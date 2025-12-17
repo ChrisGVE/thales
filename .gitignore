@@ -1,0 +1,72 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo.lock for libraries (not applications)
+# Uncomment if you want to commit Cargo.lock for reproducible builds
+# Cargo.lock
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# iOS build artifacts
+*.xcodeproj/
+*.xcworkspace/
+build/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+xcuserdata/
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# swift-bridge generated files
+generated/
+
+# Benchmark results
+criterion/
+*.criterion
+
+# Test coverage
+*.profraw
+*.profdata
+coverage/
+
+# Documentation
+/doc/
+
+# Temporary files
+tmp/
+*.tmp

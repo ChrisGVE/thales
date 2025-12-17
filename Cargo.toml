@@ -1,0 +1,49 @@
+[package]
+name = "mathsolver-core"
+version = "0.1.0"
+edition = "2021"
+authors = ["Christian C. Berclaz"]
+license = "MIT"
+description = "Mathematical equation parsing, solving, and coordinate transformations"
+repository = "https://github.com/cberclaz/mathsolver-core"
+readme = "README.md"
+
+[lib]
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[dependencies]
+chumsky = "1.0.0-alpha.8"
+num = "0.4"
+num-bigint = "0.4"
+num-complex = "0.4"
+num-rational = "0.4"
+argmin = "0.10"
+nalgebra = "0.33"
+fasteval = "0.2"
+swift-bridge = "0.1"
+
+[features]
+default = []
+ffi = []
+
+[dev-dependencies]
+proptest = "1.5"
+criterion = "0.5"
+
+[[bench]]
+name = "benchmarks"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[target.aarch64-apple-ios]
+# iOS device configuration
+
+[target.x86_64-apple-ios]
+# iOS simulator (Intel) configuration
+
+[target.aarch64-apple-ios-sim]
+# iOS simulator (ARM) configuration
