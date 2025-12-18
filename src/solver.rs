@@ -1516,6 +1516,164 @@ fn substitute_values(expr: &Expression, values: &HashMap<String, f64>) -> Expres
     }
 }
 
+/// Compute a partial derivative of an output variable with respect to an input variable.
+///
+/// Given an equation defining the output variable in terms of input variables,
+/// this function computes the partial derivative ∂output/∂input and evaluates
+/// it at the given values.
+///
+/// # Arguments
+/// * `equation` - Equation defining the output variable (e.g., "V = l * w * h")
+/// * `output_var` - Name of the output variable (e.g., "V")
+/// * `input_var` - Name of the input variable to differentiate with respect to (e.g., "l")
+/// * `values` - HashMap of variable values at which to evaluate the derivative
+///
+/// # Returns
+/// The numerical value of the partial derivative at the given point
+///
+/// # Errors
+/// Returns `SolverError` if the equation cannot be solved for the output variable
+/// or if evaluation fails due to missing variables
+///
+/// # Example
+/// ```ignore
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use mathsolver_core::solver::compute_partial_derivative;
+/// use std::collections::HashMap;
+///
+/// // Equation: V = l * w * h
+/// let l = Expression::Variable(Variable::new("l"));
+/// let w = Expression::Variable(Variable::new("w"));
+/// let h = Expression::Variable(Variable::new("h"));
+/// let lw = Expression::Binary(BinaryOp::Mul, Box::new(l), Box::new(w));
+/// let volume = Expression::Binary(BinaryOp::Mul, Box::new(lw), Box::new(h));
+/// let equation = Equation::new("box_volume", Expression::Variable(Variable::new("V")), volume);
+///
+/// let mut values = HashMap::new();
+/// values.insert("l".to_string(), 2.0);
+/// values.insert("w".to_string(), 3.0);
+/// values.insert("h".to_string(), 4.0);
+///
+/// // ∂V/∂l = w * h = 3 * 4 = 12
+/// let dv_dl = compute_partial_derivative(&equation, "V", "l", &values).unwrap();
+/// assert_eq!(dv_dl, 12.0);
+/// ```
+pub fn compute_partial_derivative(
+    equation: &Equation,
+    output_var: &str,
+    input_var: &str,
+    values: &HashMap<String, f64>,
+) -> Result<f64, SolverError> {
+    // Get the expression for the output variable
+    // If equation is "output = expr", use expr
+    // If equation is "expr = output", use expr
+    let output_expr = if let Expression::Variable(v) = &equation.left {
+        if v.name == output_var {
+            &equation.right
+        } else if let Expression::Variable(v2) = &equation.right {
+            if v2.name == output_var {
+                &equation.left
+            } else {
+                return Err(SolverError::CannotSolve(format!(
+                    "Output variable '{}' not found in equation",
+                    output_var
+                )));
+            }
+        } else {
+            return Err(SolverError::CannotSolve(format!(
+                "Output variable '{}' not found in equation",
+                output_var
+            )));
+        }
+    } else if let Expression::Variable(v) = &equation.right {
+        if v.name == output_var {
+            &equation.left
+        } else {
+            return Err(SolverError::CannotSolve(format!(
+                "Output variable '{}' not found in equation",
+                output_var
+            )));
+        }
+    } else {
+        return Err(SolverError::CannotSolve(
+            "Equation does not have output variable isolated".to_string(),
+        ));
+    };
+
+    // Compute the derivative symbolically
+    let derivative_expr = output_expr.differentiate(input_var);
+
+    // Simplify the derivative
+    let simplified = derivative_expr.simplify();
+
+    // Evaluate the derivative at the given values
+    simplified.evaluate(values).ok_or_else(|| {
+        SolverError::Other(format!(
+            "Failed to evaluate derivative - missing or invalid values"
+        ))
+    })
+}
+
+/// Compute all partial derivatives of an output variable with respect to all input variables.
+///
+/// Given an equation defining the output variable in terms of input variables,
+/// this function computes all partial derivatives ∂output/∂input_i and evaluates
+/// them at the given values.
+///
+/// # Arguments
+/// * `equation` - Equation defining the output variable
+/// * `output_var` - Name of the output variable
+/// * `input_vars` - List of input variable names to compute derivatives for
+/// * `values` - HashMap of variable values at which to evaluate the derivatives
+///
+/// # Returns
+/// A HashMap mapping each input variable name to its partial derivative value
+///
+/// # Errors
+/// Returns `SolverError` if any partial derivative computation fails
+///
+/// # Example
+/// ```ignore
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use mathsolver_core::solver::compute_all_partial_derivatives;
+/// use std::collections::HashMap;
+///
+/// // Equation: V = l * w * h
+/// let l = Expression::Variable(Variable::new("l"));
+/// let w = Expression::Variable(Variable::new("w"));
+/// let h = Expression::Variable(Variable::new("h"));
+/// let lw = Expression::Binary(BinaryOp::Mul, Box::new(l), Box::new(w));
+/// let volume = Expression::Binary(BinaryOp::Mul, Box::new(lw), Box::new(h));
+/// let equation = Equation::new("box_volume", Expression::Variable(Variable::new("V")), volume);
+///
+/// let mut values = HashMap::new();
+/// values.insert("l".to_string(), 2.0);
+/// values.insert("w".to_string(), 3.0);
+/// values.insert("h".to_string(), 4.0);
+///
+/// let input_vars = vec!["l".to_string(), "w".to_string(), "h".to_string()];
+/// let derivatives = compute_all_partial_derivatives(&equation, "V", &input_vars, &values).unwrap();
+///
+/// assert_eq!(derivatives.get("l").unwrap(), &12.0); // w * h
+/// assert_eq!(derivatives.get("w").unwrap(), &8.0);  // l * h
+/// assert_eq!(derivatives.get("h").unwrap(), &6.0);  // l * w
+/// ```
+pub fn compute_all_partial_derivatives(
+    equation: &Equation,
+    output_var: &str,
+    input_vars: &[String],
+    values: &HashMap<String, f64>,
+) -> Result<HashMap<String, f64>, SolverError> {
+    let mut derivatives = HashMap::new();
+
+    for input_var in input_vars {
+        let derivative = compute_partial_derivative(equation, output_var, input_var, values)?;
+        derivatives.insert(input_var.clone(), derivative);
+    }
+
+    Ok(derivatives)
+}
+
 // TODO: Add equation simplification before solving
 // TODO: Add symbolic manipulation utilities
 // TODO: Add support for inequalities
