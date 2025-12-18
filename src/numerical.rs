@@ -1,7 +1,46 @@
 //! Numerical approximation methods for equations.
 //!
 //! Provides numerical solvers for equations that cannot be solved symbolically,
-//! using optimization and root-finding algorithms from argmin.
+//! using root-finding and optimization algorithms.
+//!
+//! # Methods
+//!
+//! ## Newton-Raphson Method
+//! Fast convergence for smooth functions with good initial guesses.
+//! Uses **symbolic differentiation** from the AST module for exact derivatives.
+//!
+//! ## Bisection Method
+//! Guaranteed convergence for continuous functions when root is bracketed.
+//! More robust but slower than Newton-Raphson.
+//!
+//! ## Smart Solver
+//! Automatically selects the best method based on the problem characteristics.
+//!
+//! # Integration with Symbolic Differentiation
+//!
+//! The Newton-Raphson solver integrates with the symbolic differentiation
+//! capability from `ast::Expression::differentiate()` (Task 188). This provides:
+//!
+//! - **Exact derivatives** instead of finite difference approximations
+//! - **Faster convergence** due to precise derivative calculations
+//! - **Better numerical stability** by avoiding finite difference errors
+//! - **Clear resolution paths** showing the derivative expressions used
+//!
+//! # Example
+//!
+//! ```ignore
+//! use mathsolver_core::numerical::{NewtonRaphson, NumericalConfig};
+//! use mathsolver_core::ast::{Equation, Expression, Variable};
+//!
+//! // Solve x^2 = 5
+//! let equation = Equation::new("quad",
+//!     Expression::power(Expression::var("x"), 2),
+//!     Expression::Integer(5));
+//!
+//! let solver = NewtonRaphson::with_default_config();
+//! let (solution, path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+//! println!("x = {}", solution.value); // x ≈ 2.236
+//! ```
 
 use crate::ast::{Equation, Expression, Variable};
 use crate::resolution_path::{Operation, ResolutionPath};
@@ -94,6 +133,9 @@ impl NewtonRaphson {
             Box::new(equation.right.clone()),
         );
 
+        // Compute symbolic derivative f'(x) once at the beginning
+        let f_prime = f.differentiate(&variable.name);
+
         // Initial guess: use provided or estimate from domain
         let mut x = self.config.initial_guess.unwrap_or(1.0);
 
@@ -103,6 +145,11 @@ impl NewtonRaphson {
             Operation::NumericalApproximation,
             format!("Starting Newton-Raphson method with initial guess x₀ = {}", x),
             Expression::Float(x),
+        );
+        path = path.step(
+            Operation::NumericalApproximation,
+            format!("Using symbolic derivative: f'(x) = {}", f_prime),
+            f_prime.clone(),
         );
 
         let mut converged = false;
@@ -136,8 +183,13 @@ impl NewtonRaphson {
                 break;
             }
 
-            // Compute derivative f'(x) using finite differences
-            let derivative = compute_derivative_fd(&f, variable, x, self.config.step_size)?;
+            // Evaluate derivative f'(x) at current point using symbolic differentiation
+            let derivative = f_prime.evaluate(&vars).ok_or_else(|| {
+                NumericalError::EvaluationFailed(format!(
+                    "Failed to evaluate derivative at x = {}",
+                    x
+                ))
+            })?;
 
             // Check for zero derivative (would cause division by zero)
             if derivative.abs() < 1e-14 {

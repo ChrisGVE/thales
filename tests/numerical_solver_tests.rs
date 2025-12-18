@@ -436,3 +436,80 @@ fn test_edge_case_zero_derivative() {
     }
     // If it doesn't converge, that's also acceptable for this edge case
 }
+
+#[test]
+fn test_symbolic_differentiation_integration() {
+    // Test that Newton-Raphson uses symbolic differentiation from Task 188
+    // Solve x^2 - 5 = 0 (solution: x = sqrt(5) ≈ 2.236)
+    let equation = Equation::new(
+        "quadratic",
+        Expression::Power(
+            Box::new(Expression::Variable(Variable::new("x"))),
+            Box::new(Expression::Integer(2)),
+        ),
+        Expression::Integer(5),
+    );
+
+    let var = Variable::new("x");
+    let config = NumericalConfig {
+        max_iterations: 100,
+        tolerance: 1e-12,
+        initial_guess: Some(2.0),
+        step_size: 1e-6,
+    };
+
+    let solver = NewtonRaphson::new(config);
+    let result = solver.solve(&equation, &var);
+
+    assert!(result.is_ok());
+    let (solution, path) = result.unwrap();
+    assert!(solution.converged);
+
+    // Verify the solution is accurate
+    assert!((solution.value - 5.0_f64.sqrt()).abs() < 1e-11);
+
+    // Verify the resolution path contains symbolic derivative information
+    let path_str = format!("{:?}", path);
+    assert!(path_str.contains("symbolic derivative") || path_str.contains("derivative"));
+
+    // Newton-Raphson should converge very quickly for this simple case
+    assert!(solution.iterations < 10, "Expected fast convergence with symbolic differentiation");
+}
+
+#[test]
+fn test_complex_transcendental_with_symbolic_diff() {
+    // Test symbolic differentiation on a complex transcendental equation
+    // Solve tan(x) + x = 2
+    let equation = Equation::new(
+        "transcendental_tan",
+        Expression::Binary(
+            BinaryOp::Add,
+            Box::new(Expression::Function(
+                Function::Tan,
+                vec![Expression::Variable(Variable::new("x"))],
+            )),
+            Box::new(Expression::Variable(Variable::new("x"))),
+        ),
+        Expression::Integer(2),
+    );
+
+    let var = Variable::new("x");
+    let config = NumericalConfig {
+        max_iterations: 1000,
+        tolerance: 1e-10,
+        initial_guess: Some(0.8), // Near the solution
+        step_size: 1e-6,
+    };
+
+    let solver = NewtonRaphson::new(config);
+    let result = solver.solve(&equation, &var);
+
+    assert!(result.is_ok());
+    let (solution, _path) = result.unwrap();
+    assert!(solution.converged);
+
+    // Verify: tan(x) + x ≈ 2
+    let x = solution.value;
+    let residual = x.tan() + x - 2.0;
+    assert!(residual.abs() < 1e-9);
+}
