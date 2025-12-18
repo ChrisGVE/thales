@@ -4,7 +4,7 @@
 //! using optimization and root-finding algorithms from argmin.
 
 use crate::ast::{Equation, Expression, Variable};
-use crate::resolution_path::ResolutionPath;
+use crate::resolution_path::{Operation, ResolutionPath};
 use std::collections::HashMap;
 
 /// Error types for numerical solving.
@@ -82,15 +82,115 @@ impl NewtonRaphson {
     /// Find a root of the equation using Newton-Raphson method.
     pub fn solve(
         &self,
-        _equation: &Equation,
-        _variable: &Variable,
+        equation: &Equation,
+        variable: &Variable,
     ) -> NumericalResult<(NumericalSolution, ResolutionPath)> {
-        // TODO: Implement Newton-Raphson
-        // f(x) = 0, iterate: x_{n+1} = x_n - f(x_n) / f'(x_n)
-        // TODO: Compute derivative using symbolic differentiation or finite differences
-        // TODO: Check for convergence (|x_{n+1} - x_n| < tolerance)
-        // TODO: Detect divergence and try different initial guess
-        Err(NumericalError::Other("Not yet implemented".to_string()))
+        use crate::resolution_path::ResolutionPathBuilder;
+
+        // Convert equation to form f(x) = 0 by subtracting right side from left
+        let f = Expression::Binary(
+            crate::ast::BinaryOp::Sub,
+            Box::new(equation.left.clone()),
+            Box::new(equation.right.clone()),
+        );
+
+        // Initial guess: use provided or estimate from domain
+        let mut x = self.config.initial_guess.unwrap_or(1.0);
+
+        // Build resolution path
+        let mut path = ResolutionPathBuilder::new(f.clone());
+        path = path.step(
+            Operation::NumericalApproximation,
+            format!("Starting Newton-Raphson method with initial guess x₀ = {}", x),
+            Expression::Float(x),
+        );
+
+        let mut converged = false;
+        let mut iterations = 0;
+        let mut residual = 0.0;
+
+        for i in 0..self.config.max_iterations {
+            iterations = i + 1;
+
+            // Evaluate f(x) at current point
+            let mut vars = HashMap::new();
+            vars.insert(variable.name.clone(), x);
+
+            let fx = f.evaluate(&vars).ok_or_else(|| {
+                NumericalError::EvaluationFailed(format!(
+                    "Failed to evaluate function at x = {}",
+                    x
+                ))
+            })?;
+
+            residual = fx.abs();
+
+            // Check convergence
+            if residual < self.config.tolerance {
+                converged = true;
+                path = path.step(
+                    Operation::NumericalApproximation,
+                    format!("Converged: |f(x)| = {} < {}", residual, self.config.tolerance),
+                    Expression::Float(x),
+                );
+                break;
+            }
+
+            // Compute derivative f'(x) using finite differences
+            let derivative = compute_derivative_fd(&f, variable, x, self.config.step_size)?;
+
+            // Check for zero derivative (would cause division by zero)
+            if derivative.abs() < 1e-14 {
+                return Err(NumericalError::Unstable);
+            }
+
+            // Newton-Raphson update: x_{n+1} = x_n - f(x_n) / f'(x_n)
+            let x_next = x - fx / derivative;
+
+            // Check for NaN or infinity
+            if !x_next.is_finite() {
+                return Err(NumericalError::Unstable);
+            }
+
+            // Add step to path every 10 iterations or at end
+            if i % 10 == 0 || i == self.config.max_iterations - 1 {
+                path = path.step(
+                    Operation::NumericalApproximation,
+                    format!("Iteration {}: x = {}, f(x) = {}, f'(x) = {}",
+                            iterations, x_next, fx, derivative),
+                    Expression::Float(x_next),
+                );
+            }
+
+            // Check step size for convergence
+            if (x_next - x).abs() < self.config.tolerance {
+                x = x_next;
+                converged = true;
+                path = path.step(
+                    Operation::NumericalApproximation,
+                    format!("Converged: |Δx| = {} < {}", (x_next - x).abs(), self.config.tolerance),
+                    Expression::Float(x),
+                );
+                break;
+            }
+
+            x = x_next;
+        }
+
+        if !converged {
+            return Err(NumericalError::NoConvergence);
+        }
+
+        let solution = NumericalSolution {
+            value: x,
+            iterations,
+            residual,
+            converged,
+        };
+
+        let final_path = path.finish(Expression::Float(x));
+
+        Ok((solution, final_path))
     }
 }
 
@@ -146,14 +246,132 @@ impl BisectionMethod {
     /// Requires interval [a, b] where f(a) and f(b) have opposite signs.
     pub fn solve(
         &self,
-        _equation: &Equation,
-        _variable: &Variable,
-        _interval: (f64, f64),
+        equation: &Equation,
+        variable: &Variable,
+        interval: (f64, f64),
     ) -> NumericalResult<(NumericalSolution, ResolutionPath)> {
-        // TODO: Implement bisection method
-        // Requires f(a) * f(b) < 0
-        // Repeatedly halve interval until converged
-        Err(NumericalError::Other("Not yet implemented".to_string()))
+        use crate::resolution_path::ResolutionPathBuilder;
+
+        // Convert equation to form f(x) = 0
+        let f = Expression::Binary(
+            crate::ast::BinaryOp::Sub,
+            Box::new(equation.left.clone()),
+            Box::new(equation.right.clone()),
+        );
+
+        let mut a = interval.0;
+        let mut b = interval.1;
+
+        // Ensure a < b
+        if a > b {
+            std::mem::swap(&mut a, &mut b);
+        }
+
+        // Build resolution path
+        let mut path = ResolutionPathBuilder::new(f.clone());
+
+        // Evaluate at endpoints
+        let mut vars = HashMap::new();
+        vars.insert(variable.name.clone(), a);
+        let fa = f.evaluate(&vars).ok_or_else(|| {
+            NumericalError::EvaluationFailed(format!("Failed to evaluate function at x = {}", a))
+        })?;
+
+        vars.insert(variable.name.clone(), b);
+        let fb = f.evaluate(&vars).ok_or_else(|| {
+            NumericalError::EvaluationFailed(format!("Failed to evaluate function at x = {}", b))
+        })?;
+
+        // Check that f(a) and f(b) have opposite signs
+        if fa * fb > 0.0 {
+            return Err(NumericalError::Other(format!(
+                "Bisection requires f(a) and f(b) to have opposite signs. f({}) = {}, f({}) = {}",
+                a, fa, b, fb
+            )));
+        }
+
+        path = path.step(
+            Operation::NumericalApproximation,
+            format!("Starting bisection method on interval [{}, {}]. f({}) = {}, f({}) = {}",
+                    a, b, a, fa, b, fb),
+            Expression::Float((a + b) / 2.0),
+        );
+
+        let mut iterations = 0;
+        let mut c = (a + b) / 2.0;
+        let mut fc = 0.0;
+
+        for i in 0..self.config.max_iterations {
+            iterations = i + 1;
+
+            // Midpoint
+            c = (a + b) / 2.0;
+
+            // Evaluate at midpoint
+            vars.insert(variable.name.clone(), c);
+            fc = f.evaluate(&vars).ok_or_else(|| {
+                NumericalError::EvaluationFailed(format!("Failed to evaluate function at x = {}", c))
+            })?;
+
+            // Check convergence by residual
+            if fc.abs() < self.config.tolerance {
+                path = path.step(
+                    Operation::NumericalApproximation,
+                    format!("Converged: |f({})| = {} < {}", c, fc.abs(), self.config.tolerance),
+                    Expression::Float(c),
+                );
+                break;
+            }
+
+            // Check convergence by interval width
+            if (b - a) / 2.0 < self.config.tolerance {
+                path = path.step(
+                    Operation::NumericalApproximation,
+                    format!("Converged: interval width {} < {}", (b - a) / 2.0, self.config.tolerance),
+                    Expression::Float(c),
+                );
+                break;
+            }
+
+            // Determine which half contains the root
+            vars.insert(variable.name.clone(), a);
+            let fa_curr = f.evaluate(&vars).ok_or_else(|| {
+                NumericalError::EvaluationFailed(format!("Failed to evaluate function at x = {}", a))
+            })?;
+
+            if fa_curr * fc < 0.0 {
+                // Root is in left half [a, c]
+                b = c;
+            } else {
+                // Root is in right half [c, b]
+                a = c;
+            }
+
+            // Log progress every 10 iterations
+            if i % 10 == 0 || i == self.config.max_iterations - 1 {
+                path = path.step(
+                    Operation::NumericalApproximation,
+                    format!("Iteration {}: interval = [{}, {}], midpoint = {}, f(midpoint) = {}",
+                            iterations, a, b, c, fc),
+                    Expression::Float(c),
+                );
+            }
+        }
+
+        let solution = NumericalSolution {
+            value: c,
+            iterations,
+            residual: fc.abs(),
+            converged: fc.abs() < self.config.tolerance || (b - a) / 2.0 < self.config.tolerance,
+        };
+
+        if !solution.converged {
+            return Err(NumericalError::NoConvergence);
+        }
+
+        let final_path = path.finish(Expression::Float(c));
+
+        Ok((solution, final_path))
     }
 }
 
@@ -266,15 +484,71 @@ impl SmartNumericalSolver {
     /// Solve equation numerically using most appropriate method.
     pub fn solve(
         &self,
-        _equation: &Equation,
-        _variable: &Variable,
+        equation: &Equation,
+        variable: &Variable,
     ) -> NumericalResult<(NumericalSolution, ResolutionPath)> {
-        // TODO: Analyze equation and choose method:
-        //   - If derivative available: Newton-Raphson
-        //   - If interval known: Brent's method
-        //   - Otherwise: Secant method
-        // TODO: Try multiple initial guesses if first attempt fails
-        Err(NumericalError::Other("Not yet implemented".to_string()))
+        // Convert equation to f(x) = 0 form
+        let f = Expression::Binary(
+            crate::ast::BinaryOp::Sub,
+            Box::new(equation.left.clone()),
+            Box::new(equation.right.clone()),
+        );
+
+        // Strategy 1: Try Newton-Raphson if initial guess is provided
+        if self.config.initial_guess.is_some() {
+            let newton = NewtonRaphson::new(self.config.clone());
+            if let Ok(result) = newton.solve(equation, variable) {
+                return Ok(result);
+            }
+        }
+
+        // Strategy 2: Try to bracket the root and use bisection
+        let initial_guess = self.config.initial_guess.unwrap_or(1.0);
+        if let Some((a, b)) = bracket_root(&f, variable, initial_guess, 10000.0) {
+            let bisection = BisectionMethod::new(self.config.clone());
+            if let Ok(result) = bisection.solve(equation, variable, (a, b)) {
+                return Ok(result);
+            }
+        }
+
+        // Strategy 3: Try Newton-Raphson with multiple initial guesses
+        let initial_guesses = vec![0.0, 1.0, -1.0, 10.0, -10.0, 100.0, -100.0];
+
+        for guess in initial_guesses {
+            let mut config = self.config.clone();
+            config.initial_guess = Some(guess);
+
+            let newton = NewtonRaphson::new(config);
+            if let Ok(result) = newton.solve(equation, variable) {
+                return Ok(result);
+            }
+        }
+
+        // Strategy 4: Try bracketing around different centers
+        let centers = vec![0.0, 1.0, -1.0, 10.0, -10.0, 100.0];
+        for center in centers {
+            if let Some((a, b)) = bracket_root(&f, variable, center, 10000.0) {
+                let bisection = BisectionMethod::new(self.config.clone());
+                if let Ok(result) = bisection.solve(equation, variable, (a, b)) {
+                    return Ok(result);
+                }
+            }
+        }
+
+        // No method succeeded
+        Err(NumericalError::NoConvergence)
+    }
+
+    /// Solve equation numerically with a specified interval for bracketing methods.
+    pub fn solve_with_interval(
+        &self,
+        equation: &Equation,
+        variable: &Variable,
+        interval: (f64, f64),
+    ) -> NumericalResult<(NumericalSolution, ResolutionPath)> {
+        // Prefer bisection when an interval is provided
+        let bisection = BisectionMethod::new(self.config.clone());
+        bisection.solve(equation, variable, interval)
     }
 }
 
@@ -312,6 +586,77 @@ impl Default for Evaluator {
     fn default() -> Self {
         Self::new()
     }
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Compute derivative using finite differences (central difference method).
+///
+/// f'(x) ≈ [f(x + h) - f(x - h)] / (2h)
+fn compute_derivative_fd(
+    expr: &Expression,
+    variable: &Variable,
+    x: f64,
+    h: f64,
+) -> NumericalResult<f64> {
+    let mut vars = HashMap::new();
+
+    // Evaluate f(x + h)
+    vars.insert(variable.name.clone(), x + h);
+    let f_plus = expr.evaluate(&vars).ok_or_else(|| {
+        NumericalError::EvaluationFailed(format!("Failed to evaluate function at x = {}", x + h))
+    })?;
+
+    // Evaluate f(x - h)
+    vars.insert(variable.name.clone(), x - h);
+    let f_minus = expr.evaluate(&vars).ok_or_else(|| {
+        NumericalError::EvaluationFailed(format!("Failed to evaluate function at x = {}", x - h))
+    })?;
+
+    // Central difference approximation
+    let derivative = (f_plus - f_minus) / (2.0 * h);
+
+    if !derivative.is_finite() {
+        return Err(NumericalError::Unstable);
+    }
+
+    Ok(derivative)
+}
+
+/// Find a suitable initial interval for root finding by bracketing.
+///
+/// Returns (a, b) such that f(a) and f(b) have opposite signs.
+fn bracket_root(
+    expr: &Expression,
+    variable: &Variable,
+    center: f64,
+    max_range: f64,
+) -> Option<(f64, f64)> {
+    let mut vars = HashMap::new();
+
+    // Try expanding intervals around the center
+    for scale in [1.0_f64, 10.0, 100.0, 1000.0] {
+        let range = scale.min(max_range);
+
+        for offset in [0.0, range / 4.0, range / 2.0, 3.0 * range / 4.0] {
+            let a = center - range + offset;
+            let b = center + range - offset;
+
+            vars.insert(variable.name.clone(), a);
+            let fa = expr.evaluate(&vars)?;
+
+            vars.insert(variable.name.clone(), b);
+            let fb = expr.evaluate(&vars)?;
+
+            if fa * fb < 0.0 {
+                return Some((a, b));
+            }
+        }
+    }
+
+    None
 }
 
 // TODO: Add support for interval arithmetic
