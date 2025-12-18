@@ -408,7 +408,8 @@ impl Expression {
                 let left_simplified = left.simplify();
                 let right_simplified = right.simplify();
 
-                match op {
+                // First apply identity simplifications
+                let after_identity = match op {
                     BinaryOp::Add => {
                         // 0 + x → x
                         if Self::is_zero(&left_simplified) {
@@ -418,14 +419,14 @@ impl Expression {
                         if Self::is_zero(&right_simplified) {
                             return left_simplified;
                         }
-                        Expression::Binary(*op, Box::new(left_simplified), Box::new(right_simplified))
+                        None
                     }
                     BinaryOp::Sub => {
                         // x - 0 → x
                         if Self::is_zero(&right_simplified) {
                             return left_simplified;
                         }
-                        Expression::Binary(*op, Box::new(left_simplified), Box::new(right_simplified))
+                        None
                     }
                     BinaryOp::Mul => {
                         // 0 * x → 0
@@ -444,20 +445,64 @@ impl Expression {
                         if Self::is_one(&right_simplified) {
                             return left_simplified;
                         }
-                        Expression::Binary(*op, Box::new(left_simplified), Box::new(right_simplified))
+                        None
                     }
                     BinaryOp::Div => {
                         // x / 1 → x
                         if Self::is_one(&right_simplified) {
                             return left_simplified;
                         }
-                        Expression::Binary(*op, Box::new(left_simplified), Box::new(right_simplified))
+                        None
                     }
-                    _ => Expression::Binary(*op, Box::new(left_simplified), Box::new(right_simplified)),
+                    _ => None,
+                };
+
+                if after_identity.is_some() {
+                    return after_identity.unwrap();
                 }
+
+                // Constant folding: if both operands are numeric constants, evaluate
+                if Self::is_numeric_constant(&left_simplified)
+                    && Self::is_numeric_constant(&right_simplified)
+                {
+                    if let (Some(left_val), Some(right_val)) = (
+                        Self::extract_numeric_value(&left_simplified),
+                        Self::extract_numeric_value(&right_simplified),
+                    ) {
+                        let result = match op {
+                            BinaryOp::Add => Some(left_val + right_val),
+                            BinaryOp::Sub => Some(left_val - right_val),
+                            BinaryOp::Mul => Some(left_val * right_val),
+                            BinaryOp::Div => {
+                                if right_val.abs() > 1e-10 {
+                                    Some(left_val / right_val)
+                                } else {
+                                    None // Avoid division by zero
+                                }
+                            }
+                            BinaryOp::Mod => Some(left_val % right_val),
+                        };
+
+                        if let Some(value) = result {
+                            return Self::from_numeric_value(value);
+                        }
+                    }
+                }
+
+                Expression::Binary(*op, Box::new(left_simplified), Box::new(right_simplified))
             }
             Expression::Function(func, args) => {
                 let simplified_args: Vec<Expression> = args.iter().map(|arg| arg.simplify()).collect();
+
+                // Constant folding: if all arguments are numeric constants, evaluate the function
+                if simplified_args.iter().all(Self::is_numeric_constant) {
+                    // Try to evaluate the function with constant arguments
+                    let temp_expr = Expression::Function(func.clone(), simplified_args.clone());
+                    if let Some(value) = temp_expr.evaluate(&HashMap::new()) {
+                        return Self::from_numeric_value(value);
+                    }
+                }
+
                 Expression::Function(func.clone(), simplified_args)
             }
             Expression::Power(base, exp) => {
@@ -471,6 +516,21 @@ impl Expression {
                 // x^1 → x
                 if Self::is_one(&exp_simplified) {
                     return base_simplified;
+                }
+
+                // Constant folding: if both base and exponent are numeric constants, evaluate
+                if Self::is_numeric_constant(&base_simplified)
+                    && Self::is_numeric_constant(&exp_simplified)
+                {
+                    if let (Some(base_val), Some(exp_val)) = (
+                        Self::extract_numeric_value(&base_simplified),
+                        Self::extract_numeric_value(&exp_simplified),
+                    ) {
+                        let result = base_val.powf(exp_val);
+                        if result.is_finite() {
+                            return Self::from_numeric_value(result);
+                        }
+                    }
                 }
 
                 Expression::Power(Box::new(base_simplified), Box::new(exp_simplified))
@@ -496,6 +556,33 @@ impl Expression {
             Expression::Integer(1) => true,
             Expression::Float(x) if *x == 1.0 => true,
             _ => false,
+        }
+    }
+
+    /// Check if expression is a numeric constant.
+    fn is_numeric_constant(expr: &Expression) -> bool {
+        matches!(
+            expr,
+            Expression::Integer(_) | Expression::Float(_) | Expression::Rational(_)
+        )
+    }
+
+    /// Extract numeric value from constant expression.
+    fn extract_numeric_value(expr: &Expression) -> Option<f64> {
+        match expr {
+            Expression::Integer(n) => Some(*n as f64),
+            Expression::Float(x) => Some(*x),
+            Expression::Rational(r) => Some(*r.numer() as f64 / *r.denom() as f64),
+            _ => None,
+        }
+    }
+
+    /// Create numeric expression from value (Integer if whole, Float otherwise).
+    fn from_numeric_value(value: f64) -> Expression {
+        if value.is_finite() && value.fract().abs() < 1e-10 {
+            Expression::Integer(value.round() as i64)
+        } else {
+            Expression::Float(value)
         }
     }
 
