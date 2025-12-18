@@ -452,6 +452,8 @@ dependencies = [
  "num-complex",
  "num-rational",
  "proptest",
+ "serde",
+ "serde_json",
  "swift-bridge",
 ]
 

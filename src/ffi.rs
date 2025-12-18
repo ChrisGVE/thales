@@ -22,11 +22,27 @@ mod ffi {
         ) -> Result<String, String>;
 
         #[swift_bridge(return_with = Result)]
+        fn solve_with_values_ffi(
+            equation: &str,
+            variable: &str,
+            known_values_json: &str,
+        ) -> Result<ResolutionPathFFI, String>;
+
+        #[swift_bridge(return_with = Result)]
         fn solve_numerically_ffi(
             equation: &str,
             variable: &str,
             initial_guess: f64,
         ) -> Result<f64, String>;
+    }
+
+    /// Resolution path with steps (for Swift).
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct ResolutionPathFFI {
+        pub initial_expr: String,
+        pub steps_json: String,
+        pub result_expr: String,
+        pub success: bool,
     }
 
     /// Coordinate transformations.
@@ -101,12 +117,21 @@ fn parse_expression_ffi(input: &str) -> Result<String, String> {
 
 /// Solve equation symbolically.
 fn solve_equation_ffi(equation: &str, variable: &str) -> Result<String, String> {
-    // TODO: Implement equation solving pipeline
-    // 1. Parse equation
-    // 2. Parse variable
-    // 3. Solve using SmartSolver
-    // 4. Format solution as string
-    Err("Not yet implemented".to_string())
+    use crate::parser::parse_equation;
+    use crate::solver::solve_for;
+    use std::collections::HashMap;
+
+    // Parse the equation string
+    let parsed_equation = parse_equation(equation)
+        .map_err(|e| format!("Failed to parse equation: {:?}", e))?;
+
+    // Solve for the variable with no known values
+    let known_values = HashMap::new();
+    let resolution_path = solve_for(&parsed_equation, variable, &known_values)
+        .map_err(|e| format!("Failed to solve equation: {:?}", e))?;
+
+    // Format the result as a string
+    Ok(format!("{:?}", resolution_path.result))
 }
 
 /// Solve equation numerically.
@@ -115,12 +140,32 @@ fn solve_numerically_ffi(
     variable: &str,
     initial_guess: f64,
 ) -> Result<f64, String> {
-    // TODO: Implement numerical solving pipeline
-    // 1. Parse equation
-    // 2. Parse variable
-    // 3. Solve using SmartNumericalSolver with initial guess
-    // 4. Return solution value
-    Err("Not yet implemented".to_string())
+    use crate::parser::parse_equation;
+    use crate::numerical::{NumericalConfig, SmartNumericalSolver};
+    use crate::ast::Variable;
+
+    // Parse the equation string
+    let parsed_equation = parse_equation(equation)
+        .map_err(|e| format!("Failed to parse equation: {:?}", e))?;
+
+    // Create solver with initial guess
+    let mut config = NumericalConfig::default();
+    config.initial_guess = Some(initial_guess);
+    let solver = SmartNumericalSolver::new(config);
+
+    // Solve numerically
+    let target_var = Variable::new(variable);
+    let (solution, _path) = solver.solve(&parsed_equation, &target_var)
+        .map_err(|e| format!("Numerical solving failed: {:?}", e))?;
+
+    if !solution.converged {
+        return Err(format!(
+            "Did not converge after {} iterations (residual: {})",
+            solution.iterations, solution.residual
+        ));
+    }
+
+    Ok(solution.value)
 }
 
 /// Convert Cartesian to polar coordinates.
@@ -207,11 +252,59 @@ fn complex_power_ffi(re: f64, im: f64, n: f64) -> ffi::ComplexNumber {
     }
 }
 
+/// Solve equation with known values and return full resolution path.
+fn solve_with_values_ffi(
+    equation: &str,
+    variable: &str,
+    known_values_json: &str,
+) -> Result<ffi::ResolutionPathFFI, String> {
+    use crate::parser::parse_equation;
+    use crate::solver::solve_for;
+    use std::collections::HashMap;
+
+    // Parse the equation string
+    let parsed_equation = parse_equation(equation)
+        .map_err(|e| format!("Failed to parse equation: {:?}", e))?;
+
+    // Parse known values from JSON
+    let known_values: HashMap<String, f64> = if known_values_json.is_empty() {
+        HashMap::new()
+    } else {
+        serde_json::from_str(known_values_json)
+            .map_err(|e| format!("Failed to parse known values JSON: {}", e))?
+    };
+
+    // Solve for the variable
+    let resolution_path = solve_for(&parsed_equation, variable, &known_values)
+        .map_err(|e| format!("Failed to solve equation: {:?}", e))?;
+
+    // Convert steps to JSON manually (using simple format)
+    let steps: Vec<serde_json::Value> = resolution_path
+        .steps
+        .iter()
+        .map(|step| {
+            serde_json::json!({
+                "operation": step.operation.describe(),
+                "explanation": step.explanation,
+                "result": format!("{:?}", step.result)
+            })
+        })
+        .collect();
+
+    let steps_json = serde_json::to_string(&steps)
+        .map_err(|e| format!("Failed to serialize steps: {}", e))?;
+
+    Ok(ffi::ResolutionPathFFI {
+        initial_expr: format!("{:?}", resolution_path.initial),
+        steps_json,
+        result_expr: format!("{:?}", resolution_path.result),
+        success: true,
+    })
+}
+
 // TODO: Add FFI for unit conversions
 // TODO: Add FFI for expression evaluation
 // TODO: Add FFI for expression simplification
-// TODO: Add FFI for getting resolution path steps
-// TODO: Add error types that map cleanly to Swift
 // TODO: Add async FFI support for long-running operations
 // TODO: Add callback support for progress updates
 // TODO: Add memory-safe buffer passing for large data

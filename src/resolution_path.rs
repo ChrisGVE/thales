@@ -4,6 +4,7 @@
 //! providing step-by-step explanations and validation.
 
 use crate::ast::{BinaryOp, Expression, UnaryOp, Variable};
+use serde::{Serialize, Deserialize};
 
 /// Represents a complete solution path from equation to answer.
 #[derive(Debug, Clone, PartialEq)]
