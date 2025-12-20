@@ -1,20 +1,213 @@
-//! Expression and equation parser using chumsky.
+//! Expression and equation parser for mathematical notation.
 //!
-//! Provides parsing capabilities for mathematical expressions and equations
-//! from string input into AST structures.
+//! This module provides a complete parser for mathematical expressions and equations,
+//! converting string input into Abstract Syntax Tree (AST) structures for evaluation
+//! and manipulation.
+//!
+//! # Supported Syntax
+//!
+//! The parser supports a comprehensive set of mathematical constructs:
+//!
+//! | Category | Syntax | Example |
+//! |----------|--------|---------|
+//! | **Numbers** | Integer | `42`, `-17` |
+//! | | Float | `3.14`, `-2.5` |
+//! | | Scientific notation | `1.5e10`, `2.3e-5` |
+//! | **Variables** | Identifiers | `x`, `theta`, `my_var_2` |
+//! | **Binary Operators** | Addition | `a + b` |
+//! | | Subtraction | `a - b` |
+//! | | Multiplication | `a * b` |
+//! | | Division | `a / b` |
+//! | | Modulo | `a % b` |
+//! | | Power | `a ^ b` |
+//! | **Unary Operators** | Negation | `-x` |
+//! | **Functions** | Trigonometric | `sin(x)`, `cos(x)`, `tan(x)` |
+//! | | Inverse trig | `asin(x)`, `acos(x)`, `atan(x)`, `atan2(y, x)` |
+//! | | Hyperbolic | `sinh(x)`, `cosh(x)`, `tanh(x)` |
+//! | | Exponential | `exp(x)`, `pow(base, exp)` |
+//! | | Logarithmic | `ln(x)`, `log(x)`, `log2(x)`, `log10(x)` |
+//! | | Root | `sqrt(x)`, `cbrt(x)` |
+//! | | Rounding | `floor(x)`, `ceil(x)`, `round(x)` |
+//! | | Other | `abs(x)`, `sign(x)`, `min(a, b)`, `max(a, b)` |
+//! | **Grouping** | Parentheses | `(a + b) * c` |
+//! | **Equations** | Equality | `x + 2 = 5` |
+//!
+//! # Operator Precedence
+//!
+//! Operators are evaluated in the following order (highest to lowest precedence):
+//!
+//! 1. **Function calls**: `sin(x)`, `sqrt(y)` - highest precedence
+//! 2. **Unary negation**: `-x` - right-associative
+//! 3. **Power**: `a ^ b` - right-associative (e.g., `2 ^ 3 ^ 4` = `2 ^ (3 ^ 4)`)
+//! 4. **Multiplication/Division/Modulo**: `a * b`, `a / b`, `a % b` - left-associative
+//! 5. **Addition/Subtraction**: `a + b`, `a - b` - left-associative
+//!
+//! Use parentheses to override precedence: `(a + b) * c` evaluates addition before multiplication.
+//!
+//! # Examples
+//!
+//! ## Simple Expression
+//!
+//! ```
+//! use mathsolver_core::parser::parse_expression;
+//! use mathsolver_core::ast::{Expression, BinaryOp};
+//!
+//! let expr = parse_expression("2 + 3").unwrap();
+//! match expr {
+//!     Expression::Binary(BinaryOp::Add, _, _) => println!("Parsed addition"),
+//!     _ => panic!("Expected addition"),
+//! }
+//! ```
+//!
+//! ## Complex Expression with Functions
+//!
+//! ```
+//! use mathsolver_core::parser::parse_expression;
+//!
+//! let expr = parse_expression("sin(x) + cos(y) * 2").unwrap();
+//! // Parses as: (sin(x)) + ((cos(y)) * 2)
+//! ```
+//!
+//! ## Power Expression (Right-Associative)
+//!
+//! ```
+//! use mathsolver_core::parser::parse_expression;
+//! use mathsolver_core::ast::Expression;
+//!
+//! let expr = parse_expression("2 ^ 3 ^ 4").unwrap();
+//! // Parses as: 2 ^ (3 ^ 4) = 2 ^ 81, not (2 ^ 3) ^ 4
+//! ```
+//!
+//! ## Equation Parsing
+//!
+//! ```
+//! use mathsolver_core::parser::parse_equation;
+//!
+//! let eq = parse_equation("x + 2 = 5").unwrap();
+//! println!("Left side: {:?}", eq.left);
+//! println!("Right side: {:?}", eq.right);
+//! ```
+//!
+//! ## Error Handling
+//!
+//! ```
+//! use mathsolver_core::parser::{parse_expression, ParseError};
+//!
+//! match parse_expression("2 + + 3") {
+//!     Ok(expr) => println!("Parsed: {:?}", expr),
+//!     Err(errors) => {
+//!         for err in errors {
+//!             eprintln!("Parse error: {}", err);
+//!         }
+//!     }
+//! }
+//! ```
+//!
+//! # Performance
+//!
+//! The parser runs in O(n) time complexity where n is the length of the input string.
+//! Memory complexity is O(d) where d is the maximum nesting depth of the expression.
+//!
+//! # Limitations
+//!
+//! - **No implicit multiplication**: `2x` is invalid, must write `2 * x`
+//! - **No equation systems**: Only single equations supported
+//! - **No LaTeX input**: Plain ASCII notation only
+//! - **No MathML**: Plain text input only
+//!
+//! See TODO comments at end of file for planned enhancements.
 
 use crate::ast::{BinaryOp, Equation, Expression, Function, UnaryOp, Variable};
 use chumsky::prelude::*;
 
 /// Parse error type with detailed position information.
+///
+/// All error variants include a `pos` field indicating the character position
+/// where the error was detected (0-based index).
+///
+/// # Error Variants
+///
+/// - **UnexpectedCharacter**: Found a character that doesn't fit the grammar at this position
+/// - **UnexpectedEndOfInput**: Input ended when more tokens were expected
+/// - **InvalidNumber**: Number format is incorrect (e.g., "1.2.3", "1e")
+/// - **UnknownFunction**: Function name not recognized
+/// - **MismatchedParentheses**: Opening/closing parentheses don't match
+/// - **InvalidExpression**: Generic parse error with custom message
+///
+/// # Examples
+///
+/// ```
+/// use mathsolver_core::parser::{parse_expression, ParseError};
+///
+/// // Unexpected character
+/// match parse_expression("2 @ 3") {
+///     Err(errors) => {
+///         assert!(errors.iter().any(|e| matches!(
+///             e,
+///             ParseError::UnexpectedCharacter { pos: 2, found: '@' }
+///         )));
+///     }
+///     Ok(_) => panic!("Expected parse error"),
+/// }
+///
+/// // Unknown function
+/// match parse_expression("foo(x)") {
+///     Err(errors) => {
+///         assert!(errors.iter().any(|e| matches!(
+///             e,
+///             ParseError::InvalidExpression { message, .. } if message.contains("Unknown function")
+///         )));
+///     }
+///     Ok(_) => panic!("Expected parse error"),
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParseError {
-    UnexpectedCharacter { pos: usize, found: char },
-    UnexpectedEndOfInput { pos: usize, expected: String },
-    InvalidNumber { pos: usize, text: String },
-    UnknownFunction { pos: usize, name: String },
-    MismatchedParentheses { pos: usize },
-    InvalidExpression { pos: usize, message: String },
+    /// Encountered a character that doesn't match the expected grammar.
+    UnexpectedCharacter {
+        /// Character position in input (0-based)
+        pos: usize,
+        /// The unexpected character found
+        found: char,
+    },
+
+    /// Input ended before expression was complete.
+    UnexpectedEndOfInput {
+        /// Position where input ended (0-based)
+        pos: usize,
+        /// Description of what was expected
+        expected: String,
+    },
+
+    /// Number format is invalid (e.g., multiple decimal points).
+    InvalidNumber {
+        /// Position where number started (0-based)
+        pos: usize,
+        /// The invalid number text
+        text: String,
+    },
+
+    /// Function name is not recognized.
+    UnknownFunction {
+        /// Position where function name started (0-based)
+        pos: usize,
+        /// The unrecognized function name
+        name: String,
+    },
+
+    /// Parentheses are not properly matched.
+    MismatchedParentheses {
+        /// Position of the mismatched parenthesis (0-based)
+        pos: usize,
+    },
+
+    /// Generic parse error with custom message.
+    InvalidExpression {
+        /// Position where error occurred (0-based)
+        pos: usize,
+        /// Detailed error description
+        message: String,
+    },
 }
 
 impl std::fmt::Display for ParseError {
@@ -44,7 +237,65 @@ impl std::fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-/// Helper to map function names to Function enum.
+/// Maps function name strings to the corresponding Function enum variant.
+///
+/// This helper function converts textual function names (as they appear in expressions)
+/// to their corresponding `Function` enum values. Used internally by the parser to
+/// recognize valid function calls.
+///
+/// # Supported Functions
+///
+/// ## Trigonometric Functions
+/// - `sin`, `cos`, `tan` - Standard trigonometric functions
+/// - `asin`, `acos`, `atan` - Inverse trigonometric functions
+/// - `atan2` - Two-argument arctangent
+///
+/// ## Hyperbolic Functions
+/// - `sinh`, `cosh`, `tanh` - Hyperbolic trigonometric functions
+///
+/// ## Exponential and Logarithmic Functions
+/// - `exp` - Natural exponential (e^x)
+/// - `ln` - Natural logarithm (base e)
+/// - `log` - Common logarithm (base 10)
+/// - `log2` - Binary logarithm (base 2)
+/// - `log10` - Common logarithm (base 10)
+///
+/// ## Power and Root Functions
+/// - `sqrt` - Square root
+/// - `cbrt` - Cube root
+/// - `pow` - Power (base, exponent)
+///
+/// ## Rounding Functions
+/// - `floor` - Round down to nearest integer
+/// - `ceil` - Round up to nearest integer
+/// - `round` - Round to nearest integer
+///
+/// ## Other Functions
+/// - `abs` - Absolute value
+/// - `sign` - Sign function (-1, 0, or 1)
+/// - `min` - Minimum of two values
+/// - `max` - Maximum of two values
+///
+/// # Returns
+///
+/// - `Some(Function)` if the name matches a known function
+/// - `None` if the name is not recognized
+///
+/// # Examples
+///
+/// ```
+/// # use mathsolver_core::parser::parse_expression;
+/// # use mathsolver_core::ast::{Expression, Function};
+/// // Recognized function
+/// let expr = parse_expression("sin(0.5)").unwrap();
+/// match expr {
+///     Expression::Function(Function::Sin, _) => println!("Parsed sin function"),
+///     _ => panic!("Expected sin function"),
+/// }
+///
+/// // Unrecognized function results in parse error
+/// assert!(parse_expression("unknown_func(x)").is_err());
+/// ```
 fn string_to_function(name: &str) -> Option<Function> {
     match name {
         // Trigonometric
@@ -210,9 +461,29 @@ fn expression_parser<'src>() -> impl Parser<'src, &'src str, Expression, extra::
     })
 }
 
-/// Parse a mathematical expression from string input.
+/// Parses a mathematical expression from string input into an AST.
+///
+/// This function converts a textual mathematical expression into an Abstract Syntax Tree
+/// (AST) represented by the `Expression` enum. The parser supports all operators, functions,
+/// and syntax described in the module-level documentation.
+///
+/// # Arguments
+///
+/// * `input` - String slice containing the mathematical expression
+///
+/// # Returns
+///
+/// * `Ok(Expression)` - Successfully parsed expression as AST
+/// * `Err(Vec<ParseError>)` - One or more parse errors with position information
+///
+/// # Performance
+///
+/// Runs in O(n) time where n is the input length. Maximum recursion depth is proportional
+/// to expression nesting depth.
 ///
 /// # Examples
+///
+/// ## Simple Arithmetic
 ///
 /// ```
 /// use mathsolver_core::parser::parse_expression;
@@ -220,8 +491,97 @@ fn expression_parser<'src>() -> impl Parser<'src, &'src str, Expression, extra::
 ///
 /// let expr = parse_expression("2 + 3").unwrap();
 /// match expr {
-///     Expression::Binary(BinaryOp::Add, _, _) => (),
+///     Expression::Binary(BinaryOp::Add, _, _) => println!("Addition expression"),
 ///     _ => panic!("Expected addition"),
+/// }
+/// ```
+///
+/// ## Scientific Notation
+///
+/// ```
+/// use mathsolver_core::parser::parse_expression;
+/// use mathsolver_core::ast::Expression;
+///
+/// let expr = parse_expression("1.5e-10").unwrap();
+/// match expr {
+///     Expression::Float(val) => assert!((val - 1.5e-10).abs() < 1e-20),
+///     _ => panic!("Expected float"),
+/// }
+/// ```
+///
+/// ## Nested Functions
+///
+/// ```
+/// use mathsolver_core::parser::parse_expression;
+///
+/// let expr = parse_expression("sqrt(abs(-16))").unwrap();
+/// // Parses as: sqrt(abs(-16)) = sqrt(16) = 4
+/// ```
+///
+/// ## Operator Precedence
+///
+/// ```
+/// use mathsolver_core::parser::parse_expression;
+///
+/// // Multiplication before addition
+/// let expr = parse_expression("2 + 3 * 4").unwrap();
+/// // Parses as: 2 + (3 * 4) = 14, not (2 + 3) * 4 = 20
+///
+/// // Power is right-associative
+/// let expr = parse_expression("2 ^ 3 ^ 2").unwrap();
+/// // Parses as: 2 ^ (3 ^ 2) = 2 ^ 9 = 512, not (2 ^ 3) ^ 2 = 8 ^ 2 = 64
+/// ```
+///
+/// ## Multiple Variables
+///
+/// ```
+/// use mathsolver_core::parser::parse_expression;
+///
+/// let expr = parse_expression("x * y + z").unwrap();
+/// // Expression with three variables
+/// ```
+///
+/// ## Complex Expression
+///
+/// ```
+/// use mathsolver_core::parser::parse_expression;
+///
+/// let expr = parse_expression("sin(x) ^ 2 + cos(x) ^ 2").unwrap();
+/// // Trigonometric identity expression
+/// ```
+///
+/// ## Error Handling
+///
+/// ```
+/// use mathsolver_core::parser::{parse_expression, ParseError};
+///
+/// // Invalid syntax
+/// match parse_expression("2 + + 3") {
+///     Ok(_) => panic!("Should fail"),
+///     Err(errors) => {
+///         for error in errors {
+///             eprintln!("Error: {}", error);
+///         }
+///     }
+/// }
+///
+/// // Unknown function
+/// match parse_expression("foo(x)") {
+///     Ok(_) => panic!("Should fail"),
+///     Err(errors) => {
+///         assert!(errors.iter().any(|e| {
+///             matches!(e, ParseError::InvalidExpression { message, .. }
+///                 if message.contains("Unknown function"))
+///         }));
+///     }
+/// }
+///
+/// // Incomplete expression
+/// match parse_expression("2 * ") {
+///     Ok(_) => panic!("Should fail"),
+///     Err(errors) => {
+///         assert!(!errors.is_empty());
+///     }
 /// }
 /// ```
 pub fn parse_expression(input: &str) -> Result<Expression, Vec<ParseError>> {
@@ -256,16 +616,97 @@ pub fn parse_expression(input: &str) -> Result<Expression, Vec<ParseError>> {
         })
 }
 
-/// Parse a complete equation from string input.
+/// Parses a complete equation from string input into an AST.
+///
+/// An equation consists of two expressions separated by an equals sign (`=`).
+/// The parsed equation has an empty ID by default (can be set later using
+/// `Equation::with_id()`).
+///
+/// # Arguments
+///
+/// * `input` - String slice containing the equation (format: `expression = expression`)
+///
+/// # Returns
+///
+/// * `Ok(Equation)` - Successfully parsed equation with left and right sides
+/// * `Err(Vec<ParseError>)` - One or more parse errors with position information
+///
+/// # Performance
+///
+/// Runs in O(n) time where n is the input length. Equivalent to parsing two expressions
+/// plus the equals sign.
 ///
 /// # Examples
+///
+/// ## Simple Linear Equation
 ///
 /// ```
 /// use mathsolver_core::parser::parse_equation;
 ///
 /// let eq = parse_equation("x + 2 = 5").unwrap();
 /// assert_eq!(eq.id, "");
+/// // eq.left: x + 2
+/// // eq.right: 5
 /// ```
+///
+/// ## Quadratic Equation
+///
+/// ```
+/// use mathsolver_core::parser::parse_equation;
+///
+/// let eq = parse_equation("x^2 + 3*x - 4 = 0").unwrap();
+/// // Standard form quadratic equation
+/// ```
+///
+/// ## Equation with Functions
+///
+/// ```
+/// use mathsolver_core::parser::parse_equation;
+///
+/// let eq = parse_equation("sin(x) = 0.5").unwrap();
+/// // Trigonometric equation
+/// ```
+///
+/// ## Complex Equation
+///
+/// ```
+/// use mathsolver_core::parser::parse_equation;
+///
+/// let eq = parse_equation("sqrt(x^2 + y^2) = r").unwrap();
+/// // Distance formula equation
+/// ```
+///
+/// ## Setting an ID
+///
+/// ```
+/// use mathsolver_core::parser::parse_equation;
+///
+/// let mut eq = parse_equation("F = m * a").unwrap();
+/// eq.id = "newton_second_law".to_string();
+/// assert_eq!(eq.id, "newton_second_law");
+/// ```
+///
+/// ## Error Handling
+///
+/// ```
+/// use mathsolver_core::parser::parse_equation;
+///
+/// // Missing equals sign
+/// assert!(parse_equation("x + 2").is_err());
+///
+/// // Multiple equals signs (not supported)
+/// assert!(parse_equation("x = y = 5").is_err());
+///
+/// // Invalid expression on either side
+/// assert!(parse_equation("2 + + 3 = 5").is_err());
+/// assert!(parse_equation("x = 2 * * 3").is_err());
+/// ```
+///
+/// # Limitations
+///
+/// - Only single equations supported (no equation systems)
+/// - Exactly one equals sign required
+/// - Both sides must be valid expressions
 pub fn parse_equation(input: &str) -> Result<Equation, Vec<ParseError>> {
     let equation_parser = expression_parser()
         .then_ignore(just('=').padded())
