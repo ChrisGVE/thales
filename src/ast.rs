@@ -1,8 +1,46 @@
 //! Abstract Syntax Tree definitions for mathematical expressions.
 //!
-//! Provides the core data structures for representing mathematical equations,
-//! expressions, variables, operators, and functions in a tree structure
-//! suitable for parsing, manipulation, and solving.
+//! This module provides the core data structures for representing mathematical equations,
+//! expressions, variables, operators, and functions in a tree structure suitable for
+//! parsing, manipulation, symbolic differentiation, simplification, and numerical evaluation.
+//!
+//! # Overview
+//!
+//! The AST is built around the [`Expression`] enum, which can represent:
+//! - Numeric literals (integers, rationals, floats, complex numbers)
+//! - Variables with optional dimension information
+//! - Unary operations (negation, absolute value, logical NOT)
+//! - Binary operations (addition, subtraction, multiplication, division, modulo)
+//! - Mathematical functions (trigonometric, exponential, logarithmic, etc.)
+//! - Power operations (exponentiation)
+//!
+//! Expressions can be manipulated through methods like [`Expression::simplify`],
+//! [`Expression::differentiate`], and [`Expression::evaluate`].
+//!
+//! # Examples
+//!
+//! ```
+//! use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+//! use std::collections::HashMap;
+//!
+//! // Create expression: x + 2
+//! let x = Expression::Variable(Variable::new("x"));
+//! let two = Expression::Integer(2);
+//! let expr = Expression::Binary(BinaryOp::Add, Box::new(x), Box::new(two));
+//!
+//! // Evaluate with x = 5
+//! let mut vars = HashMap::new();
+//! vars.insert("x".to_string(), 5.0);
+//! assert_eq!(expr.evaluate(&vars), Some(7.0));
+//! ```
+//!
+//! # See Also
+//!
+//! - [`Equation`] - Represents complete equations with left and right sides
+//! - [`Variable`] - Variable identifiers with optional dimension metadata
+//! - [`UnaryOp`] - Unary operators
+//! - [`BinaryOp`] - Binary operators
+//! - [`Function`] - Mathematical functions
 
 use num_complex::Complex64;
 use num_rational::Rational64;
@@ -12,15 +50,61 @@ use std::collections::HashSet;
 use std::fmt;
 
 /// Represents a complete equation with left and right expressions.
+///
+/// An equation has the form `left = right`, where both sides are
+/// arbitrary expressions. Equations are identified by a unique ID.
+///
+/// # Examples
+///
+/// ```
+/// use mathsolver_core::ast::{Equation, Expression, Variable};
+///
+/// // Create equation: x + 2 = 5
+/// let left = Expression::Binary(
+///     mathsolver_core::ast::BinaryOp::Add,
+///     Box::new(Expression::Variable(Variable::new("x"))),
+///     Box::new(Expression::Integer(2))
+/// );
+/// let right = Expression::Integer(5);
+/// let eq = Equation::new("eq1", left, right);
+///
+/// assert_eq!(eq.id, "eq1");
+/// ```
+///
+/// # See Also
+///
+/// - [`Expression`] - The expression type used for left and right sides
 #[derive(Debug, Clone, PartialEq)]
 pub struct Equation {
+    /// Unique identifier for this equation
     pub id: String,
+    /// Left-hand side expression
     pub left: Expression,
+    /// Right-hand side expression
     pub right: Expression,
 }
 
 impl Equation {
     /// Create a new equation from two expressions.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the equation
+    /// * `left` - Left-hand side expression
+    /// * `right` - Right-hand side expression
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Equation, Expression};
+    ///
+    /// let eq = Equation::new(
+    ///     "pythagorean",
+    ///     Expression::Integer(3),
+    ///     Expression::Integer(5)
+    /// );
+    /// assert_eq!(eq.id, "pythagorean");
+    /// ```
     pub fn new(id: impl Into<String>, left: Expression, right: Expression) -> Self {
         Self {
             id: id.into(),
@@ -31,38 +115,360 @@ impl Equation {
 }
 
 /// Represents a mathematical expression in tree form.
+///
+/// An `Expression` is a recursive data structure that can represent any mathematical
+/// expression from simple constants to complex formulas involving variables, operators,
+/// and functions. Expressions support simplification, differentiation, and numerical evaluation.
+///
+/// # Variants
+///
+/// - [`Integer`](Expression::Integer) - Whole number constants
+/// - [`Rational`](Expression::Rational) - Exact fractions (p/q where p, q are integers)
+/// - [`Float`](Expression::Float) - Floating-point numbers
+/// - [`Complex`](Expression::Complex) - Complex numbers (a + bi)
+/// - [`Variable`](Expression::Variable) - Named variables (e.g., x, y, velocity)
+/// - [`Unary`](Expression::Unary) - Single-argument operations (e.g., -x, |x|)
+/// - [`Binary`](Expression::Binary) - Two-argument operations (e.g., x + y, x * y)
+/// - [`Function`](Expression::Function) - Mathematical functions (e.g., sin(x), log(x))
+/// - [`Power`](Expression::Power) - Exponentiation (base^exponent)
+///
+/// # Examples
+///
+/// ## Creating expressions programmatically
+///
+/// ```
+/// use mathsolver_core::ast::{Expression, Variable, BinaryOp, UnaryOp, Function};
+///
+/// // Simple constant: 42
+/// let constant = Expression::Integer(42);
+///
+/// // Variable: x
+/// let x = Expression::Variable(Variable::new("x"));
+///
+/// // Negation: -x
+/// let neg_x = Expression::Unary(UnaryOp::Neg, Box::new(x.clone()));
+///
+/// // Binary operation: x + 5
+/// let x_plus_5 = Expression::Binary(
+///     BinaryOp::Add,
+///     Box::new(x.clone()),
+///     Box::new(Expression::Integer(5))
+/// );
+///
+/// // Function call: sin(x)
+/// let sin_x = Expression::Function(Function::Sin, vec![x.clone()]);
+///
+/// // Power: x^2
+/// let x_squared = Expression::Power(
+///     Box::new(x.clone()),
+///     Box::new(Expression::Integer(2))
+/// );
+/// ```
+///
+/// ## Simplification
+///
+/// ```
+/// use mathsolver_core::ast::{Expression, BinaryOp};
+///
+/// // Create: 0 + 5
+/// let expr = Expression::Binary(
+///     BinaryOp::Add,
+///     Box::new(Expression::Integer(0)),
+///     Box::new(Expression::Integer(5))
+/// );
+///
+/// // Simplify to: 5
+/// let simplified = expr.simplify();
+/// assert_eq!(simplified, Expression::Integer(5));
+/// ```
+///
+/// ## Evaluation
+///
+/// ```
+/// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+/// use std::collections::HashMap;
+///
+/// // Create: x * 2 + 3
+/// let x = Expression::Variable(Variable::new("x"));
+/// let x_times_2 = Expression::Binary(
+///     BinaryOp::Mul,
+///     Box::new(x),
+///     Box::new(Expression::Integer(2))
+/// );
+/// let expr = Expression::Binary(
+///     BinaryOp::Add,
+///     Box::new(x_times_2),
+///     Box::new(Expression::Integer(3))
+/// );
+///
+/// // Evaluate with x = 10
+/// let mut vars = HashMap::new();
+/// vars.insert("x".to_string(), 10.0);
+/// assert_eq!(expr.evaluate(&vars), Some(23.0));
+/// ```
+///
+/// ## Symbolic differentiation
+///
+/// ```
+/// use mathsolver_core::ast::{Expression, Variable, Function};
+///
+/// // Create: sin(x)
+/// let x = Expression::Variable(Variable::new("x"));
+/// let sin_x = Expression::Function(Function::Sin, vec![x]);
+///
+/// // Differentiate: d/dx[sin(x)] = cos(x)
+/// let derivative = sin_x.differentiate("x");
+/// // Result is cos(x) * 1 (chain rule applied)
+/// ```
+///
+/// # See Also
+///
+/// - [`Variable`] - Variable identifiers with optional dimension metadata
+/// - [`UnaryOp`] - Available unary operators
+/// - [`BinaryOp`] - Available binary operators
+/// - [`Function`] - Available mathematical functions
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
-    /// Integer literal
+    /// Integer literal.
+    ///
+    /// Represents whole number constants (e.g., 0, 42, -17).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::Expression;
+    ///
+    /// let zero = Expression::Integer(0);
+    /// let answer = Expression::Integer(42);
+    /// let negative = Expression::Integer(-17);
+    /// ```
     Integer(i64),
-    /// Rational number (fraction)
+
+    /// Rational number (exact fraction).
+    ///
+    /// Represents fractions as numerator/denominator pairs (e.g., 1/2, 22/7).
+    /// Useful for exact arithmetic without floating-point errors.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::Expression;
+    /// use num_rational::Rational64;
+    ///
+    /// // One half: 1/2
+    /// let half = Expression::Rational(Rational64::new(1, 2));
+    ///
+    /// // Pi approximation: 22/7
+    /// let pi_approx = Expression::Rational(Rational64::new(22, 7));
+    /// ```
     Rational(Rational64),
-    /// Floating point number
+
+    /// Floating-point number.
+    ///
+    /// Represents real numbers with decimal precision (e.g., 3.14159, 2.718).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::Expression;
+    ///
+    /// let pi = Expression::Float(3.14159);
+    /// let e = Expression::Float(2.71828);
+    /// ```
     Float(f64),
-    /// Complex number
+
+    /// Complex number.
+    ///
+    /// Represents complex numbers of the form a + bi where a is the real part
+    /// and b is the imaginary part (e.g., 3+4i, -2i).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::Expression;
+    /// use num_complex::Complex64;
+    ///
+    /// // 3 + 4i
+    /// let z1 = Expression::Complex(Complex64::new(3.0, 4.0));
+    ///
+    /// // -2i (purely imaginary)
+    /// let z2 = Expression::Complex(Complex64::new(0.0, -2.0));
+    /// ```
     Complex(Complex64),
-    /// Variable reference
+
+    /// Variable reference.
+    ///
+    /// Represents a named variable (e.g., x, velocity, temperature).
+    /// Variables can optionally include dimension/unit information.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable};
+    ///
+    /// // Simple variable: x
+    /// let x = Expression::Variable(Variable::new("x"));
+    ///
+    /// // Variable with dimension: velocity [m/s]
+    /// let v = Expression::Variable(Variable::with_dimension("velocity", "m/s"));
+    /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`Variable`] - Variable struct with dimension support
     Variable(Variable),
-    /// Unary operation (e.g., -x, sin(x))
+
+    /// Unary operation (single operand).
+    ///
+    /// Represents operations that take one argument (e.g., -x, |x|, !x).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, UnaryOp};
+    ///
+    /// let x = Expression::Variable(Variable::new("x"));
+    ///
+    /// // Negation: -x
+    /// let neg_x = Expression::Unary(UnaryOp::Neg, Box::new(x.clone()));
+    ///
+    /// // Absolute value: |x|
+    /// let abs_x = Expression::Unary(UnaryOp::Abs, Box::new(x));
+    /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`UnaryOp`] - Available unary operators
     Unary(UnaryOp, Box<Expression>),
-    /// Binary operation (e.g., x + y, x * y)
+
+    /// Binary operation (two operands).
+    ///
+    /// Represents operations that take two arguments (e.g., x + y, a * b).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    ///
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let y = Expression::Variable(Variable::new("y"));
+    ///
+    /// // Addition: x + y
+    /// let sum = Expression::Binary(BinaryOp::Add, Box::new(x.clone()), Box::new(y.clone()));
+    ///
+    /// // Multiplication: x * y
+    /// let product = Expression::Binary(BinaryOp::Mul, Box::new(x), Box::new(y));
+    /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`BinaryOp`] - Available binary operators
     Binary(BinaryOp, Box<Expression>, Box<Expression>),
-    /// Function call with arguments
+
+    /// Function call with arguments.
+    ///
+    /// Represents mathematical function application (e.g., sin(x), log(x, base)).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, Function};
+    ///
+    /// let x = Expression::Variable(Variable::new("x"));
+    ///
+    /// // Sine: sin(x)
+    /// let sin_x = Expression::Function(Function::Sin, vec![x.clone()]);
+    ///
+    /// // Square root: sqrt(x)
+    /// let sqrt_x = Expression::Function(Function::Sqrt, vec![x.clone()]);
+    ///
+    /// // Logarithm: log(x, 10)
+    /// let log_x = Expression::Function(
+    ///     Function::Log,
+    ///     vec![x, Expression::Integer(10)]
+    /// );
+    /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`Function`] - Available mathematical functions
     Function(Function, Vec<Expression>),
-    /// Power operation (base ^ exponent)
+
+    /// Power operation (exponentiation).
+    ///
+    /// Represents base raised to an exponent (e.g., x^2, 2^n, e^x).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable};
+    ///
+    /// let x = Expression::Variable(Variable::new("x"));
+    ///
+    /// // Square: x^2
+    /// let x_squared = Expression::Power(
+    ///     Box::new(x.clone()),
+    ///     Box::new(Expression::Integer(2))
+    /// );
+    ///
+    /// // Exponential: 2^x
+    /// let two_to_x = Expression::Power(
+    ///     Box::new(Expression::Integer(2)),
+    ///     Box::new(x)
+    /// );
+    /// ```
     Power(Box<Expression>, Box<Expression>),
 }
 
 /// Variable identifier with optional metadata.
+///
+/// Represents a named variable in mathematical expressions. Variables can optionally
+/// carry dimension/unit information for dimensional analysis.
+///
+/// # Examples
+///
+/// ```
+/// use mathsolver_core::ast::Variable;
+///
+/// // Simple variable without dimension
+/// let x = Variable::new("x");
+/// assert_eq!(x.name, "x");
+/// assert_eq!(x.dimension, None);
+///
+/// // Variable with dimension (e.g., physical quantity)
+/// let velocity = Variable::with_dimension("v", "m/s");
+/// assert_eq!(velocity.name, "v");
+/// assert_eq!(velocity.dimension, Some("m/s".to_string()));
+/// ```
+///
+/// # See Also
+///
+/// - [`Expression::Variable`] - Expression variant that wraps this type
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Variable {
+    /// Variable name (e.g., "x", "velocity", "temperature")
     pub name: String,
-    /// Optional dimension/unit information
+    /// Optional dimension/unit information (e.g., "m/s", "kg", "meters")
     pub dimension: Option<String>,
 }
 
 impl Variable {
     /// Create a new variable with the given name.
+    ///
+    /// Creates a variable without dimension information.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Variable name
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::Variable;
+    ///
+    /// let x = Variable::new("x");
+    /// let theta = Variable::new("theta");
+    /// ```
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -71,6 +477,24 @@ impl Variable {
     }
 
     /// Create a variable with dimension information.
+    ///
+    /// Creates a variable annotated with physical dimension or unit information.
+    /// Useful for dimensional analysis and unit checking.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Variable name
+    /// * `dimension` - Dimension or unit string (e.g., "m/s", "kg", "meters")
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::Variable;
+    ///
+    /// let velocity = Variable::with_dimension("v", "m/s");
+    /// let mass = Variable::with_dimension("m", "kg");
+    /// let distance = Variable::with_dimension("d", "meters");
+    /// ```
     pub fn with_dimension(name: impl Into<String>, dimension: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -86,34 +510,151 @@ impl fmt::Display for Variable {
 }
 
 /// Unary operators (single operand).
+///
+/// Represents operations that take a single argument.
+///
+/// # Variants
+///
+/// - [`Neg`](UnaryOp::Neg) - Arithmetic negation (-)
+/// - [`Not`](UnaryOp::Not) - Logical NOT (!)
+/// - [`Abs`](UnaryOp::Abs) - Absolute value (|x|)
+///
+/// # Examples
+///
+/// ```
+/// use mathsolver_core::ast::{Expression, Variable, UnaryOp};
+///
+/// let x = Expression::Variable(Variable::new("x"));
+///
+/// // Negation: -x
+/// let neg = Expression::Unary(UnaryOp::Neg, Box::new(x.clone()));
+///
+/// // Absolute value: |x|
+/// let abs = Expression::Unary(UnaryOp::Abs, Box::new(x));
+/// ```
+///
+/// # See Also
+///
+/// - [`Expression::Unary`] - Expression variant using these operators
+/// - [`BinaryOp`] - Binary operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOp {
-    /// Negation (-)
+    /// Arithmetic negation: -x
+    ///
+    /// Returns the additive inverse of the operand.
+    ///
+    /// # Mathematical notation
+    ///
+    /// -x or -(expr)
     Neg,
-    /// Logical NOT
+
+    /// Logical NOT: !x
+    ///
+    /// Logical negation. Treats 0 as false and non-zero as true.
+    ///
+    /// # Mathematical notation
+    ///
+    /// !x or ¬x
     Not,
-    /// Absolute value
+
+    /// Absolute value: |x|
+    ///
+    /// Returns the magnitude of the operand (always non-negative).
+    ///
+    /// # Mathematical notation
+    ///
+    /// |x| or abs(x)
     Abs,
 }
 
 /// Binary operators (two operands).
+///
+/// Represents operations that take two arguments. All binary operators
+/// are left-associative and have defined precedence levels.
+///
+/// # Precedence
+///
+/// Higher precedence operators bind tighter:
+/// - Precedence 2: `*`, `/`, `%` (multiplication, division, modulo)
+/// - Precedence 1: `+`, `-` (addition, subtraction)
+///
+/// # Examples
+///
+/// ```
+/// use mathsolver_core::ast::{Expression, BinaryOp};
+///
+/// let two = Expression::Integer(2);
+/// let three = Expression::Integer(3);
+///
+/// // Addition: 2 + 3
+/// let sum = Expression::Binary(BinaryOp::Add, Box::new(two.clone()), Box::new(three.clone()));
+///
+/// // Multiplication: 2 * 3
+/// let product = Expression::Binary(BinaryOp::Mul, Box::new(two), Box::new(three));
+/// ```
+///
+/// # See Also
+///
+/// - [`Expression::Binary`] - Expression variant using these operators
+/// - [`UnaryOp`] - Unary operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
-    /// Addition (+)
+    /// Addition: x + y
+    ///
+    /// Returns the sum of two operands.
+    ///
+    /// Precedence: 1
     Add,
-    /// Subtraction (-)
+
+    /// Subtraction: x - y
+    ///
+    /// Returns the difference of two operands.
+    ///
+    /// Precedence: 1
     Sub,
-    /// Multiplication (*)
+
+    /// Multiplication: x * y
+    ///
+    /// Returns the product of two operands.
+    ///
+    /// Precedence: 2
     Mul,
-    /// Division (/)
+
+    /// Division: x / y
+    ///
+    /// Returns the quotient of two operands.
+    ///
+    /// Precedence: 2
     Div,
-    /// Modulo (%)
+
+    /// Modulo: x % y
+    ///
+    /// Returns the remainder after division.
+    ///
+    /// Precedence: 2
     Mod,
 }
 
 impl BinaryOp {
     /// Returns the precedence level of this operator.
-    /// Higher numbers bind tighter.
+    ///
+    /// Higher numbers bind tighter. Used for proper parenthesization
+    /// when formatting expressions.
+    ///
+    /// # Precedence levels
+    ///
+    /// - 2: `*`, `/`, `%`
+    /// - 1: `+`, `-`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::BinaryOp;
+    ///
+    /// assert_eq!(BinaryOp::Add.precedence(), 1);
+    /// assert_eq!(BinaryOp::Mul.precedence(), 2);
+    /// assert!(BinaryOp::Mul.precedence() > BinaryOp::Add.precedence());
+    /// ```
     pub fn precedence(self) -> u8 {
         match self {
             BinaryOp::Add | BinaryOp::Sub => 1,
@@ -123,46 +664,295 @@ impl BinaryOp {
 }
 
 /// Mathematical functions.
+///
+/// Represents standard mathematical functions that can be applied to expressions.
+/// Functions are organized into categories: trigonometric, hyperbolic, exponential/logarithmic,
+/// power/root, rounding, and utility functions.
+///
+/// # Categories
+///
+/// ## Trigonometric
+/// - [`Sin`](Function::Sin), [`Cos`](Function::Cos), [`Tan`](Function::Tan)
+/// - [`Asin`](Function::Asin), [`Acos`](Function::Acos), [`Atan`](Function::Atan), [`Atan2`](Function::Atan2)
+///
+/// ## Hyperbolic
+/// - [`Sinh`](Function::Sinh), [`Cosh`](Function::Cosh), [`Tanh`](Function::Tanh)
+///
+/// ## Exponential and Logarithmic
+/// - [`Exp`](Function::Exp), [`Ln`](Function::Ln)
+/// - [`Log`](Function::Log), [`Log2`](Function::Log2), [`Log10`](Function::Log10)
+///
+/// ## Power and Root
+/// - [`Sqrt`](Function::Sqrt), [`Cbrt`](Function::Cbrt), [`Pow`](Function::Pow)
+///
+/// ## Rounding
+/// - [`Floor`](Function::Floor), [`Ceil`](Function::Ceil), [`Round`](Function::Round)
+///
+/// ## Utility
+/// - [`Abs`](Function::Abs), [`Sign`](Function::Sign)
+/// - [`Min`](Function::Min), [`Max`](Function::Max)
+///
+/// # Examples
+///
+/// ```
+/// use mathsolver_core::ast::{Expression, Variable, Function};
+/// use std::collections::HashMap;
+///
+/// let x = Expression::Variable(Variable::new("x"));
+///
+/// // Trigonometric: sin(x)
+/// let sin_x = Expression::Function(Function::Sin, vec![x.clone()]);
+///
+/// // Exponential: exp(x)
+/// let exp_x = Expression::Function(Function::Exp, vec![x.clone()]);
+///
+/// // Square root: sqrt(4)
+/// let sqrt_4 = Expression::Function(Function::Sqrt, vec![Expression::Integer(4)]);
+/// let mut vars = HashMap::new();
+/// assert_eq!(sqrt_4.evaluate(&vars), Some(2.0));
+/// ```
+///
+/// # See Also
+///
+/// - [`Expression::Function`] - Expression variant using functions
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Function {
-    // Trigonometric
+    // Trigonometric functions
+
+    /// Sine function: sin(x)
+    ///
+    /// Returns the sine of the argument (in radians).
+    ///
+    /// # Mathematical notation
+    ///
+    /// sin(x)
     Sin,
+
+    /// Cosine function: cos(x)
+    ///
+    /// Returns the cosine of the argument (in radians).
+    ///
+    /// # Mathematical notation
+    ///
+    /// cos(x)
     Cos,
+
+    /// Tangent function: tan(x)
+    ///
+    /// Returns the tangent of the argument (in radians).
+    ///
+    /// # Mathematical notation
+    ///
+    /// tan(x) = sin(x) / cos(x)
     Tan,
+
+    /// Arcsine function: asin(x)
+    ///
+    /// Returns the inverse sine (in radians). Domain: [-1, 1].
+    ///
+    /// # Mathematical notation
+    ///
+    /// arcsin(x) or sin⁻¹(x)
     Asin,
+
+    /// Arccosine function: acos(x)
+    ///
+    /// Returns the inverse cosine (in radians). Domain: [-1, 1].
+    ///
+    /// # Mathematical notation
+    ///
+    /// arccos(x) or cos⁻¹(x)
     Acos,
+
+    /// Arctangent function: atan(x)
+    ///
+    /// Returns the inverse tangent (in radians).
+    ///
+    /// # Mathematical notation
+    ///
+    /// arctan(x) or tan⁻¹(x)
     Atan,
+
+    /// Two-argument arctangent: atan2(y, x)
+    ///
+    /// Returns the angle in radians between the positive x-axis and the point (x, y).
+    ///
+    /// # Mathematical notation
+    ///
+    /// atan2(y, x)
     Atan2,
 
-    // Hyperbolic
+    // Hyperbolic functions
+
+    /// Hyperbolic sine: sinh(x)
+    ///
+    /// # Mathematical notation
+    ///
+    /// sinh(x) = (eˣ - e⁻ˣ) / 2
     Sinh,
+
+    /// Hyperbolic cosine: cosh(x)
+    ///
+    /// # Mathematical notation
+    ///
+    /// cosh(x) = (eˣ + e⁻ˣ) / 2
     Cosh,
+
+    /// Hyperbolic tangent: tanh(x)
+    ///
+    /// # Mathematical notation
+    ///
+    /// tanh(x) = sinh(x) / cosh(x)
     Tanh,
 
-    // Exponential and logarithmic
+    // Exponential and logarithmic functions
+
+    /// Exponential function: exp(x)
+    ///
+    /// Returns e raised to the power x.
+    ///
+    /// # Mathematical notation
+    ///
+    /// exp(x) = eˣ
     Exp,
+
+    /// Natural logarithm: ln(x)
+    ///
+    /// Returns the natural logarithm (base e).
+    ///
+    /// # Mathematical notation
+    ///
+    /// ln(x) or logₑ(x)
     Ln,
+
+    /// Logarithm with arbitrary base: log(x, base)
+    ///
+    /// Returns the logarithm of x to the given base.
+    ///
+    /// # Mathematical notation
+    ///
+    /// log_base(x)
     Log,
+
+    /// Binary logarithm: log2(x)
+    ///
+    /// Returns the base-2 logarithm.
+    ///
+    /// # Mathematical notation
+    ///
+    /// log₂(x)
     Log2,
+
+    /// Common logarithm: log10(x)
+    ///
+    /// Returns the base-10 logarithm.
+    ///
+    /// # Mathematical notation
+    ///
+    /// log₁₀(x) or log(x)
     Log10,
 
-    // Power and root
+    // Power and root functions
+
+    /// Square root: sqrt(x)
+    ///
+    /// Returns the principal square root.
+    ///
+    /// # Mathematical notation
+    ///
+    /// √x or x^(1/2)
     Sqrt,
+
+    /// Cube root: cbrt(x)
+    ///
+    /// Returns the cube root.
+    ///
+    /// # Mathematical notation
+    ///
+    /// ∛x or x^(1/3)
     Cbrt,
+
+    /// Power function: pow(x, y)
+    ///
+    /// Returns x raised to the power y.
+    ///
+    /// # Mathematical notation
+    ///
+    /// x^y
     Pow,
 
-    // Rounding
+    // Rounding functions
+
+    /// Floor function: floor(x)
+    ///
+    /// Returns the largest integer less than or equal to x.
+    ///
+    /// # Mathematical notation
+    ///
+    /// ⌊x⌋
     Floor,
+
+    /// Ceiling function: ceil(x)
+    ///
+    /// Returns the smallest integer greater than or equal to x.
+    ///
+    /// # Mathematical notation
+    ///
+    /// ⌈x⌉
     Ceil,
+
+    /// Round function: round(x)
+    ///
+    /// Returns the nearest integer, rounding half-way cases away from zero.
+    ///
+    /// # Mathematical notation
+    ///
+    /// round(x)
     Round,
 
-    // Other
+    // Utility functions
+
+    /// Absolute value: abs(x)
+    ///
+    /// Returns the magnitude (always non-negative).
+    ///
+    /// # Mathematical notation
+    ///
+    /// |x|
     Abs,
+
+    /// Sign function: sign(x)
+    ///
+    /// Returns -1 for negative, 0 for zero, +1 for positive.
+    ///
+    /// # Mathematical notation
+    ///
+    /// sgn(x)
     Sign,
+
+    /// Minimum: min(x₁, x₂, ..., xₙ)
+    ///
+    /// Returns the smallest value among arguments.
+    ///
+    /// # Mathematical notation
+    ///
+    /// min(x₁, x₂, ..., xₙ)
     Min,
+
+    /// Maximum: max(x₁, x₂, ..., xₙ)
+    ///
+    /// Returns the largest value among arguments.
+    ///
+    /// # Mathematical notation
+    ///
+    /// max(x₁, x₂, ..., xₙ)
     Max,
 
-    // User-defined function
+    /// User-defined custom function.
+    ///
+    /// Represents a function not built into the standard set.
+    /// Evaluation of custom functions returns `None` unless
+    /// a custom evaluator is provided.
     Custom(String),
 }
 
@@ -292,6 +1082,34 @@ impl Expression {
     }
 
     /// Returns a HashSet of all variable names in the expression.
+    ///
+    /// Recursively traverses the expression tree to collect all unique variable names.
+    /// Variables appearing multiple times are only included once.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    ///
+    /// // x + y * x
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let y = Expression::Variable(Variable::new("y"));
+    /// let y_times_x = Expression::Binary(BinaryOp::Mul, Box::new(y), Box::new(x.clone()));
+    /// let expr = Expression::Binary(BinaryOp::Add, Box::new(x), Box::new(y_times_x));
+    ///
+    /// let vars = expr.variables();
+    /// assert_eq!(vars.len(), 2);
+    /// assert!(vars.contains("x"));
+    /// assert!(vars.contains("y"));
+    /// ```
+    ///
+    /// # Returns
+    ///
+    /// A `HashSet<String>` containing all unique variable names.
+    ///
+    /// # See Also
+    ///
+    /// - [`contains_variable`](Expression::contains_variable) - Check if a specific variable is present
     pub fn variables(&self) -> HashSet<String> {
         let mut vars = HashSet::new();
         self.collect_variables(&mut vars);
@@ -325,6 +1143,37 @@ impl Expression {
     }
 
     /// Returns true if expression contains the named variable.
+    ///
+    /// Recursively searches the expression tree for a variable with the given name.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The variable name to search for
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    ///
+    /// // x + 5
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let expr = Expression::Binary(
+    ///     BinaryOp::Add,
+    ///     Box::new(x),
+    ///     Box::new(Expression::Integer(5))
+    /// );
+    ///
+    /// assert!(expr.contains_variable("x"));
+    /// assert!(!expr.contains_variable("y"));
+    /// ```
+    ///
+    /// # Returns
+    ///
+    /// `true` if the variable is found, `false` otherwise.
+    ///
+    /// # See Also
+    ///
+    /// - [`variables`](Expression::variables) - Get all variables in the expression
     pub fn contains_variable(&self, name: &str) -> bool {
         match self {
             Expression::Variable(v) => v.name == name,
@@ -341,6 +1190,43 @@ impl Expression {
     }
 
     /// Recursively transform the expression using a mapping function.
+    ///
+    /// Applies the given function to every node in the expression tree, bottom-up.
+    /// The transformation is applied to child nodes first, then to the current node.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `F` - Function type that maps `&Expression` to `Expression`
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Transformation function to apply to each node
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    ///
+    /// // Replace all variables named "x" with constant 10
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let y = Expression::Variable(Variable::new("y"));
+    /// let expr = Expression::Binary(BinaryOp::Add, Box::new(x), Box::new(y));
+    ///
+    /// let transformed = expr.map(&|e| {
+    ///     match e {
+    ///         Expression::Variable(v) if v.name == "x" => Expression::Integer(10),
+    ///         _ => e.clone()
+    ///     }
+    /// });
+    ///
+    /// // Result: 10 + y
+    /// assert!(transformed.contains_variable("y"));
+    /// assert!(!transformed.contains_variable("x"));
+    /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`fold`](Expression::fold) - Accumulate values from the expression tree
     pub fn map<F>(&self, f: &F) -> Expression
     where
         F: Fn(&Expression) -> Expression,
@@ -364,6 +1250,37 @@ impl Expression {
     }
 
     /// Fold/reduce the expression tree.
+    ///
+    /// Accumulates a value by traversing the expression tree and applying a function
+    /// to each node along with the accumulated value. Traversal is depth-first.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `T` - Type of the accumulated value
+    /// * `F` - Function type that combines accumulated value with each node
+    ///
+    /// # Arguments
+    ///
+    /// * `init` - Initial accumulated value
+    /// * `f` - Reduction function `fn(accumulator, node) -> accumulator`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    ///
+    /// // Count all nodes in the expression tree
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let five = Expression::Integer(5);
+    /// let expr = Expression::Binary(BinaryOp::Add, Box::new(x), Box::new(five));
+    ///
+    /// let node_count = expr.fold(0, &|count, _node| count + 1);
+    /// assert_eq!(node_count, 3); // Binary node + 2 leaf nodes
+    /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`map`](Expression::map) - Transform each node in the expression tree
     pub fn fold<T, F>(&self, init: T, f: &F) -> T
     where
         F: Fn(T, &Expression) -> T,
@@ -387,6 +1304,56 @@ impl Expression {
     }
 
     /// Apply basic algebraic simplifications.
+    ///
+    /// Recursively simplifies the expression using standard algebraic identities
+    /// and constant folding. This method applies:
+    ///
+    /// # Simplification Rules
+    ///
+    /// ## Identity simplifications
+    /// - `0 + x` → `x`, `x + 0` → `x`
+    /// - `x - 0` → `x`
+    /// - `0 * x` → `0`, `x * 0` → `0`
+    /// - `1 * x` → `x`, `x * 1` → `x`
+    /// - `x / 1` → `x`
+    /// - `x^0` → `1` (where x ≠ 0)
+    /// - `x^1` → `x`
+    /// - `-(-x)` → `x`
+    ///
+    /// ## Constant folding
+    /// - Evaluates operations on numeric constants (e.g., `2 + 3` → `5`)
+    /// - Evaluates function calls with constant arguments (e.g., `sin(0)` → `0`)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    ///
+    /// // 0 + x simplifies to x
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let expr = Expression::Binary(
+    ///     BinaryOp::Add,
+    ///     Box::new(Expression::Integer(0)),
+    ///     Box::new(x.clone())
+    /// );
+    /// assert_eq!(expr.simplify(), x);
+    ///
+    /// // 2 * 3 simplifies to 6
+    /// let expr2 = Expression::Binary(
+    ///     BinaryOp::Mul,
+    ///     Box::new(Expression::Integer(2)),
+    ///     Box::new(Expression::Integer(3))
+    /// );
+    /// assert_eq!(expr2.simplify(), Expression::Integer(6));
+    /// ```
+    ///
+    /// # Returns
+    ///
+    /// A new simplified expression. The original expression is unchanged.
+    ///
+    /// # See Also
+    ///
+    /// - [`evaluate`](Expression::evaluate) - Numerical evaluation with variable values
     pub fn simplify(&self) -> Expression {
         // First, recursively simplify sub-expressions
         let simplified = match self {
@@ -588,19 +1555,69 @@ impl Expression {
 
     /// Compute the symbolic derivative of this expression with respect to a variable.
     ///
-    /// Uses standard differentiation rules:
+    /// Performs symbolic differentiation using standard calculus rules. The result
+    /// is an exact symbolic expression (not a numerical approximation) that may
+    /// benefit from simplification.
+    ///
+    /// # Differentiation Rules
+    ///
+    /// ## Basic rules
     /// - Constant rule: d/dx[c] = 0
-    /// - Power rule: d/dx[x^n] = n*x^(n-1)
+    /// - Variable rule: d/dx[x] = 1, d/dx[y] = 0
+    /// - Power rule: d/dx[x^n] = n·x^(n-1)
     /// - Sum rule: d/dx[u+v] = du/dx + dv/dx
-    /// - Product rule: d/dx[u*v] = u*dv/dx + v*du/dx
-    /// - Quotient rule: d/dx[u/v] = (v*du/dx - u*dv/dx) / v^2
-    /// - Chain rule: d/dx[f(g(x))] = f'(g(x)) * g'(x)
+    /// - Difference rule: d/dx[u-v] = du/dx - dv/dx
+    ///
+    /// ## Product and quotient
+    /// - Product rule: d/dx[u·v] = u·(dv/dx) + v·(du/dx)
+    /// - Quotient rule: d/dx[u/v] = (v·du/dx - u·dv/dx) / v²
+    ///
+    /// ## Chain rule
+    /// - d/dx[f(g(x))] = f'(g(x))·g'(x)
+    ///
+    /// ## Exponential and logarithmic
+    /// - d/dx[exp(u)] = exp(u)·du/dx
+    /// - d/dx[ln(u)] = (1/u)·du/dx
+    /// - d/dx[log₁₀(u)] = (1/(u·ln(10)))·du/dx
+    ///
+    /// ## Trigonometric
+    /// - d/dx[sin(u)] = cos(u)·du/dx
+    /// - d/dx[cos(u)] = -sin(u)·du/dx
+    /// - d/dx[tan(u)] = sec²(u)·du/dx
     ///
     /// # Arguments
+    ///
     /// * `with_respect_to` - Name of the variable to differentiate with respect to
     ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp, Function};
+    ///
+    /// // d/dx[x^2] = 2*x
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let x_squared = Expression::Power(
+    ///     Box::new(x.clone()),
+    ///     Box::new(Expression::Integer(2))
+    /// );
+    /// let derivative = x_squared.differentiate("x");
+    /// // Result is: 2 * x^(2-1) = 2 * x
+    ///
+    /// // d/dx[sin(x)] = cos(x)
+    /// let sin_x = Expression::Function(Function::Sin, vec![x.clone()]);
+    /// let d_sin = sin_x.differentiate("x");
+    /// // Result is: cos(x) * 1 = cos(x)
+    /// ```
+    ///
     /// # Returns
-    /// A new expression representing the derivative
+    ///
+    /// A new expression representing the derivative. The result may contain
+    /// redundant terms (like multiplication by 1) that can be removed with
+    /// [`simplify`](Expression::simplify).
+    ///
+    /// # See Also
+    ///
+    /// - [`simplify`](Expression::simplify) - Simplify the derivative result
     pub fn differentiate(&self, with_respect_to: &str) -> Expression {
         match self {
             // Constant rule: d/dx[c] = 0
@@ -1096,7 +2113,60 @@ impl Expression {
     }
 
     /// Evaluate the expression with the given variable values.
-    /// Returns None if variables are missing or evaluation fails.
+    ///
+    /// Recursively evaluates the expression tree to produce a single floating-point result.
+    /// All variables must have values provided in the `vars` map, otherwise evaluation fails.
+    ///
+    /// # Arguments
+    ///
+    /// * `vars` - HashMap mapping variable names to their numeric values
+    ///
+    /// # Returns
+    ///
+    /// - `Some(f64)` - The computed result if evaluation succeeds
+    /// - `None` - If evaluation fails due to:
+    ///   - Missing variable value
+    ///   - Division by zero
+    ///   - Complex result when real number expected
+    ///   - Invalid function argument (e.g., sqrt of negative, ln of negative)
+    ///   - Custom function encountered (not evaluable)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp, Function};
+    /// use std::collections::HashMap;
+    ///
+    /// // Evaluate: x^2 + 2*x + 1 with x = 3
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let x_squared = Expression::Power(
+    ///     Box::new(x.clone()),
+    ///     Box::new(Expression::Integer(2))
+    /// );
+    /// let two_x = Expression::Binary(
+    ///     BinaryOp::Mul,
+    ///     Box::new(Expression::Integer(2)),
+    ///     Box::new(x.clone())
+    /// );
+    /// let sum1 = Expression::Binary(BinaryOp::Add, Box::new(x_squared), Box::new(two_x));
+    /// let expr = Expression::Binary(BinaryOp::Add, Box::new(sum1), Box::new(Expression::Integer(1)));
+    ///
+    /// let mut vars = HashMap::new();
+    /// vars.insert("x".to_string(), 3.0);
+    /// assert_eq!(expr.evaluate(&vars), Some(16.0)); // 3^2 + 2*3 + 1 = 16
+    ///
+    /// // Evaluate function: sqrt(16)
+    /// let sqrt_16 = Expression::Function(
+    ///     Function::Sqrt,
+    ///     vec![Expression::Integer(16)]
+    /// );
+    /// assert_eq!(sqrt_16.evaluate(&HashMap::new()), Some(4.0));
+    /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`simplify`](Expression::simplify) - Symbolic simplification before evaluation
+    /// - [`variables`](Expression::variables) - Get all variables that need values
     pub fn evaluate(&self, vars: &HashMap<String, f64>) -> Option<f64> {
         match self {
             Expression::Integer(n) => Some(*n as f64),
