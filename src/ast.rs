@@ -52,59 +52,332 @@ use std::fmt;
 /// Represents a complete equation with left and right expressions.
 ///
 /// An equation has the form `left = right`, where both sides are
-/// arbitrary expressions. Equations are identified by a unique ID.
+/// arbitrary expressions. Equations are identified by a unique ID
+/// for tracking and reference purposes.
+///
+/// # Structure
+///
+/// An `Equation` consists of three components:
+/// - **id**: Unique string identifier for the equation (e.g., "pythagorean", "ohms_law")
+/// - **left**: Left-hand side [`Expression`]
+/// - **right**: Right-hand side [`Expression`]
+///
+/// Both sides can be arbitrary mathematical expressions including variables,
+/// constants, operators, and functions.
 ///
 /// # Examples
 ///
+/// ## Linear equations
+///
 /// ```
-/// use mathsolver_core::ast::{Equation, Expression, Variable};
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
 ///
 /// // Create equation: x + 2 = 5
 /// let left = Expression::Binary(
-///     mathsolver_core::ast::BinaryOp::Add,
+///     BinaryOp::Add,
 ///     Box::new(Expression::Variable(Variable::new("x"))),
 ///     Box::new(Expression::Integer(2))
 /// );
 /// let right = Expression::Integer(5);
-/// let eq = Equation::new("eq1", left, right);
+/// let eq = Equation::new("linear", left, right);
 ///
-/// assert_eq!(eq.id, "eq1");
+/// assert_eq!(eq.id, "linear");
+/// ```
+///
+/// ## Quadratic equations
+///
+/// ```
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+///
+/// // Create equation: x² - 5x + 6 = 0
+/// let x = Expression::Variable(Variable::new("x"));
+///
+/// // x²
+/// let x_squared = Expression::Power(
+///     Box::new(x.clone()),
+///     Box::new(Expression::Integer(2))
+/// );
+///
+/// // 5x
+/// let five_x = Expression::Binary(
+///     BinaryOp::Mul,
+///     Box::new(Expression::Integer(5)),
+///     Box::new(x.clone())
+/// );
+///
+/// // x² - 5x
+/// let term1 = Expression::Binary(
+///     BinaryOp::Sub,
+///     Box::new(x_squared),
+///     Box::new(five_x)
+/// );
+///
+/// // x² - 5x + 6
+/// let left = Expression::Binary(
+///     BinaryOp::Add,
+///     Box::new(term1),
+///     Box::new(Expression::Integer(6))
+/// );
+///
+/// let eq = Equation::new("quadratic", left, Expression::Integer(0));
+/// assert_eq!(eq.id, "quadratic");
+/// ```
+///
+/// ## Transcendental equations
+///
+/// ```
+/// use mathsolver_core::ast::{Equation, Expression, Variable, Function, BinaryOp};
+///
+/// // Create equation: sin(x) = 0.5
+/// let x = Expression::Variable(Variable::new("x"));
+/// let sin_x = Expression::Function(Function::Sin, vec![x]);
+/// let half = Expression::Float(0.5);
+///
+/// let eq = Equation::new("transcendental", sin_x, half);
+/// assert_eq!(eq.id, "transcendental");
+/// ```
+///
+/// ## Physics equations
+///
+/// ```
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+///
+/// // Ohm's Law: V = I × R
+/// let v = Expression::Variable(Variable::with_dimension("V", "volts"));
+/// let i = Expression::Variable(Variable::with_dimension("I", "amperes"));
+/// let r = Expression::Variable(Variable::with_dimension("R", "ohms"));
+///
+/// let i_times_r = Expression::Binary(
+///     BinaryOp::Mul,
+///     Box::new(i),
+///     Box::new(r)
+/// );
+///
+/// let ohms_law = Equation::new("ohms_law", v, i_times_r);
+/// assert_eq!(ohms_law.id, "ohms_law");
+/// ```
+///
+/// # Variable Extraction
+///
+/// Extract all variables from both sides of an equation:
+///
+/// ```
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use std::collections::HashSet;
+///
+/// // Create equation: a + b = c
+/// let a = Expression::Variable(Variable::new("a"));
+/// let b = Expression::Variable(Variable::new("b"));
+/// let c = Expression::Variable(Variable::new("c"));
+///
+/// let left = Expression::Binary(BinaryOp::Add, Box::new(a), Box::new(b));
+/// let eq = Equation::new("sum", left, c);
+///
+/// // Extract variables from left side
+/// let left_vars = eq.left.variables();
+/// assert!(left_vars.contains("a"));
+/// assert!(left_vars.contains("b"));
+///
+/// // Extract variables from right side
+/// let right_vars = eq.right.variables();
+/// assert!(right_vars.contains("c"));
+///
+/// // Extract all variables from both sides
+/// let mut all_vars = HashSet::new();
+/// all_vars.extend(eq.left.variables());
+/// all_vars.extend(eq.right.variables());
+/// assert_eq!(all_vars.len(), 3);
+/// assert!(all_vars.contains("a"));
+/// assert!(all_vars.contains("b"));
+/// assert!(all_vars.contains("c"));
+/// ```
+///
+/// # Mathematical Notation
+///
+/// Equations can represent various mathematical forms:
+///
+/// - Linear: `ax + b = c`
+/// - Quadratic: `ax² + bx + c = 0`
+/// - Polynomial: `aₙxⁿ + ... + a₁x + a₀ = 0`
+/// - Exponential: `a·eᵇˣ = c`
+/// - Logarithmic: `a·ln(x) + b = c`
+/// - Trigonometric: `a·sin(bx + c) = d`
+/// - Rational: `p(x)/q(x) = r(x)`
+/// - Implicit: `f(x,y) = g(x,y)`
+///
+/// # Integration with Solver
+///
+/// Equations are typically passed to solver modules for finding solutions:
+///
+/// ```ignore
+/// // This example shows the typical workflow (solver module not yet implemented)
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// // use mathsolver_core::solver::Solver; // Future solver module
+///
+/// // Create equation: 2x + 3 = 7
+/// let x = Expression::Variable(Variable::new("x"));
+/// let two_x = Expression::Binary(
+///     BinaryOp::Mul,
+///     Box::new(Expression::Integer(2)),
+///     Box::new(x)
+/// );
+/// let left = Expression::Binary(
+///     BinaryOp::Add,
+///     Box::new(two_x),
+///     Box::new(Expression::Integer(3))
+/// );
+/// let eq = Equation::new("example", left, Expression::Integer(7));
+///
+/// // Solve for x (future API)
+/// // let solutions = Solver::solve(&eq, "x")?;
+/// // assert_eq!(solutions[0], 2.0); // x = 2
 /// ```
 ///
 /// # See Also
 ///
 /// - [`Expression`] - The expression type used for left and right sides
+/// - [`Expression::variables`] - Extract variables from expressions
+/// - [`Expression::evaluate`] - Evaluate expressions with variable values
+/// - [`Expression::simplify`] - Simplify expressions algebraically
+/// - Future: `solver` module for solving equations
 #[derive(Debug, Clone, PartialEq)]
 pub struct Equation {
-    /// Unique identifier for this equation
+    /// Unique identifier for this equation.
+    ///
+    /// Used for tracking equations in systems, referencing in error messages,
+    /// and organizing equation collections. Examples: "eq1", "pythagorean",
+    /// "ohms_law", "conservation_energy".
     pub id: String,
-    /// Left-hand side expression
+
+    /// Left-hand side expression.
+    ///
+    /// Can be any valid mathematical expression including variables, constants,
+    /// operators, and functions. Represents the expression on the left side
+    /// of the equals sign.
     pub left: Expression,
-    /// Right-hand side expression
+
+    /// Right-hand side expression.
+    ///
+    /// Can be any valid mathematical expression including variables, constants,
+    /// operators, and functions. Represents the expression on the right side
+    /// of the equals sign.
     pub right: Expression,
 }
 
 impl Equation {
     /// Create a new equation from two expressions.
     ///
+    /// Constructs an equation of the form `left = right` with a unique identifier.
+    /// The `id` parameter accepts any type that implements `Into<String>`, allowing
+    /// both string literals and owned strings.
+    ///
     /// # Arguments
     ///
-    /// * `id` - Unique identifier for the equation
+    /// * `id` - Unique identifier for the equation (accepts `&str` or `String`)
     /// * `left` - Left-hand side expression
     /// * `right` - Right-hand side expression
     ///
     /// # Examples
     ///
+    /// ## Simple constant equation
+    ///
     /// ```
     /// use mathsolver_core::ast::{Equation, Expression};
     ///
+    /// // Create equation: 3 = 3
     /// let eq = Equation::new(
-    ///     "pythagorean",
+    ///     "identity",
     ///     Expression::Integer(3),
-    ///     Expression::Integer(5)
+    ///     Expression::Integer(3)
     /// );
-    /// assert_eq!(eq.id, "pythagorean");
+    /// assert_eq!(eq.id, "identity");
     /// ```
+    ///
+    /// ## Linear equation with variable
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+    ///
+    /// // Create equation: 2x = 10
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let two_x = Expression::Binary(
+    ///     BinaryOp::Mul,
+    ///     Box::new(Expression::Integer(2)),
+    ///     Box::new(x)
+    /// );
+    ///
+    /// let eq = Equation::new("linear", two_x, Expression::Integer(10));
+    /// assert_eq!(eq.id, "linear");
+    /// assert!(eq.left.contains_variable("x"));
+    /// ```
+    ///
+    /// ## Pythagorean theorem
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+    ///
+    /// // Create equation: a² + b² = c²
+    /// let a = Expression::Variable(Variable::new("a"));
+    /// let b = Expression::Variable(Variable::new("b"));
+    /// let c = Expression::Variable(Variable::new("c"));
+    ///
+    /// let a_squared = Expression::Power(
+    ///     Box::new(a),
+    ///     Box::new(Expression::Integer(2))
+    /// );
+    /// let b_squared = Expression::Power(
+    ///     Box::new(b),
+    ///     Box::new(Expression::Integer(2))
+    /// );
+    /// let c_squared = Expression::Power(
+    ///     Box::new(c),
+    ///     Box::new(Expression::Integer(2))
+    /// );
+    ///
+    /// let left = Expression::Binary(
+    ///     BinaryOp::Add,
+    ///     Box::new(a_squared),
+    ///     Box::new(b_squared)
+    /// );
+    ///
+    /// let pythagorean = Equation::new("pythagorean", left, c_squared);
+    /// assert_eq!(pythagorean.id, "pythagorean");
+    /// ```
+    ///
+    /// ## Using owned String for ID
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Equation, Expression};
+    ///
+    /// let equation_name = format!("eq_{}", 42);
+    /// let eq = Equation::new(
+    ///     equation_name,
+    ///     Expression::Integer(1),
+    ///     Expression::Integer(1)
+    /// );
+    /// assert_eq!(eq.id, "eq_42");
+    /// ```
+    ///
+    /// ## Creating equation from parser output
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp, Function};
+    ///
+    /// // Typical use case: wrapping parsed expressions into an equation
+    /// // Example: exp(x) = 2.718
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let exp_x = Expression::Function(Function::Exp, vec![x]);
+    /// let e = Expression::Float(2.718281828);
+    ///
+    /// let eq = Equation::new("exponential", exp_x, e);
+    /// assert_eq!(eq.id, "exponential");
+    /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`Expression`] - For building equation expressions
+    /// - [`Variable::new`] - Creating variables for equations
+    /// - [`BinaryOp`] - Binary operators for building expressions
     pub fn new(id: impl Into<String>, left: Expression, right: Expression) -> Self {
         Self {
             id: id.into(),
