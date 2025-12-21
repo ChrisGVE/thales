@@ -546,10 +546,16 @@ pub struct SecantMethod {
 }
 
 impl SecantMethod {
+    /// Creates a new secant method solver with custom configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Numerical configuration (tolerance, iterations, etc.)
     pub fn new(config: NumericalConfig) -> Self {
         Self { config }
     }
 
+    /// Creates a new secant method solver with default configuration.
     pub fn with_default_config() -> Self {
         Self {
             config: NumericalConfig::default(),
@@ -668,10 +674,16 @@ pub struct BisectionMethod {
 }
 
 impl BisectionMethod {
+    /// Creates a new bisection method solver with custom configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Numerical configuration (tolerance, iterations, etc.)
     pub fn new(config: NumericalConfig) -> Self {
         Self { config }
     }
 
+    /// Creates a new bisection method solver with default configuration.
     pub fn with_default_config() -> Self {
         Self {
             config: NumericalConfig::default(),
@@ -838,10 +850,16 @@ pub struct BrentsMethod {
 }
 
 impl BrentsMethod {
+    /// Creates a new Brent's method solver with custom configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Numerical configuration (tolerance, iterations, etc.)
     pub fn new(config: NumericalConfig) -> Self {
         Self { config }
     }
 
+    /// Creates a new Brent's method solver with default configuration.
     pub fn with_default_config() -> Self {
         Self {
             config: NumericalConfig::default(),
@@ -870,6 +888,12 @@ pub struct GradientDescent {
 }
 
 impl GradientDescent {
+    /// Creates a new gradient descent optimizer with custom configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Numerical configuration (tolerance, iterations, etc.)
+    /// * `learning_rate` - Step size for gradient descent (typically 0.001 to 0.1)
     pub fn new(config: NumericalConfig, learning_rate: f64) -> Self {
         Self {
             config,
@@ -897,10 +921,16 @@ pub struct LevenbergMarquardt {
 }
 
 impl LevenbergMarquardt {
+    /// Creates a new Levenberg-Marquardt solver with custom configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Numerical configuration (tolerance, iterations, etc.)
     pub fn new(config: NumericalConfig) -> Self {
         Self { config }
     }
 
+    /// Creates a new Levenberg-Marquardt solver with default configuration.
     pub fn with_default_config() -> Self {
         Self {
             config: NumericalConfig::default(),
@@ -1045,10 +1075,16 @@ pub struct SmartNumericalSolver {
 }
 
 impl SmartNumericalSolver {
+    /// Creates a new smart numerical solver with custom configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Numerical configuration (tolerance, iterations, initial guess, etc.)
     pub fn new(config: NumericalConfig) -> Self {
         Self { config }
     }
 
+    /// Creates a new smart numerical solver with default configuration.
     pub fn with_default_config() -> Self {
         Self {
             config: NumericalConfig::default(),
@@ -1132,16 +1168,28 @@ pub struct Evaluator {
 }
 
 impl Evaluator {
+    /// Creates a new evaluator with no variables defined.
     pub fn new() -> Self {
         Self {
             variables: HashMap::new(),
         }
     }
 
+    /// Creates a new evaluator with predefined variable values.
+    ///
+    /// # Arguments
+    ///
+    /// * `variables` - Map of variables to their numeric values
     pub fn with_variables(variables: HashMap<Variable, f64>) -> Self {
         Self { variables }
     }
 
+    /// Sets or updates the value of a variable.
+    ///
+    /// # Arguments
+    ///
+    /// * `var` - Variable to set
+    /// * `value` - Numeric value to assign
     pub fn set_variable(&mut self, var: Variable, value: f64) {
         self.variables.insert(var, value);
     }

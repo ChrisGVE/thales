@@ -533,7 +533,6 @@ impl ResolutionStep {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operation {
     // ===== Both-Sides Operations =====
-
     /// Add the same expression to both sides of the equation.
     ///
     /// Used to eliminate negative terms or move constants across the equation.
@@ -605,7 +604,6 @@ pub enum Operation {
     ApplyFunction(String),
 
     // ===== Expression Transformations =====
-
     /// Simplify the expression by combining like terms, reducing fractions, etc.
     ///
     /// # Example
@@ -642,7 +640,6 @@ pub enum Operation {
     Cancel,
 
     // ===== Variable Manipulation =====
-
     /// Substitute a variable with a specific value or expression.
     ///
     /// # Example
@@ -672,7 +669,6 @@ pub enum Operation {
     MoveTerm(Expression),
 
     // ===== Identity Applications =====
-
     /// Apply a named algebraic identity.
     ///
     /// # Example
@@ -695,7 +691,6 @@ pub enum Operation {
     ApplyLogProperty(String),
 
     // ===== Advanced Methods =====
-
     /// Solve using the quadratic formula: x = (-b ± √(b² - 4ac)) / 2a
     ///
     /// Used for equations in the form `ax² + bx + c = 0`
@@ -927,7 +922,8 @@ impl ResolutionPathBuilder {
     /// assert_eq!(path.step_count(), 1);
     /// ```
     pub fn step(mut self, operation: Operation, explanation: String, result: Expression) -> Self {
-        self.path.add_step(ResolutionStep::new(operation, explanation, result));
+        self.path
+            .add_step(ResolutionStep::new(operation, explanation, result));
         self
     }
 

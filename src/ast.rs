@@ -1619,11 +1619,11 @@ impl Expression {
     ///
     /// The simplification process uses several private helper methods:
     ///
-    /// - [`is_zero`](Expression::is_zero): Checks if expression equals zero (Integer 0 or Float 0.0)
-    /// - [`is_one`](Expression::is_one): Checks if expression equals one (Integer 1 or Float 1.0)
-    /// - [`is_numeric_constant`](Expression::is_numeric_constant): True for Integer, Float, Rational
-    /// - [`extract_numeric_value`](Expression::extract_numeric_value): Converts constant to f64
-    /// - [`from_numeric_value`](Expression::from_numeric_value): Creates Integer if whole, Float otherwise
+    /// - `is_zero`: Checks if expression equals zero (Integer 0 or Float 0.0)
+    /// - `is_one`: Checks if expression equals one (Integer 1 or Float 1.0)
+    /// - `is_numeric_constant`: True for Integer, Float, Rational
+    /// - `extract_numeric_value`: Converts constant to f64
+    /// - `from_numeric_value`: Creates Integer if whole, Float otherwise
     ///
     /// # Limitations
     ///
@@ -2104,12 +2104,12 @@ impl Expression {
     /// ## Basic Rules
     ///
     /// ### Constant Rule
-    /// **d/dx[c] = 0**
+    /// **d/dx\[c\] = 0**
     ///
     /// The derivative of any constant is zero.
     ///
     /// ### Variable Rule
-    /// **d/dx[x] = 1**, **d/dx[y] = 0** (when differentiating with respect to x)
+    /// **d/dx\[x\] = 1**, **d/dx\[y\] = 0** (when differentiating with respect to x)
     ///
     /// The derivative of a variable with respect to itself is 1; with respect to any other variable is 0.
     ///

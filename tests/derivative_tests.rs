@@ -108,11 +108,7 @@ mod basic_derivatives {
     #[test]
     fn test_power_rule_fractional() {
         // d/dx[x^(1/2)] = (1/2)*x^(-1/2) = 1/(2*sqrt(x))
-        let half = Expression::Binary(
-            BinaryOp::Div,
-            Box::new(int(1)),
-            Box::new(int(2))
-        );
+        let half = Expression::Binary(BinaryOp::Div, Box::new(int(1)), Box::new(int(2)));
         let expr = Expression::Power(Box::new(var("x")), Box::new(half));
         let derivative = expr.differentiate("x");
 
@@ -130,7 +126,7 @@ mod basic_derivatives {
         let expr = Expression::Binary(
             BinaryOp::Add,
             Box::new(var("x")),
-            Box::new(Expression::Power(Box::new(var("x")), Box::new(int(2))))
+            Box::new(Expression::Power(Box::new(var("x")), Box::new(int(2)))),
         );
         let derivative = expr.differentiate("x");
 
@@ -147,7 +143,7 @@ mod basic_derivatives {
         let expr = Expression::Binary(
             BinaryOp::Sub,
             Box::new(Expression::Power(Box::new(var("x")), Box::new(int(3)))),
-            Box::new(var("x"))
+            Box::new(var("x")),
         );
         let derivative = expr.differentiate("x");
 
@@ -169,7 +165,7 @@ mod product_quotient_rules {
         let expr = Expression::Binary(
             BinaryOp::Mul,
             Box::new(var("x")),
-            Box::new(Expression::Power(Box::new(var("x")), Box::new(int(2))))
+            Box::new(Expression::Power(Box::new(var("x")), Box::new(int(2)))),
         );
         let derivative = expr.differentiate("x");
 
@@ -186,7 +182,7 @@ mod product_quotient_rules {
         let expr = Expression::Binary(
             BinaryOp::Mul,
             Box::new(int(5)),
-            Box::new(Expression::Power(Box::new(var("x")), Box::new(int(2))))
+            Box::new(Expression::Power(Box::new(var("x")), Box::new(int(2)))),
         );
         let derivative = expr.differentiate("x");
 
@@ -203,7 +199,7 @@ mod product_quotient_rules {
         let expr = Expression::Binary(
             BinaryOp::Div,
             Box::new(Expression::Power(Box::new(var("x")), Box::new(int(2)))),
-            Box::new(var("x"))
+            Box::new(var("x")),
         );
         let derivative = expr.differentiate("x");
 
@@ -218,16 +214,8 @@ mod product_quotient_rules {
     fn test_quotient_rule_complex() {
         // d/dx[x / (x + 1)] = ((x+1)*1 - x*1) / (x+1)^2 = 1 / (x+1)^2
         let numerator = var("x");
-        let denominator = Expression::Binary(
-            BinaryOp::Add,
-            Box::new(var("x")),
-            Box::new(int(1))
-        );
-        let expr = Expression::Binary(
-            BinaryOp::Div,
-            Box::new(numerator),
-            Box::new(denominator)
-        );
+        let denominator = Expression::Binary(BinaryOp::Add, Box::new(var("x")), Box::new(int(1)));
+        let expr = Expression::Binary(BinaryOp::Div, Box::new(numerator), Box::new(denominator));
         let derivative = expr.differentiate("x");
 
         let mut values = HashMap::new();
@@ -245,11 +233,7 @@ mod chain_rule {
     #[test]
     fn test_chain_rule_power() {
         // d/dx[(2*x)^2] = 2 * (2*x)^1 * 2 = 8*x
-        let inner = Expression::Binary(
-            BinaryOp::Mul,
-            Box::new(int(2)),
-            Box::new(var("x"))
-        );
+        let inner = Expression::Binary(BinaryOp::Mul, Box::new(int(2)), Box::new(var("x")));
         let expr = Expression::Power(Box::new(inner), Box::new(int(2)));
         let derivative = expr.differentiate("x");
 
@@ -321,11 +305,7 @@ mod trig_derivatives {
     #[test]
     fn test_sin_chain_rule() {
         // d/dx[sin(2*x)] = cos(2*x) * 2 = 2*cos(2*x)
-        let inner = Expression::Binary(
-            BinaryOp::Mul,
-            Box::new(int(2)),
-            Box::new(var("x"))
-        );
+        let inner = Expression::Binary(BinaryOp::Mul, Box::new(int(2)), Box::new(var("x")));
         let expr = Expression::Function(Function::Sin, vec![inner]);
         let derivative = expr.differentiate("x");
 
@@ -383,11 +363,7 @@ mod exp_log_derivatives {
     #[test]
     fn test_exp_chain_rule() {
         // d/dx[exp(2*x)] = exp(2*x) * 2
-        let inner = Expression::Binary(
-            BinaryOp::Mul,
-            Box::new(int(2)),
-            Box::new(var("x"))
-        );
+        let inner = Expression::Binary(BinaryOp::Mul, Box::new(int(2)), Box::new(var("x")));
         let expr = Expression::Function(Function::Exp, vec![inner]);
         let derivative = expr.differentiate("x");
 
@@ -422,7 +398,7 @@ mod exp_log_derivatives {
         values.insert("x".to_string(), 3.0);
 
         let result = derivative.simplify().evaluate(&values).unwrap();
-        assert!((result - 2.0/3.0).abs() < 1e-10);
+        assert!((result - 2.0 / 3.0).abs() < 1e-10);
     }
 
     #[test]
@@ -482,7 +458,7 @@ mod sqrt_derivatives {
 
         let result = derivative.simplify().evaluate(&values).unwrap();
         // 1/(3 * 8^(2/3)) = 1/(3 * 4) = 1/12
-        assert!((result - 1.0/12.0).abs() < 1e-10);
+        assert!((result - 1.0 / 12.0).abs() < 1e-10);
     }
 }
 
@@ -533,8 +509,8 @@ mod partial_derivatives {
         let dv_dh = compute_partial_derivative(&equation, "V", "h", &values).unwrap();
 
         assert_eq!(dv_dl, 12.0); // w * h = 3 * 4
-        assert_eq!(dv_dw, 8.0);  // l * h = 2 * 4
-        assert_eq!(dv_dh, 6.0);  // l * w = 2 * 3
+        assert_eq!(dv_dw, 8.0); // l * h = 2 * 4
+        assert_eq!(dv_dh, 6.0); // l * w = 2 * 3
     }
 
     #[test]
@@ -553,7 +529,8 @@ mod partial_derivatives {
         values.insert("h".to_string(), 4.0);
 
         let input_vars = vec!["l".to_string(), "w".to_string(), "h".to_string()];
-        let derivatives = compute_all_partial_derivatives(&equation, "V", &input_vars, &values).unwrap();
+        let derivatives =
+            compute_all_partial_derivatives(&equation, "V", &input_vars, &values).unwrap();
 
         assert_eq!(derivatives.get("l").unwrap(), &12.0);
         assert_eq!(derivatives.get("w").unwrap(), &8.0);
@@ -604,7 +581,7 @@ mod numerical_comparison {
         let two_x_squared = Expression::Binary(
             BinaryOp::Mul,
             Box::new(int(2)),
-            Box::new(Expression::Power(Box::new(x.clone()), Box::new(int(2))))
+            Box::new(Expression::Power(Box::new(x.clone()), Box::new(int(2)))),
         );
         let five_x = Expression::Binary(BinaryOp::Mul, Box::new(int(5)), Box::new(x.clone()));
 
@@ -669,18 +646,10 @@ mod numerical_comparison {
         let numerator = Expression::Binary(
             BinaryOp::Add,
             Box::new(Expression::Power(Box::new(var("x")), Box::new(int(2)))),
-            Box::new(int(1))
+            Box::new(int(1)),
         );
-        let denominator = Expression::Binary(
-            BinaryOp::Sub,
-            Box::new(var("x")),
-            Box::new(int(1))
-        );
-        let expr = Expression::Binary(
-            BinaryOp::Div,
-            Box::new(numerator),
-            Box::new(denominator)
-        );
+        let denominator = Expression::Binary(BinaryOp::Sub, Box::new(var("x")), Box::new(int(1)));
+        let expr = Expression::Binary(BinaryOp::Div, Box::new(numerator), Box::new(denominator));
 
         let derivative = expr.differentiate("x");
 
@@ -701,11 +670,7 @@ mod edge_cases {
     #[test]
     fn test_derivative_of_constant_times_variable() {
         // d/dx[5*x] = 5
-        let expr = Expression::Binary(
-            BinaryOp::Mul,
-            Box::new(int(5)),
-            Box::new(var("x"))
-        );
+        let expr = Expression::Binary(BinaryOp::Mul, Box::new(int(5)), Box::new(var("x")));
         let derivative = expr.differentiate("x");
 
         let mut values = HashMap::new();
@@ -758,7 +723,7 @@ mod edge_cases {
         let x_squared_plus_1 = Expression::Binary(
             BinaryOp::Add,
             Box::new(Expression::Power(Box::new(var("x")), Box::new(int(2)))),
-            Box::new(int(1))
+            Box::new(int(1)),
         );
         let exp_x = Expression::Function(Function::Exp, vec![var("x")]);
         let sin_x = Expression::Function(Function::Sin, vec![var("x")]);

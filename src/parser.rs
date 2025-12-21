@@ -217,7 +217,11 @@ impl std::fmt::Display for ParseError {
                 write!(f, "Unexpected character '{}' at position {}", found, pos)
             }
             ParseError::UnexpectedEndOfInput { pos, expected } => {
-                write!(f, "Unexpected end of input at position {}, expected {}", pos, expected)
+                write!(
+                    f,
+                    "Unexpected end of input at position {}, expected {}",
+                    pos, expected
+                )
             }
             ParseError::InvalidNumber { pos, text } => {
                 write!(f, "Invalid number '{}' at position {}", text, pos)
@@ -340,7 +344,8 @@ fn string_to_function(name: &str) -> Option<Function> {
 }
 
 /// Build the expression parser.
-fn expression_parser<'src>() -> impl Parser<'src, &'src str, Expression, extra::Err<Rich<'src, char>>> {
+fn expression_parser<'src>(
+) -> impl Parser<'src, &'src str, Expression, extra::Err<Rich<'src, char>>> {
     recursive(|expr| {
         // Parse numbers (integer, float, scientific notation)
         let number = text::int(10)
@@ -349,7 +354,7 @@ fn expression_parser<'src>() -> impl Parser<'src, &'src str, Expression, extra::
                 one_of("eE")
                     .then(one_of("+-").or_not())
                     .then(text::digits(10))
-                    .or_not()
+                    .or_not(),
             )
             .to_slice()
             .try_map(|s: &str, span| {
@@ -363,31 +368,39 @@ fn expression_parser<'src>() -> impl Parser<'src, &'src str, Expression, extra::
         // Identifiers start with a letter or underscore, followed by any number of
         // letters, digits, or underscores
         let identifier = one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
-            .then(one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_").repeated())
+            .then(
+                one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
+                    .repeated(),
+            )
             .to_slice()
             .padded();
 
         // Parse function calls OR variables (function calls have precedence)
-        let identifier_expr = identifier.then(
-            expr.clone()
-                .separated_by(just(',').padded())
-                .collect::<Vec<_>>()
-                .delimited_by(just('('), just(')'))
-                .or_not()
-        ).try_map(|(name, args_opt), span| {
-            match args_opt {
-                Some(args) => {
-                    // It's a function call
-                    string_to_function(name)
-                        .map(|func| Expression::Function(func, args))
-                        .ok_or_else(|| Rich::custom(span, format!("Unknown function: {}", name)))
+        let identifier_expr = identifier
+            .then(
+                expr.clone()
+                    .separated_by(just(',').padded())
+                    .collect::<Vec<_>>()
+                    .delimited_by(just('('), just(')'))
+                    .or_not(),
+            )
+            .try_map(|(name, args_opt), span| {
+                match args_opt {
+                    Some(args) => {
+                        // It's a function call
+                        string_to_function(name)
+                            .map(|func| Expression::Function(func, args))
+                            .ok_or_else(|| {
+                                Rich::custom(span, format!("Unknown function: {}", name))
+                            })
+                    }
+                    None => {
+                        // It's a variable
+                        Ok(Expression::Variable(Variable::new(name)))
+                    }
                 }
-                None => {
-                    // It's a variable
-                    Ok(Expression::Variable(Variable::new(name)))
-                }
-            }
-        }).padded();
+            })
+            .padded();
 
         // Primary expressions: numbers, identifier expressions, or parenthesized expressions
         let primary = choice((
@@ -398,32 +411,28 @@ fn expression_parser<'src>() -> impl Parser<'src, &'src str, Expression, extra::
         .padded();
 
         // Unary operators: negation
-        let unary = just('-')
-            .padded()
-            .repeated()
-            .foldr(primary, |_op, rhs| {
-                Expression::Unary(UnaryOp::Neg, Box::new(rhs))
-            });
+        let unary = just('-').padded().repeated().foldr(primary, |_op, rhs| {
+            Expression::Unary(UnaryOp::Neg, Box::new(rhs))
+        });
 
         // Power operator (right-associative)
-        let power = unary.clone()
+        let power = unary
+            .clone()
             .then(
                 just('^')
                     .padded()
                     .ignore_then(unary.clone())
                     .repeated()
-                    .collect::<Vec<_>>()
+                    .collect::<Vec<_>>(),
             )
             .map(|(first, rest)| {
                 if rest.is_empty() {
                     first
                 } else {
                     // Build right-associative power chain
-                    let result = rest.into_iter().rev().fold(None, |acc, curr| {
-                        match acc {
-                            None => Some(curr),
-                            Some(right) => Some(Expression::Power(Box::new(curr), Box::new(right))),
-                        }
+                    let result = rest.into_iter().rev().fold(None, |acc, curr| match acc {
+                        None => Some(curr),
+                        Some(right) => Some(Expression::Power(Box::new(curr), Box::new(right))),
                     });
                     match result {
                         Some(right) => Expression::Power(Box::new(first), Box::new(right)),
@@ -433,29 +442,27 @@ fn expression_parser<'src>() -> impl Parser<'src, &'src str, Expression, extra::
             });
 
         // Multiplication and division (left-associative)
-        let product = power.clone()
-            .foldl(
-                choice((
-                    just('*').padded().to(BinaryOp::Mul),
-                    just('/').padded().to(BinaryOp::Div),
-                    just('%').padded().to(BinaryOp::Mod),
-                ))
-                .then(power)
-                .repeated(),
-                |lhs, (op, rhs)| Expression::Binary(op, Box::new(lhs), Box::new(rhs))
-            );
+        let product = power.clone().foldl(
+            choice((
+                just('*').padded().to(BinaryOp::Mul),
+                just('/').padded().to(BinaryOp::Div),
+                just('%').padded().to(BinaryOp::Mod),
+            ))
+            .then(power)
+            .repeated(),
+            |lhs, (op, rhs)| Expression::Binary(op, Box::new(lhs), Box::new(rhs)),
+        );
 
         // Addition and subtraction (left-associative)
-        let sum = product.clone()
-            .foldl(
-                choice((
-                    just('+').padded().to(BinaryOp::Add),
-                    just('-').padded().to(BinaryOp::Sub),
-                ))
-                .then(product)
-                .repeated(),
-                |lhs, (op, rhs)| Expression::Binary(op, Box::new(lhs), Box::new(rhs))
-            );
+        let sum = product.clone().foldl(
+            choice((
+                just('+').padded().to(BinaryOp::Add),
+                just('-').padded().to(BinaryOp::Sub),
+            ))
+            .then(product)
+            .repeated(),
+            |lhs, (op, rhs)| Expression::Binary(op, Box::new(lhs), Box::new(rhs)),
+        );
 
         sum
     })
@@ -590,29 +597,31 @@ pub fn parse_expression(input: &str) -> Result<Expression, Vec<ParseError>> {
         .parse(input)
         .into_result()
         .map_err(|errors| {
-            errors.into_iter().map(|e| {
-                let span = e.span();
-                let pos = span.start;
+            errors
+                .into_iter()
+                .map(|e| {
+                    let span = e.span();
+                    let pos = span.start;
 
-                match e.reason() {
-                    chumsky::error::RichReason::ExpectedFound { found, .. } => {
-                        match found {
+                    match e.reason() {
+                        chumsky::error::RichReason::ExpectedFound { found, .. } => match found {
                             Some(ch) => ParseError::UnexpectedCharacter { pos, found: **ch },
                             None => ParseError::UnexpectedEndOfInput {
                                 pos,
-                                expected: "expression".to_string()
+                                expected: "expression".to_string(),
                             },
-                        }
+                        },
+                        chumsky::error::RichReason::Custom(msg) => ParseError::InvalidExpression {
+                            pos,
+                            message: msg.to_string(),
+                        },
+                        _ => ParseError::InvalidExpression {
+                            pos,
+                            message: "Parse error".to_string(),
+                        },
                     }
-                    chumsky::error::RichReason::Custom(msg) => {
-                        ParseError::InvalidExpression { pos, message: msg.to_string() }
-                    }
-                    _ => ParseError::InvalidExpression {
-                        pos,
-                        message: "Parse error".to_string()
-                    },
-                }
-            }).collect()
+                })
+                .collect()
         })
 }
 
@@ -718,29 +727,31 @@ pub fn parse_equation(input: &str) -> Result<Equation, Vec<ParseError>> {
         .parse(input)
         .into_result()
         .map_err(|errors| {
-            errors.into_iter().map(|e| {
-                let span = e.span();
-                let pos = span.start;
+            errors
+                .into_iter()
+                .map(|e| {
+                    let span = e.span();
+                    let pos = span.start;
 
-                match e.reason() {
-                    chumsky::error::RichReason::ExpectedFound { found, .. } => {
-                        match found {
+                    match e.reason() {
+                        chumsky::error::RichReason::ExpectedFound { found, .. } => match found {
                             Some(ch) => ParseError::UnexpectedCharacter { pos, found: **ch },
                             None => ParseError::UnexpectedEndOfInput {
                                 pos,
-                                expected: "equation".to_string()
+                                expected: "equation".to_string(),
                             },
-                        }
+                        },
+                        chumsky::error::RichReason::Custom(msg) => ParseError::InvalidExpression {
+                            pos,
+                            message: msg.to_string(),
+                        },
+                        _ => ParseError::InvalidExpression {
+                            pos,
+                            message: "Parse error".to_string(),
+                        },
                     }
-                    chumsky::error::RichReason::Custom(msg) => {
-                        ParseError::InvalidExpression { pos, message: msg.to_string() }
-                    }
-                    _ => ParseError::InvalidExpression {
-                        pos,
-                        message: "Parse error".to_string()
-                    },
-                }
-            }).collect()
+                })
+                .collect()
         })
 }
 

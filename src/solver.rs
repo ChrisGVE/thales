@@ -1609,6 +1609,7 @@ impl Solver for PolynomialSolver {
 pub struct TranscendentalSolver;
 
 impl TranscendentalSolver {
+    /// Creates a new transcendental equation solver.
     pub fn new() -> Self {
         Self
     }
@@ -2576,6 +2577,7 @@ impl Solver for TranscendentalSolver {
 pub struct SystemSolver;
 
 impl SystemSolver {
+    /// Creates a new system of equations solver.
     pub fn new() -> Self {
         Self
     }
@@ -2715,6 +2717,7 @@ pub struct SmartSolver {
 }
 
 impl SmartSolver {
+    /// Creates a new smart solver with all specialized solvers initialized.
     pub fn new() -> Self {
         Self {
             linear: LinearSolver::new(),

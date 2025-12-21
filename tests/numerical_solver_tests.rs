@@ -74,10 +74,7 @@ fn test_newton_raphson_ln_equation() {
     // Solve ln(x) = 1 (solution: x = e)
     let equation = Equation::new(
         "ln_eq",
-        Expression::Function(
-            Function::Ln,
-            vec![Expression::Variable(Variable::new("x"))],
-        ),
+        Expression::Function(Function::Ln, vec![Expression::Variable(Variable::new("x"))]),
         Expression::Integer(1),
     );
 
@@ -416,7 +413,7 @@ fn test_edge_case_zero_derivative() {
     let var = Variable::new("x");
     let config = NumericalConfig {
         max_iterations: 1000,
-        tolerance: 1e-6, // More lenient tolerance for this difficult case
+        tolerance: 1e-6,          // More lenient tolerance for this difficult case
         initial_guess: Some(0.1), // Start close to the root
         step_size: 1e-6,
     };
@@ -473,7 +470,10 @@ fn test_symbolic_differentiation_integration() {
     assert!(path_str.contains("symbolic derivative") || path_str.contains("derivative"));
 
     // Newton-Raphson should converge very quickly for this simple case
-    assert!(solution.iterations < 10, "Expected fast convergence with symbolic differentiation");
+    assert!(
+        solution.iterations < 10,
+        "Expected fast convergence with symbolic differentiation"
+    );
 }
 
 #[test]

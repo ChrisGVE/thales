@@ -201,7 +201,7 @@
 //! - [`transforms`]: Coordinate system conversions (Cartesian, Polar, Spherical,
 //!   Cylindrical) and complex number operations. Built on nalgebra for linear algebra.
 //!
-//! - [`ffi`]: Foreign function interface for Swift via swift-bridge. Provides
+//! - `ffi`: Foreign function interface for Swift via swift-bridge. Provides
 //!   C-compatible bindings for iOS/macOS integration. Enabled with the `ffi` feature flag.
 //!
 //! # Safety Guarantees
@@ -353,7 +353,7 @@
 //! - [`resolution_path`] - Solution step tracking
 //! - [`dimensions`] - Units and dimensional analysis
 //! - [`transforms`] - Coordinate system conversions
-//! - [`ffi`] - Swift interoperability (requires `ffi` feature)
+//! - `ffi` - Swift interoperability (requires `ffi` feature)
 //!
 //! # Development Status
 //!
@@ -395,7 +395,7 @@ pub use dimensions::{Dimension, Quantity, Unit, UnitRegistry};
 pub use numerical::{NumericalConfig, NumericalSolution, SmartNumericalSolver};
 pub use parser::{parse_equation, parse_expression};
 pub use resolution_path::{Operation, ResolutionPath, ResolutionStep};
-pub use solver::{Solver, SmartSolver, Solution};
+pub use solver::{SmartSolver, Solution, Solver};
 pub use transforms::{
     Cartesian2D, Cartesian3D, ComplexOps, Cylindrical, Polar, Spherical, Transform2D,
 };

@@ -461,10 +461,7 @@ fn test_can_solve_linear() {
 #[test]
 fn test_cannot_solve_quadratic() {
     // x^2 + 2*x + 1 = 0
-    let left = add(
-        add(pow(var("x"), int(2)), mul(int(2), var("x"))),
-        int(1),
-    );
+    let left = add(add(pow(var("x"), int(2)), mul(int(2), var("x"))), int(1));
     let right = int(0);
     let equation = Equation::new("test", left, right);
 

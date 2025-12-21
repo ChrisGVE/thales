@@ -221,7 +221,11 @@ fn test_ln_equation_simple() {
         mathsolver_core::solver::Solution::Unique(expr) => {
             if let Some(val) = extract_float(&expr) {
                 // e^2 ≈ 7.389
-                assert!(approx_eq(val, E.powf(2.0), 1e-4), "Expected e^2, got {}", val);
+                assert!(
+                    approx_eq(val, E.powf(2.0), 1e-4),
+                    "Expected e^2, got {}",
+                    val
+                );
             } else {
                 panic!("Expected numeric result, got: {:?}", expr);
             }
@@ -322,7 +326,11 @@ fn test_exp_equation_simple() {
         mathsolver_core::solver::Solution::Unique(expr) => {
             if let Some(val) = extract_float(&expr) {
                 // ln(10) ≈ 2.3026
-                assert!(approx_eq(val, 10_f64.ln(), 1e-4), "Expected ln(10), got {}", val);
+                assert!(
+                    approx_eq(val, 10_f64.ln(), 1e-4),
+                    "Expected ln(10), got {}",
+                    val
+                );
             } else {
                 panic!("Expected numeric result, got: {:?}", expr);
             }
@@ -396,7 +404,11 @@ fn test_exp_with_coefficient() {
         mathsolver_core::solver::Solution::Unique(expr) => {
             if let Some(val) = extract_float(&expr) {
                 // ln(5) ≈ 1.6094
-                assert!(approx_eq(val, 5_f64.ln(), 1e-4), "Expected ln(5), got {}", val);
+                assert!(
+                    approx_eq(val, 5_f64.ln(), 1e-4),
+                    "Expected ln(5), got {}",
+                    val
+                );
             } else {
                 panic!("Expected numeric result, got: {:?}", expr);
             }
@@ -432,7 +444,11 @@ fn test_projectile_range_solve_for_theta() {
         mathsolver_core::solver::Solution::Unique(expr) => {
             // theta = asin(0.5) / 2 = (π/6) / 2 = π/12
             if let Some(val) = extract_float(&expr) {
-                assert!(approx_eq(val, PI / 12.0, 1e-4), "Expected π/12, got {}", val);
+                assert!(
+                    approx_eq(val, PI / 12.0, 1e-4),
+                    "Expected π/12, got {}",
+                    val
+                );
             } else {
                 panic!("Expected numeric result, got: {:?}", expr);
             }
@@ -510,7 +526,10 @@ fn test_complex_pattern_not_supported() {
 
     let result = solver.solve(&equation, &target);
     // This should fail as the pattern is too complex
-    assert!(result.is_err(), "Should fail for complex combined trig functions");
+    assert!(
+        result.is_err(),
+        "Should fail for complex combined trig functions"
+    );
 }
 
 #[test]
@@ -532,5 +551,8 @@ fn test_acos_domain_validation() {
     let target = Variable::new("x");
 
     let result = solver.solve(&equation, &target);
-    assert!(result.is_err(), "Should fail domain validation for acos(-1.5)");
+    assert!(
+        result.is_err(),
+        "Should fail domain validation for acos(-1.5)"
+    );
 }

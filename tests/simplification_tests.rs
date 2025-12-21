@@ -457,7 +457,11 @@ fn test_division_by_zero_not_folded() {
     // 5 / 0 → should not fold (avoid division by zero)
     let five = Expression::Integer(5);
     let zero = Expression::Integer(0);
-    let div = Expression::Binary(BinaryOp::Div, Box::new(five.clone()), Box::new(zero.clone()));
+    let div = Expression::Binary(
+        BinaryOp::Div,
+        Box::new(five.clone()),
+        Box::new(zero.clone()),
+    );
 
     let simplified = div.simplify();
 

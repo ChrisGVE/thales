@@ -18,15 +18,13 @@ fn test_simple_addition() {
     let result = parse_expression("2 + 3");
     assert!(result.is_ok());
     match result.unwrap() {
-        Expression::Binary(BinaryOp::Add, left, right) => {
-            match (*left, *right) {
-                (Expression::Float(l), Expression::Float(r)) => {
-                    assert_eq!(l, 2.0);
-                    assert_eq!(r, 3.0);
-                }
-                _ => panic!("Expected Float operands"),
+        Expression::Binary(BinaryOp::Add, left, right) => match (*left, *right) {
+            (Expression::Float(l), Expression::Float(r)) => {
+                assert_eq!(l, 2.0);
+                assert_eq!(r, 3.0);
             }
-        }
+            _ => panic!("Expected Float operands"),
+        },
         _ => panic!("Expected Binary Add"),
     }
 }
@@ -36,15 +34,13 @@ fn test_simple_multiplication() {
     let result = parse_expression("x * y");
     assert!(result.is_ok());
     match result.unwrap() {
-        Expression::Binary(BinaryOp::Mul, left, right) => {
-            match (*left, *right) {
-                (Expression::Variable(v1), Expression::Variable(v2)) => {
-                    assert_eq!(v1.name, "x");
-                    assert_eq!(v2.name, "y");
-                }
-                _ => panic!("Expected Variable operands"),
+        Expression::Binary(BinaryOp::Mul, left, right) => match (*left, *right) {
+            (Expression::Variable(v1), Expression::Variable(v2)) => {
+                assert_eq!(v1.name, "x");
+                assert_eq!(v2.name, "y");
             }
-        }
+            _ => panic!("Expected Variable operands"),
+        },
         _ => panic!("Expected Binary Mul"),
     }
 }
@@ -54,15 +50,13 @@ fn test_power_operation() {
     let result = parse_expression("a ^ 2");
     assert!(result.is_ok());
     match result.unwrap() {
-        Expression::Power(base, exp) => {
-            match (*base, *exp) {
-                (Expression::Variable(v), Expression::Float(n)) => {
-                    assert_eq!(v.name, "a");
-                    assert_eq!(n, 2.0);
-                }
-                _ => panic!("Expected Variable base and Float exponent"),
+        Expression::Power(base, exp) => match (*base, *exp) {
+            (Expression::Variable(v), Expression::Float(n)) => {
+                assert_eq!(v.name, "a");
+                assert_eq!(n, 2.0);
             }
-        }
+            _ => panic!("Expected Variable base and Float exponent"),
+        },
         _ => panic!("Expected Power"),
     }
 }
@@ -72,12 +66,10 @@ fn test_negation() {
     let result = parse_expression("-x");
     assert!(result.is_ok());
     match result.unwrap() {
-        Expression::Unary(UnaryOp::Neg, expr) => {
-            match *expr {
-                Expression::Variable(v) => assert_eq!(v.name, "x"),
-                _ => panic!("Expected Variable"),
-            }
-        }
+        Expression::Unary(UnaryOp::Neg, expr) => match *expr {
+            Expression::Variable(v) => assert_eq!(v.name, "x"),
+            _ => panic!("Expected Variable"),
+        },
         _ => panic!("Expected Unary Neg"),
     }
 }
@@ -94,15 +86,13 @@ fn test_operator_precedence_mul_add() {
                 _ => panic!("Expected Float on left"),
             }
             match *right {
-                Expression::Binary(BinaryOp::Mul, l, r) => {
-                    match (*l, *r) {
-                        (Expression::Float(n1), Expression::Float(n2)) => {
-                            assert_eq!(n1, 3.0);
-                            assert_eq!(n2, 4.0);
-                        }
-                        _ => panic!("Expected Float operands in multiplication"),
+                Expression::Binary(BinaryOp::Mul, l, r) => match (*l, *r) {
+                    (Expression::Float(n1), Expression::Float(n2)) => {
+                        assert_eq!(n1, 3.0);
+                        assert_eq!(n2, 4.0);
                     }
-                }
+                    _ => panic!("Expected Float operands in multiplication"),
+                },
                 _ => panic!("Expected Binary Mul on right"),
             }
         }
@@ -122,15 +112,13 @@ fn test_operator_precedence_power_mul() {
                 _ => panic!("Expected Float on left"),
             }
             match *right {
-                Expression::Power(base, exp) => {
-                    match (*base, *exp) {
-                        (Expression::Float(b), Expression::Float(e)) => {
-                            assert_eq!(b, 3.0);
-                            assert_eq!(e, 4.0);
-                        }
-                        _ => panic!("Expected Float operands in power"),
+                Expression::Power(base, exp) => match (*base, *exp) {
+                    (Expression::Float(b), Expression::Float(e)) => {
+                        assert_eq!(b, 3.0);
+                        assert_eq!(e, 4.0);
                     }
-                }
+                    _ => panic!("Expected Float operands in power"),
+                },
                 _ => panic!("Expected Power on right"),
             }
         }
@@ -150,15 +138,13 @@ fn test_right_associative_power() {
                 _ => panic!("Expected Float base"),
             }
             match *exp {
-                Expression::Power(inner_base, inner_exp) => {
-                    match (*inner_base, *inner_exp) {
-                        (Expression::Float(b), Expression::Float(e)) => {
-                            assert_eq!(b, 3.0);
-                            assert_eq!(e, 4.0);
-                        }
-                        _ => panic!("Expected Float operands in inner power"),
+                Expression::Power(inner_base, inner_exp) => match (*inner_base, *inner_exp) {
+                    (Expression::Float(b), Expression::Float(e)) => {
+                        assert_eq!(b, 3.0);
+                        assert_eq!(e, 4.0);
                     }
-                }
+                    _ => panic!("Expected Float operands in inner power"),
+                },
                 _ => panic!("Expected Power as exponent"),
             }
         }
@@ -260,14 +246,12 @@ fn test_equation_e_equals_mc2() {
         _ => panic!("Expected Variable on left"),
     }
     match eq.right {
-        Expression::Binary(BinaryOp::Mul, left, right) => {
-            match (*left, *right) {
-                (Expression::Variable(m), Expression::Power(_, _)) => {
-                    assert_eq!(m.name, "m");
-                }
-                _ => panic!("Expected Variable and Power"),
+        Expression::Binary(BinaryOp::Mul, left, right) => match (*left, *right) {
+            (Expression::Variable(m), Expression::Power(_, _)) => {
+                assert_eq!(m.name, "m");
             }
-        }
+            _ => panic!("Expected Variable and Power"),
+        },
         _ => panic!("Expected Binary Mul on right"),
     }
 }
@@ -337,12 +321,12 @@ fn test_complex_expression_with_parens() {
     let result = parse_expression("(a + b) * (c - d)");
     assert!(result.is_ok());
     match result.unwrap() {
-        Expression::Binary(BinaryOp::Mul, left, right) => {
-            match (*left, *right) {
-                (Expression::Binary(BinaryOp::Add, _, _), Expression::Binary(BinaryOp::Sub, _, _)) => (),
-                _ => panic!("Expected Add and Sub inside Mul"),
+        Expression::Binary(BinaryOp::Mul, left, right) => match (*left, *right) {
+            (Expression::Binary(BinaryOp::Add, _, _), Expression::Binary(BinaryOp::Sub, _, _)) => {
+                ()
             }
-        }
+            _ => panic!("Expected Add and Sub inside Mul"),
+        },
         _ => panic!("Expected Binary Mul"),
     }
 }
@@ -352,17 +336,18 @@ fn test_pythagorean_identity() {
     let result = parse_expression("sin(x)^2 + cos(x)^2");
     assert!(result.is_ok());
     match result.unwrap() {
-        Expression::Binary(BinaryOp::Add, left, right) => {
-            match (*left, *right) {
-                (Expression::Power(l_base, _), Expression::Power(r_base, _)) => {
-                    match (*l_base, *r_base) {
-                        (Expression::Function(Function::Sin, _), Expression::Function(Function::Cos, _)) => (),
-                        _ => panic!("Expected sin and cos functions"),
-                    }
+        Expression::Binary(BinaryOp::Add, left, right) => match (*left, *right) {
+            (Expression::Power(l_base, _), Expression::Power(r_base, _)) => {
+                match (*l_base, *r_base) {
+                    (
+                        Expression::Function(Function::Sin, _),
+                        Expression::Function(Function::Cos, _),
+                    ) => (),
+                    _ => panic!("Expected sin and cos functions"),
                 }
-                _ => panic!("Expected Power operands"),
             }
-        }
+            _ => panic!("Expected Power operands"),
+        },
         _ => panic!("Expected Binary Add"),
     }
 }
@@ -384,12 +369,12 @@ fn test_multiple_operations() {
     assert!(result.is_ok());
     // Verify it parses - detailed structure would be: (a + (b * c)) - (d / e)
     match result.unwrap() {
-        Expression::Binary(BinaryOp::Sub, left, right) => {
-            match (*left, *right) {
-                (Expression::Binary(BinaryOp::Add, _, _), Expression::Binary(BinaryOp::Div, _, _)) => (),
-                _ => panic!("Expected Add on left, Div on right"),
+        Expression::Binary(BinaryOp::Sub, left, right) => match (*left, *right) {
+            (Expression::Binary(BinaryOp::Add, _, _), Expression::Binary(BinaryOp::Div, _, _)) => {
+                ()
             }
-        }
+            _ => panic!("Expected Add on left, Div on right"),
+        },
         _ => panic!("Expected Binary Sub at top level"),
     }
 }
@@ -469,12 +454,10 @@ fn test_double_negation() {
     let result = parse_expression("--x");
     assert!(result.is_ok());
     match result.unwrap() {
-        Expression::Unary(UnaryOp::Neg, inner) => {
-            match *inner {
-                Expression::Unary(UnaryOp::Neg, _) => (),
-                _ => panic!("Expected nested Neg"),
-            }
-        }
+        Expression::Unary(UnaryOp::Neg, inner) => match *inner {
+            Expression::Unary(UnaryOp::Neg, _) => (),
+            _ => panic!("Expected nested Neg"),
+        },
         _ => panic!("Expected Unary Neg"),
     }
 }
