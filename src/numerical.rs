@@ -1201,7 +1201,52 @@ fn compute_derivative_fd(
 
 /// Find a suitable initial interval for root finding by bracketing.
 ///
-/// Returns (a, b) such that f(a) and f(b) have opposite signs.
+/// Searches for an interval [a, b] where the function changes sign, which
+/// guarantees the existence of at least one root (by the Intermediate Value
+/// Theorem for continuous functions).
+///
+/// # Algorithm
+///
+/// The function uses an expanding search strategy:
+/// 1. Tries intervals of increasing size: 1, 10, 100, 1000 (up to max_range)
+/// 2. For each size, tries different offsets from the center point
+/// 3. Returns the first interval where f(a) and f(b) have opposite signs
+///
+/// This approach balances thoroughness with efficiency, checking common
+/// ranges first before expanding to larger intervals.
+///
+/// # Arguments
+///
+/// * `expr` - The function expression to evaluate (should be in f(x) = 0 form)
+/// * `variable` - The variable to solve for
+/// * `center` - The center point around which to search for a bracket
+/// * `max_range` - Maximum distance from center to search (prevents unbounded searches)
+///
+/// # Returns
+///
+/// * `Some((a, b))` - An interval where f(a) and f(b) have opposite signs
+/// * `None` - No bracketing interval found within the search range
+///
+/// # Usage
+///
+/// This helper function is used internally by `SmartNumericalSolver` to
+/// automatically find suitable intervals for bisection when the user hasn't
+/// provided an initial guess or interval. It's particularly useful for:
+/// - Unknown function behavior
+/// - Automated solving without manual interval specification
+/// - Fallback when Newton-Raphson fails
+///
+/// # Example Context
+///
+/// ```ignore
+/// // Used internally by SmartNumericalSolver
+/// let f = Expression::Binary(BinaryOp::Sub, lhs, rhs); // f(x) = 0 form
+/// if let Some((a, b)) = bracket_root(&f, &var, 1.0, 10000.0) {
+///     // Found bracketing interval, can use bisection method
+///     let bisection = BisectionMethod::new(config);
+///     bisection.solve(equation, variable, (a, b))
+/// }
+/// ```
 fn bracket_root(
     expr: &Expression,
     variable: &Variable,
