@@ -44,7 +44,7 @@
 
 use num_complex::Complex64;
 use num_rational::Rational64;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
@@ -991,7 +991,6 @@ impl BinaryOp {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Function {
     // Trigonometric functions
-
     /// Sine function: sin(x)
     ///
     /// Returns the sine of the argument (in radians).
@@ -1056,7 +1055,6 @@ pub enum Function {
     Atan2,
 
     // Hyperbolic functions
-
     /// Hyperbolic sine: sinh(x)
     ///
     /// # Mathematical notation
@@ -1079,7 +1077,6 @@ pub enum Function {
     Tanh,
 
     // Exponential and logarithmic functions
-
     /// Exponential function: exp(x)
     ///
     /// Returns e raised to the power x.
@@ -1126,7 +1123,6 @@ pub enum Function {
     Log10,
 
     // Power and root functions
-
     /// Square root: sqrt(x)
     ///
     /// Returns the principal square root.
@@ -1155,7 +1151,6 @@ pub enum Function {
     Pow,
 
     // Rounding functions
-
     /// Floor function: floor(x)
     ///
     /// Returns the largest integer less than or equal to x.
@@ -1184,7 +1179,6 @@ pub enum Function {
     Round,
 
     // Utility functions
-
     /// Absolute value: abs(x)
     ///
     /// Returns the magnitude (always non-negative).
@@ -1505,9 +1499,7 @@ impl Expression {
         F: Fn(&Expression) -> Expression,
     {
         let mapped = match self {
-            Expression::Unary(op, expr) => {
-                Expression::Unary(*op, Box::new(expr.map(f)))
-            }
+            Expression::Unary(op, expr) => Expression::Unary(*op, Box::new(expr.map(f))),
             Expression::Binary(op, left, right) => {
                 Expression::Binary(*op, Box::new(left.map(f)), Box::new(right.map(f)))
             }
@@ -1565,9 +1557,7 @@ impl Expression {
                 let acc = left.fold(acc, f);
                 right.fold(acc, f)
             }
-            Expression::Function(_, args) => {
-                args.iter().fold(acc, |acc, arg| arg.fold(acc, f))
-            }
+            Expression::Function(_, args) => args.iter().fold(acc, |acc, arg| arg.fold(acc, f)),
             Expression::Power(base, exp) => {
                 let acc = base.fold(acc, f);
                 exp.fold(acc, f)
@@ -1578,26 +1568,80 @@ impl Expression {
 
     /// Apply basic algebraic simplifications.
     ///
-    /// Recursively simplifies the expression using standard algebraic identities
-    /// and constant folding. This method applies:
+    /// Recursively simplifies the expression tree using standard algebraic identities
+    /// and constant folding. The simplification process works bottom-up: child nodes
+    /// are simplified first, then algebraic rules are applied to the current node.
     ///
-    /// # Simplification Rules
+    /// # Simplification Strategy
     ///
-    /// ## Identity simplifications
-    /// - `0 + x` → `x`, `x + 0` → `x`
-    /// - `x - 0` → `x`
-    /// - `0 * x` → `0`, `x * 0` → `0`
-    /// - `1 * x` → `x`, `x * 1` → `x`
-    /// - `x / 1` → `x`
-    /// - `x^0` → `1` (where x ≠ 0)
-    /// - `x^1` → `x`
-    /// - `-(-x)` → `x`
+    /// The method performs three types of simplification:
+    /// 1. **Recursive simplification**: All subexpressions are simplified first
+    /// 2. **Algebraic identities**: Common patterns are replaced with simpler forms
+    /// 3. **Constant folding**: Numeric subexpressions are evaluated to single values
     ///
-    /// ## Constant folding
-    /// - Evaluates operations on numeric constants (e.g., `2 + 3` → `5`)
-    /// - Evaluates function calls with constant arguments (e.g., `sin(0)` → `0`)
+    /// # Algebraic Identity Rules
+    ///
+    /// ## Addition identities
+    /// - `0 + x` → `x` (additive identity, left)
+    /// - `x + 0` → `x` (additive identity, right)
+    ///
+    /// ## Subtraction identities
+    /// - `x - 0` → `x` (subtracting zero)
+    ///
+    /// ## Multiplication identities
+    /// - `0 * x` → `0` (annihilator, left)
+    /// - `x * 0` → `0` (annihilator, right)
+    /// - `1 * x` → `x` (multiplicative identity, left)
+    /// - `x * 1` → `x` (multiplicative identity, right)
+    ///
+    /// ## Division identities
+    /// - `x / 1` → `x` (dividing by one)
+    ///
+    /// ## Power identities
+    /// - `x^0` → `1` (anything to power zero equals one, where x ≠ 0)
+    /// - `x^1` → `x` (anything to power one equals itself)
+    ///
+    /// ## Negation identities
+    /// - `-(-x)` → `x` (double negation elimination)
+    ///
+    /// # Constant Folding
+    ///
+    /// When both operands of a binary operation are numeric constants (Integer, Float,
+    /// or Rational), the operation is evaluated immediately:
+    ///
+    /// - Arithmetic: `2 + 3` → `5`, `10 / 2` → `5`, `3 * 4` → `12`
+    /// - Powers: `2^3` → `8`, `4^0.5` → `2.0`
+    /// - Functions: `sin(0)` → `0`, `sqrt(16)` → `4.0`, `ln(1)` → `0`
+    ///
+    /// Division by zero is avoided (returns unsimplified expression).
+    ///
+    /// # Helper Methods
+    ///
+    /// The simplification process uses several private helper methods:
+    ///
+    /// - [`is_zero`](Expression::is_zero): Checks if expression equals zero (Integer 0 or Float 0.0)
+    /// - [`is_one`](Expression::is_one): Checks if expression equals one (Integer 1 or Float 1.0)
+    /// - [`is_numeric_constant`](Expression::is_numeric_constant): True for Integer, Float, Rational
+    /// - [`extract_numeric_value`](Expression::extract_numeric_value): Converts constant to f64
+    /// - [`from_numeric_value`](Expression::from_numeric_value): Creates Integer if whole, Float otherwise
+    ///
+    /// # Limitations
+    ///
+    /// This method performs only basic algebraic simplification. It does NOT:
+    ///
+    /// - Factor expressions (e.g., `x^2 - 1` is not factored to `(x-1)(x+1)`)
+    /// - Combine like terms (e.g., `x + 2*x` remains `x + 2*x`, not `3*x`)
+    /// - Expand products (e.g., `(x+1)(x-1)` remains unexpanded)
+    /// - Apply trigonometric identities (e.g., `sin^2(x) + cos^2(x)` remains as is)
+    /// - Rationalize denominators
+    /// - Simplify complex fractions
+    ///
+    /// For symbolic equation solving, see the [`solver`](crate::solver) module which
+    /// uses simplification as part of algebraic manipulation.
     ///
     /// # Examples
+    ///
+    /// ## Identity simplification
     ///
     /// ```
     /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
@@ -1611,22 +1655,107 @@ impl Expression {
     /// );
     /// assert_eq!(expr.simplify(), x);
     ///
-    /// // 2 * 3 simplifies to 6
+    /// // x * 1 simplifies to x
     /// let expr2 = Expression::Binary(
     ///     BinaryOp::Mul,
+    ///     Box::new(x.clone()),
+    ///     Box::new(Expression::Integer(1))
+    /// );
+    /// assert_eq!(expr2.simplify(), x);
+    ///
+    /// // x^1 simplifies to x
+    /// let expr3 = Expression::Power(
+    ///     Box::new(x.clone()),
+    ///     Box::new(Expression::Integer(1))
+    /// );
+    /// assert_eq!(expr3.simplify(), x);
+    /// ```
+    ///
+    /// ## Constant folding
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, BinaryOp, Function};
+    ///
+    /// // 2 + 3 simplifies to 5
+    /// let expr = Expression::Binary(
+    ///     BinaryOp::Add,
     ///     Box::new(Expression::Integer(2)),
     ///     Box::new(Expression::Integer(3))
     /// );
-    /// assert_eq!(expr2.simplify(), Expression::Integer(6));
+    /// assert_eq!(expr.simplify(), Expression::Integer(5));
+    ///
+    /// // 2^3 simplifies to 8
+    /// let expr2 = Expression::Power(
+    ///     Box::new(Expression::Integer(2)),
+    ///     Box::new(Expression::Integer(3))
+    /// );
+    /// assert_eq!(expr2.simplify(), Expression::Integer(8));
+    ///
+    /// // sqrt(16) simplifies to 4
+    /// let expr3 = Expression::Function(
+    ///     Function::Sqrt,
+    ///     vec![Expression::Integer(16)]
+    /// );
+    /// assert_eq!(expr3.simplify(), Expression::Integer(4));
+    /// ```
+    ///
+    /// ## Double negation elimination
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, UnaryOp};
+    ///
+    /// // -(-x) simplifies to x
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let neg_x = Expression::Unary(UnaryOp::Neg, Box::new(x.clone()));
+    /// let neg_neg_x = Expression::Unary(UnaryOp::Neg, Box::new(neg_x));
+    /// assert_eq!(neg_neg_x.simplify(), x);
+    /// ```
+    ///
+    /// ## Recursive simplification
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    ///
+    /// // (x + 0) * 1 simplifies to x
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let x_plus_0 = Expression::Binary(
+    ///     BinaryOp::Add,
+    ///     Box::new(x.clone()),
+    ///     Box::new(Expression::Integer(0))
+    /// );
+    /// let expr = Expression::Binary(
+    ///     BinaryOp::Mul,
+    ///     Box::new(x_plus_0),
+    ///     Box::new(Expression::Integer(1))
+    /// );
+    /// assert_eq!(expr.simplify(), x);
+    /// ```
+    ///
+    /// ## Zero annihilation
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    ///
+    /// // x * 0 simplifies to 0
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let expr = Expression::Binary(
+    ///     BinaryOp::Mul,
+    ///     Box::new(x),
+    ///     Box::new(Expression::Integer(0))
+    /// );
+    /// assert_eq!(expr.simplify(), Expression::Integer(0));
     /// ```
     ///
     /// # Returns
     ///
-    /// A new simplified expression. The original expression is unchanged.
+    /// A new simplified expression. The original expression is unchanged. The result
+    /// may be structurally identical if no simplifications apply.
     ///
     /// # See Also
     ///
     /// - [`evaluate`](Expression::evaluate) - Numerical evaluation with variable values
+    /// - [`differentiate`](Expression::differentiate) - Symbolic differentiation (results benefit from simplification)
+    /// - [`solver`](crate::solver) - Equation solving using simplification
     pub fn simplify(&self) -> Expression {
         // First, recursively simplify sub-expressions
         let simplified = match self {
@@ -1732,7 +1861,8 @@ impl Expression {
                 Expression::Binary(*op, Box::new(left_simplified), Box::new(right_simplified))
             }
             Expression::Function(func, args) => {
-                let simplified_args: Vec<Expression> = args.iter().map(|arg| arg.simplify()).collect();
+                let simplified_args: Vec<Expression> =
+                    args.iter().map(|arg| arg.simplify()).collect();
 
                 // Constant folding: if all arguments are numeric constants, evaluate the function
                 if simplified_args.iter().all(Self::is_numeric_constant) {
@@ -1782,6 +1912,32 @@ impl Expression {
     }
 
     /// Check if expression is zero.
+    ///
+    /// Returns `true` if the expression is exactly zero, either as an integer (0)
+    /// or floating-point (0.0). Used by [`simplify`](Expression::simplify) to
+    /// apply additive identity and annihilator rules.
+    ///
+    /// # Arguments
+    ///
+    /// * `expr` - Expression to test
+    ///
+    /// # Returns
+    ///
+    /// `true` if expression is `Integer(0)` or `Float(0.0)`, `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Integer zero
+    /// assert!(Expression::is_zero(&Expression::Integer(0)));
+    ///
+    /// // Float zero
+    /// assert!(Expression::is_zero(&Expression::Float(0.0)));
+    ///
+    /// // Non-zero values
+    /// assert!(!Expression::is_zero(&Expression::Integer(1)));
+    /// assert!(!Expression::is_zero(&Expression::Float(0.001)));
+    /// ```
     fn is_zero(expr: &Expression) -> bool {
         match expr {
             Expression::Integer(0) => true,
@@ -1791,6 +1947,32 @@ impl Expression {
     }
 
     /// Check if expression is one.
+    ///
+    /// Returns `true` if the expression is exactly one, either as an integer (1)
+    /// or floating-point (1.0). Used by [`simplify`](Expression::simplify) to
+    /// apply multiplicative identity and power identity rules.
+    ///
+    /// # Arguments
+    ///
+    /// * `expr` - Expression to test
+    ///
+    /// # Returns
+    ///
+    /// `true` if expression is `Integer(1)` or `Float(1.0)`, `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Integer one
+    /// assert!(Expression::is_one(&Expression::Integer(1)));
+    ///
+    /// // Float one
+    /// assert!(Expression::is_one(&Expression::Float(1.0)));
+    ///
+    /// // Non-one values
+    /// assert!(!Expression::is_one(&Expression::Integer(0)));
+    /// assert!(!Expression::is_one(&Expression::Float(1.001)));
+    /// ```
     fn is_one(expr: &Expression) -> bool {
         match expr {
             Expression::Integer(1) => true,
@@ -1800,6 +1982,31 @@ impl Expression {
     }
 
     /// Check if expression is a numeric constant.
+    ///
+    /// Returns `true` if the expression is any kind of numeric literal that can be
+    /// evaluated without variable values: Integer, Float, or Rational. Used by
+    /// [`simplify`](Expression::simplify) to identify constant folding opportunities.
+    ///
+    /// # Arguments
+    ///
+    /// * `expr` - Expression to test
+    ///
+    /// # Returns
+    ///
+    /// `true` for Integer, Float, or Rational variants, `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Numeric constants
+    /// assert!(Expression::is_numeric_constant(&Expression::Integer(42)));
+    /// assert!(Expression::is_numeric_constant(&Expression::Float(3.14)));
+    /// assert!(Expression::is_numeric_constant(&Expression::Rational(Rational64::new(1, 2))));
+    ///
+    /// // Non-constants
+    /// assert!(!Expression::is_numeric_constant(&Expression::Variable(Variable::new("x"))));
+    /// assert!(!Expression::is_numeric_constant(&Expression::Complex(Complex64::new(1.0, 0.0))));
+    /// ```
     fn is_numeric_constant(expr: &Expression) -> bool {
         matches!(
             expr,
@@ -1808,6 +2015,37 @@ impl Expression {
     }
 
     /// Extract numeric value from constant expression.
+    ///
+    /// Converts a numeric constant expression to f64 for evaluation. Works with
+    /// Integer, Float, and Rational variants. Returns `None` for non-numeric
+    /// expressions. Used by [`simplify`](Expression::simplify) for constant folding.
+    ///
+    /// # Arguments
+    ///
+    /// * `expr` - Expression to extract value from
+    ///
+    /// # Returns
+    ///
+    /// - `Some(f64)` for Integer, Float, or Rational expressions
+    /// - `None` for all other expression types
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Extract integer
+    /// assert_eq!(Expression::extract_numeric_value(&Expression::Integer(42)), Some(42.0));
+    ///
+    /// // Extract float
+    /// assert_eq!(Expression::extract_numeric_value(&Expression::Float(3.14)), Some(3.14));
+    ///
+    /// // Extract rational (1/2 = 0.5)
+    /// let half = Expression::Rational(Rational64::new(1, 2));
+    /// assert_eq!(Expression::extract_numeric_value(&half), Some(0.5));
+    ///
+    /// // Non-numeric returns None
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// assert_eq!(Expression::extract_numeric_value(&x), None);
+    /// ```
     fn extract_numeric_value(expr: &Expression) -> Option<f64> {
         match expr {
             Expression::Integer(n) => Some(*n as f64),
@@ -1818,6 +2056,35 @@ impl Expression {
     }
 
     /// Create numeric expression from value (Integer if whole, Float otherwise).
+    ///
+    /// Converts a floating-point value to the most appropriate Expression variant.
+    /// If the value is finite and very close to an integer (within 1e-10), creates
+    /// an Integer expression. Otherwise creates a Float expression. Used by
+    /// [`simplify`](Expression::simplify) after constant folding operations.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - Floating-point value to convert
+    ///
+    /// # Returns
+    ///
+    /// - `Integer(i64)` if value is finite and within 1e-10 of a whole number
+    /// - `Float(f64)` otherwise
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Whole numbers become Integer
+    /// assert_eq!(Expression::from_numeric_value(5.0), Expression::Integer(5));
+    /// assert_eq!(Expression::from_numeric_value(5.0000000001), Expression::Integer(5));
+    ///
+    /// // Non-whole numbers become Float
+    /// assert_eq!(Expression::from_numeric_value(3.14), Expression::Float(3.14));
+    /// assert_eq!(Expression::from_numeric_value(5.1), Expression::Float(5.1));
+    ///
+    /// // Special values become Float
+    /// assert_eq!(Expression::from_numeric_value(f64::INFINITY), Expression::Float(f64::INFINITY));
+    /// ```
     fn from_numeric_value(value: f64) -> Expression {
         if value.is_finite() && value.fract().abs() < 1e-10 {
             Expression::Integer(value.round() as i64)
@@ -1830,33 +2097,92 @@ impl Expression {
     ///
     /// Performs symbolic differentiation using standard calculus rules. The result
     /// is an exact symbolic expression (not a numerical approximation) that may
-    /// benefit from simplification.
+    /// benefit from simplification using [`simplify`](Expression::simplify).
     ///
     /// # Differentiation Rules
     ///
-    /// ## Basic rules
-    /// - Constant rule: d/dx[c] = 0
-    /// - Variable rule: d/dx[x] = 1, d/dx[y] = 0
-    /// - Power rule: d/dx[x^n] = n·x^(n-1)
-    /// - Sum rule: d/dx[u+v] = du/dx + dv/dx
-    /// - Difference rule: d/dx[u-v] = du/dx - dv/dx
+    /// ## Basic Rules
     ///
-    /// ## Product and quotient
-    /// - Product rule: d/dx[u·v] = u·(dv/dx) + v·(du/dx)
-    /// - Quotient rule: d/dx[u/v] = (v·du/dx - u·dv/dx) / v²
+    /// ### Constant Rule
+    /// **d/dx[c] = 0**
     ///
-    /// ## Chain rule
-    /// - d/dx[f(g(x))] = f'(g(x))·g'(x)
+    /// The derivative of any constant is zero.
     ///
-    /// ## Exponential and logarithmic
-    /// - d/dx[exp(u)] = exp(u)·du/dx
-    /// - d/dx[ln(u)] = (1/u)·du/dx
-    /// - d/dx[log₁₀(u)] = (1/(u·ln(10)))·du/dx
+    /// ### Variable Rule
+    /// **d/dx[x] = 1**, **d/dx[y] = 0** (when differentiating with respect to x)
     ///
-    /// ## Trigonometric
-    /// - d/dx[sin(u)] = cos(u)·du/dx
-    /// - d/dx[cos(u)] = -sin(u)·du/dx
-    /// - d/dx[tan(u)] = sec²(u)·du/dx
+    /// The derivative of a variable with respect to itself is 1; with respect to any other variable is 0.
+    ///
+    /// ### Power Rule
+    /// **d/dx[x^n] = n·x^(n-1)**
+    ///
+    /// When n is constant, multiply by the exponent and reduce the power by 1.
+    ///
+    /// ### Sum Rule
+    /// **d/dx[u + v] = du/dx + dv/dx**
+    ///
+    /// The derivative of a sum equals the sum of the derivatives.
+    ///
+    /// ### Difference Rule
+    /// **d/dx[u - v] = du/dx - dv/dx**
+    ///
+    /// The derivative of a difference equals the difference of the derivatives.
+    ///
+    /// ## Product and Quotient Rules
+    ///
+    /// ### Product Rule
+    /// **d/dx[u·v] = u·(dv/dx) + v·(du/dx)**
+    ///
+    /// The derivative of a product equals: first times derivative of second, plus second times derivative of first.
+    ///
+    /// ### Quotient Rule
+    /// **d/dx[u/v] = (v·du/dx - u·dv/dx) / v²**
+    ///
+    /// The derivative of a quotient equals: (bottom times derivative of top minus top times derivative of bottom) over bottom squared.
+    ///
+    /// ## Chain Rule
+    /// **d/dx[f(g(x))] = f'(g(x))·g'(x)**
+    ///
+    /// The derivative of a composition equals: derivative of outer function evaluated at inner, times derivative of inner function.
+    /// This rule is automatically applied to all function derivatives below.
+    ///
+    /// ## Trigonometric Functions
+    ///
+    /// All trigonometric derivatives include chain rule application:
+    ///
+    /// - **d/dx[sin(u)] = cos(u)·du/dx**
+    /// - **d/dx[cos(u)] = -sin(u)·du/dx**
+    /// - **d/dx[tan(u)] = sec²(u)·du/dx = (1/cos²(u))·du/dx**
+    ///
+    /// ## Inverse Trigonometric Functions
+    ///
+    /// - **d/dx[asin(u)] = (1/√(1-u²))·du/dx**
+    /// - **d/dx[acos(u)] = (-1/√(1-u²))·du/dx**
+    /// - **d/dx[atan(u)] = (1/(1+u²))·du/dx**
+    ///
+    /// ## Hyperbolic Functions
+    ///
+    /// - **d/dx[sinh(u)] = cosh(u)·du/dx**
+    /// - **d/dx[cosh(u)] = sinh(u)·du/dx**
+    /// - **d/dx[tanh(u)] = sech²(u)·du/dx = (1/cosh²(u))·du/dx**
+    ///
+    /// ## Exponential and Logarithmic Functions
+    ///
+    /// ### Exponential derivatives
+    /// - **d/dx[exp(u)] = exp(u)·du/dx**
+    /// - **d/dx[a^u] = a^u·ln(a)·du/dx** (where a is constant)
+    /// - **d/dx[u^v] = u^v·(v'·ln(u) + v·u'/u)** (general case)
+    ///
+    /// ### Logarithmic derivatives
+    /// - **d/dx[ln(u)] = (1/u)·du/dx**
+    /// - **d/dx[log₁₀(u)] = (1/(u·ln(10)))·du/dx**
+    /// - **d/dx[log₂(u)] = (1/(u·ln(2)))·du/dx**
+    /// - **d/dx[log_b(u)] = (1/(u·ln(b)))·du/dx**
+    ///
+    /// ## Root Functions
+    ///
+    /// - **d/dx[√u] = (1/(2√u))·du/dx**
+    /// - **d/dx[∛u] = (1/(3u^(2/3)))·du/dx**
     ///
     /// # Arguments
     ///
@@ -1864,39 +2190,166 @@ impl Expression {
     ///
     /// # Examples
     ///
-    /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp, Function};
+    /// ## Power Rule Example
     ///
-    /// // d/dx[x^2] = 2*x
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable};
+    ///
+    /// // Differentiate x^3 with respect to x
+    /// // d/dx[x^3] = 3·x^2
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let x_cubed = Expression::Power(
+    ///     Box::new(x.clone()),
+    ///     Box::new(Expression::Integer(3))
+    /// );
+    /// let derivative = x_cubed.differentiate("x").simplify();
+    /// // Result simplifies to: 3 * x^2
+    /// ```
+    ///
+    /// ## Polynomial Derivative
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    ///
+    /// // Differentiate 3x^2 + 2x + 1 with respect to x
+    /// // d/dx[3x^2 + 2x + 1] = 6x + 2
+    /// let x = Expression::Variable(Variable::new("x"));
+    ///
+    /// // Build 3x^2
+    /// let x_squared = Expression::Power(
+    ///     Box::new(x.clone()),
+    ///     Box::new(Expression::Integer(2))
+    /// );
+    /// let three_x_squared = Expression::Binary(
+    ///     BinaryOp::Mul,
+    ///     Box::new(Expression::Integer(3)),
+    ///     Box::new(x_squared)
+    /// );
+    ///
+    /// // Build 2x
+    /// let two_x = Expression::Binary(
+    ///     BinaryOp::Mul,
+    ///     Box::new(Expression::Integer(2)),
+    ///     Box::new(x.clone())
+    /// );
+    ///
+    /// // Build 3x^2 + 2x
+    /// let sum1 = Expression::Binary(
+    ///     BinaryOp::Add,
+    ///     Box::new(three_x_squared),
+    ///     Box::new(two_x)
+    /// );
+    ///
+    /// // Build 3x^2 + 2x + 1
+    /// let polynomial = Expression::Binary(
+    ///     BinaryOp::Add,
+    ///     Box::new(sum1),
+    ///     Box::new(Expression::Integer(1))
+    /// );
+    ///
+    /// // Compute derivative
+    /// let derivative = polynomial.differentiate("x").simplify();
+    /// // Result: 6x + 2 (after simplification)
+    /// ```
+    ///
+    /// ## Chain Rule Example
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, Function};
+    ///
+    /// // Differentiate sin(x^2) with respect to x
+    /// // d/dx[sin(x^2)] = cos(x^2)·2x
     /// let x = Expression::Variable(Variable::new("x"));
     /// let x_squared = Expression::Power(
     ///     Box::new(x.clone()),
     ///     Box::new(Expression::Integer(2))
     /// );
-    /// let derivative = x_squared.differentiate("x");
-    /// // Result is: 2 * x^(2-1) = 2 * x
+    /// let sin_x_squared = Expression::Function(Function::Sin, vec![x_squared]);
     ///
-    /// // d/dx[sin(x)] = cos(x)
+    /// let derivative = sin_x_squared.differentiate("x");
+    /// // Result: cos(x^2) * (2 * x^1 * 1)
+    /// // Simplifies to: cos(x^2) * 2x
+    /// ```
+    ///
+    /// ## Product Rule Example
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp, Function};
+    ///
+    /// // Differentiate x·sin(x) with respect to x
+    /// // d/dx[x·sin(x)] = x·cos(x) + sin(x)·1 = x·cos(x) + sin(x)
+    /// let x = Expression::Variable(Variable::new("x"));
     /// let sin_x = Expression::Function(Function::Sin, vec![x.clone()]);
-    /// let d_sin = sin_x.differentiate("x");
-    /// // Result is: cos(x) * 1 = cos(x)
+    /// let x_times_sin_x = Expression::Binary(
+    ///     BinaryOp::Mul,
+    ///     Box::new(x.clone()),
+    ///     Box::new(sin_x)
+    /// );
+    ///
+    /// let derivative = x_times_sin_x.differentiate("x");
+    /// // Result: x·cos(x) + sin(x)·1
+    /// ```
+    ///
+    /// ## Exponential Function Example
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp, Function};
+    ///
+    /// // Differentiate exp(2x) with respect to x
+    /// // d/dx[exp(2x)] = exp(2x)·2
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let two_x = Expression::Binary(
+    ///     BinaryOp::Mul,
+    ///     Box::new(Expression::Integer(2)),
+    ///     Box::new(x.clone())
+    /// );
+    /// let exp_2x = Expression::Function(Function::Exp, vec![two_x]);
+    ///
+    /// let derivative = exp_2x.differentiate("x");
+    /// // Result: exp(2x) * 2
+    /// ```
+    ///
+    /// ## Logarithmic Function Example
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp, Function};
+    ///
+    /// // Differentiate ln(x^2 + 1) with respect to x
+    /// // d/dx[ln(x^2 + 1)] = (1/(x^2 + 1))·2x
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let x_squared = Expression::Power(
+    ///     Box::new(x.clone()),
+    ///     Box::new(Expression::Integer(2))
+    /// );
+    /// let x_squared_plus_1 = Expression::Binary(
+    ///     BinaryOp::Add,
+    ///     Box::new(x_squared),
+    ///     Box::new(Expression::Integer(1))
+    /// );
+    /// let ln_expr = Expression::Function(Function::Ln, vec![x_squared_plus_1]);
+    ///
+    /// let derivative = ln_expr.differentiate("x");
+    /// // Result: (1/(x^2 + 1)) * (2*x)
     /// ```
     ///
     /// # Returns
     ///
-    /// A new expression representing the derivative. The result may contain
-    /// redundant terms (like multiplication by 1) that can be removed with
-    /// [`simplify`](Expression::simplify).
+    /// A new [`Expression`] representing the symbolic derivative. The result is automatically
+    /// simplified during construction but may benefit from additional simplification using
+    /// [`simplify`](Expression::simplify) to remove redundant terms like multiplication by 1
+    /// or addition of 0.
     ///
     /// # See Also
     ///
-    /// - [`simplify`](Expression::simplify) - Simplify the derivative result
+    /// - [`simplify`](Expression::simplify) - Simplify the derivative result to remove redundant terms
+    /// - [`evaluate`](Expression::evaluate) - Numerically evaluate the derivative at specific variable values
     pub fn differentiate(&self, with_respect_to: &str) -> Expression {
         match self {
             // Constant rule: d/dx[c] = 0
-            Expression::Integer(_) | Expression::Rational(_) | Expression::Float(_) | Expression::Complex(_) => {
-                Expression::Integer(0)
-            }
+            Expression::Integer(_)
+            | Expression::Rational(_)
+            | Expression::Float(_)
+            | Expression::Complex(_) => Expression::Integer(0),
 
             // Variable rule: d/dx[x] = 1, d/dx[y] = 0
             Expression::Variable(v) => {
@@ -1912,12 +2365,11 @@ impl Expression {
                 let inner_derivative = expr.differentiate(with_respect_to);
                 match op {
                     // d/dx[-f] = -f'
-                    UnaryOp::Neg => {
-                        Expression::Unary(UnaryOp::Neg, Box::new(inner_derivative))
-                    }
+                    UnaryOp::Neg => Expression::Unary(UnaryOp::Neg, Box::new(inner_derivative)),
                     // d/dx[|f|] = sign(f) * f' (simplified, assumes f != 0)
                     UnaryOp::Abs => {
-                        let sign = Expression::Function(Function::Sign, vec![expr.as_ref().clone()]);
+                        let sign =
+                            Expression::Function(Function::Sign, vec![expr.as_ref().clone()]);
                         Expression::Binary(
                             BinaryOp::Mul,
                             Box::new(sign),
@@ -1936,52 +2388,46 @@ impl Expression {
 
                 match op {
                     // Sum rule: d/dx[u + v] = du/dx + dv/dx
-                    BinaryOp::Add => {
-                        Expression::Binary(BinaryOp::Add, Box::new(left_deriv), Box::new(right_deriv))
-                    }
+                    BinaryOp::Add => Expression::Binary(
+                        BinaryOp::Add,
+                        Box::new(left_deriv),
+                        Box::new(right_deriv),
+                    ),
 
                     // Difference rule: d/dx[u - v] = du/dx - dv/dx
-                    BinaryOp::Sub => {
-                        Expression::Binary(BinaryOp::Sub, Box::new(left_deriv), Box::new(right_deriv))
-                    }
+                    BinaryOp::Sub => Expression::Binary(
+                        BinaryOp::Sub,
+                        Box::new(left_deriv),
+                        Box::new(right_deriv),
+                    ),
 
                     // Product rule: d/dx[u * v] = u * dv/dx + v * du/dx
                     BinaryOp::Mul => {
-                        let term1 = Expression::Binary(
-                            BinaryOp::Mul,
-                            left.clone(),
-                            Box::new(right_deriv),
-                        );
-                        let term2 = Expression::Binary(
-                            BinaryOp::Mul,
-                            right.clone(),
-                            Box::new(left_deriv),
-                        );
+                        let term1 =
+                            Expression::Binary(BinaryOp::Mul, left.clone(), Box::new(right_deriv));
+                        let term2 =
+                            Expression::Binary(BinaryOp::Mul, right.clone(), Box::new(left_deriv));
                         Expression::Binary(BinaryOp::Add, Box::new(term1), Box::new(term2))
                     }
 
                     // Quotient rule: d/dx[u / v] = (v * du/dx - u * dv/dx) / v^2
                     BinaryOp::Div => {
-                        let numerator_term1 = Expression::Binary(
-                            BinaryOp::Mul,
-                            right.clone(),
-                            Box::new(left_deriv),
-                        );
-                        let numerator_term2 = Expression::Binary(
-                            BinaryOp::Mul,
-                            left.clone(),
-                            Box::new(right_deriv),
-                        );
+                        let numerator_term1 =
+                            Expression::Binary(BinaryOp::Mul, right.clone(), Box::new(left_deriv));
+                        let numerator_term2 =
+                            Expression::Binary(BinaryOp::Mul, left.clone(), Box::new(right_deriv));
                         let numerator = Expression::Binary(
                             BinaryOp::Sub,
                             Box::new(numerator_term1),
                             Box::new(numerator_term2),
                         );
-                        let denominator = Expression::Power(
-                            right.clone(),
-                            Box::new(Expression::Integer(2)),
-                        );
-                        Expression::Binary(BinaryOp::Div, Box::new(numerator), Box::new(denominator))
+                        let denominator =
+                            Expression::Power(right.clone(), Box::new(Expression::Integer(2)));
+                        Expression::Binary(
+                            BinaryOp::Div,
+                            Box::new(numerator),
+                            Box::new(denominator),
+                        )
                     }
 
                     // Modulo: derivative is complex, not commonly needed
@@ -2006,31 +2452,17 @@ impl Expression {
                         Box::new(Expression::Integer(1)),
                     );
                     let power_term = Expression::Power(base.clone(), Box::new(n_minus_1));
-                    let scaled = Expression::Binary(
-                        BinaryOp::Mul,
-                        exponent.clone(),
-                        Box::new(power_term),
-                    );
-                    Expression::Binary(
-                        BinaryOp::Mul,
-                        Box::new(scaled),
-                        Box::new(base_deriv),
-                    )
+                    let scaled =
+                        Expression::Binary(BinaryOp::Mul, exponent.clone(), Box::new(power_term));
+                    Expression::Binary(BinaryOp::Mul, Box::new(scaled), Box::new(base_deriv))
                 } else if !base_has_var && exp_has_var {
                     // Exponential rule: d/dx[a^v] = a^v * ln(a) * dv/dx
                     let exp_deriv = exponent.differentiate(with_respect_to);
                     let ln_base = Expression::Function(Function::Ln, vec![base.as_ref().clone()]);
                     let power_term = Expression::Power(base.clone(), exponent.clone());
-                    let scaled = Expression::Binary(
-                        BinaryOp::Mul,
-                        Box::new(power_term),
-                        Box::new(ln_base),
-                    );
-                    Expression::Binary(
-                        BinaryOp::Mul,
-                        Box::new(scaled),
-                        Box::new(exp_deriv),
-                    )
+                    let scaled =
+                        Expression::Binary(BinaryOp::Mul, Box::new(power_term), Box::new(ln_base));
+                    Expression::Binary(BinaryOp::Mul, Box::new(scaled), Box::new(exp_deriv))
                 } else {
                     // General case: d/dx[u^v] = u^v * (v' * ln(u) + v * u'/u)
                     // This is the full logarithmic differentiation formula
@@ -2038,17 +2470,11 @@ impl Expression {
                     let exp_deriv = exponent.differentiate(with_respect_to);
 
                     let ln_base = Expression::Function(Function::Ln, vec![base.as_ref().clone()]);
-                    let term1 = Expression::Binary(
-                        BinaryOp::Mul,
-                        Box::new(exp_deriv),
-                        Box::new(ln_base),
-                    );
+                    let term1 =
+                        Expression::Binary(BinaryOp::Mul, Box::new(exp_deriv), Box::new(ln_base));
 
-                    let u_prime_over_u = Expression::Binary(
-                        BinaryOp::Div,
-                        Box::new(base_deriv),
-                        base.clone(),
-                    );
+                    let u_prime_over_u =
+                        Expression::Binary(BinaryOp::Div, Box::new(base_deriv), base.clone());
                     let term2 = Expression::Binary(
                         BinaryOp::Mul,
                         exponent.clone(),
@@ -2058,11 +2484,7 @@ impl Expression {
                     let sum = Expression::Binary(BinaryOp::Add, Box::new(term1), Box::new(term2));
                     let power = Expression::Power(base.clone(), exponent.clone());
 
-                    Expression::Binary(
-                        BinaryOp::Mul,
-                        Box::new(power),
-                        Box::new(sum),
-                    )
+                    Expression::Binary(BinaryOp::Mul, Box::new(power), Box::new(sum))
                 }
             }
 
@@ -2096,16 +2518,18 @@ impl Expression {
                         let arg = &args[0];
                         let arg_deriv = arg.differentiate(with_respect_to);
                         let cos_u = Expression::Function(Function::Cos, vec![arg.clone()]);
-                        let cos_squared = Expression::Power(
-                            Box::new(cos_u),
-                            Box::new(Expression::Integer(2)),
-                        );
+                        let cos_squared =
+                            Expression::Power(Box::new(cos_u), Box::new(Expression::Integer(2)));
                         let sec_squared = Expression::Binary(
                             BinaryOp::Div,
                             Box::new(Expression::Integer(1)),
                             Box::new(cos_squared),
                         );
-                        Expression::Binary(BinaryOp::Mul, Box::new(sec_squared), Box::new(arg_deriv))
+                        Expression::Binary(
+                            BinaryOp::Mul,
+                            Box::new(sec_squared),
+                            Box::new(arg_deriv),
+                        )
                     }
 
                     // Inverse trigonometric functions
@@ -2128,7 +2552,11 @@ impl Expression {
                             Box::new(Expression::Integer(1)),
                             Box::new(sqrt_term),
                         );
-                        Expression::Binary(BinaryOp::Mul, Box::new(deriv_factor), Box::new(arg_deriv))
+                        Expression::Binary(
+                            BinaryOp::Mul,
+                            Box::new(deriv_factor),
+                            Box::new(arg_deriv),
+                        )
                     }
 
                     Function::Acos => {
@@ -2172,7 +2600,11 @@ impl Expression {
                             Box::new(Expression::Integer(1)),
                             Box::new(one_plus_u_sq),
                         );
-                        Expression::Binary(BinaryOp::Mul, Box::new(deriv_factor), Box::new(arg_deriv))
+                        Expression::Binary(
+                            BinaryOp::Mul,
+                            Box::new(deriv_factor),
+                            Box::new(arg_deriv),
+                        )
                     }
 
                     Function::Atan2 => {
@@ -2202,16 +2634,18 @@ impl Expression {
                         let arg = &args[0];
                         let arg_deriv = arg.differentiate(with_respect_to);
                         let cosh_u = Expression::Function(Function::Cosh, vec![arg.clone()]);
-                        let cosh_squared = Expression::Power(
-                            Box::new(cosh_u),
-                            Box::new(Expression::Integer(2)),
-                        );
+                        let cosh_squared =
+                            Expression::Power(Box::new(cosh_u), Box::new(Expression::Integer(2)));
                         let sech_squared = Expression::Binary(
                             BinaryOp::Div,
                             Box::new(Expression::Integer(1)),
                             Box::new(cosh_squared),
                         );
-                        Expression::Binary(BinaryOp::Mul, Box::new(sech_squared), Box::new(arg_deriv))
+                        Expression::Binary(
+                            BinaryOp::Mul,
+                            Box::new(sech_squared),
+                            Box::new(arg_deriv),
+                        )
                     }
 
                     // Exponential and logarithmic functions
@@ -2239,10 +2673,8 @@ impl Expression {
                         // d/dx[log10(u)] = 1/(u * ln(10)) * du/dx
                         let arg = &args[0];
                         let arg_deriv = arg.differentiate(with_respect_to);
-                        let ln_10 = Expression::Function(
-                            Function::Ln,
-                            vec![Expression::Integer(10)],
-                        );
+                        let ln_10 =
+                            Expression::Function(Function::Ln, vec![Expression::Integer(10)]);
                         let u_times_ln10 = Expression::Binary(
                             BinaryOp::Mul,
                             Box::new(arg.clone()),
@@ -2253,17 +2685,18 @@ impl Expression {
                             Box::new(Expression::Integer(1)),
                             Box::new(u_times_ln10),
                         );
-                        Expression::Binary(BinaryOp::Mul, Box::new(deriv_factor), Box::new(arg_deriv))
+                        Expression::Binary(
+                            BinaryOp::Mul,
+                            Box::new(deriv_factor),
+                            Box::new(arg_deriv),
+                        )
                     }
 
                     Function::Log2 => {
                         // d/dx[log2(u)] = 1/(u * ln(2)) * du/dx
                         let arg = &args[0];
                         let arg_deriv = arg.differentiate(with_respect_to);
-                        let ln_2 = Expression::Function(
-                            Function::Ln,
-                            vec![Expression::Integer(2)],
-                        );
+                        let ln_2 = Expression::Function(Function::Ln, vec![Expression::Integer(2)]);
                         let u_times_ln2 = Expression::Binary(
                             BinaryOp::Mul,
                             Box::new(arg.clone()),
@@ -2274,7 +2707,11 @@ impl Expression {
                             Box::new(Expression::Integer(1)),
                             Box::new(u_times_ln2),
                         );
-                        Expression::Binary(BinaryOp::Mul, Box::new(deriv_factor), Box::new(arg_deriv))
+                        Expression::Binary(
+                            BinaryOp::Mul,
+                            Box::new(deriv_factor),
+                            Box::new(arg_deriv),
+                        )
                     }
 
                     Function::Log => {
@@ -2294,7 +2731,11 @@ impl Expression {
                                 Box::new(Expression::Integer(1)),
                                 Box::new(u_times_lnb),
                             );
-                            Expression::Binary(BinaryOp::Mul, Box::new(deriv_factor), Box::new(arg_deriv))
+                            Expression::Binary(
+                                BinaryOp::Mul,
+                                Box::new(deriv_factor),
+                                Box::new(arg_deriv),
+                            )
                         } else {
                             Expression::Integer(0)
                         }
@@ -2316,7 +2757,11 @@ impl Expression {
                             Box::new(Expression::Integer(1)),
                             Box::new(two_sqrt_u),
                         );
-                        Expression::Binary(BinaryOp::Mul, Box::new(deriv_factor), Box::new(arg_deriv))
+                        Expression::Binary(
+                            BinaryOp::Mul,
+                            Box::new(deriv_factor),
+                            Box::new(arg_deriv),
+                        )
                     }
 
                     Function::Cbrt => {
@@ -2328,10 +2773,8 @@ impl Expression {
                             Box::new(Expression::Integer(2)),
                             Box::new(Expression::Integer(3)),
                         );
-                        let u_to_2_3 = Expression::Power(
-                            Box::new(arg.clone()),
-                            Box::new(two_thirds),
-                        );
+                        let u_to_2_3 =
+                            Expression::Power(Box::new(arg.clone()), Box::new(two_thirds));
                         let three_u_2_3 = Expression::Binary(
                             BinaryOp::Mul,
                             Box::new(Expression::Integer(3)),
@@ -2342,7 +2785,11 @@ impl Expression {
                             Box::new(Expression::Integer(1)),
                             Box::new(three_u_2_3),
                         );
-                        Expression::Binary(BinaryOp::Mul, Box::new(deriv_factor), Box::new(arg_deriv))
+                        Expression::Binary(
+                            BinaryOp::Mul,
+                            Box::new(deriv_factor),
+                            Box::new(arg_deriv),
+                        )
                     }
 
                     Function::Pow => {
@@ -2508,12 +2955,8 @@ impl Expression {
                     Function::Round => Some(arg_vals.get(0)?.round()),
                     Function::Abs => Some(arg_vals.get(0)?.abs()),
                     Function::Sign => Some(arg_vals.get(0)?.signum()),
-                    Function::Min => {
-                        arg_vals.iter().copied().reduce(f64::min)
-                    }
-                    Function::Max => {
-                        arg_vals.iter().copied().reduce(f64::max)
-                    }
+                    Function::Min => arg_vals.iter().copied().reduce(f64::min),
+                    Function::Max => arg_vals.iter().copied().reduce(f64::max),
                     Function::Custom(_) => None,
                 }
             }
