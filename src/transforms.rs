@@ -319,20 +319,130 @@ impl Polar {
 }
 
 /// 3D Cartesian coordinates (x, y, z).
+///
+/// Represents a point in 3D space using Cartesian coordinates with x, y, and z axes.
+/// Provides conversions to spherical and cylindrical coordinate systems, and integration
+/// with nalgebra's Vector3.
+///
+/// # Mathematical Representation
+///
+/// A point P in 3D Cartesian coordinates is represented as:
+/// ```text
+/// P = (x, y, z)
+/// ```
+///
+/// # Coordinate System Diagram
+///
+/// ```text
+///        z
+///        ↑
+///        |
+///        |    P(x,y,z)
+///        |   /
+///        |  /
+///        | /
+///        |/________→ y
+///       /
+///      /
+///     /
+///    ↓
+///    x
+/// ```
+///
+/// # Examples
+///
+/// ```
+/// use mathsolver_core::transforms::Cartesian3D;
+///
+/// // Create a point at (3, 4, 5)
+/// let point = Cartesian3D::new(3.0, 4.0, 5.0);
+/// assert_eq!(point.x, 3.0);
+/// assert_eq!(point.y, 4.0);
+/// assert_eq!(point.z, 5.0);
+///
+/// // Calculate distance from origin
+/// let magnitude = point.magnitude();
+/// let expected = (3.0*3.0 + 4.0*4.0 + 5.0*5.0_f64).sqrt();
+/// assert!((magnitude - expected).abs() < 1e-10);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cartesian3D {
+    /// x-coordinate (horizontal axis)
     pub x: f64,
+    /// y-coordinate (horizontal axis perpendicular to x)
     pub y: f64,
+    /// z-coordinate (vertical axis)
     pub z: f64,
 }
 
 impl Cartesian3D {
     /// Create new 3D Cartesian coordinates.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::transforms::Cartesian3D;
+    ///
+    /// let point = Cartesian3D::new(1.0, 2.0, 3.0);
+    /// assert_eq!(point.x, 1.0);
+    /// assert_eq!(point.y, 2.0);
+    /// assert_eq!(point.z, 3.0);
+    /// ```
     pub fn new(x: f64, y: f64, z: f64) -> Self {
         Self { x, y, z }
     }
 
     /// Convert to spherical coordinates.
+    ///
+    /// Converts Cartesian coordinates (x, y, z) to spherical coordinates (r, θ, φ) using:
+    /// ```text
+    /// r = √(x² + y² + z²)
+    /// θ = atan2(y, x)           [azimuthal angle in xy-plane]
+    /// φ = acos(z / r)           [polar angle from z-axis]
+    /// ```
+    ///
+    /// Uses the **physics convention** where:
+    /// - r ≥ 0: radius (distance from origin)
+    /// - θ ∈ [0, 2π): azimuthal angle in xy-plane from x-axis
+    /// - φ ∈ [0, π]: polar angle from positive z-axis
+    ///
+    /// # Coordinate System Diagram
+    ///
+    /// ```text
+    ///        z
+    ///        ↑
+    ///        |    P
+    ///        |   /|
+    ///        |  / |
+    ///        | /  | r·cos(φ)
+    ///      φ |/   |
+    ///        O----●----------→ y
+    ///       /     |
+    ///      /    r·sin(φ)
+    ///     /    θ
+    ///    ↓
+    ///    x
+    /// ```
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::transforms::Cartesian3D;
+    /// use std::f64::consts::PI;
+    ///
+    /// // Point on positive z-axis
+    /// let point = Cartesian3D::new(0.0, 0.0, 5.0);
+    /// let spherical = point.to_spherical();
+    /// assert!((spherical.r - 5.0).abs() < 1e-10);
+    /// assert!((spherical.phi - 0.0).abs() < 1e-10);  // φ = 0 on z-axis
+    ///
+    /// // Point in xy-plane at 45 degrees
+    /// let point = Cartesian3D::new(1.0, 1.0, 0.0);
+    /// let spherical = point.to_spherical();
+    /// assert!((spherical.r - std::f64::consts::SQRT_2).abs() < 1e-10);
+    /// assert!((spherical.theta - PI / 4.0).abs() < 1e-10);
+    /// assert!((spherical.phi - PI / 2.0).abs() < 1e-10);  // φ = π/2 in xy-plane
+    /// ```
     pub fn to_spherical(&self) -> Spherical {
         let r = (self.x * self.x + self.y * self.y + self.z * self.z).sqrt();
         let theta = (self.y.atan2(self.x)).rem_euclid(2.0 * PI); // azimuthal angle
@@ -345,6 +455,51 @@ impl Cartesian3D {
     }
 
     /// Convert to cylindrical coordinates.
+    ///
+    /// Converts Cartesian coordinates (x, y, z) to cylindrical coordinates (ρ, φ, z) using:
+    /// ```text
+    /// ρ = √(x² + y²)
+    /// φ = atan2(y, x)
+    /// z = z
+    /// ```
+    ///
+    /// # Coordinate System Diagram
+    ///
+    /// ```text
+    ///        z
+    ///        ↑
+    ///        |     P(x,y,z)
+    ///        |    /|
+    ///        |   / |
+    ///        |  /  | z
+    ///        | /   |
+    ///        |/____●----------→ y
+    ///       /      |
+    ///      /     ρ (radial distance from z-axis)
+    ///     /    φ
+    ///    ↓
+    ///    x
+    /// ```
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::transforms::Cartesian3D;
+    /// use std::f64::consts::PI;
+    ///
+    /// // Point at (3, 4, 5)
+    /// let point = Cartesian3D::new(3.0, 4.0, 5.0);
+    /// let cylindrical = point.to_cylindrical();
+    /// assert!((cylindrical.rho - 5.0).abs() < 1e-10);  // √(3² + 4²) = 5
+    /// assert!((cylindrical.z - 5.0).abs() < 1e-10);
+    ///
+    /// // Point on positive y-axis
+    /// let point = Cartesian3D::new(0.0, 2.0, 3.0);
+    /// let cylindrical = point.to_cylindrical();
+    /// assert!((cylindrical.rho - 2.0).abs() < 1e-10);
+    /// assert!((cylindrical.phi - PI / 2.0).abs() < 1e-10);
+    /// assert!((cylindrical.z - 3.0).abs() < 1e-10);
+    /// ```
     pub fn to_cylindrical(&self) -> Cylindrical {
         let rho = (self.x * self.x + self.y * self.y).sqrt();
         let phi = self.y.atan2(self.x);
@@ -352,35 +507,206 @@ impl Cartesian3D {
     }
 
     /// Convert to nalgebra vector.
+    ///
+    /// Returns a 3D column vector `[x, y, z]ᵀ` for use with nalgebra linear algebra operations.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::transforms::Cartesian3D;
+    ///
+    /// let point = Cartesian3D::new(1.0, 2.0, 3.0);
+    /// let vec = point.to_vector();
+    /// assert_eq!(vec[0], 1.0);
+    /// assert_eq!(vec[1], 2.0);
+    /// assert_eq!(vec[2], 3.0);
+    /// ```
     pub fn to_vector(&self) -> Vector3<f64> {
         Vector3::new(self.x, self.y, self.z)
     }
 
     /// Distance from origin.
+    ///
+    /// Calculates the Euclidean distance from the origin (0, 0, 0) to the point (x, y, z):
+    /// ```text
+    /// |P| = √(x² + y² + z²)
+    /// ```
+    ///
+    /// This is equivalent to the radius r in spherical coordinates.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::transforms::Cartesian3D;
+    ///
+    /// // 3-4-5 right triangle in 3D space
+    /// let point = Cartesian3D::new(0.0, 3.0, 4.0);
+    /// assert!((point.magnitude() - 5.0).abs() < 1e-10);
+    ///
+    /// // Point at origin
+    /// let origin = Cartesian3D::new(0.0, 0.0, 0.0);
+    /// assert_eq!(origin.magnitude(), 0.0);
+    ///
+    /// // 3D Pythagorean quintuple (1, 2, 2) → √9 = 3
+    /// let point = Cartesian3D::new(1.0, 2.0, 2.0);
+    /// assert!((point.magnitude() - 3.0).abs() < 1e-10);
+    /// ```
     pub fn magnitude(&self) -> f64 {
         (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
     }
 }
 
 /// Spherical coordinates (r, θ, φ).
-/// Uses physics convention: r (radius), θ (azimuthal), φ (polar from z-axis).
+///
+/// Represents a point in 3D space using spherical coordinates with radius r,
+/// azimuthal angle θ, and polar angle φ.
+///
+/// # Physics Convention
+///
+/// This implementation uses the **physics convention** (ISO 31-11), NOT the mathematics convention.
+///
+/// **Physics Convention** (used here):
+/// - r ≥ 0: radial distance from origin
+/// - θ ∈ [0, 2π): azimuthal angle in xy-plane from positive x-axis
+/// - φ ∈ [0, π]: polar angle (inclination) from positive z-axis
+///
+/// **Mathematics Convention** (NOT used):
+/// - r ≥ 0: radial distance
+/// - θ ∈ [0, π]: polar angle from positive z-axis (equivalent to our φ)
+/// - φ ∈ [0, 2π): azimuthal angle (equivalent to our θ)
+///
+/// # Coordinate System Diagram
+///
+/// ```text
+///        z
+///        ↑
+///        |    P
+///        |   /|
+///        |  / |
+///        | /  |
+///      φ |/)r |
+///        O----●-------→ y
+///       /  θ  |
+///      /      ρ (projection onto xy-plane)
+///     /
+///    ↓
+///    x
+///
+/// where:
+///   r = radius (distance OP)
+///   θ = azimuthal angle (counterclockwise from x-axis in xy-plane)
+///   φ = polar angle (angle from positive z-axis)
+///   ρ = r·sin(φ) (projection of r onto xy-plane)
+/// ```
+///
+/// # Conversion Formulas
+///
+/// From Cartesian (x, y, z) to Spherical (r, θ, φ):
+/// ```text
+/// r = √(x² + y² + z²)
+/// θ = atan2(y, x)
+/// φ = acos(z / r)
+/// ```
+///
+/// From Spherical (r, θ, φ) to Cartesian (x, y, z):
+/// ```text
+/// x = r sin(φ) cos(θ)
+/// y = r sin(φ) sin(θ)
+/// z = r cos(φ)
+/// ```
+///
+/// # Examples
+///
+/// ```
+/// use mathsolver_core::transforms::{Spherical, Cartesian3D};
+/// use std::f64::consts::PI;
+///
+/// // Point on positive z-axis at distance 5
+/// let spherical = Spherical::new(5.0, 0.0, 0.0);  // φ = 0 points along +z
+/// let cartesian = spherical.to_cartesian();
+/// assert!((cartesian.x - 0.0).abs() < 1e-10);
+/// assert!((cartesian.y - 0.0).abs() < 1e-10);
+/// assert!((cartesian.z - 5.0).abs() < 1e-10);
+///
+/// // Point in xy-plane at 45 degrees from x-axis
+/// let spherical = Spherical::new(2.0, PI / 4.0, PI / 2.0);  // φ = π/2 is xy-plane
+/// let cartesian = spherical.to_cartesian();
+/// assert!((cartesian.x - std::f64::consts::SQRT_2).abs() < 1e-10);
+/// assert!((cartesian.y - std::f64::consts::SQRT_2).abs() < 1e-10);
+/// assert!((cartesian.z - 0.0).abs() < 1e-10);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Spherical {
-    /// Radius (distance from origin)
+    /// Radius (distance from origin), r ≥ 0
     pub r: f64,
-    /// Azimuthal angle θ in radians (angle in xy-plane from x-axis)
+    /// Azimuthal angle θ in radians (angle in xy-plane from x-axis), θ ∈ [0, 2π)
     pub theta: f64,
-    /// Polar angle φ in radians (angle from positive z-axis)
+    /// Polar angle φ in radians (angle from positive z-axis), φ ∈ [0, π]
     pub phi: f64,
 }
 
 impl Spherical {
     /// Create new spherical coordinates.
+    ///
+    /// # Arguments
+    ///
+    /// * `r` - Radius (distance from origin), typically r ≥ 0
+    /// * `theta` - Azimuthal angle in radians (angle in xy-plane from x-axis)
+    /// * `phi` - Polar angle in radians (angle from positive z-axis)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::transforms::Spherical;
+    /// use std::f64::consts::PI;
+    ///
+    /// // Point at radius 5, 30° azimuthal, 45° polar
+    /// let spherical = Spherical::new(5.0, PI / 6.0, PI / 4.0);
+    /// assert_eq!(spherical.r, 5.0);
+    /// assert!((spherical.theta - PI / 6.0).abs() < 1e-10);
+    /// assert!((spherical.phi - PI / 4.0).abs() < 1e-10);
+    /// ```
     pub fn new(r: f64, theta: f64, phi: f64) -> Self {
         Self { r, theta, phi }
     }
 
     /// Convert to Cartesian coordinates.
+    ///
+    /// Converts spherical coordinates (r, θ, φ) to Cartesian coordinates (x, y, z) using:
+    /// ```text
+    /// x = r sin(φ) cos(θ)
+    /// y = r sin(φ) sin(θ)
+    /// z = r cos(φ)
+    /// ```
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::transforms::Spherical;
+    /// use std::f64::consts::PI;
+    ///
+    /// // Point at radius 1 on positive x-axis
+    /// let spherical = Spherical::new(1.0, 0.0, PI / 2.0);
+    /// let cartesian = spherical.to_cartesian();
+    /// assert!((cartesian.x - 1.0).abs() < 1e-10);
+    /// assert!((cartesian.y - 0.0).abs() < 1e-10);
+    /// assert!((cartesian.z - 0.0).abs() < 1e-10);
+    ///
+    /// // Point at radius 1 on positive z-axis
+    /// let spherical = Spherical::new(1.0, 0.0, 0.0);
+    /// let cartesian = spherical.to_cartesian();
+    /// assert!((cartesian.x - 0.0).abs() < 1e-10);
+    /// assert!((cartesian.y - 0.0).abs() < 1e-10);
+    /// assert!((cartesian.z - 1.0).abs() < 1e-10);
+    ///
+    /// // Round-trip conversion
+    /// let original = Spherical::new(3.0, PI / 3.0, PI / 6.0);
+    /// let cartesian = original.to_cartesian();
+    /// let spherical = cartesian.to_spherical();
+    /// assert!((spherical.r - original.r).abs() < 1e-10);
+    /// assert!((spherical.theta - original.theta).abs() < 1e-10);
+    /// assert!((spherical.phi - original.phi).abs() < 1e-10);
+    /// ```
     pub fn to_cartesian(&self) -> Cartesian3D {
         let x = self.r * self.phi.sin() * self.theta.cos();
         let y = self.r * self.phi.sin() * self.theta.sin();
@@ -389,6 +715,33 @@ impl Spherical {
     }
 
     /// Convert to cylindrical coordinates.
+    ///
+    /// Converts spherical coordinates (r, θ, φ) to cylindrical coordinates (ρ, φ_cyl, z) using:
+    /// ```text
+    /// ρ = r sin(φ)
+    /// φ_cyl = θ
+    /// z = r cos(φ)
+    /// ```
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::transforms::Spherical;
+    /// use std::f64::consts::PI;
+    ///
+    /// // Point at radius 2, θ=30°, φ=60°
+    /// let spherical = Spherical::new(2.0, PI / 6.0, PI / 3.0);
+    /// let cylindrical = spherical.to_cylindrical();
+    /// assert!((cylindrical.rho - 2.0 * (PI / 3.0).sin()).abs() < 1e-10);
+    /// assert!((cylindrical.phi - PI / 6.0).abs() < 1e-10);
+    /// assert!((cylindrical.z - 2.0 * (PI / 3.0).cos()).abs() < 1e-10);
+    ///
+    /// // Point in xy-plane (φ = π/2)
+    /// let spherical = Spherical::new(5.0, PI / 4.0, PI / 2.0);
+    /// let cylindrical = spherical.to_cylindrical();
+    /// assert!((cylindrical.rho - 5.0).abs() < 1e-10);
+    /// assert!((cylindrical.z - 0.0).abs() < 1e-10);
+    /// ```
     pub fn to_cylindrical(&self) -> Cylindrical {
         let rho = self.r * self.phi.sin();
         Cylindrical::new(rho, self.theta, self.r * self.phi.cos())
@@ -396,11 +749,96 @@ impl Spherical {
 }
 
 /// Cylindrical coordinates (ρ, φ, z).
+///
+/// Represents a point in 3D space using cylindrical coordinates with radial distance ρ
+/// from the z-axis, azimuthal angle φ, and height z along the z-axis.
+///
+/// # Mathematical Representation
+///
+/// A point P in cylindrical coordinates is represented as:
+/// ```text
+/// P = (ρ, φ, z)
+/// where:
+///   ρ ≥ 0 is the radial distance from the z-axis (radius in xy-plane)
+///   φ is the azimuthal angle in radians from the positive x-axis
+///   z is the height along the z-axis
+/// ```
+///
+/// # Coordinate System Diagram
+///
+/// ```text
+///        z
+///        ↑
+///        |     P(ρ,φ,z)
+///        |    /|
+///        |   / |
+///        |  /  | z (height)
+///        | /   |
+///        |/____|_____→ y
+///       /      ●
+///      /       |
+///     /        ρ (radial distance from z-axis)
+///    ↓       φ
+///    x
+///
+/// Top view (looking down z-axis):
+///
+///      y
+///      ↑
+///      |    P
+///      |   /
+///      |  /
+///      | / ρ
+///    φ |/)
+///      |/________→ x
+/// ```
+///
+/// # Conversion Formulas
+///
+/// From Cartesian (x, y, z) to Cylindrical (ρ, φ, z):
+/// ```text
+/// ρ = √(x² + y²)
+/// φ = atan2(y, x)
+/// z = z
+/// ```
+///
+/// From Cylindrical (ρ, φ, z) to Cartesian (x, y, z):
+/// ```text
+/// x = ρ cos(φ)
+/// y = ρ sin(φ)
+/// z = z
+/// ```
+///
+/// From Cylindrical (ρ, φ, z) to Spherical (r, θ, φ_sph):
+/// ```text
+/// r = √(ρ² + z²)
+/// θ = φ
+/// φ_sph = acos(z / r)
+/// ```
+///
+/// # Examples
+///
+/// ```
+/// use mathsolver_core::transforms::{Cylindrical, Cartesian3D};
+/// use std::f64::consts::PI;
+///
+/// // Point at radius 3 from z-axis, angle 60°, height 4
+/// let cylindrical = Cylindrical::new(3.0, PI / 3.0, 4.0);
+/// assert_eq!(cylindrical.rho, 3.0);
+/// assert!((cylindrical.phi - PI / 3.0).abs() < 1e-10);
+/// assert_eq!(cylindrical.z, 4.0);
+///
+/// // Convert to Cartesian
+/// let cartesian = cylindrical.to_cartesian();
+/// assert!((cartesian.x - 3.0 * (PI / 3.0).cos()).abs() < 1e-10);
+/// assert!((cartesian.y - 3.0 * (PI / 3.0).sin()).abs() < 1e-10);
+/// assert!((cartesian.z - 4.0).abs() < 1e-10);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cylindrical {
-    /// Radial distance from z-axis
+    /// Radial distance from z-axis (radius in xy-plane), ρ ≥ 0
     pub rho: f64,
-    /// Azimuthal angle in radians
+    /// Azimuthal angle in radians (angle in xy-plane from x-axis)
     pub phi: f64,
     /// Height along z-axis
     pub z: f64,
@@ -408,11 +846,66 @@ pub struct Cylindrical {
 
 impl Cylindrical {
     /// Create new cylindrical coordinates.
+    ///
+    /// # Arguments
+    ///
+    /// * `rho` - Radial distance from z-axis, typically ρ ≥ 0
+    /// * `phi` - Azimuthal angle in radians (angle in xy-plane from x-axis)
+    /// * `z` - Height along z-axis
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::transforms::Cylindrical;
+    /// use std::f64::consts::PI;
+    ///
+    /// // Point at radius 2 from z-axis, 45°, height 3
+    /// let cylindrical = Cylindrical::new(2.0, PI / 4.0, 3.0);
+    /// assert_eq!(cylindrical.rho, 2.0);
+    /// assert!((cylindrical.phi - PI / 4.0).abs() < 1e-10);
+    /// assert_eq!(cylindrical.z, 3.0);
+    /// ```
     pub fn new(rho: f64, phi: f64, z: f64) -> Self {
         Self { rho, phi, z }
     }
 
     /// Convert to Cartesian coordinates.
+    ///
+    /// Converts cylindrical coordinates (ρ, φ, z) to Cartesian coordinates (x, y, z) using:
+    /// ```text
+    /// x = ρ cos(φ)
+    /// y = ρ sin(φ)
+    /// z = z
+    /// ```
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::transforms::Cylindrical;
+    /// use std::f64::consts::PI;
+    ///
+    /// // Point at radius 5 on positive x-axis, height 2
+    /// let cylindrical = Cylindrical::new(5.0, 0.0, 2.0);
+    /// let cartesian = cylindrical.to_cartesian();
+    /// assert!((cartesian.x - 5.0).abs() < 1e-10);
+    /// assert!((cartesian.y - 0.0).abs() < 1e-10);
+    /// assert!((cartesian.z - 2.0).abs() < 1e-10);
+    ///
+    /// // Point at radius 2 on positive y-axis, height 3
+    /// let cylindrical = Cylindrical::new(2.0, PI / 2.0, 3.0);
+    /// let cartesian = cylindrical.to_cartesian();
+    /// assert!((cartesian.x - 0.0).abs() < 1e-10);
+    /// assert!((cartesian.y - 2.0).abs() < 1e-10);
+    /// assert!((cartesian.z - 3.0).abs() < 1e-10);
+    ///
+    /// // Round-trip conversion
+    /// let original = Cylindrical::new(4.0, PI / 6.0, 5.0);
+    /// let cartesian = original.to_cartesian();
+    /// let cylindrical = cartesian.to_cylindrical();
+    /// assert!((cylindrical.rho - original.rho).abs() < 1e-10);
+    /// assert!((cylindrical.phi - original.phi).abs() < 1e-10);
+    /// assert!((cylindrical.z - original.z).abs() < 1e-10);
+    /// ```
     pub fn to_cartesian(&self) -> Cartesian3D {
         let x = self.rho * self.phi.cos();
         let y = self.rho * self.phi.sin();
@@ -420,13 +913,35 @@ impl Cylindrical {
     }
 
     /// Convert to spherical coordinates.
+    ///
+    /// Converts cylindrical coordinates (ρ, φ, z) to spherical coordinates (r, θ, φ_sph) using:
+    /// ```text
+    /// r = √(ρ² + z²)
+    /// θ = φ
+    /// φ_sph = acos(z / r)
+    /// ```
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::transforms::Cylindrical;
+    /// use std::f64::consts::PI;
+    ///
+    /// // Point at radius 3, angle 30°, height 4
+    /// let cylindrical = Cylindrical::new(3.0, PI / 6.0, 4.0);
+    /// let spherical = cylindrical.to_spherical();
+    /// assert!((spherical.r - 5.0).abs() < 1e-10);  // √(3² + 4²) = 5
+    /// assert!((spherical.theta - PI / 6.0).abs() < 1e-10);
+    ///
+    /// // Point in xy-plane (z = 0)
+    /// let cylindrical = Cylindrical::new(2.0, PI / 4.0, 0.0);
+    /// let spherical = cylindrical.to_spherical();
+    /// assert!((spherical.r - 2.0).abs() < 1e-10);
+    /// assert!((spherical.phi - PI / 2.0).abs() < 1e-10);  // φ = π/2 for z=0
+    /// ```
     pub fn to_spherical(&self) -> Spherical {
         let r = (self.rho * self.rho + self.z * self.z).sqrt();
-        let phi = if r == 0.0 {
-            0.0
-        } else {
-            (self.z / r).acos()
-        };
+        let phi = if r == 0.0 { 0.0 } else { (self.z / r).acos() };
         Spherical::new(r, self.phi, phi)
     }
 }
@@ -696,10 +1211,102 @@ impl Transform2D {
 }
 
 /// Rotation matrices for 3D transformations.
+///
+/// Provides methods to create 3×3 rotation matrices for rotating points in 3D space
+/// around the coordinate axes or arbitrary axes. Returns nalgebra Matrix3 for integration
+/// with linear algebra operations.
+///
+/// # Mathematical Background
+///
+/// Rotation matrices are orthogonal matrices that preserve distances and angles.
+/// For any rotation matrix R:
+/// - R^T R = I (orthogonal)
+/// - det(R) = 1 (proper rotation, not reflection)
+///
+/// # Integration with nalgebra
+///
+/// All methods return `nalgebra::Matrix3<f64>` which can be:
+/// - Multiplied with Vector3 to rotate points
+/// - Composed through matrix multiplication
+/// - Inverted by transposition (R^(-1) = R^T)
+///
+/// # Examples
+///
+/// ```
+/// use mathsolver_core::transforms::{Rotation3D, Cartesian3D};
+/// use std::f64::consts::PI;
+///
+/// // Rotate point around z-axis by 90 degrees
+/// let rot = Rotation3D::around_z(PI / 2.0);
+/// let point = Cartesian3D::new(1.0, 0.0, 0.0);
+/// let vec = point.to_vector();
+/// let rotated = rot * vec;
+/// assert!((rotated[0] - 0.0).abs() < 1e-10);
+/// assert!((rotated[1] - 1.0).abs() < 1e-10);
+/// assert!((rotated[2] - 0.0).abs() < 1e-10);
+/// ```
 pub struct Rotation3D;
 
 impl Rotation3D {
     /// Rotation around x-axis.
+    ///
+    /// Creates a rotation matrix for rotating points counterclockwise around the x-axis
+    /// by angle θ when looking from positive x towards the origin (right-hand rule).
+    ///
+    /// # Matrix Form
+    ///
+    /// ```text
+    /// Rx(θ) = ┌                   ┐
+    ///         │ 1     0        0  │
+    ///         │ 0  cos(θ)  -sin(θ)│
+    ///         │ 0  sin(θ)   cos(θ)│
+    ///         └                   ┘
+    /// ```
+    ///
+    /// # Coordinate Transformation
+    ///
+    /// ```text
+    /// x' = x
+    /// y' = y cos(θ) - z sin(θ)
+    /// z' = y sin(θ) + z cos(θ)
+    /// ```
+    ///
+    /// # Coordinate System Diagram
+    ///
+    /// ```text
+    ///   Looking down the x-axis (from +x towards origin):
+    ///
+    ///         z
+    ///         ↑
+    ///         |     P'
+    ///         |    /
+    ///       θ |   /
+    ///         |  /
+    ///         | /___P
+    ///         |/________→ y
+    ///
+    ///   Positive rotation is counterclockwise (right-hand rule)
+    /// ```
+    ///
+    /// # Arguments
+    ///
+    /// * `theta` - Rotation angle in radians (counterclockwise when looking from +x)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::transforms::Rotation3D;
+    /// use nalgebra::Vector3;
+    /// use std::f64::consts::PI;
+    ///
+    /// // Rotate 90° around x-axis: (0,1,0) → (0,0,1)
+    /// let rot = Rotation3D::around_x(PI / 2.0);
+    /// let vec = Vector3::new(0.0, 1.0, 0.0);
+    /// let result = rot * vec;
+    /// assert!((result[0] - 0.0).abs() < 1e-10);
+    /// assert!((result[1] - 0.0).abs() < 1e-10);
+    /// assert!((result[2] - 1.0).abs() < 1e-10);
+    /// ```
     pub fn around_x(theta: f64) -> Matrix3<f64> {
         Matrix3::new(
             1.0,
@@ -715,6 +1322,64 @@ impl Rotation3D {
     }
 
     /// Rotation around y-axis.
+    ///
+    /// Creates a rotation matrix for rotating points counterclockwise around the y-axis
+    /// by angle θ when looking from positive y towards the origin (right-hand rule).
+    ///
+    /// # Matrix Form
+    ///
+    /// ```text
+    /// Ry(θ) = ┌                   ┐
+    ///         │  cos(θ)  0  sin(θ)│
+    ///         │    0     1    0   │
+    ///         │ -sin(θ)  0  cos(θ)│
+    ///         └                   ┘
+    /// ```
+    ///
+    /// # Coordinate Transformation
+    ///
+    /// ```text
+    /// x' = x cos(θ) + z sin(θ)
+    /// y' = y
+    /// z' = -x sin(θ) + z cos(θ)
+    /// ```
+    ///
+    /// # Coordinate System Diagram
+    ///
+    /// ```text
+    ///   Looking down the y-axis (from +y towards origin):
+    ///
+    ///         z
+    ///         ↑
+    ///         |     P
+    ///         |    /
+    ///       θ |   /
+    ///         |  /
+    ///         | /___P'
+    ///         |/________→ x
+    ///
+    ///   Positive rotation is counterclockwise (right-hand rule)
+    /// ```
+    ///
+    /// # Arguments
+    ///
+    /// * `theta` - Rotation angle in radians (counterclockwise when looking from +y)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::transforms::Rotation3D;
+    /// use nalgebra::Vector3;
+    /// use std::f64::consts::PI;
+    ///
+    /// // Rotate 90° around y-axis: (1,0,0) → (0,0,-1)
+    /// let rot = Rotation3D::around_y(PI / 2.0);
+    /// let vec = Vector3::new(1.0, 0.0, 0.0);
+    /// let result = rot * vec;
+    /// assert!((result[0] - 0.0).abs() < 1e-10);
+    /// assert!((result[1] - 0.0).abs() < 1e-10);
+    /// assert!((result[2] - -1.0).abs() < 1e-10);
+    /// ```
     pub fn around_y(theta: f64) -> Matrix3<f64> {
         Matrix3::new(
             theta.cos(),
@@ -730,6 +1395,73 @@ impl Rotation3D {
     }
 
     /// Rotation around z-axis.
+    ///
+    /// Creates a rotation matrix for rotating points counterclockwise around the z-axis
+    /// by angle θ when looking from positive z towards the origin (right-hand rule).
+    ///
+    /// # Matrix Form
+    ///
+    /// ```text
+    /// Rz(θ) = ┌                   ┐
+    ///         │ cos(θ)  -sin(θ)  0│
+    ///         │ sin(θ)   cos(θ)  0│
+    ///         │   0        0     1│
+    ///         └                   ┘
+    /// ```
+    ///
+    /// # Coordinate Transformation
+    ///
+    /// ```text
+    /// x' = x cos(θ) - y sin(θ)
+    /// y' = x sin(θ) + y cos(θ)
+    /// z' = z
+    /// ```
+    ///
+    /// # Coordinate System Diagram
+    ///
+    /// ```text
+    ///   Looking down the z-axis (from +z towards origin):
+    ///
+    ///         y
+    ///         ↑
+    ///         |     P'
+    ///         |    /
+    ///       θ |   /
+    ///         |  /
+    ///         | /___P
+    ///         |/________→ x
+    ///
+    ///   Positive rotation is counterclockwise (right-hand rule)
+    /// ```
+    ///
+    /// # Arguments
+    ///
+    /// * `theta` - Rotation angle in radians (counterclockwise when looking from +z)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::transforms::Rotation3D;
+    /// use nalgebra::Vector3;
+    /// use std::f64::consts::PI;
+    ///
+    /// // Rotate 90° around z-axis: (1,0,0) → (0,1,0)
+    /// let rot = Rotation3D::around_z(PI / 2.0);
+    /// let vec = Vector3::new(1.0, 0.0, 0.0);
+    /// let result = rot * vec;
+    /// assert!((result[0] - 0.0).abs() < 1e-10);
+    /// assert!((result[1] - 1.0).abs() < 1e-10);
+    /// assert!((result[2] - 0.0).abs() < 1e-10);
+    ///
+    /// // Compose rotations: 90° + 90° = 180°
+    /// let rot1 = Rotation3D::around_z(PI / 2.0);
+    /// let rot2 = Rotation3D::around_z(PI / 2.0);
+    /// let combined = rot2 * rot1;
+    /// let vec = Vector3::new(1.0, 0.0, 0.0);
+    /// let result = combined * vec;
+    /// assert!((result[0] - -1.0).abs() < 1e-10);
+    /// assert!((result[1] - 0.0).abs() < 1e-10);
+    /// ```
     pub fn around_z(theta: f64) -> Matrix3<f64> {
         Matrix3::new(
             theta.cos(),
@@ -745,6 +1477,30 @@ impl Rotation3D {
     }
 
     /// Rotation around arbitrary axis (Rodrigues' rotation formula).
+    ///
+    /// **TODO**: Not yet implemented. Returns identity matrix as placeholder.
+    ///
+    /// When implemented, will create a rotation matrix for rotating points around
+    /// an arbitrary unit axis vector by angle θ using Rodrigues' rotation formula.
+    ///
+    /// # Rodrigues' Rotation Formula
+    ///
+    /// For a unit vector **k** = (kx, ky, kz) and angle θ:
+    /// ```text
+    /// R = I + sin(θ)K + (1 - cos(θ))K²
+    ///
+    /// where K is the cross-product matrix:
+    /// K = ┌              ┐
+    ///     │  0   -kz   ky│
+    ///     │  kz   0   -kx│
+    ///     │ -ky   kx   0 │
+    ///     └              ┘
+    /// ```
+    ///
+    /// # Arguments
+    ///
+    /// * `_axis` - Unit vector defining rotation axis (should be normalized)
+    /// * `_theta` - Rotation angle in radians (right-hand rule)
     pub fn around_axis(_axis: Vector3<f64>, _theta: f64) -> Matrix3<f64> {
         // TODO: Implement Rodrigues' formula
         Matrix3::identity()
