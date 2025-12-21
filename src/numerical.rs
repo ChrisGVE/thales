@@ -47,11 +47,31 @@ use crate::resolution_path::{Operation, ResolutionPath};
 use std::collections::HashMap;
 
 /// Error types for numerical solving.
+///
+/// Represents the various failure modes that can occur during numerical
+/// root-finding and optimization.
+///
+/// # Variants
+///
+/// * `NoConvergence` - The algorithm did not converge within the maximum number
+///   of iterations. This can happen if the initial guess is too far from the root,
+///   the function is poorly behaved, or the tolerance is too tight.
+///
+/// * `Unstable` - Numerical instability was detected, such as division by zero
+///   (when derivative is zero in Newton-Raphson), NaN values, or infinite values.
+///
+/// * `InvalidInitialGuess` - The provided initial guess is invalid (e.g., outside
+///   the valid domain of the function).
+///
+/// * `EvaluationFailed` - Function or derivative evaluation failed at a specific
+///   point. The string contains details about the failure.
+///
+/// * `Other` - Any other error with a descriptive message.
 #[derive(Debug, Clone, PartialEq)]
 pub enum NumericalError {
     /// Failed to converge within iteration limit
     NoConvergence,
-    /// Numerical instability detected
+    /// Numerical instability detected (zero derivative, NaN, infinity)
     Unstable,
     /// Invalid initial guess
     InvalidInitialGuess,
@@ -65,6 +85,46 @@ pub enum NumericalError {
 pub type NumericalResult<T> = Result<T, NumericalError>;
 
 /// Configuration for numerical solvers.
+///
+/// Controls the behavior and termination criteria for numerical root-finding
+/// algorithms.
+///
+/// # Fields
+///
+/// * `max_iterations` - Maximum number of iterations before giving up.
+///   Default: 1000
+///
+/// * `tolerance` - Convergence tolerance. The algorithm stops when either:
+///   - The residual |f(x)| < tolerance, or
+///   - The step size |Δx| < tolerance
+///   Default: 1e-10
+///
+/// * `initial_guess` - Starting point for the algorithm. If `None`, the solver
+///   will attempt to estimate a reasonable starting point. For Newton-Raphson,
+///   a good initial guess close to the actual root leads to faster convergence.
+///   Default: None (will use 1.0)
+///
+/// * `step_size` - Step size for finite difference derivative approximation.
+///   This is only used as a fallback; the Newton-Raphson solver primarily uses
+///   symbolic differentiation for exact derivatives.
+///   Default: 1e-6
+///
+/// # Example
+///
+/// ```
+/// use mathsolver_core::numerical::NumericalConfig;
+///
+/// // Use default configuration
+/// let config = NumericalConfig::default();
+///
+/// // Custom configuration for high precision
+/// let precise_config = NumericalConfig {
+///     max_iterations: 10000,
+///     tolerance: 1e-15,
+///     initial_guess: Some(2.0),
+///     step_size: 1e-8,
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct NumericalConfig {
     /// Maximum number of iterations
@@ -89,6 +149,48 @@ impl Default for NumericalConfig {
 }
 
 /// Numerical solution with convergence information.
+///
+/// Contains the result of a numerical root-finding operation along with
+/// diagnostic information about the convergence process.
+///
+/// # Fields
+///
+/// * `value` - The approximate solution (root) found by the algorithm
+///
+/// * `iterations` - Number of iterations performed before convergence or
+///   termination
+///
+/// * `residual` - Final residual value |f(x)|. For a perfect solution, this
+///   would be 0.0. In practice, it should be smaller than the configured
+///   tolerance.
+///
+/// * `converged` - Whether the algorithm successfully converged to a solution
+///   within the tolerance and iteration limits
+///
+/// # Example
+///
+/// ```
+/// use mathsolver_core::numerical::{NewtonRaphson, NumericalConfig};
+/// use mathsolver_core::ast::{Equation, Expression, Variable};
+///
+/// // Solve x^2 = 5
+/// let equation = Equation::new(
+///     "find_sqrt5",
+///     Expression::Power(
+///         Box::new(Expression::Variable(Variable::new("x"))),
+///         Box::new(Expression::Integer(2))
+///     ),
+///     Expression::Integer(5)
+/// );
+///
+/// let solver = NewtonRaphson::with_default_config();
+/// let (solution, _path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+///
+/// assert!(solution.converged);
+/// assert!((solution.value - 2.236067977).abs() < 1e-6); // √5 ≈ 2.236
+/// assert!(solution.residual < 1e-10);
+/// println!("Solution found in {} iterations", solution.iterations);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct NumericalSolution {
     /// The approximate solution value
@@ -101,17 +203,144 @@ pub struct NumericalSolution {
     pub converged: bool,
 }
 
-/// Newton-Raphson root finder.
+/// Newton-Raphson root finder with symbolic differentiation.
+///
+/// Implements the Newton-Raphson method for finding roots of equations:
+///
+/// **x_{n+1} = x_n - f(x_n) / f'(x_n)**
+///
+/// This is an iterative method that starts from an initial guess and refines
+/// it by linearizing the function at each step. It converges quadratically
+/// for smooth functions when the initial guess is sufficiently close to the root.
+///
+/// # Key Features
+///
+/// * **Symbolic differentiation**: Uses `Expression::differentiate()` for exact
+///   derivatives instead of finite difference approximations
+/// * **Fast convergence**: Quadratic convergence rate near the root
+/// * **Resolution path tracking**: Records all steps for educational purposes
+/// * **Robust error handling**: Detects zero derivatives, NaN, and divergence
+///
+/// # Algorithm
+///
+/// 1. Convert equation to form f(x) = 0
+/// 2. Compute symbolic derivative f'(x) once
+/// 3. Start from initial guess x₀
+/// 4. Iterate: x_{n+1} = x_n - f(x_n) / f'(x_n)
+/// 5. Check convergence: |f(x)| < tolerance or |Δx| < tolerance
+/// 6. Return solution when converged
+///
+/// # Convergence Criteria
+///
+/// The algorithm stops when either:
+/// - Residual criterion: |f(x)| < tolerance
+/// - Step size criterion: |x_{n+1} - x_n| < tolerance
+/// - Maximum iterations reached (returns error)
+///
+/// # Limitations
+///
+/// * Requires good initial guess (close to actual root)
+/// * Fails when f'(x) = 0 at iteration point
+/// * May diverge for poorly behaved functions
+/// * Only finds one root at a time
+///
+/// # Example: Square Root
+///
+/// ```
+/// use mathsolver_core::numerical::{NewtonRaphson, NumericalConfig};
+/// use mathsolver_core::ast::{Equation, Expression, Variable};
+///
+/// // Solve x^2 = 5 to find √5
+/// let equation = Equation::new(
+///     "sqrt5",
+///     Expression::Power(
+///         Box::new(Expression::Variable(Variable::new("x"))),
+///         Box::new(Expression::Integer(2))
+///     ),
+///     Expression::Integer(5)
+/// );
+///
+/// let solver = NewtonRaphson::with_default_config();
+/// let (solution, _path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+///
+/// assert!((solution.value - 2.236067977).abs() < 1e-6);
+/// assert!(solution.converged);
+/// println!("√5 ≈ {} (found in {} iterations)", solution.value, solution.iterations);
+/// ```
+///
+/// # Example: Custom Configuration
+///
+/// ```
+/// use mathsolver_core::numerical::{NewtonRaphson, NumericalConfig};
+/// use mathsolver_core::ast::{Equation, Expression, Variable};
+///
+/// // High precision configuration
+/// let config = NumericalConfig {
+///     max_iterations: 1000,
+///     tolerance: 1e-15,
+///     initial_guess: Some(1.5), // good guess for √5
+///     step_size: 1e-8,
+/// };
+///
+/// let equation = Equation::new(
+///     "cubic",
+///     Expression::Power(
+///         Box::new(Expression::Variable(Variable::new("x"))),
+///         Box::new(Expression::Integer(3))
+///     ),
+///     Expression::Integer(27)
+/// );
+///
+/// let solver = NewtonRaphson::new(config);
+/// let (solution, _) = solver.solve(&equation, &Variable::new("x")).unwrap();
+/// assert!((solution.value - 3.0).abs() < 1e-10); // ∛27 = 3
+/// ```
 #[derive(Debug)]
 pub struct NewtonRaphson {
     config: NumericalConfig,
 }
 
 impl NewtonRaphson {
+    /// Create a new Newton-Raphson solver with custom configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Configuration controlling iteration limits, tolerance, and
+    ///   initial guess
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use mathsolver_core::numerical::{NewtonRaphson, NumericalConfig};
+    ///
+    /// let config = NumericalConfig {
+    ///     max_iterations: 500,
+    ///     tolerance: 1e-12,
+    ///     initial_guess: Some(2.0),
+    ///     step_size: 1e-7,
+    /// };
+    ///
+    /// let solver = NewtonRaphson::new(config);
+    /// ```
     pub fn new(config: NumericalConfig) -> Self {
         Self { config }
     }
 
+    /// Create a new Newton-Raphson solver with default configuration.
+    ///
+    /// Uses:
+    /// - max_iterations: 1000
+    /// - tolerance: 1e-10
+    /// - initial_guess: None (will use 1.0)
+    /// - step_size: 1e-6
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use mathsolver_core::numerical::NewtonRaphson;
+    ///
+    /// let solver = NewtonRaphson::with_default_config();
+    /// ```
     pub fn with_default_config() -> Self {
         Self {
             config: NumericalConfig::default(),
@@ -119,6 +348,58 @@ impl NewtonRaphson {
     }
 
     /// Find a root of the equation using Newton-Raphson method.
+    ///
+    /// # Algorithm Steps
+    ///
+    /// 1. Convert equation to f(x) = 0 form: f(x) = left - right
+    /// 2. Compute symbolic derivative f'(x) using `Expression::differentiate()`
+    /// 3. Initialize x from config or default to 1.0
+    /// 4. Iterate Newton-Raphson formula: x_{n+1} = x_n - f(x_n)/f'(x_n)
+    /// 5. Check convergence at each step
+    /// 6. Return solution and resolution path
+    ///
+    /// # Arguments
+    ///
+    /// * `equation` - The equation to solve
+    /// * `variable` - The variable to solve for
+    ///
+    /// # Returns
+    ///
+    /// * `Ok((solution, path))` - The numerical solution and resolution path
+    /// * `Err(NumericalError)` - If solving fails
+    ///
+    /// # Errors
+    ///
+    /// * `NumericalError::NoConvergence` - Did not converge within max_iterations
+    /// * `NumericalError::Unstable` - Zero derivative or NaN encountered
+    /// * `NumericalError::EvaluationFailed` - Function evaluation failed
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use mathsolver_core::numerical::NewtonRaphson;
+    /// use mathsolver_core::ast::{Equation, Expression, Variable};
+    ///
+    /// // Solve x^2 = 5
+    /// let equation = Equation::new(
+    ///     "quadratic",
+    ///     Expression::Power(
+    ///         Box::new(Expression::Variable(Variable::new("x"))),
+    ///         Box::new(Expression::Integer(2))
+    ///     ),
+    ///     Expression::Integer(5)
+    /// );
+    ///
+    /// let solver = NewtonRaphson::with_default_config();
+    /// match solver.solve(&equation, &Variable::new("x")) {
+    ///     Ok((solution, _path)) => {
+    ///         println!("Found root: x = {}", solution.value);
+    ///         println!("Iterations: {}", solution.iterations);
+    ///         println!("Residual: {}", solution.residual);
+    ///     }
+    ///     Err(e) => println!("Failed to solve: {:?}", e),
+    /// }
+    /// ```
     pub fn solve(
         &self,
         equation: &Equation,
@@ -143,7 +424,10 @@ impl NewtonRaphson {
         let mut path = ResolutionPathBuilder::new(f.clone());
         path = path.step(
             Operation::NumericalApproximation,
-            format!("Starting Newton-Raphson method with initial guess x₀ = {}", x),
+            format!(
+                "Starting Newton-Raphson method with initial guess x₀ = {}",
+                x
+            ),
             Expression::Float(x),
         );
         path = path.step(
@@ -177,7 +461,10 @@ impl NewtonRaphson {
                 converged = true;
                 path = path.step(
                     Operation::NumericalApproximation,
-                    format!("Converged: |f(x)| = {} < {}", residual, self.config.tolerance),
+                    format!(
+                        "Converged: |f(x)| = {} < {}",
+                        residual, self.config.tolerance
+                    ),
                     Expression::Float(x),
                 );
                 break;
@@ -208,8 +495,10 @@ impl NewtonRaphson {
             if i % 10 == 0 || i == self.config.max_iterations - 1 {
                 path = path.step(
                     Operation::NumericalApproximation,
-                    format!("Iteration {}: x = {}, f(x) = {}, f'(x) = {}",
-                            iterations, x_next, fx, derivative),
+                    format!(
+                        "Iteration {}: x = {}, f(x) = {}, f'(x) = {}",
+                        iterations, x_next, fx, derivative
+                    ),
                     Expression::Float(x_next),
                 );
             }
@@ -220,7 +509,11 @@ impl NewtonRaphson {
                 converged = true;
                 path = path.step(
                     Operation::NumericalApproximation,
-                    format!("Converged: |Δx| = {} < {}", (x_next - x).abs(), self.config.tolerance),
+                    format!(
+                        "Converged: |Δx| = {} < {}",
+                        (x_next - x).abs(),
+                        self.config.tolerance
+                    ),
                     Expression::Float(x),
                 );
                 break;
@@ -277,6 +570,98 @@ impl SecantMethod {
 }
 
 /// Bisection method root finder (guaranteed convergence for continuous functions).
+///
+/// Implements the bisection method for finding roots of equations. This is the most
+/// robust root-finding algorithm - it is guaranteed to converge to a root if:
+/// 1. The function is continuous on the interval [a, b]
+/// 2. f(a) and f(b) have opposite signs (the root is bracketed)
+///
+/// # Algorithm
+///
+/// 1. Start with interval [a, b] where f(a) and f(b) have opposite signs
+/// 2. Compute midpoint c = (a + b) / 2
+/// 3. Evaluate f(c)
+/// 4. If f(c) ≈ 0, return c as the root
+/// 5. If f(a) and f(c) have opposite signs, set b = c
+/// 6. Otherwise, set a = c
+/// 7. Repeat until convergence
+///
+/// # Convergence
+///
+/// * **Linear convergence**: Error approximately halves each iteration
+/// * **Guaranteed convergence**: Always converges if root is bracketed
+/// * **Predictable iterations**: Number of iterations is log₂((b-a)/tolerance)
+/// * **Robust**: Works even for poorly behaved functions
+///
+/// # Trade-offs
+///
+/// **Advantages:**
+/// - Guaranteed convergence when root is bracketed
+/// - Very robust, works for non-smooth functions
+/// - No derivative needed
+/// - No risk of divergence
+///
+/// **Disadvantages:**
+/// - Slower than Newton-Raphson (linear vs quadratic convergence)
+/// - Requires initial interval with sign change
+/// - Only finds one root per interval
+/// - Cannot find roots at extrema (where f'(x) = 0)
+///
+/// # Example: Square Root
+///
+/// ```
+/// use mathsolver_core::numerical::BisectionMethod;
+/// use mathsolver_core::ast::{Equation, Expression, Variable};
+///
+/// // Solve x^2 = 5 to find √5
+/// // We know root is between 2 and 3 because 2² = 4 < 5 and 3² = 9 > 5
+/// let equation = Equation::new(
+///     "sqrt5",
+///     Expression::Power(
+///         Box::new(Expression::Variable(Variable::new("x"))),
+///         Box::new(Expression::Integer(2))
+///     ),
+///     Expression::Integer(5)
+/// );
+///
+/// let solver = BisectionMethod::with_default_config();
+/// let (solution, _path) = solver.solve(&equation, &Variable::new("x"), (2.0, 3.0)).unwrap();
+///
+/// assert!((solution.value - 2.236067977).abs() < 1e-6);
+/// assert!(solution.converged);
+/// println!("√5 ≈ {} (found in {} iterations)", solution.value, solution.iterations);
+/// ```
+///
+/// # Example: Finding Multiple Roots
+///
+/// ```
+/// use mathsolver_core::numerical::BisectionMethod;
+/// use mathsolver_core::ast::{Equation, Expression, Variable};
+///
+/// // Solve x^2 - 1 = 0 which has roots at x = -1 and x = 1
+/// let equation = Equation::new(
+///     "quadratic",
+///     Expression::Binary(
+///         mathsolver_core::ast::BinaryOp::Sub,
+///         Box::new(Expression::Power(
+///             Box::new(Expression::Variable(Variable::new("x"))),
+///             Box::new(Expression::Integer(2))
+///         )),
+///         Box::new(Expression::Integer(1))
+///     ),
+///     Expression::Integer(0)
+/// );
+///
+/// let solver = BisectionMethod::with_default_config();
+///
+/// // Find negative root in [-2, 0]
+/// let (solution1, _) = solver.solve(&equation, &Variable::new("x"), (-2.0, 0.0)).unwrap();
+/// assert!((solution1.value - (-1.0)).abs() < 1e-6);
+///
+/// // Find positive root in [0, 2]
+/// let (solution2, _) = solver.solve(&equation, &Variable::new("x"), (0.0, 2.0)).unwrap();
+/// assert!((solution2.value - 1.0).abs() < 1e-6);
+/// ```
 #[derive(Debug)]
 pub struct BisectionMethod {
     config: NumericalConfig,
@@ -344,8 +729,10 @@ impl BisectionMethod {
 
         path = path.step(
             Operation::NumericalApproximation,
-            format!("Starting bisection method on interval [{}, {}]. f({}) = {}, f({}) = {}",
-                    a, b, a, fa, b, fb),
+            format!(
+                "Starting bisection method on interval [{}, {}]. f({}) = {}, f({}) = {}",
+                a, b, a, fa, b, fb
+            ),
             Expression::Float((a + b) / 2.0),
         );
 
@@ -362,14 +749,22 @@ impl BisectionMethod {
             // Evaluate at midpoint
             vars.insert(variable.name.clone(), c);
             fc = f.evaluate(&vars).ok_or_else(|| {
-                NumericalError::EvaluationFailed(format!("Failed to evaluate function at x = {}", c))
+                NumericalError::EvaluationFailed(format!(
+                    "Failed to evaluate function at x = {}",
+                    c
+                ))
             })?;
 
             // Check convergence by residual
             if fc.abs() < self.config.tolerance {
                 path = path.step(
                     Operation::NumericalApproximation,
-                    format!("Converged: |f({})| = {} < {}", c, fc.abs(), self.config.tolerance),
+                    format!(
+                        "Converged: |f({})| = {} < {}",
+                        c,
+                        fc.abs(),
+                        self.config.tolerance
+                    ),
                     Expression::Float(c),
                 );
                 break;
@@ -379,7 +774,11 @@ impl BisectionMethod {
             if (b - a) / 2.0 < self.config.tolerance {
                 path = path.step(
                     Operation::NumericalApproximation,
-                    format!("Converged: interval width {} < {}", (b - a) / 2.0, self.config.tolerance),
+                    format!(
+                        "Converged: interval width {} < {}",
+                        (b - a) / 2.0,
+                        self.config.tolerance
+                    ),
                     Expression::Float(c),
                 );
                 break;
@@ -388,7 +787,10 @@ impl BisectionMethod {
             // Determine which half contains the root
             vars.insert(variable.name.clone(), a);
             let fa_curr = f.evaluate(&vars).ok_or_else(|| {
-                NumericalError::EvaluationFailed(format!("Failed to evaluate function at x = {}", a))
+                NumericalError::EvaluationFailed(format!(
+                    "Failed to evaluate function at x = {}",
+                    a
+                ))
             })?;
 
             if fa_curr * fc < 0.0 {
@@ -403,8 +805,10 @@ impl BisectionMethod {
             if i % 10 == 0 || i == self.config.max_iterations - 1 {
                 path = path.step(
                     Operation::NumericalApproximation,
-                    format!("Iteration {}: interval = [{}, {}], midpoint = {}, f(midpoint) = {}",
-                            iterations, a, b, c, fc),
+                    format!(
+                        "Iteration {}: interval = [{}, {}], midpoint = {}, f(midpoint) = {}",
+                        iterations, a, b, c, fc
+                    ),
                     Expression::Float(c),
                 );
             }
@@ -516,7 +920,125 @@ impl LevenbergMarquardt {
     }
 }
 
-/// Smart numerical solver that selects appropriate method.
+/// Smart numerical solver that automatically selects the best method.
+///
+/// This solver attempts multiple strategies to find a root, choosing the most
+/// appropriate method based on the problem characteristics and available information.
+/// It provides a "best effort" solution without requiring the user to understand
+/// the trade-offs between different numerical methods.
+///
+/// # Strategy Selection
+///
+/// The solver tries methods in order of preference:
+///
+/// 1. **Newton-Raphson** (if initial guess provided)
+///    - Fast quadratic convergence with symbolic differentiation
+///    - Used when user provides a good initial guess
+///
+/// 2. **Bisection** (if root can be bracketed)
+///    - Attempts to find interval [a, b] where f(a) and f(b) have opposite signs
+///    - Guaranteed convergence, slower but robust
+///
+/// 3. **Newton-Raphson with multiple guesses**
+///    - Tries several initial guesses: 0, ±1, ±10, ±100
+///    - Increases chances of finding a root for unknown functions
+///
+/// 4. **Bisection with multiple centers**
+///    - Attempts bracketing around different center points
+///    - Last resort for difficult functions
+///
+/// # When to Use
+///
+/// Use `SmartNumericalSolver` when:
+/// - You don't know which method is best for your equation
+/// - You want a "just solve it" approach without tuning
+/// - The function behavior is unknown or complex
+/// - You need robust solving without manual intervention
+///
+/// Use specialized solvers (Newton-Raphson, Bisection) when:
+/// - You know the appropriate method for your problem
+/// - You need fine control over convergence parameters
+/// - Performance is critical and you can optimize the method choice
+///
+/// # Examples
+///
+/// ## Basic Usage
+///
+/// ```
+/// use mathsolver_core::numerical::SmartNumericalSolver;
+/// use mathsolver_core::ast::{Equation, Expression, Variable};
+///
+/// // Solve x^3 = 27 (we don't know a good initial guess)
+/// let equation = Equation::new(
+///     "cubic",
+///     Expression::Power(
+///         Box::new(Expression::Variable(Variable::new("x"))),
+///         Box::new(Expression::Integer(3))
+///     ),
+///     Expression::Integer(27)
+/// );
+///
+/// let solver = SmartNumericalSolver::with_default_config();
+/// let (solution, _path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+///
+/// assert!((solution.value - 3.0).abs() < 1e-6);
+/// println!("∛27 = {} (method chosen automatically)", solution.value);
+/// ```
+///
+/// ## With Known Interval
+///
+/// ```
+/// use mathsolver_core::numerical::SmartNumericalSolver;
+/// use mathsolver_core::ast::{Equation, Expression, Variable};
+///
+/// // Solve x^2 = 5, we know root is between 2 and 3
+/// let equation = Equation::new(
+///     "sqrt5",
+///     Expression::Power(
+///         Box::new(Expression::Variable(Variable::new("x"))),
+///         Box::new(Expression::Integer(2))
+///     ),
+///     Expression::Integer(5)
+/// );
+///
+/// let solver = SmartNumericalSolver::with_default_config();
+/// // Provide interval for guaranteed convergence
+/// let (solution, _) = solver.solve_with_interval(
+///     &equation,
+///     &Variable::new("x"),
+///     (2.0, 3.0)
+/// ).unwrap();
+///
+/// assert!((solution.value - 2.236067977).abs() < 1e-6);
+/// ```
+///
+/// ## With Initial Guess
+///
+/// ```
+/// use mathsolver_core::numerical::{SmartNumericalSolver, NumericalConfig};
+/// use mathsolver_core::ast::{Equation, Expression, Variable};
+///
+/// // Provide initial guess to use fast Newton-Raphson first
+/// let config = NumericalConfig {
+///     initial_guess: Some(2.0),
+///     ..Default::default()
+/// };
+///
+/// let equation = Equation::new(
+///     "sqrt5",
+///     Expression::Power(
+///         Box::new(Expression::Variable(Variable::new("x"))),
+///         Box::new(Expression::Integer(2))
+///     ),
+///     Expression::Integer(5)
+/// );
+///
+/// let solver = SmartNumericalSolver::new(config);
+/// let (solution, _) = solver.solve(&equation, &Variable::new("x")).unwrap();
+///
+/// assert!((solution.value - 2.236067977).abs() < 1e-6);
+/// // Will use Newton-Raphson since initial_guess is provided
+/// ```
 #[derive(Debug)]
 pub struct SmartNumericalSolver {
     config: NumericalConfig,
