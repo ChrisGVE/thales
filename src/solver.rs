@@ -1226,10 +1226,44 @@ impl Solver for QuadraticSolver {
         _equation: &Equation,
         _variable: &Variable,
     ) -> SolverResult<(Solution, ResolutionPath)> {
-        // TODO: Implement quadratic formula
-        // TODO: Handle complex roots
-        // TODO: Handle degenerate cases (a=0, becomes linear)
-        // TODO: Handle discriminant = 0 (repeated root)
+        // TODO: Phase 1 - Extract coefficients a, b, c from equation
+        //       Pattern matching for: ax² + bx + c = 0
+        //       Handle both sides: left = 0 and left = right
+        //       Collect x² terms, x terms, and constant terms
+
+        // TODO: Phase 1 - Check for degenerate case (a = 0)
+        //       If a = 0, delegate to LinearSolver
+        //       If a = b = 0 and c ≠ 0, return Solution::None
+        //       If a = b = c = 0, return Solution::Infinite
+
+        // TODO: Phase 1 - Compute discriminant Δ = b² - 4ac
+        //       Create step showing discriminant calculation
+        //       Simplify discriminant expression
+
+        // TODO: Phase 1 - Handle discriminant cases (real roots only)
+        //       If Δ > 0: compute x₁ = (-b + √Δ)/(2a) and x₂ = (-b - √Δ)/(2a)
+        //                 return Solution::Multiple([x₁, x₂])
+        //       If Δ = 0: compute x = -b/(2a)
+        //                 return Solution::Unique(x)
+        //       If Δ < 0: return SolverError::Other("Complex roots not yet supported")
+
+        // TODO: Phase 2 - Add resolution path steps
+        //       Step 1: Show equation in standard form
+        //       Step 2: Identify coefficients a, b, c
+        //       Step 3: Compute and display discriminant
+        //       Step 4: Apply quadratic formula
+        //       Step 5: Simplify and evaluate roots
+
+        // TODO: Phase 3 - Complex root support
+        //       When Δ < 0, compute real and imaginary parts
+        //       x = -b/(2a) ± i√(-Δ)/(2a)
+        //       Return Solution::Multiple with Expression::Complex values
+
+        // TODO: Phase 4 - Alternative solution methods
+        //       Completing the square
+        //       Factoring (when roots are rational)
+        //       Vertex form conversion
+
         Err(SolverError::Other("Not yet implemented".to_string()))
     }
 
@@ -1356,13 +1390,57 @@ impl Solver for PolynomialSolver {
         _equation: &Equation,
         _variable: &Variable,
     ) -> SolverResult<(Solution, ResolutionPath)> {
-        // TODO: Implement polynomial solving
-        // TODO: Use appropriate method based on degree:
-        //   - degree 1: linear
-        //   - degree 2: quadratic formula
-        //   - degree 3: cubic formula
-        //   - degree 4: quartic formula
-        //   - degree 5+: numerical methods
+        // TODO: Phase 1 - Extract polynomial coefficients
+        //       Analyze equation structure to identify polynomial form
+        //       Collect terms by degree: [a₀, a₁, a₂, ..., aₙ]
+        //       Determine degree n (highest power with non-zero coefficient)
+        //       Handle both sides: transform to standard form P(x) = 0
+
+        // TODO: Phase 1 - Delegate by degree
+        //       degree 0: Check if 0 = 0 (infinite) or 0 = c (none)
+        //       degree 1: Delegate to LinearSolver
+        //       degree 2: Delegate to QuadraticSolver
+        //       degree 3: Call cubic_solve() method
+        //       degree 4: Call quartic_solve() method
+        //       degree 5+: Call numerical_solve() method
+
+        // TODO: Phase 2 - Implement cubic_solve()
+        //       Transform to depressed cubic: t³ + pt + q = 0
+        //       Compute discriminant Δ = -4p³ - 27q²
+        //       Apply Cardano's formula or trigonometric method
+        //       Transform roots back to original variable
+        //       Return Solution::Multiple with 1-3 roots
+
+        // TODO: Phase 3 - Implement quartic_solve()
+        //       Transform to depressed quartic: y⁴ + py² + qy + r = 0
+        //       Construct and solve resolvent cubic
+        //       Factor quartic using resolvent root
+        //       Solve two resulting quadratic equations
+        //       Combine roots from both quadratics
+        //       Transform roots back to original variable
+
+        // TODO: Phase 4 - Implement numerical_solve() for degree 5+
+        //       Initialize with rough bounds on roots
+        //       Apply Newton-Raphson to find first root
+        //       Deflate polynomial: divide by (x - root)
+        //       Repeat for remaining roots
+        //       Refine all roots simultaneously with Durand-Kerner
+        //       Return Solution::Multiple with approximate roots
+
+        // TODO: Phase 5 - Special case optimizations
+        //       Detect binomial form: xⁿ - a = 0 → compute nth roots
+        //       Detect quadratic form: x²ⁿ + bxⁿ + c → substitute u = xⁿ
+        //       Detect palindromic polynomials → reduce degree
+        //       Detect cyclotomic polynomials → roots of unity
+
+        // TODO: Add resolution path steps for each method
+        //       Show polynomial in standard form
+        //       Show coefficient identification
+        //       Show method selection based on degree
+        //       Show intermediate steps (transformations, substitutions)
+        //       Show formula application
+        //       Show root simplification
+
         Err(SolverError::Other("Not yet implemented".to_string()))
     }
 
