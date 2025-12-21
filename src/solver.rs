@@ -2594,8 +2594,119 @@ impl SystemSolver {
     }
 }
 
-/// Smart solver that dispatches to appropriate specialized solver.
 #[derive(Debug)]
+/// Automatic solver dispatcher that selects the appropriate solving method.
+///
+/// `SmartSolver` examines the equation structure and dispatches to the most
+/// suitable specialized solver. This eliminates the need to manually choose
+/// between linear, quadratic, polynomial, or transcendental solvers.
+///
+/// # Priority Order
+///
+/// The solver tries methods in this priority order:
+/// 1. **Linear** ([`LinearSolver`]): Fastest, handles equations like `ax + b = c`
+/// 2. **Quadratic** ([`QuadraticSolver`]): Equations with x² terms
+/// 3. **Polynomial** ([`PolynomialSolver`]): General polynomial equations
+/// 4. **Transcendental** ([`TranscendentalSolver`]): Equations with sin, cos, exp, ln, log
+///
+/// This priority ensures simpler methods are tried first, falling back to more
+/// complex methods only when needed.
+///
+/// # Examples
+///
+/// ## Linear Equation
+///
+/// ```
+/// use mathsolver_core::solver::{SmartSolver, Solver, Solution};
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+///
+/// let solver = SmartSolver::new();
+///
+/// // Solve: 2x + 3 = 11
+/// let x = Expression::Variable(Variable::new("x"));
+/// let two_x = Expression::Binary(
+///     BinaryOp::Mul,
+///     Box::new(Expression::Integer(2)),
+///     Box::new(x.clone()),
+/// );
+/// let left = Expression::Binary(
+///     BinaryOp::Add,
+///     Box::new(two_x),
+///     Box::new(Expression::Integer(3)),
+/// );
+/// let equation = Equation::new("example", left, Expression::Integer(11));
+///
+/// let (solution, path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+///
+/// // SmartSolver automatically selected LinearSolver
+/// match solution {
+///     Solution::Unique(expr) => {
+///         assert_eq!(expr.evaluate(&std::collections::HashMap::new()), Some(4.0));
+///     }
+///     _ => panic!("Expected unique solution"),
+/// }
+/// ```
+///
+/// ## Transcendental Equation
+///
+/// ```no_run
+/// use mathsolver_core::solver::{SmartSolver, Solver, Solution};
+/// use mathsolver_core::ast::{Equation, Expression, Variable, Function};
+///
+/// let solver = SmartSolver::new();
+///
+/// // Solve: sin(x) = 0.5
+/// let x = Expression::Variable(Variable::new("x"));
+/// let sin_x = Expression::Function(Function::Sin, vec![x]);
+/// let equation = Equation::new("trig", sin_x, Expression::Float(0.5));
+///
+/// let (solution, path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+///
+/// // SmartSolver automatically selected TranscendentalSolver
+/// match solution {
+///     Solution::Unique(expr) => {
+///         // expr contains asin(0.5)
+///         let result = expr.evaluate(&std::collections::HashMap::new()).unwrap();
+///         assert!((result - 0.5236).abs() < 0.001); // π/6 radians
+///     }
+///     _ => panic!("Expected unique solution"),
+/// }
+/// ```
+///
+/// ## Error Handling
+///
+/// ```
+/// use mathsolver_core::solver::{SmartSolver, Solver, SolverError};
+/// use mathsolver_core::ast::{Equation, Expression, Variable};
+///
+/// let solver = SmartSolver::new();
+///
+/// // Variable not in equation
+/// let equation = Equation::new("bad", Expression::Integer(0), Expression::Integer(5));
+/// let result = solver.solve(&equation, &Variable::new("x"));
+///
+/// // Since x doesn't appear in the equation, solver cannot handle it
+/// assert!(result.is_err());
+/// match result {
+///     Err(SolverError::CannotSolve(_)) | Err(SolverError::UnsupportedEquationType) => {
+///         // Expected - x not in equation or equation not supported
+///     }
+///     _ => panic!("Expected CannotSolve or UnsupportedEquationType error"),
+/// }
+/// ```
+///
+/// # Implementation Notes
+///
+/// - `SmartSolver` maintains instances of all specialized solvers internally
+/// - The `can_solve()` check is fast and only examines equation structure
+/// - If no solver can handle the equation, returns [`SolverError::UnsupportedEquationType`]
+/// - The solving process is deterministic - same equation always uses same solver
+///
+/// # See Also
+///
+/// - [`solve_for`]: High-level API that uses `SmartSolver` and handles value substitution
+/// - [`Solver`]: Base trait implemented by all solvers
+/// - [`LinearSolver`], [`QuadraticSolver`], [`PolynomialSolver`], [`TranscendentalSolver`]: Specialized solvers
 pub struct SmartSolver {
     linear: LinearSolver,
     quadratic: QuadraticSolver,
@@ -2653,21 +2764,192 @@ impl Solver for SmartSolver {
 // High-Level API
 // ============================================================================
 
-/// Solve an equation for a specific variable.
+/// Solve an equation for a specific variable with known values substituted.
 ///
-/// This is the main entry point for solving equations. It attempts to solve
-/// the equation symbolically, then substitutes known values and simplifies.
+/// This is the primary high-level API for equation solving. It combines symbolic
+/// solving with numeric evaluation in three steps:
+///
+/// 1. **Symbolic solving**: Uses [`SmartSolver`] to solve for the target variable
+/// 2. **Value substitution**: Replaces known variables with their numeric values
+/// 3. **Simplification**: Evaluates constants and simplifies the result
+///
+/// This function is ideal when you have an equation with multiple variables and
+/// want to solve for one variable given values for the others.
 ///
 /// # Arguments
-/// * `equation` - The equation to solve
-/// * `target` - The name of the variable to solve for
-/// * `known_values` - HashMap of known variable values
+///
+/// * `equation` - The equation to solve (e.g., `ax + b = c`)
+/// * `target` - Name of the variable to solve for (e.g., `"x"`)
+/// * `known_values` - HashMap mapping variable names to their numeric values
 ///
 /// # Returns
-/// A ResolutionPath showing the solution steps and final result
+///
+/// A [`ResolutionPath`] containing:
+/// - All solving steps performed (isolating variable, applying operations)
+/// - The final result expression (fully evaluated if all values known)
+/// - Operation history for display/debugging
 ///
 /// # Errors
-/// Returns SolverError if the equation cannot be solved
+///
+/// Returns [`SolverError`] if:
+/// - [`SolverError::UnsupportedEquationType`]: No solver can handle this equation type
+/// - [`SolverError::NoSolution`]: Equation is inconsistent (e.g., `0 = 5`)
+/// - [`SolverError::InfiniteSolutions`]: Equation is an identity (e.g., `x = x`)
+/// - [`SolverError::CannotSolve`]: Target variable not found or in unsolvable form
+/// - [`SolverError::Other`]: Evaluation failed or unsupported solution type
+///
+/// # Examples
+///
+/// ## Basic Linear Equation with Substitution
+///
+/// ```
+/// use mathsolver_core::solver::solve_for;
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use std::collections::HashMap;
+///
+/// // Solve: ax + b = c for x, given a=2, b=3, c=11
+/// let a = Expression::Variable(Variable::new("a"));
+/// let x = Expression::Variable(Variable::new("x"));
+/// let b = Expression::Variable(Variable::new("b"));
+/// let c = Expression::Variable(Variable::new("c"));
+///
+/// let ax = Expression::Binary(BinaryOp::Mul, Box::new(a), Box::new(x));
+/// let left = Expression::Binary(BinaryOp::Add, Box::new(ax), Box::new(b));
+/// let equation = Equation::new("linear", left, c);
+///
+/// let mut known = HashMap::new();
+/// known.insert("a".to_string(), 2.0);
+/// known.insert("b".to_string(), 3.0);
+/// known.insert("c".to_string(), 11.0);
+///
+/// let path = solve_for(&equation, "x", &known).unwrap();
+///
+/// // Result is x = 4.0
+/// assert_eq!(path.result.evaluate(&HashMap::new()), Some(4.0));
+///
+/// // Path contains solving steps
+/// assert!(!path.steps.is_empty());
+/// ```
+///
+/// ## Physics Formula: Ohm's Law
+///
+/// ```
+/// use mathsolver_core::solver::solve_for;
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use std::collections::HashMap;
+///
+/// // V = I * R, solve for I given V=12V, R=4Ω
+/// let v = Expression::Variable(Variable::new("V"));
+/// let i = Expression::Variable(Variable::new("I"));
+/// let r = Expression::Variable(Variable::new("R"));
+///
+/// let ir = Expression::Binary(BinaryOp::Mul, Box::new(i), Box::new(r));
+/// let equation = Equation::new("ohms_law", v, ir);
+///
+/// let mut known = HashMap::new();
+/// known.insert("V".to_string(), 12.0);
+/// known.insert("R".to_string(), 4.0);
+///
+/// let path = solve_for(&equation, "I", &known).unwrap();
+///
+/// // I = V/R = 12/4 = 3A
+/// assert_eq!(path.result.evaluate(&HashMap::new()), Some(3.0));
+/// ```
+///
+/// ## Symbolic Solution (No Known Values)
+///
+/// ```
+/// use mathsolver_core::solver::solve_for;
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use std::collections::HashMap;
+///
+/// // Solve: 2x + 3 = y for x (no known values)
+/// let x = Expression::Variable(Variable::new("x"));
+/// let y = Expression::Variable(Variable::new("y"));
+/// let two_x = Expression::Binary(
+///     BinaryOp::Mul,
+///     Box::new(Expression::Integer(2)),
+///     Box::new(x),
+/// );
+/// let left = Expression::Binary(
+///     BinaryOp::Add,
+///     Box::new(two_x),
+///     Box::new(Expression::Integer(3)),
+/// );
+/// let equation = Equation::new("symbolic", left, y);
+///
+/// let known = HashMap::new(); // No known values
+///
+/// let path = solve_for(&equation, "x", &known).unwrap();
+///
+/// // Result is symbolic: x = (y - 3) / 2
+/// // Can evaluate when y is provided later
+/// let mut eval_context = HashMap::new();
+/// eval_context.insert("y".to_string(), 11.0);
+/// assert_eq!(path.result.evaluate(&eval_context), Some(4.0));
+/// ```
+///
+/// ## Error Handling
+///
+/// ```
+/// use mathsolver_core::solver::{solve_for, SolverError};
+/// use mathsolver_core::ast::{Equation, Expression};
+/// use std::collections::HashMap;
+///
+/// // Variable not in equation: 0 = 5
+/// let equation = Equation::new("bad", Expression::Integer(0), Expression::Integer(5));
+/// let known = HashMap::new();
+///
+/// let result = solve_for(&equation, "x", &known);
+///
+/// // Should fail because x doesn't appear in equation
+/// assert!(result.is_err());
+/// match result {
+///     Err(SolverError::CannotSolve(_)) | Err(SolverError::UnsupportedEquationType) => {
+///         // Expected - x not in equation
+///     }
+///     _ => panic!("Should have failed with CannotSolve or UnsupportedEquationType"),
+/// }
+/// ```
+///
+/// # Parameter Details
+///
+/// ## Variable Substitution
+///
+/// The `known_values` HashMap substitutes variables before final evaluation:
+///
+/// ```text
+/// Equation: ax + b = c
+/// Target: x
+/// Known: {a: 2, b: 3, c: 11}
+///
+/// Step 1 (Symbolic): x = (c - b) / a
+/// Step 2 (Substitute): x = (11 - 3) / 2
+/// Step 3 (Evaluate): x = 4
+/// ```
+///
+/// Variables not in `known_values` remain symbolic in the result.
+///
+/// ## Result Expression
+///
+/// The `ResolutionPath.result` field contains the final expression:
+/// - If all variables known: evaluates to a single number
+/// - If some variables unknown: contains symbolic expression
+/// - Use [`Expression::evaluate`] with additional values to compute final result
+///
+/// # Implementation Notes
+///
+/// - Uses [`SmartSolver`] internally for automatic method selection
+/// - Only supports unique solutions currently (not multiple/parametric)
+/// - Simplification is automatic - no manual step required
+/// - Thread-safe: can be called concurrently on different equations
+///
+/// # See Also
+///
+/// - [`SmartSolver`]: The underlying solver used for symbolic solving
+/// - [`ResolutionPath`]: Return type containing steps and result
+/// - [`compute_partial_derivative`]: For derivative computation (uncertainty propagation)
+/// - [`Expression::evaluate`]: For evaluating symbolic results with values
 pub fn solve_for(
     equation: &Equation,
     target: &str,
@@ -2752,27 +3034,61 @@ fn substitute_values(expr: &Expression, values: &HashMap<String, f64>) -> Expres
     }
 }
 
-/// Compute a partial derivative of an output variable with respect to an input variable.
+/// Compute a partial derivative for uncertainty propagation and sensitivity analysis.
 ///
-/// Given an equation defining the output variable in terms of input variables,
+/// Given an equation defining an output variable in terms of input variables,
 /// this function computes the partial derivative ∂output/∂input and evaluates
-/// it at the given values.
+/// it at the given point. This is essential for:
+///
+/// - **Uncertainty propagation**: Computing how measurement errors affect results
+/// - **Sensitivity analysis**: Understanding which inputs most affect the output
+/// - **Error bars**: Calculating confidence intervals for computed values
+///
+/// # Mathematical Background
+///
+/// For a function V(l, w, h), the partial derivative ∂V/∂l represents the rate
+/// of change of V with respect to l while holding w and h constant.
+///
+/// **Example**: Box volume V = l × w × h
+/// ```text
+/// ∂V/∂l = w × h    (derivative with respect to length)
+/// ∂V/∂w = l × h    (derivative with respect to width)
+/// ∂V/∂h = l × w    (derivative with respect to height)
+/// ```
+///
+/// # Uncertainty Propagation Formula
+///
+/// For independent input variables with uncertainties δx₁, δx₂, ..., the
+/// uncertainty in the output δy is:
+///
+/// ```text
+/// δy = √[(∂y/∂x₁ · δx₁)² + (∂y/∂x₂ · δx₂)² + ...]
+/// ```
+///
+/// Use [`compute_all_partial_derivatives`] to get all derivatives at once.
 ///
 /// # Arguments
-/// * `equation` - Equation defining the output variable (e.g., "V = l * w * h")
-/// * `output_var` - Name of the output variable (e.g., "V")
-/// * `input_var` - Name of the input variable to differentiate with respect to (e.g., "l")
-/// * `values` - HashMap of variable values at which to evaluate the derivative
+///
+/// * `equation` - Equation with output variable isolated (e.g., `V = l * w * h`)
+/// * `output_var` - Name of the output variable (left or right side, e.g., `"V"`)
+/// * `input_var` - Name of the input variable to differentiate with respect to (e.g., `"l"`)
+/// * `values` - HashMap of all variable values at the evaluation point
 ///
 /// # Returns
-/// The numerical value of the partial derivative at the given point
+///
+/// The numerical value of ∂output/∂input evaluated at the given point.
 ///
 /// # Errors
-/// Returns `SolverError` if the equation cannot be solved for the output variable
-/// or if evaluation fails due to missing variables
 ///
-/// # Example
-/// ```ignore
+/// Returns [`SolverError`] if:
+/// - [`SolverError::CannotSolve`]: Output variable not found or not isolated in equation
+/// - [`SolverError::Other`]: Evaluation failed due to missing values in the HashMap
+///
+/// # Examples
+///
+/// ## Box Volume Derivative
+///
+/// ```
 /// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
 /// use mathsolver_core::solver::compute_partial_derivative;
 /// use std::collections::HashMap;
@@ -2781,19 +3097,106 @@ fn substitute_values(expr: &Expression, values: &HashMap<String, f64>) -> Expres
 /// let l = Expression::Variable(Variable::new("l"));
 /// let w = Expression::Variable(Variable::new("w"));
 /// let h = Expression::Variable(Variable::new("h"));
+/// let v = Expression::Variable(Variable::new("V"));
+///
 /// let lw = Expression::Binary(BinaryOp::Mul, Box::new(l), Box::new(w));
-/// let volume = Expression::Binary(BinaryOp::Mul, Box::new(lw), Box::new(h));
-/// let equation = Equation::new("box_volume", Expression::Variable(Variable::new("V")), volume);
+/// let lwh = Expression::Binary(BinaryOp::Mul, Box::new(lw), Box::new(h));
+/// let equation = Equation::new("box_volume", v, lwh);
 ///
 /// let mut values = HashMap::new();
 /// values.insert("l".to_string(), 2.0);
 /// values.insert("w".to_string(), 3.0);
 /// values.insert("h".to_string(), 4.0);
 ///
-/// // ∂V/∂l = w * h = 3 * 4 = 12
+/// // ∂V/∂l = w * h = 3 * 4 = 12.0
 /// let dv_dl = compute_partial_derivative(&equation, "V", "l", &values).unwrap();
 /// assert_eq!(dv_dl, 12.0);
+///
+/// // ∂V/∂w = l * h = 2 * 4 = 8.0
+/// let dv_dw = compute_partial_derivative(&equation, "V", "w", &values).unwrap();
+/// assert_eq!(dv_dw, 8.0);
+///
+/// // ∂V/∂h = l * w = 2 * 3 = 6.0
+/// let dv_dh = compute_partial_derivative(&equation, "V", "h", &values).unwrap();
+/// assert_eq!(dv_dh, 6.0);
 /// ```
+///
+/// ## Ohm's Law Sensitivity
+///
+/// ```
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use mathsolver_core::solver::compute_partial_derivative;
+/// use std::collections::HashMap;
+///
+/// // P = V² / R (power dissipation)
+/// let v = Expression::Variable(Variable::new("V"));
+/// let r = Expression::Variable(Variable::new("R"));
+/// let p = Expression::Variable(Variable::new("P"));
+///
+/// let v_squared = Expression::Power(Box::new(v), Box::new(Expression::Integer(2)));
+/// let power = Expression::Binary(BinaryOp::Div, Box::new(v_squared), Box::new(r));
+/// let equation = Equation::new("power", p, power);
+///
+/// let mut values = HashMap::new();
+/// values.insert("V".to_string(), 12.0);
+/// values.insert("R".to_string(), 4.0);
+///
+/// // ∂P/∂V = 2V/R = 2(12)/4 = 6.0 W/V
+/// let dp_dv = compute_partial_derivative(&equation, "P", "V", &values).unwrap();
+/// assert_eq!(dp_dv, 6.0);
+///
+/// // This means a 1V change in voltage causes ~6W change in power
+/// ```
+///
+/// ## Uncertainty Propagation Example
+///
+/// ```
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use mathsolver_core::solver::compute_partial_derivative;
+/// use std::collections::HashMap;
+///
+/// // Area = π * r² with r = 5.0 ± 0.1 cm
+/// let pi = std::f64::consts::PI;
+/// let r = Expression::Variable(Variable::new("r"));
+/// let a = Expression::Variable(Variable::new("A"));
+///
+/// let r_squared = Expression::Power(Box::new(r), Box::new(Expression::Integer(2)));
+/// let pi_r_sq = Expression::Binary(
+///     BinaryOp::Mul,
+///     Box::new(Expression::Float(pi)),
+///     Box::new(r_squared),
+/// );
+/// let equation = Equation::new("circle_area", a, pi_r_sq);
+///
+/// let mut values = HashMap::new();
+/// values.insert("r".to_string(), 5.0);
+///
+/// // ∂A/∂r = 2πr
+/// let da_dr = compute_partial_derivative(&equation, "A", "r", &values).unwrap();
+/// assert!((da_dr - 2.0 * pi * 5.0).abs() < 0.001);
+///
+/// // Uncertainty: δA = |∂A/∂r| × δr = 31.416 × 0.1 ≈ 3.14 cm²
+/// let delta_r = 0.1;
+/// let delta_a = da_dr * delta_r;
+/// assert!((delta_a - 3.14159).abs() < 0.001);
+/// ```
+///
+/// # Implementation Notes
+///
+/// The function:
+/// 1. Extracts the expression for the output variable from the equation
+/// 2. Computes the symbolic derivative using [`Expression::differentiate`]
+/// 3. Simplifies the derivative expression
+/// 4. Evaluates it numerically with the provided values
+///
+/// **Requirement**: The equation must have the output variable isolated on one side.
+/// For example, `V = l*w*h` is valid, but `V - l*w*h = 0` is not (yet).
+///
+/// # See Also
+///
+/// - [`compute_all_partial_derivatives`]: Compute all partial derivatives at once
+/// - [`Expression::differentiate`]: Underlying symbolic differentiation
+/// - [`solve_for`]: Solve equations before computing derivatives
 pub fn compute_partial_derivative(
     equation: &Equation,
     output_var: &str,
@@ -2850,26 +3253,51 @@ pub fn compute_partial_derivative(
     })
 }
 
-/// Compute all partial derivatives of an output variable with respect to all input variables.
+/// Compute all partial derivatives for complete uncertainty propagation.
 ///
-/// Given an equation defining the output variable in terms of input variables,
+/// Given an equation defining an output variable in terms of input variables,
 /// this function computes all partial derivatives ∂output/∂input_i and evaluates
-/// them at the given values.
+/// them at the given point. This is the recommended way to compute derivatives
+/// when you need multiple partial derivatives, as it provides a clean interface
+/// for uncertainty propagation.
+///
+/// # Uncertainty Propagation
+///
+/// This function provides all the partial derivatives needed to compute output
+/// uncertainty from input uncertainties using the standard formula:
+///
+/// ```text
+/// δy = √[(∂y/∂x₁ · δx₁)² + (∂y/∂x₂ · δx₂)² + ... + (∂y/∂xₙ · δxₙ)²]
+/// ```
+///
+/// where:
+/// - `δy` is the uncertainty in the output
+/// - `∂y/∂xᵢ` are the partial derivatives (computed by this function)
+/// - `δxᵢ` are the uncertainties in the input variables
 ///
 /// # Arguments
-/// * `equation` - Equation defining the output variable
-/// * `output_var` - Name of the output variable
-/// * `input_vars` - List of input variable names to compute derivatives for
-/// * `values` - HashMap of variable values at which to evaluate the derivatives
+///
+/// * `equation` - Equation with output variable isolated (e.g., `V = l * w * h`)
+/// * `output_var` - Name of the output variable (e.g., `"V"`)
+/// * `input_vars` - Slice of input variable names to compute derivatives for
+/// * `values` - HashMap of all variable values at the evaluation point
 ///
 /// # Returns
-/// A HashMap mapping each input variable name to its partial derivative value
+///
+/// A HashMap mapping each input variable name to its partial derivative value.
+/// The returned HashMap has the same keys as provided in `input_vars`.
 ///
 /// # Errors
-/// Returns `SolverError` if any partial derivative computation fails
 ///
-/// # Example
-/// ```ignore
+/// Returns [`SolverError`] if any partial derivative computation fails:
+/// - [`SolverError::CannotSolve`]: Output variable not found or not isolated
+/// - [`SolverError::Other`]: Evaluation failed due to missing values
+///
+/// # Examples
+///
+/// ## Box Volume with Complete Uncertainty
+///
+/// ```
 /// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
 /// use mathsolver_core::solver::compute_all_partial_derivatives;
 /// use std::collections::HashMap;
@@ -2878,22 +3306,142 @@ pub fn compute_partial_derivative(
 /// let l = Expression::Variable(Variable::new("l"));
 /// let w = Expression::Variable(Variable::new("w"));
 /// let h = Expression::Variable(Variable::new("h"));
-/// let lw = Expression::Binary(BinaryOp::Mul, Box::new(l), Box::new(w));
-/// let volume = Expression::Binary(BinaryOp::Mul, Box::new(lw), Box::new(h));
-/// let equation = Equation::new("box_volume", Expression::Variable(Variable::new("V")), volume);
+/// let v = Expression::Variable(Variable::new("V"));
 ///
+/// let lw = Expression::Binary(BinaryOp::Mul, Box::new(l), Box::new(w));
+/// let lwh = Expression::Binary(BinaryOp::Mul, Box::new(lw), Box::new(h));
+/// let equation = Equation::new("box_volume", v, lwh);
+///
+/// // Measurements with uncertainties
 /// let mut values = HashMap::new();
-/// values.insert("l".to_string(), 2.0);
-/// values.insert("w".to_string(), 3.0);
-/// values.insert("h".to_string(), 4.0);
+/// values.insert("l".to_string(), 2.0);  // 2.0 ± 0.1 cm
+/// values.insert("w".to_string(), 3.0);  // 3.0 ± 0.1 cm
+/// values.insert("h".to_string(), 4.0);  // 4.0 ± 0.1 cm
 ///
 /// let input_vars = vec!["l".to_string(), "w".to_string(), "h".to_string()];
-/// let derivatives = compute_all_partial_derivatives(&equation, "V", &input_vars, &values).unwrap();
+/// let derivatives = compute_all_partial_derivatives(
+///     &equation,
+///     "V",
+///     &input_vars,
+///     &values
+/// ).unwrap();
 ///
-/// assert_eq!(derivatives.get("l").unwrap(), &12.0); // w * h
-/// assert_eq!(derivatives.get("w").unwrap(), &8.0);  // l * h
-/// assert_eq!(derivatives.get("h").unwrap(), &6.0);  // l * w
+/// // Verify partial derivatives
+/// assert_eq!(derivatives.get("l").unwrap(), &12.0); // ∂V/∂l = w*h = 3*4
+/// assert_eq!(derivatives.get("w").unwrap(), &8.0);  // ∂V/∂w = l*h = 2*4
+/// assert_eq!(derivatives.get("h").unwrap(), &6.0);  // ∂V/∂h = l*w = 2*3
+///
+/// // Compute uncertainty: δV = √[(∂V/∂l·δl)² + (∂V/∂w·δw)² + (∂V/∂h·δh)²]
+/// let delta_l = 0.1;
+/// let delta_w = 0.1;
+/// let delta_h = 0.1;
+///
+/// let delta_v = (
+///     (derivatives["l"] * delta_l).powi(2) +
+///     (derivatives["w"] * delta_w).powi(2) +
+///     (derivatives["h"] * delta_h).powi(2)
+/// ).sqrt();
+///
+/// // V = 24.0 ± 1.56 cm³
+/// assert!((delta_v - 1.562).abs() < 0.01);
 /// ```
+///
+/// ## Slide Rule Calculation with Error Propagation
+///
+/// ```
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use mathsolver_core::solver::compute_all_partial_derivatives;
+/// use std::collections::HashMap;
+///
+/// // Power: P = V * I with measurement errors
+/// let v = Expression::Variable(Variable::new("V"));
+/// let i = Expression::Variable(Variable::new("I"));
+/// let p = Expression::Variable(Variable::new("P"));
+///
+/// let power = Expression::Binary(BinaryOp::Mul, Box::new(v), Box::new(i));
+/// let equation = Equation::new("power", p, power);
+///
+/// // Slide rule readings (±2% typical accuracy)
+/// let mut values = HashMap::new();
+/// values.insert("V".to_string(), 12.0);  // 12.0V ± 2%
+/// values.insert("I".to_string(), 2.5);   // 2.5A ± 2%
+///
+/// let input_vars = vec!["V".to_string(), "I".to_string()];
+/// let derivatives = compute_all_partial_derivatives(
+///     &equation,
+///     "P",
+///     &input_vars,
+///     &values
+/// ).unwrap();
+///
+/// // ∂P/∂V = I = 2.5 W/V
+/// assert_eq!(derivatives["V"], 2.5);
+///
+/// // ∂P/∂I = V = 12.0 W/A
+/// assert_eq!(derivatives["I"], 12.0);
+///
+/// // Combined uncertainty (2% error on each measurement)
+/// let delta_v = 12.0 * 0.02;  // 0.24V
+/// let delta_i = 2.5 * 0.02;   // 0.05A
+///
+/// let delta_p = (
+///     (derivatives["V"] * delta_v).powi(2) +
+///     (derivatives["I"] * delta_i).powi(2)
+/// ).sqrt();
+///
+/// // P = 30W ± 0.84W (2.8% combined error)
+/// assert!((delta_p - 0.84).abs() < 0.01);
+/// ```
+///
+/// ## Sensitivity Analysis
+///
+/// ```
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use mathsolver_core::solver::compute_all_partial_derivatives;
+/// use std::collections::HashMap;
+///
+/// // Area = length * width (simple formula for sensitivity analysis)
+/// let l = Expression::Variable(Variable::new("L"));
+/// let w = Expression::Variable(Variable::new("W"));
+/// let a = Expression::Variable(Variable::new("A"));
+///
+/// let area = Expression::Binary(BinaryOp::Mul, Box::new(l), Box::new(w));
+/// let equation = Equation::new("area", a, area);
+///
+/// let mut values = HashMap::new();
+/// values.insert("L".to_string(), 10.0);  // Length (m)
+/// values.insert("W".to_string(), 5.0);   // Width (m)
+///
+/// let input_vars = vec!["L".to_string(), "W".to_string()];
+/// let derivatives = compute_all_partial_derivatives(
+///     &equation,
+///     "A",
+///     &input_vars,
+///     &values
+/// ).unwrap();
+///
+/// // ∂A/∂L = W = 5.0
+/// assert_eq!(derivatives["L"], 5.0);
+///
+/// // ∂A/∂W = L = 10.0
+/// assert_eq!(derivatives["W"], 10.0);
+///
+/// // Length has stronger effect (larger derivative value)
+/// // ∂A/∂W = 10.0 is twice ∂A/∂L = 5.0
+/// assert!(derivatives["W"] > derivatives["L"]);
+/// ```
+///
+/// # Performance Notes
+///
+/// This function calls [`compute_partial_derivative`] for each input variable.
+/// If you only need one or two derivatives, calling [`compute_partial_derivative`]
+/// directly may be more efficient.
+///
+/// # See Also
+///
+/// - [`compute_partial_derivative`]: Compute a single partial derivative
+/// - [`Expression::differentiate`]: Underlying symbolic differentiation
+/// - [`solve_for`]: Solve equations before computing derivatives
 pub fn compute_all_partial_derivatives(
     equation: &Equation,
     output_var: &str,
