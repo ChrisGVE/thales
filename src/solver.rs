@@ -1,26 +1,183 @@
-//! Algebraic equation solver.
+//! Algebraic equation solver with symbolic manipulation.
 //!
-//! Provides symbolic manipulation and solving capabilities for equations
-//! with one or more unknowns.
+//! This module provides a comprehensive framework for solving algebraic equations
+//! symbolically. It supports linear, quadratic, polynomial, and transcendental
+//! equations, with automatic method selection via the [`SmartSolver`].
+//!
+//! # Overview
+//!
+//! The solver works by:
+//! 1. Analyzing the equation structure to determine appropriate solving method
+//! 2. Applying symbolic transformations to isolate the target variable
+//! 3. Simplifying and evaluating the result
+//! 4. Recording all steps in a [`ResolutionPath`] for display
+//!
+//! # Solver Types
+//!
+//! - [`LinearSolver`]: Solves equations of the form `ax + b = c`
+//! - [`QuadraticSolver`]: Solves equations with x² terms (not yet implemented)
+//! - [`PolynomialSolver`]: General polynomial equations (not yet implemented)
+//! - [`TranscendentalSolver`]: Equations with sin, cos, tan, exp, ln, log functions
+//! - [`SmartSolver`]: Automatically selects the appropriate solver
+//!
+//! # Solution Types
+//!
+//! Solutions can be:
+//! - [`Solution::Unique`]: Single solution (e.g., x = 5)
+//! - [`Solution::Multiple`]: Discrete solutions (e.g., x = 2 or x = -2)
+//! - [`Solution::Parametric`]: Solution depends on other variables
+//! - [`Solution::None`]: No solution exists (inconsistent equation)
+//! - [`Solution::Infinite`]: All values satisfy the equation (identity)
+//!
+//! # Examples
+//!
+//! ## Basic Linear Equation
+//!
+//! ```
+//! use mathsolver_core::solver::{LinearSolver, Solver};
+//! use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+//!
+//! // Solve: 2x + 3 = 11
+//! let x = Expression::Variable(Variable::new("x"));
+//! let left = Expression::Binary(
+//!     BinaryOp::Add,
+//!     Box::new(Expression::Binary(
+//!         BinaryOp::Mul,
+//!         Box::new(Expression::Integer(2)),
+//!         Box::new(x),
+//!     )),
+//!     Box::new(Expression::Integer(3)),
+//! );
+//! let right = Expression::Integer(11);
+//! let equation = Equation::new("linear_eq", left, right);
+//!
+//! let solver = LinearSolver::new();
+//! let (solution, path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+//!
+//! // Solution is x = 4
+//! # use mathsolver_core::solver::Solution;
+//! # match solution {
+//! #     Solution::Unique(expr) => {
+//! #         assert_eq!(expr.evaluate(&std::collections::HashMap::new()), Some(4.0));
+//! #     }
+//! #     _ => panic!("Expected unique solution"),
+//! # }
+//! ```
+//!
+//! ## Using SmartSolver
+//!
+//! ```
+//! use mathsolver_core::solver::{SmartSolver, Solver};
+//! use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+//!
+//! // SmartSolver automatically picks the right method
+//! let solver = SmartSolver::new();
+//!
+//! // Solve: 3x = 12
+//! let x = Expression::Variable(Variable::new("x"));
+//! let left = Expression::Binary(
+//!     BinaryOp::Mul,
+//!     Box::new(Expression::Integer(3)),
+//!     Box::new(x),
+//! );
+//! let equation = Equation::new("simple", left, Expression::Integer(12));
+//!
+//! let (solution, _path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+//! // Solution is x = 4
+//! ```
+//!
+//! ## High-Level API with Known Values
+//!
+//! ```
+//! use mathsolver_core::solver::solve_for;
+//! use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+//! use std::collections::HashMap;
+//!
+//! // Solve: ax + b = c for x, given a=2, b=3, c=11
+//! let a = Expression::Variable(Variable::new("a"));
+//! let x = Expression::Variable(Variable::new("x"));
+//! let b = Expression::Variable(Variable::new("b"));
+//! let c = Expression::Variable(Variable::new("c"));
+//!
+//! let ax = Expression::Binary(BinaryOp::Mul, Box::new(a), Box::new(x));
+//! let left = Expression::Binary(BinaryOp::Add, Box::new(ax), Box::new(b));
+//! let equation = Equation::new("parametric", left, c);
+//!
+//! let mut known = HashMap::new();
+//! known.insert("a".to_string(), 2.0);
+//! known.insert("b".to_string(), 3.0);
+//! known.insert("c".to_string(), 11.0);
+//!
+//! let path = solve_for(&equation, "x", &known).unwrap();
+//! // Result is x = 4.0
+//! # assert_eq!(path.result.evaluate(&HashMap::new()), Some(4.0));
+//! ```
 
 use crate::ast::{BinaryOp, Equation, Expression, Variable};
 use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder, ResolutionStep};
 use std::collections::HashMap;
 
 /// Error types for equation solving.
+///
+/// These errors represent different failure modes when attempting to solve
+/// an equation symbolically.
+///
+/// # Examples
+///
+/// ```
+/// use mathsolver_core::solver::{SolverError, LinearSolver, Solver};
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+///
+/// // NoSolution: 0 = 5 (inconsistent equation)
+/// let eq = Equation::new("bad", Expression::Integer(0), Expression::Integer(5));
+/// // This would fail with an error during solving
+///
+/// // CannotSolve: x² = 4 (not linear, LinearSolver can't handle it)
+/// let x = Expression::Variable(Variable::new("x"));
+/// let x_squared = Expression::Power(
+///     Box::new(x),
+///     Box::new(Expression::Integer(2)),
+/// );
+/// let eq = Equation::new("quadratic", x_squared, Expression::Integer(4));
+/// let solver = LinearSolver::new();
+/// let result = solver.solve(&eq, &Variable::new("x"));
+/// assert!(result.is_err());
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum SolverError {
-    /// Equation has no solution
+    /// Equation has no solution (inconsistent).
+    ///
+    /// Example: `0 = 5` or `x + 1 = x + 2`
     NoSolution,
-    /// Equation has infinite solutions
+
+    /// Equation has infinite solutions (identity).
+    ///
+    /// Example: `x = x` or `2(x + 1) = 2x + 2`
     InfiniteSolutions,
-    /// Cannot solve for the given variable
+
+    /// Cannot solve for the given variable with this solver.
+    ///
+    /// This typically means the equation is too complex for the solver,
+    /// or the variable doesn't appear in a solvable form. The message
+    /// provides specific details about why solving failed.
+    ///
+    /// Example: Variable not in equation, or pattern not recognized
     CannotSolve(String),
-    /// Equation is not linear/polynomial as expected
+
+    /// Equation type is not supported by this solver.
+    ///
+    /// Example: Trying to solve a quadratic equation with LinearSolver
     UnsupportedEquationType,
-    /// Division by zero encountered
+
+    /// Division by zero encountered during solving.
+    ///
+    /// Example: Attempting to divide by a coefficient that evaluates to zero
     DivisionByZero,
-    /// Other error with description
+
+    /// Other error with description.
+    ///
+    /// Used for errors that don't fit other categories, such as
+    /// domain errors (e.g., asin(2)) or not-yet-implemented features.
     Other(String),
 }
 
@@ -28,35 +185,188 @@ pub enum SolverError {
 pub type SolverResult<T> = Result<T, SolverError>;
 
 /// Solution to an equation.
+///
+/// Represents the different types of solutions an equation can have.
+/// Each variant captures a different solution structure.
+///
+/// # Examples
+///
+/// ```
+/// use mathsolver_core::solver::{Solution, LinearSolver, Solver};
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+///
+/// // Unique solution: 2x = 8 → x = 4
+/// let x = Expression::Variable(Variable::new("x"));
+/// let left = Expression::Binary(
+///     BinaryOp::Mul,
+///     Box::new(Expression::Integer(2)),
+///     Box::new(x),
+/// );
+/// let eq = Equation::new("simple", left, Expression::Integer(8));
+///
+/// let solver = LinearSolver::new();
+/// let (solution, _) = solver.solve(&eq, &Variable::new("x")).unwrap();
+///
+/// match solution {
+///     Solution::Unique(expr) => {
+///         // expr evaluates to 4
+///         assert_eq!(expr.evaluate(&std::collections::HashMap::new()), Some(4.0));
+///     }
+///     _ => panic!("Expected unique solution"),
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum Solution {
-    /// Single unique solution
+    /// Single unique solution.
+    ///
+    /// The equation has exactly one solution, represented as an expression.
+    ///
+    /// # Examples
+    ///
+    /// - Linear: `2x + 3 = 11` → `x = 4`
+    /// - Transcendental: `sin(x) = 0.5` → `x = asin(0.5)`
     Unique(Expression),
-    /// Multiple discrete solutions
+
+    /// Multiple discrete solutions.
+    ///
+    /// The equation has a finite number of distinct solutions.
+    ///
+    /// # Examples
+    ///
+    /// - Quadratic: `x² - 4 = 0` → `x = 2` or `x = -2`
+    /// - Trigonometric: `sin(x) = 0` on [0, 2π] → `x = 0, π, 2π`
     Multiple(Vec<Expression>),
-    /// Parametric solution with constraints
+
+    /// Parametric solution with constraints.
+    ///
+    /// The solution depends on other variables, with optional constraints.
+    /// Useful for underdetermined systems or equations with parameters.
+    ///
+    /// # Examples
+    ///
+    /// - `x + y = 5` solving for x → `x = 5 - y` (y is a parameter)
+    /// - `sqrt(x) = 2` → `x = 4` with constraint `x ≥ 0`
     Parametric {
+        /// The solution expression, potentially containing other variables
         expression: Expression,
+        /// Constraints that must be satisfied
         constraints: Vec<Constraint>,
     },
-    /// No solution exists
+
+    /// No solution exists.
+    ///
+    /// The equation is inconsistent and has no values that satisfy it.
+    ///
+    /// # Examples
+    ///
+    /// - `0 = 5` (contradiction)
+    /// - `x + 1 = x + 2` (no solution)
     None,
-    /// Infinite solutions (identity)
+
+    /// Infinite solutions (identity).
+    ///
+    /// The equation is satisfied by all values (tautology).
+    ///
+    /// # Examples
+    ///
+    /// - `x = x` (trivial identity)
+    /// - `2(x + 1) = 2x + 2` (identity after simplification)
     Infinite,
 }
 
 /// Constraint on a solution.
+///
+/// Represents a condition that must be satisfied for a solution to be valid.
+/// Typically used with parametric solutions to specify domain restrictions.
+///
+/// # Examples
+///
+/// ```
+/// use mathsolver_core::ast::{Variable, Expression};
+/// use mathsolver_core::solver::Constraint;
+///
+/// // Constraint: x != 0 (for denominators)
+/// // Note: The condition expression format depends on application needs
+/// let constraint = Constraint {
+///     variable: Variable::new("x"),
+///     condition: Expression::Variable(Variable::new("x")),  // Placeholder for non-zero condition
+/// };
+/// ```
+///
+/// # Note
+///
+/// The exact representation of constraints is application-specific. Common uses include:
+/// - Domain restrictions (e.g., x > 0 for sqrt, log)
+/// - Non-zero denominators
+/// - Parameter ranges
 #[derive(Debug, Clone, PartialEq)]
 pub struct Constraint {
+    /// The variable being constrained
     pub variable: Variable,
+    /// The condition that must hold (e.g., x >= 0)
     pub condition: Expression,
 }
 
 /// Trait for equation solvers.
+///
+/// Implementors of this trait provide methods to solve equations symbolically.
+/// Each solver specializes in a particular type of equation (linear, quadratic, etc.).
+///
+/// # Design
+///
+/// The trait has two methods:
+/// - [`can_solve`](Solver::can_solve): Quick check if equation is suitable for this solver
+/// - [`solve`](Solver::solve): Perform the actual solving and return solution with steps
+///
+/// This design allows for solver selection (see [`SmartSolver`]) and error handling.
+///
+/// # Examples
+///
+/// ```
+/// use mathsolver_core::solver::{Solver, LinearSolver};
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+///
+/// let solver = LinearSolver::new();
+///
+/// // Build equation: 5x = 20
+/// let x = Expression::Variable(Variable::new("x"));
+/// let left = Expression::Binary(
+///     BinaryOp::Mul,
+///     Box::new(Expression::Integer(5)),
+///     Box::new(x),
+/// );
+/// let eq = Equation::new("test", left, Expression::Integer(20));
+///
+/// // Check if solver can handle it
+/// assert!(solver.can_solve(&eq));
+///
+/// // Solve it
+/// let (solution, path) = solver.solve(&eq, &Variable::new("x")).unwrap();
+/// // Solution is x = 4
+/// ```
 pub trait Solver {
     /// Solve an equation for the specified variable.
     ///
-    /// Returns the solution(s) and the resolution path showing the steps taken.
+    /// Returns the solution(s) and a [`ResolutionPath`] showing the steps taken.
+    ///
+    /// # Arguments
+    ///
+    /// * `equation` - The equation to solve
+    /// * `variable` - The variable to solve for
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    /// - [`Solution`]: The solution (unique, multiple, none, etc.)
+    /// - [`ResolutionPath`]: Step-by-step record of solving process
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SolverError`] if:
+    /// - Variable not found in equation
+    /// - Equation type not supported by this solver
+    /// - Equation has no solution or infinite solutions
+    /// - Other solving failures (see [`SolverError`] variants)
     fn solve(
         &self,
         equation: &Equation,
@@ -64,6 +374,42 @@ pub trait Solver {
     ) -> SolverResult<(Solution, ResolutionPath)>;
 
     /// Check if this solver can handle the given equation.
+    ///
+    /// This is a fast pre-check that examines the equation structure without
+    /// actually solving it. It's used by [`SmartSolver`] to select the
+    /// appropriate solver.
+    ///
+    /// # Note
+    ///
+    /// Returning `true` doesn't guarantee successful solving - the equation
+    /// might still have no solution or be too complex. This method only
+    /// checks if the equation type matches this solver's capabilities.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::solver::{Solver, LinearSolver};
+    /// use mathsolver_core::ast::{Equation, Expression, Variable};
+    ///
+    /// let solver = LinearSolver::new();
+    ///
+    /// // Linear equation: x + 5 = 10
+    /// let eq1 = Equation::new(
+    ///     "linear",
+    ///     Expression::Variable(Variable::new("x")),
+    ///     Expression::Integer(5),
+    /// );
+    /// assert!(solver.can_solve(&eq1));
+    ///
+    /// // Quadratic equation: x² = 4
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let x_squared = Expression::Power(
+    ///     Box::new(x),
+    ///     Box::new(Expression::Integer(2)),
+    /// );
+    /// let eq2 = Equation::new("quadratic", x_squared, Expression::Integer(4));
+    /// assert!(!solver.can_solve(&eq2)); // LinearSolver rejects quadratics
+    /// ```
     fn can_solve(&self, equation: &Equation) -> bool;
 }
 
@@ -72,13 +418,59 @@ pub trait Solver {
 // ============================================================================
 
 /// Check if expression contains the given variable.
+///
+/// This is a convenience wrapper around [`Expression::contains_variable`].
+///
+/// # Examples
+///
+/// ```ignore
+/// let x = Expression::Variable(Variable::new("x"));
+/// let y = Expression::Variable(Variable::new("y"));
+/// let expr = Expression::Binary(BinaryOp::Add, Box::new(x), Box::new(Expression::Integer(5)));
+///
+/// assert!(contains_variable(&expr, "x"));
+/// assert!(!contains_variable(&expr, "y"));
+/// ```
 fn contains_variable(expr: &Expression, var: &str) -> bool {
     expr.contains_variable(var)
 }
 
 /// Extract the coefficient of a variable from an expression.
-/// For example: in "3 * x", returns Some(3)
-/// Returns None if variable not found or pattern doesn't match.
+///
+/// Recognizes patterns like:
+/// - `x` → coefficient is 1
+/// - `3 * x` → coefficient is 3
+/// - `x * 3` → coefficient is 3
+/// - `a * x` → coefficient is a (where a doesn't contain x)
+///
+/// Returns `None` if the variable is not found or appears in a non-linear way.
+///
+/// # Examples
+///
+/// ```ignore
+/// // 3 * x → Some(3)
+/// let expr = Expression::Binary(
+///     BinaryOp::Mul,
+///     Box::new(Expression::Integer(3)),
+///     Box::new(Expression::Variable(Variable::new("x"))),
+/// );
+/// let coeff = extract_coefficient(&expr, "x");
+/// assert_eq!(coeff, Some(Expression::Integer(3)));
+///
+/// // x → Some(1)
+/// let expr = Expression::Variable(Variable::new("x"));
+/// let coeff = extract_coefficient(&expr, "x");
+/// assert_eq!(coeff, Some(Expression::Integer(1)));
+///
+/// // x + 5 → None (not a pure coefficient pattern)
+/// let expr = Expression::Binary(
+///     BinaryOp::Add,
+///     Box::new(Expression::Variable(Variable::new("x"))),
+///     Box::new(Expression::Integer(5)),
+/// );
+/// let coeff = extract_coefficient(&expr, "x");
+/// assert_eq!(coeff, None);
+/// ```
 fn extract_coefficient(expr: &Expression, var: &str) -> Option<Expression> {
     match expr {
         // x -> coefficient is 1
@@ -104,7 +496,35 @@ fn extract_coefficient(expr: &Expression, var: &str) -> Option<Expression> {
 }
 
 /// Collect terms with and without the variable from an expression.
-/// Returns (terms_with_var, terms_without_var)
+///
+/// Recursively traverses an expression and separates additive terms into two groups:
+/// - Terms containing the target variable
+/// - Terms not containing the target variable
+///
+/// This is useful for rearranging equations into the form `terms_with_var = -terms_without_var`.
+///
+/// # Arguments
+///
+/// * `expr` - The expression to analyze
+/// * `var` - The variable name to search for
+///
+/// # Returns
+///
+/// A tuple `(terms_with_var, terms_without_var)` where each is a vector of expressions.
+///
+/// # Examples
+///
+/// ```ignore
+/// // 2x + 3 + 5x - 7
+/// // Returns: ([2x, 5x], [3, -7])
+/// let x = Expression::Variable(Variable::new("x"));
+/// let expr = /* ... */;
+/// let (with_x, without_x) = collect_terms(&expr, "x");
+/// ```
+///
+/// # Note
+///
+/// Subtraction is handled by negating the right operand before collecting.
 fn collect_terms(expr: &Expression, var: &str) -> (Vec<Expression>, Vec<Expression>) {
     let mut with_var = Vec::new();
     let mut without_var = Vec::new();
@@ -128,10 +548,8 @@ fn collect_terms_recursive(
         Expression::Binary(BinaryOp::Sub, left, right) => {
             collect_terms_recursive(left, var, with_var, without_var);
             // Negate the right side when collecting
-            let negated = Expression::Unary(
-                crate::ast::UnaryOp::Neg,
-                Box::new(right.as_ref().clone()),
-            );
+            let negated =
+                Expression::Unary(crate::ast::UnaryOp::Neg, Box::new(right.as_ref().clone()));
             collect_terms_recursive(&negated, var, with_var, without_var);
         }
         _ => {
@@ -150,9 +568,10 @@ fn combine_with_add(terms: Vec<Expression>) -> Expression {
         return Expression::Integer(0);
     }
 
-    terms.into_iter().reduce(|acc, term| {
-        Expression::Binary(BinaryOp::Add, Box::new(acc), Box::new(term))
-    }).unwrap()
+    terms
+        .into_iter()
+        .reduce(|acc, term| Expression::Binary(BinaryOp::Add, Box::new(acc), Box::new(term)))
+        .unwrap()
 }
 
 /// Evaluate constant expressions to their numeric values.
@@ -177,7 +596,49 @@ fn evaluate_constants(expr: &Expression) -> Expression {
 }
 
 /// Isolate a variable in an equation.
-/// Returns the expression that the variable equals.
+///
+/// Rearranges the equation to solve for the target variable, returning the
+/// expression that equals the variable. This is the core solving logic for
+/// linear equations.
+///
+/// # Algorithm
+///
+/// Recognizes and solves several linear patterns:
+/// 1. Variable already isolated: `x = expr` or `expr = x`
+/// 2. Coefficient pattern: `a*x = c` → `x = c/a`
+/// 3. Addition pattern: `x + b = c` → `x = c - b`
+/// 4. Combined pattern: `a*x + b = c` → `x = (c - b)/a`
+///
+/// All patterns are checked in both left-to-right and right-to-left orientations.
+///
+/// # Arguments
+///
+/// * `equation` - The equation to solve
+/// * `var` - The variable name to isolate
+/// * `path` - Resolution path builder to record solving steps
+///
+/// # Returns
+///
+/// An [`Expression`] representing the isolated variable's value.
+///
+/// # Errors
+///
+/// Returns [`SolverError`] if:
+/// - Variable not found in equation
+/// - Equation pattern not recognized (too complex for Phase 1)
+///
+/// # Examples
+///
+/// ```ignore
+/// // 2x + 3 = 11
+/// // Step 1: Recognize pattern a*x + b = c
+/// // Step 2: Compute (c - b) / a = (11 - 3) / 2 = 4
+/// // Returns: Expression::Integer(4)
+///
+/// let equation = /* ... */;
+/// let mut path = ResolutionPathBuilder::new(/* ... */);
+/// let result = isolate_variable(&equation, "x", &mut path)?;
+/// ```
 fn isolate_variable(
     equation: &Equation,
     var: &str,
@@ -215,7 +676,8 @@ fn isolate_variable(
                 BinaryOp::Div,
                 Box::new(right.clone()),
                 Box::new(coeff.clone()),
-            ).simplify();
+            )
+            .simplify();
             let evaluated = evaluate_constants(&result);
             return Ok(evaluated);
         }
@@ -228,7 +690,8 @@ fn isolate_variable(
                 BinaryOp::Div,
                 Box::new(left.clone()),
                 Box::new(coeff.clone()),
-            ).simplify();
+            )
+            .simplify();
             let evaluated = evaluate_constants(&result);
             return Ok(evaluated);
         }
@@ -242,7 +705,8 @@ fn isolate_variable(
                     BinaryOp::Sub,
                     Box::new(right.clone()),
                     Box::new(r.as_ref().clone()),
-                ).simplify();
+                )
+                .simplify();
                 let evaluated = evaluate_constants(&result);
                 return Ok(evaluated);
             }
@@ -253,7 +717,8 @@ fn isolate_variable(
                     BinaryOp::Sub,
                     Box::new(right.clone()),
                     Box::new(l.as_ref().clone()),
-                ).simplify();
+                )
+                .simplify();
                 let evaluated = evaluate_constants(&result);
                 return Ok(evaluated);
             }
@@ -268,7 +733,8 @@ fn isolate_variable(
                     BinaryOp::Sub,
                     Box::new(left.clone()),
                     Box::new(r.as_ref().clone()),
-                ).simplify();
+                )
+                .simplify();
                 let evaluated = evaluate_constants(&result);
                 return Ok(evaluated);
             }
@@ -279,7 +745,8 @@ fn isolate_variable(
                     BinaryOp::Sub,
                     Box::new(left.clone()),
                     Box::new(l.as_ref().clone()),
-                ).simplify();
+                )
+                .simplify();
                 let evaluated = evaluate_constants(&result);
                 return Ok(evaluated);
             }
@@ -295,11 +762,9 @@ fn isolate_variable(
                     Box::new(right.clone()),
                     Box::new(r.as_ref().clone()),
                 );
-                let result = Expression::Binary(
-                    BinaryOp::Div,
-                    Box::new(numerator),
-                    Box::new(coeff),
-                ).simplify();
+                let result =
+                    Expression::Binary(BinaryOp::Div, Box::new(numerator), Box::new(coeff))
+                        .simplify();
                 let evaluated = evaluate_constants(&result);
                 return Ok(evaluated);
             }
@@ -311,11 +776,9 @@ fn isolate_variable(
                     Box::new(right.clone()),
                     Box::new(l.as_ref().clone()),
                 );
-                let result = Expression::Binary(
-                    BinaryOp::Div,
-                    Box::new(numerator),
-                    Box::new(coeff),
-                ).simplify();
+                let result =
+                    Expression::Binary(BinaryOp::Div, Box::new(numerator), Box::new(coeff))
+                        .simplify();
                 let evaluated = evaluate_constants(&result);
                 return Ok(evaluated);
             }
@@ -328,11 +791,150 @@ fn isolate_variable(
     ))
 }
 
-/// Linear equation solver (ax + b = c).
+/// Linear equation solver for equations of the form `ax + b = c`.
+///
+/// Solves first-degree polynomial equations in one variable by pattern matching
+/// and algebraic manipulation. Handles various linear patterns including:
+/// - Simple variable: `x = 5`
+/// - Multiplication: `3x = 12`
+/// - Addition: `x + 7 = 10`
+/// - Combined: `2x + 3 = 11`
+///
+/// # Mathematical Foundation
+///
+/// A linear equation in one variable has the general form:
+/// ```text
+/// ax + b = c
+/// ```
+///
+/// The solution is obtained by:
+/// 1. Subtracting `b` from both sides: `ax = c - b`
+/// 2. Dividing both sides by `a`: `x = (c - b) / a`
+///
+/// The solver recognizes these patterns automatically and applies the
+/// appropriate transformations.
+///
+/// # Limitations
+///
+/// - Only handles linear equations (degree 1)
+/// - Cannot solve equations with the variable in denominators (e.g., `1/x = 2`)
+/// - Cannot solve equations with the variable in exponents (e.g., `2^x = 8`)
+/// - Cannot handle products of variables (e.g., `x*y = 5`)
+///
+/// For more complex equations, use [`TranscendentalSolver`] or [`SmartSolver`].
+///
+/// # Examples
+///
+/// ## Simple Linear Equation
+///
+/// ```
+/// use mathsolver_core::solver::{LinearSolver, Solver};
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+///
+/// // Solve: 2x + 3 = 11
+/// let x = Expression::Variable(Variable::new("x"));
+/// let two_x = Expression::Binary(
+///     BinaryOp::Mul,
+///     Box::new(Expression::Integer(2)),
+///     Box::new(x),
+/// );
+/// let left = Expression::Binary(
+///     BinaryOp::Add,
+///     Box::new(two_x),
+///     Box::new(Expression::Integer(3)),
+/// );
+/// let equation = Equation::new("linear", left, Expression::Integer(11));
+///
+/// let solver = LinearSolver::new();
+/// let (solution, path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+///
+/// // Verify solution: x = 4
+/// # use mathsolver_core::solver::Solution;
+/// # use std::collections::HashMap;
+/// # match solution {
+/// #     Solution::Unique(expr) => {
+/// #         assert_eq!(expr.evaluate(&HashMap::new()), Some(4.0));
+/// #     }
+/// #     _ => panic!("Expected unique solution"),
+/// # }
+/// ```
+///
+/// ## Equation with Parametric Coefficients
+///
+/// ```
+/// use mathsolver_core::solver::{LinearSolver, Solver};
+/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use std::collections::HashMap;
+///
+/// // Solve: ax = b for x (symbolic)
+/// let a = Expression::Variable(Variable::new("a"));
+/// let x = Expression::Variable(Variable::new("x"));
+/// let b = Expression::Variable(Variable::new("b"));
+///
+/// let left = Expression::Binary(BinaryOp::Mul, Box::new(a), Box::new(x));
+/// let equation = Equation::new("parametric", left, b);
+///
+/// let solver = LinearSolver::new();
+/// let (solution, _path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+///
+/// // Solution is symbolic: x = b/a
+/// # use mathsolver_core::solver::Solution;
+/// # match solution {
+/// #     Solution::Unique(expr) => {
+/// #         // Can substitute values later
+/// #         let mut values = HashMap::new();
+/// #         values.insert("a".to_string(), 3.0);
+/// #         values.insert("b".to_string(), 12.0);
+/// #         // Result would be 4.0
+/// #     }
+/// #     _ => panic!("Expected unique solution"),
+/// # }
+/// ```
+///
+/// ## Checking Solver Applicability
+///
+/// ```
+/// use mathsolver_core::solver::{LinearSolver, Solver};
+/// use mathsolver_core::ast::{Equation, Expression, Variable};
+///
+/// let solver = LinearSolver::new();
+///
+/// // Can solve linear equation
+/// let linear = Equation::new(
+///     "linear",
+///     Expression::Variable(Variable::new("x")),
+///     Expression::Integer(5),
+/// );
+/// assert!(solver.can_solve(&linear));
+///
+/// // Cannot solve quadratic equation
+/// let x = Expression::Variable(Variable::new("x"));
+/// let x_squared = Expression::Power(
+///     Box::new(x),
+///     Box::new(Expression::Integer(2)),
+/// );
+/// let quadratic = Equation::new("quadratic", x_squared, Expression::Integer(4));
+/// assert!(!solver.can_solve(&quadratic));
+/// ```
+///
+/// # See Also
+///
+/// - [`SmartSolver`]: Automatically selects LinearSolver for linear equations
+/// - [`TranscendentalSolver`]: For equations with sin, cos, exp, ln, etc.
+/// - [`solve_for`]: High-level API that uses SmartSolver and substitutes known values
 #[derive(Debug, Default)]
 pub struct LinearSolver;
 
 impl LinearSolver {
+    /// Create a new linear equation solver.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::solver::LinearSolver;
+    ///
+    /// let solver = LinearSolver::new();
+    /// ```
     pub fn new() -> Self {
         Self
     }
@@ -615,7 +1217,13 @@ impl TranscendentalSolver {
         let var_name = &variable.name;
 
         // Pattern: sin(x) = a  →  x = asin(a)
-        if let Some((result, func, value)) = self.match_trig_pattern_with_validation(&equation.left, &equation.right, var_name, crate::ast::Function::Sin, crate::ast::Function::Asin) {
+        if let Some((result, func, value)) = self.match_trig_pattern_with_validation(
+            &equation.left,
+            &equation.right,
+            var_name,
+            crate::ast::Function::Sin,
+            crate::ast::Function::Asin,
+        ) {
             // Validate domain before creating result
             if let Err(e) = Self::validate_trig_domain(value, &func) {
                 return None; // Return None to allow error propagation at higher level
@@ -629,7 +1237,13 @@ impl TranscendentalSolver {
         }
 
         // Pattern: a = sin(x)  →  x = asin(a)
-        if let Some((result, func, value)) = self.match_trig_pattern_with_validation(&equation.right, &equation.left, var_name, crate::ast::Function::Sin, crate::ast::Function::Asin) {
+        if let Some((result, func, value)) = self.match_trig_pattern_with_validation(
+            &equation.right,
+            &equation.left,
+            var_name,
+            crate::ast::Function::Sin,
+            crate::ast::Function::Asin,
+        ) {
             if let Err(e) = Self::validate_trig_domain(value, &func) {
                 return None;
             }
@@ -642,7 +1256,13 @@ impl TranscendentalSolver {
         }
 
         // Pattern: cos(x) = a  →  x = acos(a)
-        if let Some((result, func, value)) = self.match_trig_pattern_with_validation(&equation.left, &equation.right, var_name, crate::ast::Function::Cos, crate::ast::Function::Acos) {
+        if let Some((result, func, value)) = self.match_trig_pattern_with_validation(
+            &equation.left,
+            &equation.right,
+            var_name,
+            crate::ast::Function::Cos,
+            crate::ast::Function::Acos,
+        ) {
             if let Err(e) = Self::validate_trig_domain(value, &func) {
                 return None;
             }
@@ -655,7 +1275,13 @@ impl TranscendentalSolver {
         }
 
         // Pattern: a = cos(x)  →  x = acos(a)
-        if let Some((result, func, value)) = self.match_trig_pattern_with_validation(&equation.right, &equation.left, var_name, crate::ast::Function::Cos, crate::ast::Function::Acos) {
+        if let Some((result, func, value)) = self.match_trig_pattern_with_validation(
+            &equation.right,
+            &equation.left,
+            var_name,
+            crate::ast::Function::Cos,
+            crate::ast::Function::Acos,
+        ) {
             if let Err(e) = Self::validate_trig_domain(value, &func) {
                 return None;
             }
@@ -668,7 +1294,13 @@ impl TranscendentalSolver {
         }
 
         // Pattern: tan(x) = a  →  x = atan(a)
-        if let Some(result) = self.match_trig_pattern(&equation.left, &equation.right, var_name, crate::ast::Function::Tan, crate::ast::Function::Atan) {
+        if let Some(result) = self.match_trig_pattern(
+            &equation.left,
+            &equation.right,
+            var_name,
+            crate::ast::Function::Tan,
+            crate::ast::Function::Atan,
+        ) {
             path.add_step(ResolutionStep::new(
                 Operation::ApplyFunction("atan".to_string()),
                 format!("Apply arctangent to solve tan({}) = value", variable),
@@ -678,7 +1310,13 @@ impl TranscendentalSolver {
         }
 
         // Pattern: a = tan(x)  →  x = atan(a)
-        if let Some(result) = self.match_trig_pattern(&equation.right, &equation.left, var_name, crate::ast::Function::Tan, crate::ast::Function::Atan) {
+        if let Some(result) = self.match_trig_pattern(
+            &equation.right,
+            &equation.left,
+            var_name,
+            crate::ast::Function::Tan,
+            crate::ast::Function::Atan,
+        ) {
             path.add_step(ResolutionStep::new(
                 Operation::ApplyFunction("atan".to_string()),
                 format!("Apply arctangent to solve tan({}) = value", variable),
@@ -716,7 +1354,8 @@ impl TranscendentalSolver {
                 // Check if arg is exactly the variable
                 if let Expression::Variable(v) = &args[0] {
                     if v.name == var {
-                        let result = Expression::Function(inverse_func.clone(), vec![right.clone()]);
+                        let result =
+                            Expression::Function(inverse_func.clone(), vec![right.clone()]);
                         return Some((result.simplify(), inverse_func, value));
                     }
                 }
@@ -724,7 +1363,8 @@ impl TranscendentalSolver {
                 // Check if arg is a linear expression like a*x
                 if let Some(coeff) = extract_coefficient(&args[0], var) {
                     // func(a*x) = b  →  a*x = inverse_func(b)  →  x = inverse_func(b) / a
-                    let inverse_applied = Expression::Function(inverse_func.clone(), vec![right.clone()]);
+                    let inverse_applied =
+                        Expression::Function(inverse_func.clone(), vec![right.clone()]);
                     let result = Expression::Binary(
                         BinaryOp::Div,
                         Box::new(inverse_applied),
@@ -911,20 +1551,28 @@ impl TranscendentalSolver {
         }
 
         // Pattern: log(x, b) = a  →  x = b^a
-        if let Some(result) = self.match_log_base_pattern(&equation.left, &equation.right, var_name) {
+        if let Some(result) = self.match_log_base_pattern(&equation.left, &equation.right, var_name)
+        {
             path.add_step(ResolutionStep::new(
                 Operation::ApplyLogProperty("exponential form".to_string()),
-                format!("Convert logarithm to exponential form to solve for {}", variable),
+                format!(
+                    "Convert logarithm to exponential form to solve for {}",
+                    variable
+                ),
                 result.clone(),
             ));
             return Some(result);
         }
 
         // Pattern: a = log(x, b)  →  x = b^a
-        if let Some(result) = self.match_log_base_pattern(&equation.right, &equation.left, var_name) {
+        if let Some(result) = self.match_log_base_pattern(&equation.right, &equation.left, var_name)
+        {
             path.add_step(ResolutionStep::new(
                 Operation::ApplyLogProperty("exponential form".to_string()),
-                format!("Convert logarithm to exponential form to solve for {}", variable),
+                format!(
+                    "Convert logarithm to exponential form to solve for {}",
+                    variable
+                ),
                 result.clone(),
             ));
             return Some(result);
@@ -950,7 +1598,8 @@ impl TranscendentalSolver {
             if args.len() == 1 {
                 if let Expression::Variable(v) = &args[0] {
                     if v.name == var {
-                        let result = Expression::Function(crate::ast::Function::Exp, vec![right.clone()]);
+                        let result =
+                            Expression::Function(crate::ast::Function::Exp, vec![right.clone()]);
                         return Some(result.simplify());
                     }
                 }
@@ -968,7 +1617,8 @@ impl TranscendentalSolver {
                                 Box::new(right.clone()),
                                 Box::new(mul_right.as_ref().clone()),
                             );
-                            let result = Expression::Function(crate::ast::Function::Exp, vec![divided]);
+                            let result =
+                                Expression::Function(crate::ast::Function::Exp, vec![divided]);
                             return Some(result.simplify());
                         }
                     }
@@ -984,7 +1634,8 @@ impl TranscendentalSolver {
                                 Box::new(right.clone()),
                                 Box::new(mul_left.as_ref().clone()),
                             );
-                            let result = Expression::Function(crate::ast::Function::Exp, vec![divided]);
+                            let result =
+                                Expression::Function(crate::ast::Function::Exp, vec![divided]);
                             return Some(result.simplify());
                         }
                     }
@@ -1040,10 +1691,8 @@ impl TranscendentalSolver {
             if args.len() == 2 {
                 if let Expression::Variable(v) = &args[0] {
                     if v.name == var && !contains_variable(&args[1], var) {
-                        let result = Expression::Power(
-                            Box::new(args[1].clone()),
-                            Box::new(right.clone()),
-                        );
+                        let result =
+                            Expression::Power(Box::new(args[1].clone()), Box::new(right.clone()));
                         return Some(result.simplify());
                     }
                 }
@@ -1121,19 +1770,18 @@ impl TranscendentalSolver {
             if args.len() == 1 {
                 if let Expression::Variable(v) = &args[0] {
                     if v.name == var {
-                        let result = Expression::Function(crate::ast::Function::Ln, vec![right.clone()]);
+                        let result =
+                            Expression::Function(crate::ast::Function::Ln, vec![right.clone()]);
                         return Some(result.simplify());
                     }
                 }
 
                 // Pattern: exp(a*x) = b  →  a*x = ln(b)  →  x = ln(b)/a
                 if let Some(coeff) = extract_coefficient(&args[0], var) {
-                    let ln_applied = Expression::Function(crate::ast::Function::Ln, vec![right.clone()]);
-                    let result = Expression::Binary(
-                        BinaryOp::Div,
-                        Box::new(ln_applied),
-                        Box::new(coeff),
-                    );
+                    let ln_applied =
+                        Expression::Function(crate::ast::Function::Ln, vec![right.clone()]);
+                    let result =
+                        Expression::Binary(BinaryOp::Div, Box::new(ln_applied), Box::new(coeff));
                     return Some(result.simplify());
                 }
             }
@@ -1150,7 +1798,8 @@ impl TranscendentalSolver {
                                 Box::new(right.clone()),
                                 Box::new(mul_right.as_ref().clone()),
                             );
-                            let result = Expression::Function(crate::ast::Function::Ln, vec![divided]);
+                            let result =
+                                Expression::Function(crate::ast::Function::Ln, vec![divided]);
                             return Some(result.simplify());
                         }
                     }
@@ -1166,7 +1815,8 @@ impl TranscendentalSolver {
                                 Box::new(right.clone()),
                                 Box::new(mul_left.as_ref().clone()),
                             );
-                            let result = Expression::Function(crate::ast::Function::Ln, vec![divided]);
+                            let result =
+                                Expression::Function(crate::ast::Function::Ln, vec![divided]);
                             return Some(result.simplify());
                         }
                     }
@@ -1194,8 +1844,12 @@ impl TranscendentalSolver {
                 // Simple case: a^x = b
                 if let Expression::Variable(v) = exp.as_ref() {
                     if v.name == var {
-                        let ln_right = Expression::Function(crate::ast::Function::Ln, vec![right.clone()]);
-                        let ln_base = Expression::Function(crate::ast::Function::Ln, vec![base.as_ref().clone()]);
+                        let ln_right =
+                            Expression::Function(crate::ast::Function::Ln, vec![right.clone()]);
+                        let ln_base = Expression::Function(
+                            crate::ast::Function::Ln,
+                            vec![base.as_ref().clone()],
+                        );
                         let result = Expression::Binary(
                             BinaryOp::Div,
                             Box::new(ln_right),
@@ -1207,18 +1861,14 @@ impl TranscendentalSolver {
 
                 // Pattern: a^(b*x) = c  →  b*x = ln(c)/ln(a)  →  x = ln(c)/(b*ln(a))
                 if let Some(coeff) = extract_coefficient(exp, var) {
-                    let ln_right = Expression::Function(crate::ast::Function::Ln, vec![right.clone()]);
-                    let ln_base = Expression::Function(crate::ast::Function::Ln, vec![base.as_ref().clone()]);
-                    let divided = Expression::Binary(
-                        BinaryOp::Div,
-                        Box::new(ln_right),
-                        Box::new(ln_base),
-                    );
-                    let result = Expression::Binary(
-                        BinaryOp::Div,
-                        Box::new(divided),
-                        Box::new(coeff),
-                    );
+                    let ln_right =
+                        Expression::Function(crate::ast::Function::Ln, vec![right.clone()]);
+                    let ln_base =
+                        Expression::Function(crate::ast::Function::Ln, vec![base.as_ref().clone()]);
+                    let divided =
+                        Expression::Binary(BinaryOp::Div, Box::new(ln_right), Box::new(ln_base));
+                    let result =
+                        Expression::Binary(BinaryOp::Div, Box::new(divided), Box::new(coeff));
                     return Some(result.simplify());
                 }
             }
@@ -1231,12 +1881,22 @@ impl TranscendentalSolver {
     fn has_transcendental_function(expr: &Expression) -> bool {
         match expr {
             Expression::Function(func, _) => {
-                matches!(func,
-                    crate::ast::Function::Sin | crate::ast::Function::Cos | crate::ast::Function::Tan |
-                    crate::ast::Function::Asin | crate::ast::Function::Acos | crate::ast::Function::Atan |
-                    crate::ast::Function::Sinh | crate::ast::Function::Cosh | crate::ast::Function::Tanh |
-                    crate::ast::Function::Exp | crate::ast::Function::Ln |
-                    crate::ast::Function::Log | crate::ast::Function::Log2 | crate::ast::Function::Log10
+                matches!(
+                    func,
+                    crate::ast::Function::Sin
+                        | crate::ast::Function::Cos
+                        | crate::ast::Function::Tan
+                        | crate::ast::Function::Asin
+                        | crate::ast::Function::Acos
+                        | crate::ast::Function::Atan
+                        | crate::ast::Function::Sinh
+                        | crate::ast::Function::Cosh
+                        | crate::ast::Function::Tanh
+                        | crate::ast::Function::Exp
+                        | crate::ast::Function::Ln
+                        | crate::ast::Function::Log
+                        | crate::ast::Function::Log2
+                        | crate::ast::Function::Log10
                 )
             }
             Expression::Unary(_, inner) => Self::has_transcendental_function(inner),
@@ -1245,7 +1905,9 @@ impl TranscendentalSolver {
             }
             Expression::Power(base, exp) => {
                 // Check if variable appears in exponent (exponential form)
-                has_any_variable(exp) || Self::has_transcendental_function(base) || Self::has_transcendental_function(exp)
+                has_any_variable(exp)
+                    || Self::has_transcendental_function(base)
+                    || Self::has_transcendental_function(exp)
             }
             _ => false,
         }
@@ -1333,7 +1995,8 @@ impl Solver for TranscendentalSolver {
 
     fn can_solve(&self, equation: &Equation) -> bool {
         // Check if equation contains transcendental functions
-        Self::has_transcendental_function(&equation.left) || Self::has_transcendental_function(&equation.right)
+        Self::has_transcendental_function(&equation.left)
+            || Self::has_transcendental_function(&equation.right)
     }
 }
 
@@ -1506,7 +2169,9 @@ fn substitute_values(expr: &Expression, values: &HashMap<String, f64>) -> Expres
         ),
         Expression::Function(func, args) => Expression::Function(
             func.clone(),
-            args.iter().map(|arg| substitute_values(arg, values)).collect(),
+            args.iter()
+                .map(|arg| substitute_values(arg, values))
+                .collect(),
         ),
         Expression::Power(base, exp) => Expression::Power(
             Box::new(substitute_values(base, values)),
