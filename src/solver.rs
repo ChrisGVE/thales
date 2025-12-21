@@ -1137,11 +1137,84 @@ fn is_linear_in_variable(expr: &Expression, var: &str) -> bool {
     }
 }
 
-/// Quadratic equation solver (ax² + bx + c = 0).
+/// Quadratic equation solver for equations of the form ax² + bx + c = 0.
+///
+/// Solves second-degree polynomial equations in one variable using the quadratic
+/// formula and returns either zero, one, or two real solutions, or two complex solutions.
+///
+/// # Mathematical Foundation
+///
+/// A quadratic equation has the general form:
+/// ```text
+/// ax² + bx + c = 0    where a ≠ 0
+/// ```
+///
+/// The solution is obtained using the quadratic formula:
+/// ```text
+/// x = (-b ± √(b² - 4ac)) / (2a)
+/// ```
+///
+/// The discriminant Δ = b² - 4ac determines the nature of the roots:
+/// - Δ > 0: Two distinct real roots
+/// - Δ = 0: One repeated real root (multiplicity 2)
+/// - Δ < 0: Two complex conjugate roots
+///
+/// # TODO: Planned Implementation
+///
+/// ## Phase 1: Real Roots Only
+/// - Extract coefficients a, b, c from equation
+/// - Compute discriminant Δ = b² - 4ac
+/// - Handle discriminant cases:
+///   - Δ > 0: Return [`Solution::Multiple`] with two roots
+///   - Δ = 0: Return [`Solution::Unique`] with repeated root
+///   - Δ < 0: Return [`SolverError::NoSolution`] (defer complex support)
+/// - Apply quadratic formula: x = (-b ± √Δ) / (2a)
+/// - Record resolution steps showing discriminant and formula application
+///
+/// ## Phase 2: Degenerate Cases
+/// - Detect when a = 0 (linear equation, not quadratic)
+///   - Delegate to [`LinearSolver`]
+/// - Detect when a = b = 0 (constant equation)
+///   - Return [`Solution::None`] if c ≠ 0
+///   - Return [`Solution::Infinite`] if c = 0
+///
+/// ## Phase 3: Complex Root Support
+/// - When Δ < 0, compute complex conjugate pairs
+/// - Return [`Solution::Multiple`] with complex expressions
+/// - Use [`Expression::Complex`] for representation
+/// - Example: x² + 1 = 0 → x = ±i
+///
+/// ## Phase 4: Alternative Forms
+/// - Vertex form: a(x - h)² + k = 0
+/// - Factored form: a(x - r₁)(x - r₂) = 0
+/// - Recognize perfect square trinomials
+/// - Completing the square method (for educational purposes)
+///
+/// # Limitations (Current)
+///
+/// - **NOT YET IMPLEMENTED**: Always returns error
+/// - Cannot handle equations where variable appears non-quadratically
+/// - Cannot solve bivariate quadratics (e.g., x² + xy + y² = 0)
+/// - Cannot handle parametric coefficients requiring symbolic computation
+///
+/// # See Also
+///
+/// - [`LinearSolver`]: For degenerate case when a = 0
+/// - [`PolynomialSolver`]: General polynomial solver (uses QuadraticSolver for degree 2)
+/// - [`SmartSolver`]: Automatically selects QuadraticSolver for quadratic equations
 #[derive(Debug, Default)]
 pub struct QuadraticSolver;
 
 impl QuadraticSolver {
+    /// Create a new quadratic equation solver.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::solver::QuadraticSolver;
+    ///
+    /// let solver = QuadraticSolver::new();
+    /// ```
     pub fn new() -> Self {
         Self
     }
@@ -1166,11 +1239,112 @@ impl Solver for QuadraticSolver {
     }
 }
 
-/// Polynomial equation solver (general degree n).
+/// Polynomial equation solver for general degree n polynomials.
+///
+/// Solves polynomial equations in one variable using closed-form algebraic formulas
+/// for degrees 1-4, and numerical methods for higher degrees.
+///
+/// # Mathematical Foundation
+///
+/// A polynomial equation has the general form:
+/// ```text
+/// aₙxⁿ + aₙ₋₁xⁿ⁻¹ + ... + a₂x² + a₁x + a₀ = 0
+/// ```
+/// where n is the degree and aₙ ≠ 0.
+///
+/// # Solution Methods by Degree
+///
+/// - **Degree 1 (Linear)**: Direct division: x = -a₀/a₁
+/// - **Degree 2 (Quadratic)**: Quadratic formula: x = (-b ± √(b²-4ac))/(2a)
+/// - **Degree 3 (Cubic)**: Cardano's formula or trigonometric method
+/// - **Degree 4 (Quartic)**: Ferrari's method or resolvent cubic
+/// - **Degree 5+ (Quintic and higher)**: Numerical root-finding methods
+///
+/// # TODO: Planned Implementation
+///
+/// ## Phase 1: Degree Detection and Delegation
+/// - Analyze equation to extract polynomial form
+/// - Determine degree of polynomial
+/// - Delegate to specialized solver:
+///   - Degree 1 → [`LinearSolver`]
+///   - Degree 2 → [`QuadraticSolver`]
+///   - Degree 3 → Cubic formula implementation
+///   - Degree 4 → Quartic formula implementation
+///   - Degree 5+ → Numerical solver (see below)
+/// - Return appropriate [`Solution`] variant based on number of roots
+///
+/// ## Phase 2: Cubic Formula (Degree 3)
+/// - Normalize to depressed cubic: t³ + pt + q = 0
+/// - Compute discriminant: Δ = -4p³ - 27q²
+/// - Handle three cases:
+///   - Δ > 0: Three distinct real roots (trigonometric method)
+///   - Δ = 0: Repeated roots (algebraic method)
+///   - Δ < 0: One real root, two complex conjugate roots
+/// - Transform back to original variable
+/// - Record resolution steps
+///
+/// ## Phase 3: Quartic Formula (Degree 4)
+/// - Normalize to depressed quartic: y⁴ + py² + qy + r = 0
+/// - Solve resolvent cubic equation
+/// - Use resolvent root to factor quartic
+/// - Solve two quadratic equations
+/// - Combine roots from both quadratics
+/// - Transform back to original variable
+///
+/// ## Phase 4: Numerical Methods (Degree 5+)
+/// - By Abel-Ruffini theorem, no general algebraic solution exists
+/// - Implement numerical root-finding:
+///   - Newton-Raphson method for initial root approximation
+///   - Polynomial deflation to find remaining roots
+///   - Durand-Kerner method for simultaneous approximation
+///   - Aberth method for robust convergence
+/// - Link to `numerical` module for implementation
+/// - Return [`Solution::Multiple`] with approximate roots
+/// - Note: Numerical solutions are approximate, not symbolic
+///
+/// ## Phase 5: Special Polynomial Forms
+/// - Recognize and optimize special cases:
+///   - Binomial: xⁿ - a = 0 (nth roots of a)
+///   - Quadratic form: x²ⁿ + bxⁿ + c = 0 (substitute u = xⁿ)
+///   - Palindromic: coefficients symmetric
+///   - Reciprocal: x = 1/x symmetry
+///   - Cyclotomic: roots of unity
+/// - Use specialized algorithms for efficiency
+///
+/// # Limitations (Current)
+///
+/// - **NOT YET IMPLEMENTED**: Always returns error
+/// - Cannot handle multivariate polynomials (e.g., x² + xy + y²)
+/// - Cannot handle rational functions (polynomial ÷ polynomial)
+/// - Cannot handle polynomials with transcendental coefficients
+/// - Cannot handle symbolic/parametric coefficients
+///
+/// # See Also
+///
+/// - [`LinearSolver`]: Specialized solver for degree 1
+/// - [`QuadraticSolver`]: Specialized solver for degree 2
+/// - [`SmartSolver`]: Automatically selects PolynomialSolver for polynomial equations
+///
+/// # References
+///
+/// - [Cubic function](https://en.wikipedia.org/wiki/Cubic_function)
+/// - [Quartic function](https://en.wikipedia.org/wiki/Quartic_function)
+/// - [Abel-Ruffini theorem](https://en.wikipedia.org/wiki/Abel%E2%80%93Ruffini_theorem)
+/// - [Newton's method](https://en.wikipedia.org/wiki/Newton%27s_method)
+/// - [Durand-Kerner method](https://en.wikipedia.org/wiki/Durand%E2%80%93Kerner_method)
 #[derive(Debug, Default)]
 pub struct PolynomialSolver;
 
 impl PolynomialSolver {
+    /// Create a new polynomial equation solver.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::solver::PolynomialSolver;
+    ///
+    /// let solver = PolynomialSolver::new();
+    /// ```
     pub fn new() -> Self {
         Self
     }
@@ -1198,7 +1372,161 @@ impl Solver for PolynomialSolver {
     }
 }
 
-/// Transcendental equation solver (equations with trig, exp, log functions).
+/// Transcendental equation solver for equations with trig, exp, and log functions.
+///
+/// Solves equations involving transcendental functions - functions that cannot be
+/// expressed in terms of algebraic operations alone. This includes trigonometric,
+/// exponential, and logarithmic functions.
+///
+/// # Supported Equation Types
+///
+/// The solver recognizes and solves three categories of transcendental equations:
+///
+/// ## Trigonometric Equations
+///
+/// Equations with sin, cos, tan and their inverses:
+/// - `sin(x) = a` → `x = asin(a)` (requires |a| ≤ 1)
+/// - `cos(x) = a` → `x = acos(a)` (requires |a| ≤ 1)
+/// - `tan(x) = a` → `x = atan(a)` (no domain restriction)
+/// - `c * sin(x) = b` → `x = asin(b/c)`
+/// - `sin(c*x) = a` → `x = asin(a)/c`
+///
+/// ## Logarithmic Equations
+///
+/// Equations with natural log, log base 10, and arbitrary base logarithms:
+/// - `ln(x) = a` → `x = exp(a)`
+/// - `log10(x) = a` → `x = 10^a`
+/// - `log(x, b) = a` → `x = b^a`
+/// - `c * ln(x) = a` → `x = exp(a/c)`
+///
+/// ## Exponential Equations
+///
+/// Equations with exponential functions:
+/// - `exp(x) = a` → `x = ln(a)`
+/// - `a^x = b` → `x = ln(b)/ln(a)` (change of base formula)
+/// - `exp(c*x) = a` → `x = ln(a)/c`
+/// - `c * exp(x) = a` → `x = ln(a/c)`
+///
+/// # Domain Validation
+///
+/// The solver automatically validates domain restrictions for inverse functions:
+/// - **asin(x)** and **acos(x)** require `-1 ≤ x ≤ 1`
+/// - **ln(x)** and **log(x)** require `x > 0` (validated during evaluation)
+/// - **atan(x)** has no domain restrictions
+///
+/// When a domain restriction is violated, the solver returns a [`SolverError::Other`]
+/// with a descriptive error message.
+///
+/// # Limitations
+///
+/// The solver currently handles only equations where:
+/// 1. The variable appears in a single transcendental function call
+/// 2. The function can be inverted by applying its inverse function
+/// 3. No products or compositions of transcendental functions with the variable
+///
+/// For example, **cannot solve**:
+/// - `sin(x) * cos(x) = 0.5` (product of functions)
+/// - `sin(cos(x)) = 0.5` (composition of functions)
+/// - `sin(x) + cos(x) = 1` (sum of different functions)
+///
+/// # Examples
+///
+/// ## Solving sin(x) = 0.5
+///
+/// ```
+/// use mathsolver_core::solver::{TranscendentalSolver, Solver};
+/// use mathsolver_core::ast::{Equation, Expression, Variable, Function};
+///
+/// // Build equation: sin(x) = 0.5
+/// let x = Expression::Variable(Variable::new("x"));
+/// let sin_x = Expression::Function(Function::Sin, vec![x]);
+/// let half = Expression::Float(0.5);
+/// let equation = Equation::new("trig", sin_x, half);
+///
+/// let solver = TranscendentalSolver::new();
+/// let (solution, path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+///
+/// // Solution is x = asin(0.5) ≈ 0.5236 radians (30 degrees)
+/// # use mathsolver_core::solver::Solution;
+/// # use std::collections::HashMap;
+/// # match solution {
+/// #     Solution::Unique(expr) => {
+/// #         let result = expr.evaluate(&HashMap::new()).unwrap();
+/// #         assert!((result - 0.5235987755982989).abs() < 1e-10);
+/// #     }
+/// #     _ => panic!("Expected unique solution"),
+/// # }
+/// ```
+///
+/// ## Solving ln(x) = 2
+///
+/// ```
+/// use mathsolver_core::solver::{TranscendentalSolver, Solver};
+/// use mathsolver_core::ast::{Equation, Expression, Variable, Function};
+///
+/// // Build equation: ln(x) = 2
+/// let x = Expression::Variable(Variable::new("x"));
+/// let ln_x = Expression::Function(Function::Ln, vec![x]);
+/// let two = Expression::Integer(2);
+/// let equation = Equation::new("log", ln_x, two);
+///
+/// let solver = TranscendentalSolver::new();
+/// let (solution, path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+///
+/// // Solution is x = exp(2) ≈ 7.389
+/// # use mathsolver_core::solver::Solution;
+/// # use std::collections::HashMap;
+/// # match solution {
+/// #     Solution::Unique(expr) => {
+/// #         let result = expr.evaluate(&HashMap::new()).unwrap();
+/// #         assert!((result - std::f64::consts::E.powi(2)).abs() < 1e-10);
+/// #     }
+/// #     _ => panic!("Expected unique solution"),
+/// # }
+/// ```
+///
+/// ## Solving 2^x = 8
+///
+/// ```
+/// use mathsolver_core::solver::{TranscendentalSolver, Solver};
+/// use mathsolver_core::ast::{Equation, Expression, Variable};
+///
+/// // Build equation: 2^x = 8
+/// let x = Expression::Variable(Variable::new("x"));
+/// let two_pow_x = Expression::Power(
+///     Box::new(Expression::Integer(2)),
+///     Box::new(x),
+/// );
+/// let eight = Expression::Integer(8);
+/// let equation = Equation::new("exp", two_pow_x, eight);
+///
+/// let solver = TranscendentalSolver::new();
+/// let (solution, path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+///
+/// // Solution is x = ln(8)/ln(2) = 3
+/// # use mathsolver_core::solver::Solution;
+/// # use std::collections::HashMap;
+/// # match solution {
+/// #     Solution::Unique(expr) => {
+/// #         let result = expr.evaluate(&HashMap::new()).unwrap();
+/// #         assert!((result - 3.0).abs() < 1e-10);
+/// #     }
+/// #     _ => panic!("Expected unique solution"),
+/// # }
+/// ```
+///
+/// ## Domain Validation
+///
+/// Domain restrictions are automatically validated. For example, attempting to solve
+/// `sin(x) = 2` (which would require `asin(2)`) will fail because |sin(x)| ≤ 1 always.
+/// The solver returns `Err(SolverError::CannotSolve(...))` when pattern matching fails
+/// due to invalid domains.
+///
+/// # See Also
+///
+/// - [`LinearSolver`]: For linear equations (ax + b = c)
+/// - [`SmartSolver`]: Automatically selects TranscendentalSolver for transcendental equations
+/// - [`solve_for`]: High-level API that handles solver selection and value substitution
 #[derive(Debug, Default)]
 pub struct TranscendentalSolver;
 
@@ -1208,6 +1536,40 @@ impl TranscendentalSolver {
     }
 
     /// Try to solve a trigonometric equation for the target variable.
+    ///
+    /// Attempts to match and solve equations involving sin, cos, or tan by applying
+    /// the appropriate inverse function (asin, acos, atan). The method validates
+    /// domain restrictions for asin and acos.
+    ///
+    /// # Supported Patterns
+    ///
+    /// - `sin(x) = a` or `a = sin(x)` → `x = asin(a)` (requires |a| ≤ 1)
+    /// - `cos(x) = a` or `a = cos(x)` → `x = acos(a)` (requires |a| ≤ 1)
+    /// - `tan(x) = a` or `a = tan(x)` → `x = atan(a)` (no restriction)
+    /// - `c * sin(x) = b` → `x = asin(b/c)`
+    /// - `sin(c*x) = a` → `x = asin(a)/c`
+    ///
+    /// # Domain Validation
+    ///
+    /// For asin and acos, the input value must satisfy |value| ≤ 1.
+    /// If this constraint is violated, the method returns `None` to allow
+    /// the caller to propagate the error.
+    ///
+    /// # Parameters
+    ///
+    /// - `equation`: The equation to solve
+    /// - `variable`: The variable to solve for
+    /// - `path`: Resolution path to record the solving steps
+    ///
+    /// # Returns
+    ///
+    /// - `Some(expression)` if a valid trigonometric pattern is matched
+    /// - `None` if no pattern matches or domain validation fails
+    ///
+    /// # Examples
+    ///
+    /// This is a private helper method called by the public [`solve`](Solver::solve) method.
+    /// See the [`TranscendentalSolver`] struct documentation for public API examples.
     fn solve_trig_equation(
         &self,
         equation: &Equation,
@@ -1502,6 +1864,39 @@ impl TranscendentalSolver {
     }
 
     /// Try to solve a logarithmic equation for the target variable.
+    ///
+    /// Attempts to match and solve equations involving ln, log10, or log with
+    /// arbitrary base by converting to exponential form.
+    ///
+    /// # Supported Patterns
+    ///
+    /// - `ln(x) = a` or `a = ln(x)` → `x = exp(a)`
+    /// - `log10(x) = a` or `a = log10(x)` → `x = 10^a`
+    /// - `log(x, b) = a` or `a = log(x, b)` → `x = b^a`
+    /// - `c * ln(x) = a` → `x = exp(a/c)`
+    ///
+    /// # Mathematical Principle
+    ///
+    /// The solver uses the inverse relationship between logarithms and exponents:
+    /// - If `log_b(x) = a`, then `x = b^a`
+    /// - Natural log: `ln(x) = a` → `x = e^a` (using exp function)
+    /// - Common log: `log10(x) = a` → `x = 10^a`
+    ///
+    /// # Parameters
+    ///
+    /// - `equation`: The equation to solve
+    /// - `variable`: The variable to solve for
+    /// - `path`: Resolution path to record the solving steps
+    ///
+    /// # Returns
+    ///
+    /// - `Some(expression)` if a valid logarithmic pattern is matched
+    /// - `None` if no pattern matches
+    ///
+    /// # Examples
+    ///
+    /// This is a private helper method called by the public [`solve`](Solver::solve) method.
+    /// See the [`TranscendentalSolver`] struct documentation for public API examples.
     fn solve_log_equation(
         &self,
         equation: &Equation,
@@ -1703,6 +2098,39 @@ impl TranscendentalSolver {
     }
 
     /// Try to solve an exponential equation for the target variable.
+    ///
+    /// Attempts to match and solve equations with the variable in an exponent
+    /// by applying logarithms to isolate the variable.
+    ///
+    /// # Supported Patterns
+    ///
+    /// - `exp(x) = a` or `a = exp(x)` → `x = ln(a)`
+    /// - `a^x = b` or `b = a^x` → `x = ln(b)/ln(a)` (change of base formula)
+    /// - `exp(c*x) = a` → `x = ln(a)/c`
+    /// - `c * exp(x) = a` → `x = ln(a/c)`
+    /// - `a^(c*x) = b` → `x = ln(b)/(c*ln(a))`
+    ///
+    /// # Mathematical Principle
+    ///
+    /// The solver uses the inverse relationship between exponents and logarithms:
+    /// - If `e^x = a`, then `x = ln(a)`
+    /// - If `b^x = a`, then `x = log_b(a) = ln(a)/ln(b)` (change of base formula)
+    ///
+    /// # Parameters
+    ///
+    /// - `equation`: The equation to solve
+    /// - `variable`: The variable to solve for
+    /// - `path`: Resolution path to record the solving steps
+    ///
+    /// # Returns
+    ///
+    /// - `Some(expression)` if a valid exponential pattern is matched
+    /// - `None` if no pattern matches
+    ///
+    /// # Examples
+    ///
+    /// This is a private helper method called by the public [`solve`](Solver::solve) method.
+    /// See the [`TranscendentalSolver`] struct documentation for public API examples.
     fn solve_exp_equation(
         &self,
         equation: &Equation,
@@ -1877,7 +2305,46 @@ impl TranscendentalSolver {
         None
     }
 
-    /// Check if an equation contains transcendental functions.
+    /// Check if an expression contains transcendental functions.
+    ///
+    /// A transcendental function is one that cannot be expressed as a finite
+    /// combination of algebraic operations (addition, subtraction, multiplication,
+    /// division, and root extraction). This includes trigonometric, exponential,
+    /// and logarithmic functions.
+    ///
+    /// This helper is used by [`can_solve`](TranscendentalSolver::can_solve) to determine
+    /// if an equation is suitable for the TranscendentalSolver.
+    ///
+    /// # Recognized Transcendental Functions
+    ///
+    /// - **Trigonometric**: sin, cos, tan, asin, acos, atan
+    /// - **Hyperbolic**: sinh, cosh, tanh
+    /// - **Exponential**: exp, a^x (when x contains a variable)
+    /// - **Logarithmic**: ln, log, log2, log10
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::solver::TranscendentalSolver;
+    /// use mathsolver_core::ast::{Expression, Variable, Function};
+    ///
+    /// // sin(x) contains transcendental function
+    /// let x = Expression::Variable(Variable::new("x"));
+    /// let sin_x = Expression::Function(Function::Sin, vec![x.clone()]);
+    /// // Note: has_transcendental_function is private, tested via can_solve
+    ///
+    /// // x^2 does not contain transcendental function (algebraic)
+    /// let x_squared = Expression::Power(
+    ///     Box::new(x.clone()),
+    ///     Box::new(Expression::Integer(2)),
+    /// );
+    ///
+    /// // 2^x contains transcendental function (variable in exponent)
+    /// let two_pow_x = Expression::Power(
+    ///     Box::new(Expression::Integer(2)),
+    ///     Box::new(x.clone()),
+    /// );
+    /// ```
     fn has_transcendental_function(expr: &Expression) -> bool {
         match expr {
             Expression::Function(func, _) => {
@@ -1914,6 +2381,32 @@ impl TranscendentalSolver {
     }
 
     /// Validate domain restrictions for inverse trigonometric functions.
+    ///
+    /// Ensures that input values to inverse trigonometric functions satisfy
+    /// their domain restrictions. This prevents mathematical errors like
+    /// attempting to compute asin(2).
+    ///
+    /// # Domain Restrictions
+    ///
+    /// - **asin(x)**: Requires `-1 ≤ x ≤ 1` (domain of arcsine)
+    /// - **acos(x)**: Requires `-1 ≤ x ≤ 1` (domain of arccosine)
+    /// - **atan(x)**: No restriction (all real numbers)
+    ///
+    /// # Parameters
+    ///
+    /// - `value`: The numeric value to validate
+    /// - `func`: The inverse trigonometric function being applied
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(())` if the value is within the valid domain
+    /// - `Err(SolverError::Other)` if the value violates domain restrictions
+    ///
+    /// # Examples
+    ///
+    /// This is a private helper method that validates domains automatically during solving.
+    /// See the domain error example in the [`TranscendentalSolver`] struct documentation
+    /// for how domain validation errors are surfaced through the public API.
     fn validate_trig_domain(value: f64, func: &crate::ast::Function) -> Result<(), SolverError> {
         match func {
             crate::ast::Function::Asin | crate::ast::Function::Acos => {
