@@ -391,6 +391,7 @@ pub mod matrix;
 pub mod precision;
 pub mod integration;
 pub mod inequality;
+pub mod trigonometric;
 
 // FFI module (conditionally compiled for FFI builds)
 #[cfg(feature = "ffi")]
@@ -417,6 +418,12 @@ pub use integration::{
 };
 pub use inequality::{
     solve_inequality, solve_system, Bound, Inequality, InequalityError, IntervalSolution,
+};
+pub use trigonometric::{
+    all_trig_rules, double_angle_rules, inverse_rules, parity_rules, product_to_sum_rules,
+    pythagorean_rules, quotient_rules, simplify_double_angle, simplify_pythagorean,
+    simplify_quotient, simplify_trig, simplify_trig_step, simplify_trig_with_steps,
+    special_value_rules,
 };
 
 /// Library version information.
