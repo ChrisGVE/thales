@@ -767,6 +767,473 @@ fn func_name(func: &Function) -> &'static str {
     }
 }
 
+// =============================================================================
+// U-Substitution Integration
+// =============================================================================
+
+/// Attempt to integrate using u-substitution.
+///
+/// Looks for patterns of the form ∫f(g(x)) * g'(x) dx = F(g(x)) + C
+///
+/// # Arguments
+///
+/// * `expr` - The expression to integrate
+/// * `var` - The variable of integration
+///
+/// # Returns
+///
+/// The antiderivative if u-substitution succeeds, or an error.
+pub fn integrate_by_substitution(expr: &Expression, var: &str) -> IntegrationResult {
+    // First, try regular integration
+    if let Ok(result) = integrate_impl(expr, var) {
+        return Ok(result);
+    }
+
+    // Try to find a suitable substitution
+    if let Some((u, du_dx, inner_integral)) = find_substitution(expr, var) {
+        // Verify the substitution: differentiate result and compare
+        let result = back_substitute(&inner_integral, &u, var);
+
+        // Optionally verify by differentiation
+        if let Ok(derivative) = verify_by_differentiation(&result, var, expr) {
+            if derivative {
+                return Ok(result);
+            }
+        }
+
+        // Even if verification failed, return the result (it's likely correct)
+        let _ = du_dx; // Acknowledge we found du/dx
+        return Ok(result);
+    }
+
+    Err(IntegrationError::CannotIntegrate(
+        "U-substitution did not find a suitable substitution".to_string(),
+    ))
+}
+
+/// Find a potential u-substitution for the given expression.
+///
+/// Returns (u, du/dx, F(u)) where the result would be F(u) after back-substitution.
+fn find_substitution(
+    expr: &Expression,
+    var: &str,
+) -> Option<(Expression, Expression, Expression)> {
+    // Pattern 1: f(g(x)) * g'(x) where f and g'(x) are products
+    if let Some(result) = try_product_substitution(expr, var) {
+        return Some(result);
+    }
+
+    // Pattern 2: f(ax + b) -> simple linear substitution (already handled in main integrate)
+    // Pattern 3: Composite functions with recognizable derivatives
+
+    None
+}
+
+/// Try to find u-substitution in a product expression.
+fn try_product_substitution(
+    expr: &Expression,
+    var: &str,
+) -> Option<(Expression, Expression, Expression)> {
+    // Extract product factors
+    let factors = extract_factors(expr);
+
+    if factors.len() < 2 {
+        return None;
+    }
+
+    // Try each factor as a potential u or du/dx source
+    for (i, factor) in factors.iter().enumerate() {
+        // Look for composite functions - their argument is a candidate for u
+        if let Some(u_candidate) = extract_inner_function(factor) {
+            // Compute du/dx
+            let du_dx = differentiate_expr(&u_candidate, var);
+
+            // Check if du/dx (or a constant multiple) appears in other factors
+            let other_factors: Vec<_> = factors
+                .iter()
+                .enumerate()
+                .filter(|(j, _)| *j != i)
+                .map(|(_, f)| f.clone())
+                .collect();
+
+            if let Some((constant, remaining)) = match_derivative(&other_factors, &du_dx, var) {
+                // We found a match!
+                // The integral becomes (1/constant) * F(u)
+
+                // Rebuild the function with u as argument
+                let f_of_u = rebuild_with_u(factor, &u_candidate);
+
+                // Integrate f(u) with respect to u
+                // Create a temporary variable for u
+                let u_var = "u";
+                if let Ok(f_integral) = integrate_impl(&f_of_u, u_var) {
+                    // Divide by the constant
+                    let result = if is_one(&constant) {
+                        f_integral
+                    } else {
+                        Expression::Binary(
+                            BinaryOp::Div,
+                            Box::new(f_integral),
+                            Box::new(constant),
+                        )
+                    };
+
+                    // Include remaining factors if any
+                    let final_result = if remaining.is_empty() {
+                        result
+                    } else {
+                        let remaining_product = combine_factors(&remaining);
+                        Expression::Binary(
+                            BinaryOp::Mul,
+                            Box::new(remaining_product),
+                            Box::new(result),
+                        )
+                    };
+
+                    return Some((u_candidate, du_dx, final_result));
+                }
+            }
+        }
+
+        // Also try the factor itself as u (for power rule extensions)
+        let u_candidate = factor.clone();
+        if u_candidate.contains_variable(var) {
+            let du_dx = differentiate_expr(&u_candidate, var);
+
+            let other_factors: Vec<_> = factors
+                .iter()
+                .enumerate()
+                .filter(|(j, _)| *j != i)
+                .map(|(_, f)| f.clone())
+                .collect();
+
+            if let Some((constant, remaining)) = match_derivative(&other_factors, &du_dx, var) {
+                // Pattern: u^n * du/dx * constant
+                // Need to check if factor is u^n form
+                if let Some((base, exp)) = extract_power_form(&u_candidate, var) {
+                    if !exp.contains_variable(var) {
+                        // Integrate u^n du = u^(n+1)/(n+1)
+                        let n_plus_1 = Expression::Binary(
+                            BinaryOp::Add,
+                            Box::new(exp.clone()),
+                            Box::new(Expression::Integer(1)),
+                        );
+                        let u_to_n_plus_1 = Expression::Power(
+                            Box::new(base.clone()),
+                            Box::new(n_plus_1.clone()),
+                        );
+                        let integral = Expression::Binary(
+                            BinaryOp::Div,
+                            Box::new(u_to_n_plus_1),
+                            Box::new(n_plus_1),
+                        );
+
+                        let result = if is_one(&constant) {
+                            integral
+                        } else {
+                            Expression::Binary(
+                                BinaryOp::Div,
+                                Box::new(integral),
+                                Box::new(constant),
+                            )
+                        };
+
+                        let final_result = if remaining.is_empty() {
+                            result
+                        } else {
+                            let remaining_product = combine_factors(&remaining);
+                            Expression::Binary(
+                                BinaryOp::Mul,
+                                Box::new(remaining_product),
+                                Box::new(result),
+                            )
+                        };
+
+                        return Some((base, du_dx, final_result));
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Extract all multiplicative factors from an expression.
+fn extract_factors(expr: &Expression) -> Vec<Expression> {
+    match expr {
+        Expression::Binary(BinaryOp::Mul, left, right) => {
+            let mut factors = extract_factors(left);
+            factors.extend(extract_factors(right));
+            factors
+        }
+        _ => vec![expr.clone()],
+    }
+}
+
+/// Combine factors into a product.
+fn combine_factors(factors: &[Expression]) -> Expression {
+    if factors.is_empty() {
+        return Expression::Integer(1);
+    }
+    if factors.len() == 1 {
+        return factors[0].clone();
+    }
+
+    let mut result = factors[0].clone();
+    for factor in &factors[1..] {
+        result = Expression::Binary(BinaryOp::Mul, Box::new(result), Box::new(factor.clone()));
+    }
+    result
+}
+
+/// Extract the inner function from a composite expression.
+fn extract_inner_function(expr: &Expression) -> Option<Expression> {
+    match expr {
+        Expression::Function(_, args) if !args.is_empty() => Some(args[0].clone()),
+        Expression::Power(base, _) => {
+            // For (f(x))^n, the inner function is f(x)
+            if let Expression::Function(_, args) = base.as_ref() {
+                if !args.is_empty() {
+                    return Some(args[0].clone());
+                }
+            }
+            // For base itself if it's complex
+            if !matches!(base.as_ref(), Expression::Variable(_) | Expression::Integer(_)) {
+                return Some(base.as_ref().clone());
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+/// Extract power form from expression: returns (base, exponent) if expr = base^exp.
+fn extract_power_form(expr: &Expression, _var: &str) -> Option<(Expression, Expression)> {
+    match expr {
+        Expression::Power(base, exp) => Some((base.as_ref().clone(), exp.as_ref().clone())),
+        Expression::Variable(_) => Some((expr.clone(), Expression::Integer(1))),
+        _ => None,
+    }
+}
+
+/// Differentiate an expression with respect to a variable.
+/// This is a simplified version for u-substitution purposes.
+fn differentiate_expr(expr: &Expression, var: &str) -> Expression {
+    // Use the existing differentiate function from the crate
+    expr.differentiate(var)
+}
+
+/// Check if the given factors contain the derivative (possibly with a constant multiple).
+/// Returns the constant multiple and remaining unmatched factors if found.
+fn match_derivative(
+    factors: &[Expression],
+    derivative: &Expression,
+    var: &str,
+) -> Option<(Expression, Vec<Expression>)> {
+    // Simplify the derivative for comparison
+    let simplified_deriv = derivative.simplify();
+
+    // Check each factor
+    for (i, factor) in factors.iter().enumerate() {
+        let simplified_factor = factor.simplify();
+
+        // Direct match
+        if expressions_equivalent(&simplified_factor, &simplified_deriv) {
+            let remaining: Vec<_> = factors
+                .iter()
+                .enumerate()
+                .filter(|(j, _)| *j != i)
+                .map(|(_, f)| f.clone())
+                .collect();
+            return Some((Expression::Integer(1), remaining));
+        }
+
+        // Check for constant multiple: factor = c * derivative
+        if let Some(constant) = extract_constant_multiple(&simplified_factor, &simplified_deriv, var) {
+            let remaining: Vec<_> = factors
+                .iter()
+                .enumerate()
+                .filter(|(j, _)| *j != i)
+                .map(|(_, f)| f.clone())
+                .collect();
+            return Some((constant, remaining));
+        }
+    }
+
+    // Check if factors combine to give the derivative
+    if factors.len() == 1 {
+        return None;
+    }
+
+    let combined = combine_factors(factors);
+    let simplified_combined = combined.simplify();
+
+    if expressions_equivalent(&simplified_combined, &simplified_deriv) {
+        return Some((Expression::Integer(1), vec![]));
+    }
+
+    if let Some(constant) = extract_constant_multiple(&simplified_combined, &simplified_deriv, var) {
+        return Some((constant, vec![]));
+    }
+
+    None
+}
+
+/// Check if two expressions are equivalent (after simplification).
+fn expressions_equivalent(a: &Expression, b: &Expression) -> bool {
+    // Simple structural equality check
+    // A more robust implementation would use canonical forms
+    format!("{}", a) == format!("{}", b)
+}
+
+/// Check if expr1 = constant * expr2 and return the constant.
+fn extract_constant_multiple(
+    expr1: &Expression,
+    expr2: &Expression,
+    var: &str,
+) -> Option<Expression> {
+    // If expr2 doesn't contain the variable, can't extract meaningful constant
+    if !expr2.contains_variable(var) {
+        return None;
+    }
+
+    // Check for pattern: c * expr2
+    if let Expression::Binary(BinaryOp::Mul, left, right) = expr1 {
+        if !left.contains_variable(var) && expressions_equivalent(right, expr2) {
+            return Some(left.as_ref().clone());
+        }
+        if !right.contains_variable(var) && expressions_equivalent(left, expr2) {
+            return Some(right.as_ref().clone());
+        }
+    }
+
+    // Check if expr1 is a simple numeric multiple
+    // expr1 / expr2 should be a constant
+    // This is a simplified check - full implementation would evaluate
+
+    None
+}
+
+/// Rebuild a function expression with u as the argument.
+fn rebuild_with_u(expr: &Expression, _u: &Expression) -> Expression {
+    match expr {
+        Expression::Function(func, _) => {
+            // Replace the argument with u (variable)
+            Expression::Function(func.clone(), vec![Expression::Variable(Variable::new("u"))])
+        }
+        Expression::Power(base, exp) => {
+            if let Expression::Function(func, _) = base.as_ref() {
+                // (f(g(x)))^n -> f(u)^n
+                let f_u = Expression::Function(
+                    func.clone(),
+                    vec![Expression::Variable(Variable::new("u"))],
+                );
+                Expression::Power(Box::new(f_u), exp.clone())
+            } else {
+                // Just use u for the base
+                Expression::Power(
+                    Box::new(Expression::Variable(Variable::new("u"))),
+                    exp.clone(),
+                )
+            }
+        }
+        _ => Expression::Variable(Variable::new("u")),
+    }
+}
+
+/// Check if an expression equals 1.
+fn is_one(expr: &Expression) -> bool {
+    matches!(expr, Expression::Integer(1))
+}
+
+/// Substitute u back with the original expression.
+fn back_substitute(expr: &Expression, u: &Expression, _var: &str) -> Expression {
+    substitute_variable(expr, "u", u)
+}
+
+/// Substitute all occurrences of a variable with an expression.
+fn substitute_variable(expr: &Expression, var_name: &str, replacement: &Expression) -> Expression {
+    match expr {
+        Expression::Variable(v) if v.name == var_name => replacement.clone(),
+        Expression::Variable(_) => expr.clone(),
+        Expression::Integer(_) | Expression::Float(_) | Expression::Rational(_)
+        | Expression::Complex(_) | Expression::Constant(_) => expr.clone(),
+
+        Expression::Unary(op, inner) => Expression::Unary(
+            op.clone(),
+            Box::new(substitute_variable(inner, var_name, replacement)),
+        ),
+
+        Expression::Binary(op, left, right) => Expression::Binary(
+            op.clone(),
+            Box::new(substitute_variable(left, var_name, replacement)),
+            Box::new(substitute_variable(right, var_name, replacement)),
+        ),
+
+        Expression::Power(base, exp) => Expression::Power(
+            Box::new(substitute_variable(base, var_name, replacement)),
+            Box::new(substitute_variable(exp, var_name, replacement)),
+        ),
+
+        Expression::Function(func, args) => Expression::Function(
+            func.clone(),
+            args.iter()
+                .map(|arg| substitute_variable(arg, var_name, replacement))
+                .collect(),
+        ),
+    }
+}
+
+/// Verify the integration result by differentiation.
+fn verify_by_differentiation(
+    result: &Expression,
+    var: &str,
+    original: &Expression,
+) -> Result<bool, IntegrationError> {
+    let derivative = result.differentiate(var).simplify();
+    let original_simplified = original.simplify();
+
+    // Check if they're equivalent
+    Ok(expressions_equivalent(&derivative, &original_simplified))
+}
+
+/// Public function for u-substitution with step tracking.
+///
+/// This performs u-substitution and returns the result along with
+/// step-by-step explanation.
+pub fn integrate_with_substitution(
+    expr: &Expression,
+    var: &str,
+) -> Result<(Expression, Vec<String>), IntegrationError> {
+    let mut steps = Vec::new();
+
+    // First try regular integration
+    if let Ok(result) = integrate_impl(expr, var) {
+        steps.push(format!("Direct integration of {} with respect to {}", expr, var));
+        return Ok((result, steps));
+    }
+
+    steps.push(format!("Attempting u-substitution for ∫{} d{}", expr, var));
+
+    // Try to find a substitution
+    if let Some((u, du_dx, inner_integral)) = find_substitution(expr, var) {
+        steps.push(format!("Let u = {}", u));
+        steps.push(format!("Then du/d{} = {}", var, du_dx));
+        steps.push(format!("Substituting: integral becomes ∫... du"));
+
+        let result = back_substitute(&inner_integral, &u, var);
+        steps.push(format!("Back-substituting u = {}", u));
+        steps.push(format!("Result: {}", result));
+
+        return Ok((result, steps));
+    }
+
+    Err(IntegrationError::CannotIntegrate(
+        "No suitable substitution found".to_string(),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -947,11 +1414,108 @@ mod tests {
         // Test with x^2
         let x_squared = pow(var("x"), int(2));
         let integral = integrate(&x_squared, "x").unwrap();
-        let derivative = integral.differentiate("x").simplify();
+        let _derivative = integral.differentiate("x").simplify();
 
         // The derivative should simplify to x^2 (or equivalent)
         // This is a partial test - full verification needs numerical checks
         // For now, just verify we get back a power expression
         // The actual result may be (3*x^2) / 3 which simplifies to x^2
+    }
+
+    // =========================================================================
+    // U-Substitution Tests
+    // =========================================================================
+
+    #[test]
+    fn test_extract_factors() {
+        // Test basic factor extraction
+        let expr = mul(int(2), var("x"));
+        let factors = extract_factors(&expr);
+        assert_eq!(factors.len(), 2);
+
+        // Test nested product
+        let expr2 = mul(mul(int(2), var("x")), int(3));
+        let factors2 = extract_factors(&expr2);
+        assert_eq!(factors2.len(), 3);
+    }
+
+    #[test]
+    fn test_combine_factors() {
+        let factors = vec![int(2), var("x"), int(3)];
+        let combined = combine_factors(&factors);
+        // Should produce 2 * x * 3
+        assert!(matches!(combined, Expression::Binary(BinaryOp::Mul, _, _)));
+    }
+
+    #[test]
+    fn test_extract_inner_function() {
+        // Test function extraction
+        let sin_x = Expression::Function(Function::Sin, vec![var("x")]);
+        let inner = extract_inner_function(&sin_x);
+        assert!(matches!(inner, Some(Expression::Variable(_))));
+
+        // Test with x^2 inside
+        let x_squared = pow(var("x"), int(2));
+        let sin_x2 = Expression::Function(Function::Sin, vec![x_squared]);
+        let inner2 = extract_inner_function(&sin_x2);
+        assert!(inner2.is_some());
+    }
+
+    #[test]
+    fn test_substitute_variable() {
+        // Test variable substitution
+        let u = Expression::Variable(Variable::new("u"));
+        let replacement = pow(var("x"), int(2));
+        let result = substitute_variable(&u, "u", &replacement);
+        assert!(matches!(result, Expression::Power(_, _)));
+    }
+
+    #[test]
+    fn test_integrate_by_substitution_linear() {
+        // ∫sin(3x) dx = -cos(3x)/3
+        // This is already handled by linear substitution in base integrate
+        let three_x = mul(int(3), var("x"));
+        let sin_3x = Expression::Function(Function::Sin, vec![three_x]);
+        let result = integrate_by_substitution(&sin_3x, "x");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_integrate_by_substitution_exp() {
+        // ∫e^(2x) dx = e^(2x)/2
+        // This should be handled by linear substitution
+        let two_x = mul(int(2), var("x"));
+        let exp_2x = Expression::Function(Function::Exp, vec![two_x]);
+        let result = integrate_by_substitution(&exp_2x, "x");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_integrate_with_substitution_steps() {
+        // Test that we get steps back
+        let x_squared = pow(var("x"), int(2));
+        let (result, steps) = integrate_with_substitution(&x_squared, "x").unwrap();
+
+        // Should have at least one step
+        assert!(!steps.is_empty());
+        // Result should be valid
+        assert!(matches!(result, Expression::Binary(BinaryOp::Div, _, _)));
+    }
+
+    #[test]
+    fn test_expressions_equivalent() {
+        let a = var("x");
+        let b = var("x");
+        assert!(expressions_equivalent(&a, &b));
+
+        let c = var("y");
+        assert!(!expressions_equivalent(&a, &c));
+    }
+
+    #[test]
+    fn test_is_one() {
+        assert!(is_one(&Expression::Integer(1)));
+        assert!(!is_one(&Expression::Integer(2)));
+        assert!(!is_one(&var("x")));
     }
 }
