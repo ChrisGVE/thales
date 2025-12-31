@@ -382,6 +382,7 @@ pub mod dimensions;
 pub mod latex;
 pub mod numerical;
 pub mod parser;
+pub mod pattern;
 pub mod resolution_path;
 pub mod solver;
 pub mod transforms;
