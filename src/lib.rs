@@ -387,6 +387,7 @@ pub mod pattern;
 pub mod resolution_path;
 pub mod solver;
 pub mod transforms;
+pub mod matrix;
 
 // FFI module (conditionally compiled for FFI builds)
 #[cfg(feature = "ffi")]
@@ -403,6 +404,7 @@ pub use solver::{SmartSolver, Solution, Solver};
 pub use transforms::{
     Cartesian2D, Cartesian3D, ComplexOps, Cylindrical, Polar, Spherical, Transform2D,
 };
+pub use matrix::{MatrixExpr, MatrixError, BracketStyle};
 
 /// Library version information.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
