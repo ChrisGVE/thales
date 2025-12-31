@@ -403,7 +403,9 @@ pub use numerical::{NumericalConfig, NumericalSolution, SmartNumericalSolver};
 pub use latex::{parse_latex, parse_latex_equation};
 pub use parser::{parse_equation, parse_expression};
 pub use resolution_path::{Operation, ResolutionPath, ResolutionStep};
-pub use solver::{SmartSolver, Solution, Solver};
+pub use solver::{
+    LinearSystem, SmartSolver, Solution, Solver, SystemSolution, SystemSolver,
+};
 pub use transforms::{
     Cartesian2D, Cartesian3D, ComplexOps, Cylindrical, Polar, Spherical, Transform2D,
 };
