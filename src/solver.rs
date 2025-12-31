@@ -113,7 +113,7 @@
 //! # assert_eq!(path.result.evaluate(&HashMap::new()), Some(4.0));
 //! ```
 
-use crate::ast::{BinaryOp, Equation, Expression, Variable};
+use crate::ast::{BinaryOp, Equation, Expression, UnaryOp, Variable};
 use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder, ResolutionStep};
 use std::collections::HashMap;
 
@@ -1074,6 +1074,682 @@ fn has_any_variable(expr: &Expression) -> bool {
     }
 }
 
+/// Extract coefficients (a, b, c) from a quadratic expression ax² + bx + c.
+fn extract_quadratic_coefficients(expr: &Expression, var: &str) -> (f64, f64, f64) {
+    let mut a = 0.0;
+    let mut b = 0.0;
+    let mut c = 0.0;
+
+    extract_poly_coefficients_recursive(expr, var, 1.0, &mut a, &mut b, &mut c);
+    (a, b, c)
+}
+
+/// Recursively extract polynomial coefficients.
+fn extract_poly_coefficients_recursive(
+    expr: &Expression,
+    var: &str,
+    multiplier: f64,
+    a: &mut f64,
+    b: &mut f64,
+    c: &mut f64,
+) {
+    match expr {
+        Expression::Integer(n) => *c += (*n as f64) * multiplier,
+        Expression::Float(f) => *c += f * multiplier,
+        Expression::Rational(r) => *c += (*r.numer() as f64 / *r.denom() as f64) * multiplier,
+        Expression::Variable(v) if v.name == var => *b += multiplier,
+        Expression::Variable(_) | Expression::Constant(_) => {
+            // Other variable or constant treated as part of constant term
+            if let Some(val) = expr.evaluate(&std::collections::HashMap::new()) {
+                *c += val * multiplier;
+            }
+        }
+        Expression::Unary(UnaryOp::Neg, inner) => {
+            extract_poly_coefficients_recursive(inner, var, -multiplier, a, b, c);
+        }
+        Expression::Binary(BinaryOp::Add, left, right) => {
+            extract_poly_coefficients_recursive(left, var, multiplier, a, b, c);
+            extract_poly_coefficients_recursive(right, var, multiplier, a, b, c);
+        }
+        Expression::Binary(BinaryOp::Sub, left, right) => {
+            extract_poly_coefficients_recursive(left, var, multiplier, a, b, c);
+            extract_poly_coefficients_recursive(right, var, -multiplier, a, b, c);
+        }
+        Expression::Binary(BinaryOp::Mul, left, right) => {
+            // Check for coefficient * variable or coefficient * x^2
+            let left_val = left.evaluate(&std::collections::HashMap::new());
+            let right_val = right.evaluate(&std::collections::HashMap::new());
+
+            match (left_val, right_val) {
+                (Some(lv), None) => {
+                    extract_poly_coefficients_recursive(right, var, multiplier * lv, a, b, c);
+                }
+                (None, Some(rv)) => {
+                    extract_poly_coefficients_recursive(left, var, multiplier * rv, a, b, c);
+                }
+                (Some(lv), Some(rv)) => {
+                    *c += lv * rv * multiplier;
+                }
+                (None, None) => {
+                    // Could be x * x = x^2 or other variable products
+                    if matches!(&**left, Expression::Variable(v) if v.name == var)
+                        && matches!(&**right, Expression::Variable(v) if v.name == var)
+                    {
+                        *a += multiplier;
+                    } else if matches!(&**left, Expression::Variable(v) if v.name == var) {
+                        if let Some(rv) = right.evaluate(&std::collections::HashMap::new()) {
+                            *b += multiplier * rv;
+                        }
+                    } else if matches!(&**right, Expression::Variable(v) if v.name == var) {
+                        if let Some(lv) = left.evaluate(&std::collections::HashMap::new()) {
+                            *b += multiplier * lv;
+                        }
+                    }
+                }
+            }
+        }
+        Expression::Power(base, exp) => {
+            // Check for x^2 or x^n
+            if matches!(&**base, Expression::Variable(v) if v.name == var) {
+                if let Some(exp_val) = exp.evaluate(&std::collections::HashMap::new()) {
+                    if (exp_val - 2.0).abs() < 1e-10 {
+                        *a += multiplier;
+                    } else if (exp_val - 1.0).abs() < 1e-10 {
+                        *b += multiplier;
+                    } else if exp_val.abs() < 1e-10 {
+                        *c += multiplier;
+                    }
+                }
+            }
+        }
+        _ => {
+            // For other expressions, try to evaluate as constant
+            if let Some(val) = expr.evaluate(&std::collections::HashMap::new()) {
+                *c += val * multiplier;
+            }
+        }
+    }
+}
+
+/// Simplify a numeric value to the best Expression representation.
+fn simplify_numeric_expression(val: f64) -> Expression {
+    // Check if it's close to an integer
+    let rounded = val.round();
+    if (val - rounded).abs() < 1e-10 && rounded.abs() < i64::MAX as f64 {
+        Expression::Integer(rounded as i64)
+    } else {
+        Expression::Float(val)
+    }
+}
+
+/// Extract coefficients for a general polynomial.
+/// Returns vector of coefficients [a0, a1, a2, ..., an] for a0 + a1*x + a2*x^2 + ...
+fn extract_polynomial_coefficients(expr: &Expression, var: &str, max_degree: usize) -> Vec<f64> {
+    let mut coeffs = vec![0.0; max_degree + 1];
+    extract_general_poly_coefficients(expr, var, 1.0, &mut coeffs);
+    coeffs
+}
+
+/// Recursively extract general polynomial coefficients.
+fn extract_general_poly_coefficients(
+    expr: &Expression,
+    var: &str,
+    multiplier: f64,
+    coeffs: &mut [f64],
+) {
+    match expr {
+        Expression::Integer(n) => coeffs[0] += (*n as f64) * multiplier,
+        Expression::Float(f) => coeffs[0] += f * multiplier,
+        Expression::Rational(r) => coeffs[0] += (*r.numer() as f64 / *r.denom() as f64) * multiplier,
+        Expression::Variable(v) if v.name == var => {
+            if coeffs.len() > 1 {
+                coeffs[1] += multiplier;
+            }
+        }
+        Expression::Variable(_) | Expression::Constant(_) => {
+            if let Some(val) = expr.evaluate(&std::collections::HashMap::new()) {
+                coeffs[0] += val * multiplier;
+            }
+        }
+        Expression::Unary(UnaryOp::Neg, inner) => {
+            extract_general_poly_coefficients(inner, var, -multiplier, coeffs);
+        }
+        Expression::Binary(BinaryOp::Add, left, right) => {
+            extract_general_poly_coefficients(left, var, multiplier, coeffs);
+            extract_general_poly_coefficients(right, var, multiplier, coeffs);
+        }
+        Expression::Binary(BinaryOp::Sub, left, right) => {
+            extract_general_poly_coefficients(left, var, multiplier, coeffs);
+            extract_general_poly_coefficients(right, var, -multiplier, coeffs);
+        }
+        Expression::Binary(BinaryOp::Mul, left, right) => {
+            let left_val = left.evaluate(&std::collections::HashMap::new());
+            let right_val = right.evaluate(&std::collections::HashMap::new());
+
+            match (left_val, right_val) {
+                (Some(lv), None) => {
+                    extract_general_poly_coefficients(right, var, multiplier * lv, coeffs);
+                }
+                (None, Some(rv)) => {
+                    extract_general_poly_coefficients(left, var, multiplier * rv, coeffs);
+                }
+                (Some(lv), Some(rv)) => {
+                    coeffs[0] += lv * rv * multiplier;
+                }
+                (None, None) => {
+                    // Variable * variable case
+                    if matches!(&**left, Expression::Variable(v) if v.name == var)
+                        && matches!(&**right, Expression::Variable(v) if v.name == var)
+                    {
+                        if coeffs.len() > 2 {
+                            coeffs[2] += multiplier;
+                        }
+                    }
+                }
+            }
+        }
+        Expression::Power(base, exp) => {
+            if matches!(&**base, Expression::Variable(v) if v.name == var) {
+                if let Some(exp_val) = exp.evaluate(&std::collections::HashMap::new()) {
+                    let degree = exp_val.round() as usize;
+                    if degree < coeffs.len() {
+                        coeffs[degree] += multiplier;
+                    }
+                }
+            }
+        }
+        _ => {
+            if let Some(val) = expr.evaluate(&std::collections::HashMap::new()) {
+                coeffs[0] += val * multiplier;
+            }
+        }
+    }
+}
+
+/// Get the degree of a polynomial expression with respect to a variable.
+fn get_polynomial_degree(expr: &Expression, var: &str) -> usize {
+    match expr {
+        Expression::Integer(_)
+        | Expression::Rational(_)
+        | Expression::Float(_)
+        | Expression::Complex(_)
+        | Expression::Constant(_) => 0,
+
+        Expression::Variable(v) if v.name == var => 1,
+        Expression::Variable(_) => 0,
+
+        Expression::Unary(UnaryOp::Neg, inner) => get_polynomial_degree(inner, var),
+
+        Expression::Binary(BinaryOp::Add | BinaryOp::Sub, left, right) => {
+            get_polynomial_degree(left, var).max(get_polynomial_degree(right, var))
+        }
+
+        Expression::Binary(BinaryOp::Mul, left, right) => {
+            get_polynomial_degree(left, var) + get_polynomial_degree(right, var)
+        }
+
+        Expression::Binary(BinaryOp::Div, left, right) => {
+            // Division by variable increases complexity, treat as special case
+            if contains_variable(right, var) {
+                0 // Not a polynomial
+            } else {
+                get_polynomial_degree(left, var)
+            }
+        }
+
+        Expression::Power(base, exp) => {
+            if let Expression::Variable(v) = base.as_ref() {
+                if v.name == var {
+                    if let Some(exp_val) = exp.evaluate(&HashMap::new()) {
+                        if exp_val >= 0.0 && (exp_val - exp_val.round()).abs() < 1e-10 {
+                            return exp_val.round() as usize;
+                        }
+                    }
+                }
+            }
+            // For complex powers, multiply base degree by power
+            let base_deg = get_polynomial_degree(base, var);
+            if base_deg == 0 {
+                0
+            } else if let Some(exp_val) = exp.evaluate(&HashMap::new()) {
+                if exp_val >= 0.0 && (exp_val - exp_val.round()).abs() < 1e-10 {
+                    base_deg * (exp_val.round() as usize)
+                } else {
+                    0
+                }
+            } else {
+                0
+            }
+        }
+
+        _ => 0,
+    }
+}
+
+/// Check if an expression is polynomial (contains no transcendental functions).
+fn is_polynomial_expression(expr: &Expression) -> bool {
+    match expr {
+        Expression::Integer(_)
+        | Expression::Rational(_)
+        | Expression::Float(_)
+        | Expression::Complex(_)
+        | Expression::Constant(_)
+        | Expression::Variable(_) => true,
+
+        Expression::Unary(_, inner) => is_polynomial_expression(inner),
+
+        Expression::Binary(_, left, right) => {
+            is_polynomial_expression(left) && is_polynomial_expression(right)
+        }
+
+        Expression::Power(base, exp) => {
+            // Power is polynomial if base is polynomial and exponent is a non-negative integer
+            if !is_polynomial_expression(base) {
+                return false;
+            }
+            if let Some(exp_val) = exp.evaluate(&HashMap::new()) {
+                exp_val >= 0.0 && (exp_val - exp_val.round()).abs() < 1e-10
+            } else {
+                // If exponent contains variables, check if it's polynomial
+                is_polynomial_expression(exp)
+            }
+        }
+
+        Expression::Function(_, _) => false, // Functions are transcendental
+    }
+}
+
+/// Solve cubic equation ax³ + bx² + cx + d = 0 using Cardano's formula.
+/// coeffs = [d, c, b, a] (constant term first)
+fn solve_cubic(
+    coeffs: &[f64],
+    _var: &str,
+    mut path: ResolutionPathBuilder,
+) -> SolverResult<(Solution, ResolutionPath)> {
+    if coeffs.len() < 4 {
+        return Err(SolverError::CannotSolve("Not a cubic polynomial".to_string()));
+    }
+
+    let d = coeffs[0];
+    let c = coeffs[1];
+    let b = coeffs[2];
+    let a = coeffs[3];
+
+    if a.abs() < 1e-15 {
+        // Not actually cubic, delegate to quadratic
+        return Err(SolverError::CannotSolve("Leading coefficient is zero".to_string()));
+    }
+
+    // Normalize to monic form: x³ + px² + qx + r = 0
+    let p = b / a;
+    let q = c / a;
+    let r = d / a;
+
+    path = path.step(
+        Operation::Simplify,
+        format!("Normalized cubic: x³ + {}x² + {}x + {} = 0", p, q, r),
+        Expression::Integer(0),
+    );
+
+    // Depress the cubic: substitute x = t - p/3
+    // t³ + pt + q = 0 where:
+    // p = q - p²/3
+    // q = r - pq/3 + 2p³/27
+    let dep_p = q - p * p / 3.0;
+    let dep_q = r - p * q / 3.0 + 2.0 * p * p * p / 27.0;
+
+    path = path.step(
+        Operation::Simplify,
+        format!("Depressed cubic: t³ + {}t + {} = 0", dep_p, dep_q),
+        Expression::Integer(0),
+    );
+
+    // Discriminant: Δ = -4p³ - 27q²
+    let discriminant = -4.0 * dep_p * dep_p * dep_p - 27.0 * dep_q * dep_q;
+
+    path = path.step(
+        Operation::Simplify,
+        format!("Discriminant: Δ = {}", discriminant),
+        Expression::Integer(0),
+    );
+
+    let shift = -p / 3.0;
+    let roots: Vec<Expression>;
+
+    if discriminant.abs() < 1e-10 {
+        // All roots are real, at least two are equal
+        if dep_p.abs() < 1e-10 && dep_q.abs() < 1e-10 {
+            // Triple root at t = 0
+            let root = simplify_numeric_expression(shift);
+            roots = vec![root.clone(), root.clone(), root];
+        } else {
+            // One single root and one double root
+            let t1 = 3.0 * dep_q / dep_p;
+            let t2 = -3.0 * dep_q / (2.0 * dep_p);
+            roots = vec![
+                simplify_numeric_expression(t1 + shift),
+                simplify_numeric_expression(t2 + shift),
+                simplify_numeric_expression(t2 + shift),
+            ];
+        }
+    } else if discriminant > 0.0 {
+        // Three distinct real roots (casus irreducibilis)
+        // Use trigonometric method
+        let m = 2.0 * (-dep_p / 3.0).sqrt();
+        let theta = (3.0 * dep_q / (dep_p * m)).acos() / 3.0;
+
+        let t1 = m * theta.cos();
+        let t2 = m * (theta - 2.0 * std::f64::consts::PI / 3.0).cos();
+        let t3 = m * (theta - 4.0 * std::f64::consts::PI / 3.0).cos();
+
+        roots = vec![
+            simplify_numeric_expression(t1 + shift),
+            simplify_numeric_expression(t2 + shift),
+            simplify_numeric_expression(t3 + shift),
+        ];
+    } else {
+        // One real root and two complex conjugate roots
+        // Use Cardano's formula
+        let sqrt_term = (dep_q * dep_q / 4.0 + dep_p * dep_p * dep_p / 27.0).sqrt();
+        let u = (-dep_q / 2.0 + sqrt_term).cbrt();
+        let v = (-dep_q / 2.0 - sqrt_term).cbrt();
+
+        let t_real = u + v;
+        let real_part = -0.5 * (u + v) + shift;
+        let imag_part = (3.0_f64).sqrt() / 2.0 * (u - v);
+
+        roots = vec![
+            simplify_numeric_expression(t_real + shift),
+            Expression::Complex(num_complex::Complex64::new(real_part, imag_part)),
+            Expression::Complex(num_complex::Complex64::new(real_part, -imag_part)),
+        ];
+    }
+
+    path = path.step(
+        Operation::Simplify,
+        "Applied Cardano's formula".to_string(),
+        roots[0].clone(),
+    );
+
+    let resolution_path = path.finish(roots[0].clone());
+    Ok((Solution::Multiple(roots), resolution_path))
+}
+
+/// Solve quartic equation ax⁴ + bx³ + cx² + dx + e = 0 using Ferrari's method.
+/// coeffs = [e, d, c, b, a] (constant term first)
+fn solve_quartic(
+    coeffs: &[f64],
+    _var: &str,
+    mut path: ResolutionPathBuilder,
+) -> SolverResult<(Solution, ResolutionPath)> {
+    if coeffs.len() < 5 {
+        return Err(SolverError::CannotSolve("Not a quartic polynomial".to_string()));
+    }
+
+    let e = coeffs[0];
+    let d = coeffs[1];
+    let c = coeffs[2];
+    let b = coeffs[3];
+    let a = coeffs[4];
+
+    if a.abs() < 1e-15 {
+        return Err(SolverError::CannotSolve("Leading coefficient is zero".to_string()));
+    }
+
+    // Normalize to monic form: x⁴ + px³ + qx² + rx + s = 0
+    let p = b / a;
+    let q = c / a;
+    let r = d / a;
+    let s = e / a;
+
+    path = path.step(
+        Operation::Simplify,
+        format!("Normalized quartic: x⁴ + {}x³ + {}x² + {}x + {} = 0", p, q, r, s),
+        Expression::Integer(0),
+    );
+
+    // Depress the quartic: substitute x = y - p/4
+    // y⁴ + αy² + βy + γ = 0
+    let alpha = q - 3.0 * p * p / 8.0;
+    let beta = r - p * q / 2.0 + p * p * p / 8.0;
+    let gamma = s - p * r / 4.0 + p * p * q / 16.0 - 3.0 * p * p * p * p / 256.0;
+
+    path = path.step(
+        Operation::Simplify,
+        format!("Depressed quartic: y⁴ + {}y² + {}y + {} = 0", alpha, beta, gamma),
+        Expression::Integer(0),
+    );
+
+    let shift = -p / 4.0;
+
+    // Handle special case: β = 0 (biquadratic)
+    if beta.abs() < 1e-15 {
+        // y⁴ + αy² + γ = 0, substitute u = y²
+        let disc = alpha * alpha - 4.0 * gamma;
+        if disc < -1e-15 {
+            // Complex roots
+            let u1_real = -alpha / 2.0;
+            let u1_imag = (-disc).sqrt() / 2.0;
+
+            // y² = u gives y = ±√u (complex square roots)
+            let mut roots = Vec::new();
+            for sign1 in [-1.0, 1.0] {
+                let u_real = u1_real;
+                let u_imag = sign1 * u1_imag;
+                // √(a + bi) = ±(√((r+a)/2) + i*sign(b)*√((r-a)/2))
+                let r = (u_real * u_real + u_imag * u_imag).sqrt();
+                let sqrt_real = ((r + u_real) / 2.0).sqrt();
+                let sqrt_imag = u_imag.signum() * ((r - u_real) / 2.0).sqrt();
+                roots.push(Expression::Complex(num_complex::Complex64::new(
+                    sqrt_real + shift, sqrt_imag
+                )));
+                roots.push(Expression::Complex(num_complex::Complex64::new(
+                    -sqrt_real + shift, -sqrt_imag
+                )));
+            }
+            let resolution_path = path.finish(roots[0].clone());
+            return Ok((Solution::Multiple(roots), resolution_path));
+        } else {
+            let u1 = (-alpha + disc.sqrt()) / 2.0;
+            let u2 = (-alpha - disc.sqrt()) / 2.0;
+
+            let mut roots = Vec::new();
+            for u in [u1, u2] {
+                if u >= 0.0 {
+                    roots.push(simplify_numeric_expression(u.sqrt() + shift));
+                    roots.push(simplify_numeric_expression(-u.sqrt() + shift));
+                } else {
+                    let imag = (-u).sqrt();
+                    roots.push(Expression::Complex(num_complex::Complex64::new(shift, imag)));
+                    roots.push(Expression::Complex(num_complex::Complex64::new(shift, -imag)));
+                }
+            }
+            let resolution_path = path.finish(roots[0].clone());
+            return Ok((Solution::Multiple(roots), resolution_path));
+        }
+    }
+
+    // Solve resolvent cubic: m³ + (α/2)m² + ((α² - 4γ)/16)m - β²/64 = 0
+    let resolvent_coeffs = vec![
+        -beta * beta / 64.0,
+        (alpha * alpha - 4.0 * gamma) / 16.0,
+        alpha / 2.0,
+        1.0,
+    ];
+
+    // Get one real root of the resolvent cubic
+    let dep_p = resolvent_coeffs[1] - resolvent_coeffs[2] * resolvent_coeffs[2] / 3.0;
+    let dep_q = resolvent_coeffs[0] - resolvent_coeffs[2] * resolvent_coeffs[1] / 3.0
+        + 2.0 * resolvent_coeffs[2] * resolvent_coeffs[2] * resolvent_coeffs[2] / 27.0;
+
+    let disc_cubic = -4.0 * dep_p * dep_p * dep_p - 27.0 * dep_q * dep_q;
+
+    let m: f64;
+    if disc_cubic > 1e-10 {
+        // Use trigonometric method for real root
+        let sqrt_term = 2.0 * (-dep_p / 3.0).sqrt();
+        let theta = (3.0 * dep_q / (dep_p * sqrt_term)).acos() / 3.0;
+        m = sqrt_term * theta.cos() - resolvent_coeffs[2] / 3.0;
+    } else {
+        // Use Cardano's formula
+        let sqrt_term = (dep_q * dep_q / 4.0 + dep_p * dep_p * dep_p / 27.0).abs().sqrt();
+        let sign = if dep_q < 0.0 { 1.0 } else { -1.0 };
+        let u = (sign * sqrt_term - dep_q / 2.0).abs().cbrt() * (sign * sqrt_term - dep_q / 2.0).signum();
+        let v = if u.abs() > 1e-10 { -dep_p / (3.0 * u) } else { 0.0 };
+        m = u + v - resolvent_coeffs[2] / 3.0;
+    }
+
+    path = path.step(
+        Operation::Simplify,
+        format!("Resolvent cubic root: m = {}", m),
+        Expression::Integer(0),
+    );
+
+    // Factor quartic: (y² + m)² = (α + 2m)y² - βy + (m² + αm + γ - γ)
+    // Using Ferrari's factorization into two quadratics
+    let sqrt_2m_alpha = (2.0 * m + alpha).max(0.0).sqrt();
+
+    // y² + sqrt(2m+α)y + (m + β/(2*sqrt(2m+α))) = 0
+    // y² - sqrt(2m+α)y + (m - β/(2*sqrt(2m+α))) = 0
+    let term = if sqrt_2m_alpha.abs() > 1e-10 {
+        beta / (2.0 * sqrt_2m_alpha)
+    } else {
+        0.0
+    };
+
+    let mut roots = Vec::new();
+
+    // First quadratic: y² + sqrt(2m+α)y + (m + term) = 0
+    let a1 = 1.0;
+    let b1 = sqrt_2m_alpha;
+    let c1 = m + term;
+    let disc1 = b1 * b1 - 4.0 * a1 * c1;
+
+    if disc1 >= 0.0 {
+        roots.push(simplify_numeric_expression((-b1 + disc1.sqrt()) / 2.0 + shift));
+        roots.push(simplify_numeric_expression((-b1 - disc1.sqrt()) / 2.0 + shift));
+    } else {
+        let real = -b1 / 2.0 + shift;
+        let imag = (-disc1).sqrt() / 2.0;
+        roots.push(Expression::Complex(num_complex::Complex64::new(real, imag)));
+        roots.push(Expression::Complex(num_complex::Complex64::new(real, -imag)));
+    }
+
+    // Second quadratic: y² - sqrt(2m+α)y + (m - term) = 0
+    let b2 = -sqrt_2m_alpha;
+    let c2 = m - term;
+    let disc2 = b2 * b2 - 4.0 * a1 * c2;
+
+    if disc2 >= 0.0 {
+        roots.push(simplify_numeric_expression((-b2 + disc2.sqrt()) / 2.0 + shift));
+        roots.push(simplify_numeric_expression((-b2 - disc2.sqrt()) / 2.0 + shift));
+    } else {
+        let real = -b2 / 2.0 + shift;
+        let imag = (-disc2).sqrt() / 2.0;
+        roots.push(Expression::Complex(num_complex::Complex64::new(real, imag)));
+        roots.push(Expression::Complex(num_complex::Complex64::new(real, -imag)));
+    }
+
+    path = path.step(
+        Operation::Simplify,
+        "Applied Ferrari's method".to_string(),
+        roots[0].clone(),
+    );
+
+    let resolution_path = path.finish(roots[0].clone());
+    Ok((Solution::Multiple(roots), resolution_path))
+}
+
+/// Solve polynomial of degree 5+ using numerical methods (Durand-Kerner).
+fn solve_polynomial_numerically(
+    coeffs: &[f64],
+    _var: &str,
+    mut path: ResolutionPathBuilder,
+) -> SolverResult<(Solution, ResolutionPath)> {
+    let degree = coeffs.len() - 1;
+    if degree < 1 {
+        return Err(SolverError::CannotSolve("Invalid polynomial".to_string()));
+    }
+
+    // Find leading coefficient
+    let leading = coeffs[degree];
+    if leading.abs() < 1e-15 {
+        return Err(SolverError::CannotSolve("Leading coefficient is zero".to_string()));
+    }
+
+    path = path.step(
+        Operation::Simplify,
+        format!("Solving degree {} polynomial numerically (Durand-Kerner method)", degree),
+        Expression::Integer(0),
+    );
+
+    // Initial guess: roots evenly spaced on a circle
+    let radius = 1.0 + coeffs.iter().take(degree).map(|c| (c / leading).abs()).fold(0.0, f64::max);
+    let mut roots: Vec<num_complex::Complex64> = (0..degree)
+        .map(|k| {
+            let angle = 2.0 * std::f64::consts::PI * (k as f64) / (degree as f64) + 0.4;
+            num_complex::Complex64::new(radius * angle.cos(), radius * angle.sin())
+        })
+        .collect();
+
+    // Durand-Kerner iteration
+    let max_iter = 100;
+    let tolerance = 1e-12;
+
+    for _ in 0..max_iter {
+        let mut max_change: f64 = 0.0;
+
+        for i in 0..degree {
+            // Evaluate polynomial at roots[i]
+            let mut p_val = num_complex::Complex64::new(0.0, 0.0);
+            let mut power = num_complex::Complex64::new(1.0, 0.0);
+            for &coeff in coeffs.iter() {
+                p_val += num_complex::Complex64::new(coeff, 0.0) * power;
+                power *= roots[i];
+            }
+
+            // Compute denominator product
+            let mut denom = num_complex::Complex64::new(1.0, 0.0);
+            for j in 0..degree {
+                if i != j {
+                    denom *= roots[i] - roots[j];
+                }
+            }
+
+            if denom.norm() > 1e-15 {
+                let delta = p_val / denom;
+                roots[i] -= delta;
+                max_change = max_change.max(delta.norm());
+            }
+        }
+
+        if max_change < tolerance {
+            break;
+        }
+    }
+
+    // Convert to Expression
+    let root_exprs: Vec<Expression> = roots
+        .iter()
+        .map(|r| {
+            if r.im.abs() < 1e-10 {
+                simplify_numeric_expression(r.re)
+            } else {
+                Expression::Complex(*r)
+            }
+        })
+        .collect();
+
+    path = path.step(
+        Operation::Simplify,
+        format!("Found {} roots numerically", degree),
+        root_exprs[0].clone(),
+    );
+
+    let resolution_path = path.finish(root_exprs[0].clone());
+    Ok((Solution::Multiple(root_exprs), resolution_path))
+}
+
 /// Check if an expression is linear with respect to a specific variable.
 /// An expression is linear in variable x if:
 /// - x appears to at most power 1
@@ -1225,53 +1901,136 @@ impl QuadraticSolver {
 impl Solver for QuadraticSolver {
     fn solve(
         &self,
-        _equation: &Equation,
-        _variable: &Variable,
+        equation: &Equation,
+        variable: &Variable,
     ) -> SolverResult<(Solution, ResolutionPath)> {
-        // TODO: Phase 1 - Extract coefficients a, b, c from equation
-        //       Pattern matching for: ax² + bx + c = 0
-        //       Handle both sides: left = 0 and left = right
-        //       Collect x² terms, x terms, and constant terms
+        let var_name = &variable.name;
 
-        // TODO: Phase 1 - Check for degenerate case (a = 0)
-        //       If a = 0, delegate to LinearSolver
-        //       If a = b = 0 and c ≠ 0, return Solution::None
-        //       If a = b = c = 0, return Solution::Infinite
+        // Initialize resolution path
+        let initial_expr = Expression::Binary(
+            BinaryOp::Sub,
+            Box::new(equation.left.clone()),
+            Box::new(equation.right.clone()),
+        );
+        let mut path = ResolutionPathBuilder::new(initial_expr.clone());
 
-        // TODO: Phase 1 - Compute discriminant Δ = b² - 4ac
-        //       Create step showing discriminant calculation
-        //       Simplify discriminant expression
+        // Check if variable appears in equation
+        if !contains_variable(&equation.left, var_name)
+            && !contains_variable(&equation.right, var_name)
+        {
+            return Err(SolverError::CannotSolve(format!(
+                "Variable '{}' not found in equation",
+                var_name
+            )));
+        }
 
-        // TODO: Phase 1 - Handle discriminant cases (real roots only)
-        //       If Δ > 0: compute x₁ = (-b + √Δ)/(2a) and x₂ = (-b - √Δ)/(2a)
-        //                 return Solution::Multiple([x₁, x₂])
-        //       If Δ = 0: compute x = -b/(2a)
-        //                 return Solution::Unique(x)
-        //       If Δ < 0: return SolverError::Other("Complex roots not yet supported")
+        // Extract coefficients a, b, c from ax² + bx + c = 0
+        // Move everything to left side: left - right = 0
+        let combined = Expression::Binary(
+            BinaryOp::Sub,
+            Box::new(equation.left.clone()),
+            Box::new(equation.right.clone()),
+        )
+        .simplify();
 
-        // TODO: Phase 2 - Add resolution path steps
-        //       Step 1: Show equation in standard form
-        //       Step 2: Identify coefficients a, b, c
-        //       Step 3: Compute and display discriminant
-        //       Step 4: Apply quadratic formula
-        //       Step 5: Simplify and evaluate roots
+        // Extract polynomial coefficients
+        let (a, b, c) = extract_quadratic_coefficients(&combined, var_name);
 
-        // TODO: Phase 3 - Complex root support
-        //       When Δ < 0, compute real and imaginary parts
-        //       x = -b/(2a) ± i√(-Δ)/(2a)
-        //       Return Solution::Multiple with Expression::Complex values
+        // Add step showing coefficients
+        path = path.step(
+            Operation::Simplify,
+            format!("Identified coefficients: a={}, b={}, c={}", a, b, c),
+            combined.clone(),
+        );
 
-        // TODO: Phase 4 - Alternative solution methods
-        //       Completing the square
-        //       Factoring (when roots are rational)
-        //       Vertex form conversion
+        // Check for degenerate case (a = 0)
+        if a.abs() < 1e-15 {
+            if b.abs() < 1e-15 {
+                if c.abs() < 1e-15 {
+                    let resolution_path = path.finish(Expression::Integer(0));
+                    return Ok((Solution::Infinite, resolution_path));
+                } else {
+                    return Err(SolverError::NoSolution);
+                }
+            }
+            // Linear equation: bx + c = 0 -> x = -c/b
+            let solution = Expression::Float(-c / b);
+            let resolution_path = path.finish(solution.clone());
+            return Ok((Solution::Unique(solution), resolution_path));
+        }
 
-        Err(SolverError::Other("Not yet implemented".to_string()))
+        // Compute discriminant Δ = b² - 4ac
+        let discriminant = b * b - 4.0 * a * c;
+
+        path = path.step(
+            Operation::Simplify,
+            format!("Computed discriminant: Δ = b² - 4ac = {}", discriminant),
+            combined.clone(),
+        );
+
+        let epsilon = 1e-15;
+        if discriminant > epsilon {
+            // Two distinct real roots
+            let sqrt_disc = discriminant.sqrt();
+            let x1 = (-b + sqrt_disc) / (2.0 * a);
+            let x2 = (-b - sqrt_disc) / (2.0 * a);
+
+            let root1 = simplify_numeric_expression(x1);
+            let root2 = simplify_numeric_expression(x2);
+
+            path = path.step(
+                Operation::Simplify,
+                format!(
+                    "Quadratic formula: x = (-b ± √Δ)/(2a) = {} or {}",
+                    x1, x2
+                ),
+                root1.clone(),
+            );
+
+            let resolution_path = path.finish(root1.clone());
+            Ok((Solution::Multiple(vec![root1, root2]), resolution_path))
+        } else if discriminant.abs() <= epsilon {
+            // One repeated real root
+            let x = -b / (2.0 * a);
+            let root = simplify_numeric_expression(x);
+
+            path = path.step(
+                Operation::Simplify,
+                format!("Quadratic formula (Δ = 0): x = -b/(2a) = {}", x),
+                root.clone(),
+            );
+
+            let resolution_path = path.finish(root.clone());
+            Ok((Solution::Unique(root), resolution_path))
+        } else {
+            // Complex roots: x = -b/(2a) ± i√(-Δ)/(2a)
+            let real_part = -b / (2.0 * a);
+            let imag_part = (-discriminant).sqrt() / (2.0 * a);
+
+            let root1 = Expression::Complex(num_complex::Complex64::new(
+                real_part, imag_part,
+            ));
+            let root2 = Expression::Complex(num_complex::Complex64::new(
+                real_part, -imag_part,
+            ));
+
+            path = path.step(
+                Operation::Simplify,
+                format!(
+                    "Complex roots: x = {} ± {}i",
+                    real_part, imag_part
+                ),
+                root1.clone(),
+            );
+
+            let resolution_path = path.finish(root1.clone());
+            Ok((Solution::Multiple(vec![root1, root2]), resolution_path))
+        }
     }
 
-    fn can_solve(&self, _equation: &Equation) -> bool {
-        // TODO: Check if equation is quadratic in the target variable
-        false
+    fn can_solve(&self, equation: &Equation) -> bool {
+        // Check if equation has quadratic terms
+        has_obvious_nonlinearity(&equation.left) || has_obvious_nonlinearity(&equation.right)
     }
 }
 
@@ -1389,66 +2148,90 @@ impl PolynomialSolver {
 impl Solver for PolynomialSolver {
     fn solve(
         &self,
-        _equation: &Equation,
-        _variable: &Variable,
+        equation: &Equation,
+        variable: &Variable,
     ) -> SolverResult<(Solution, ResolutionPath)> {
-        // TODO: Phase 1 - Extract polynomial coefficients
-        //       Analyze equation structure to identify polynomial form
-        //       Collect terms by degree: [a₀, a₁, a₂, ..., aₙ]
-        //       Determine degree n (highest power with non-zero coefficient)
-        //       Handle both sides: transform to standard form P(x) = 0
+        let var_name = &variable.name;
 
-        // TODO: Phase 1 - Delegate by degree
-        //       degree 0: Check if 0 = 0 (infinite) or 0 = c (none)
-        //       degree 1: Delegate to LinearSolver
-        //       degree 2: Delegate to QuadraticSolver
-        //       degree 3: Call cubic_solve() method
-        //       degree 4: Call quartic_solve() method
-        //       degree 5+: Call numerical_solve() method
+        // Initialize resolution path
+        let initial_expr = Expression::Binary(
+            BinaryOp::Sub,
+            Box::new(equation.left.clone()),
+            Box::new(equation.right.clone()),
+        );
+        let mut path = ResolutionPathBuilder::new(initial_expr.clone());
 
-        // TODO: Phase 2 - Implement cubic_solve()
-        //       Transform to depressed cubic: t³ + pt + q = 0
-        //       Compute discriminant Δ = -4p³ - 27q²
-        //       Apply Cardano's formula or trigonometric method
-        //       Transform roots back to original variable
-        //       Return Solution::Multiple with 1-3 roots
+        // Check if variable appears in equation
+        if !contains_variable(&equation.left, var_name)
+            && !contains_variable(&equation.right, var_name)
+        {
+            return Err(SolverError::CannotSolve(format!(
+                "Variable '{}' not found in equation",
+                var_name
+            )));
+        }
 
-        // TODO: Phase 3 - Implement quartic_solve()
-        //       Transform to depressed quartic: y⁴ + py² + qy + r = 0
-        //       Construct and solve resolvent cubic
-        //       Factor quartic using resolvent root
-        //       Solve two resulting quadratic equations
-        //       Combine roots from both quadratics
-        //       Transform roots back to original variable
+        // Move everything to left side: left - right = 0
+        let combined = Expression::Binary(
+            BinaryOp::Sub,
+            Box::new(equation.left.clone()),
+            Box::new(equation.right.clone()),
+        )
+        .simplify();
 
-        // TODO: Phase 4 - Implement numerical_solve() for degree 5+
-        //       Initialize with rough bounds on roots
-        //       Apply Newton-Raphson to find first root
-        //       Deflate polynomial: divide by (x - root)
-        //       Repeat for remaining roots
-        //       Refine all roots simultaneously with Durand-Kerner
-        //       Return Solution::Multiple with approximate roots
+        // Determine degree of polynomial
+        let degree = get_polynomial_degree(&combined, var_name);
 
-        // TODO: Phase 5 - Special case optimizations
-        //       Detect binomial form: xⁿ - a = 0 → compute nth roots
-        //       Detect quadratic form: x²ⁿ + bxⁿ + c → substitute u = xⁿ
-        //       Detect palindromic polynomials → reduce degree
-        //       Detect cyclotomic polynomials → roots of unity
+        path = path.step(
+            Operation::Simplify,
+            format!("Identified polynomial of degree {}", degree),
+            combined.clone(),
+        );
 
-        // TODO: Add resolution path steps for each method
-        //       Show polynomial in standard form
-        //       Show coefficient identification
-        //       Show method selection based on degree
-        //       Show intermediate steps (transformations, substitutions)
-        //       Show formula application
-        //       Show root simplification
-
-        Err(SolverError::Other("Not yet implemented".to_string()))
+        match degree {
+            0 => {
+                // Constant equation: check if 0 = 0
+                if let Some(val) = combined.evaluate(&HashMap::new()) {
+                    if val.abs() < 1e-15 {
+                        let resolution_path = path.finish(Expression::Integer(0));
+                        return Ok((Solution::Infinite, resolution_path));
+                    } else {
+                        return Err(SolverError::NoSolution);
+                    }
+                }
+                Err(SolverError::CannotSolve(
+                    "Cannot evaluate constant expression".to_string(),
+                ))
+            }
+            1 => {
+                // Delegate to LinearSolver
+                LinearSolver::new().solve(equation, variable)
+            }
+            2 => {
+                // Delegate to QuadraticSolver
+                QuadraticSolver::new().solve(equation, variable)
+            }
+            3 => {
+                // Cubic: Cardano's formula
+                let coeffs = extract_polynomial_coefficients(&combined, var_name, 3);
+                solve_cubic(&coeffs, var_name, path)
+            }
+            4 => {
+                // Quartic: Ferrari's method
+                let coeffs = extract_polynomial_coefficients(&combined, var_name, 4);
+                solve_quartic(&coeffs, var_name, path)
+            }
+            _ => {
+                // Higher degree: numerical methods
+                let coeffs = extract_polynomial_coefficients(&combined, var_name, degree);
+                solve_polynomial_numerically(&coeffs, var_name, path)
+            }
+        }
     }
 
-    fn can_solve(&self, _equation: &Equation) -> bool {
-        // TODO: Check if equation is polynomial
-        false
+    fn can_solve(&self, equation: &Equation) -> bool {
+        // Check if equation is polynomial (no transcendental functions)
+        is_polynomial_expression(&equation.left) && is_polynomial_expression(&equation.right)
     }
 }
 

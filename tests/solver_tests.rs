@@ -468,3 +468,222 @@ fn test_cannot_solve_quadratic() {
     let solver = LinearSolver::new();
     assert!(!solver.can_solve(&equation));
 }
+
+// ============================================================================
+// QuadraticSolver Tests
+// ============================================================================
+
+use mathsolver_core::solver::{QuadraticSolver, PolynomialSolver, Solution};
+
+#[test]
+fn test_quadratic_solver_two_real_roots() {
+    // x^2 - 5x + 6 = 0 => x = 2 or x = 3
+    let left = add(add(pow(var("x"), int(2)), mul(int(-5), var("x"))), int(6));
+    let right = int(0);
+    let equation = Equation::new("test", left, right);
+
+    let solver = QuadraticSolver::new();
+    let result = solver.solve(&equation, &Variable::new("x"));
+    assert!(result.is_ok());
+
+    let (solution, _path) = result.unwrap();
+    match solution {
+        Solution::Multiple(roots) => {
+            assert_eq!(roots.len(), 2);
+            let vals: Vec<f64> = roots
+                .iter()
+                .filter_map(|r| r.evaluate(&HashMap::new()))
+                .collect();
+            assert!(vals.iter().any(|v| (v - 2.0).abs() < 1e-10));
+            assert!(vals.iter().any(|v| (v - 3.0).abs() < 1e-10));
+        }
+        _ => panic!("Expected multiple solutions"),
+    }
+}
+
+#[test]
+fn test_quadratic_solver_complex_roots() {
+    // x^2 + 1 = 0 => x = ±i
+    let left = add(pow(var("x"), int(2)), int(1));
+    let right = int(0);
+    let equation = Equation::new("test", left, right);
+
+    let solver = QuadraticSolver::new();
+    let result = solver.solve(&equation, &Variable::new("x"));
+    assert!(result.is_ok());
+
+    let (solution, _path) = result.unwrap();
+    match solution {
+        Solution::Multiple(roots) => {
+            assert_eq!(roots.len(), 2);
+            // Both roots should be complex with real part 0 and imaginary ±1
+            for root in &roots {
+                if let Expression::Complex(c) = root {
+                    assert!(c.re.abs() < 1e-10);
+                    assert!((c.im.abs() - 1.0).abs() < 1e-10);
+                } else {
+                    panic!("Expected complex roots");
+                }
+            }
+        }
+        _ => panic!("Expected multiple solutions"),
+    }
+}
+
+// ============================================================================
+// PolynomialSolver (Cubic) Tests
+// ============================================================================
+
+#[test]
+fn test_cubic_solver_x3_minus_1() {
+    // x^3 - 1 = 0 => x = 1, x = -0.5 ± (√3/2)i
+    let left = add(pow(var("x"), int(3)), int(-1));
+    let right = int(0);
+    let equation = Equation::new("test", left, right);
+
+    let solver = PolynomialSolver::new();
+    let result = solver.solve(&equation, &Variable::new("x"));
+    assert!(result.is_ok());
+
+    let (solution, _path) = result.unwrap();
+    match solution {
+        Solution::Multiple(roots) => {
+            assert_eq!(roots.len(), 3);
+            // One real root should be 1
+            let real_roots: Vec<f64> = roots
+                .iter()
+                .filter_map(|r| r.evaluate(&HashMap::new()))
+                .collect();
+            assert!(real_roots.iter().any(|v| (v - 1.0).abs() < 1e-10));
+        }
+        _ => panic!("Expected multiple solutions"),
+    }
+}
+
+#[test]
+fn test_cubic_solver_depressed_cubic() {
+    // x^3 - 6x - 9 = 0 => x = 3 is one root
+    let left = add(add(pow(var("x"), int(3)), mul(int(-6), var("x"))), int(-9));
+    let right = int(0);
+    let equation = Equation::new("test", left, right);
+
+    let solver = PolynomialSolver::new();
+    let result = solver.solve(&equation, &Variable::new("x"));
+    assert!(result.is_ok());
+
+    let (solution, _path) = result.unwrap();
+    match solution {
+        Solution::Multiple(roots) => {
+            assert_eq!(roots.len(), 3);
+            // Check that one root is approximately 3
+            let real_roots: Vec<f64> = roots
+                .iter()
+                .filter_map(|r| r.evaluate(&HashMap::new()))
+                .collect();
+            assert!(real_roots.iter().any(|v| (v - 3.0).abs() < 1e-10));
+        }
+        _ => panic!("Expected multiple solutions"),
+    }
+}
+
+// ============================================================================
+// PolynomialSolver (Quartic) Tests
+// ============================================================================
+
+#[test]
+fn test_quartic_solver_x4_minus_1() {
+    // x^4 - 1 = 0 => x = ±1, x = ±i
+    let left = add(pow(var("x"), int(4)), int(-1));
+    let right = int(0);
+    let equation = Equation::new("test", left, right);
+
+    let solver = PolynomialSolver::new();
+    let result = solver.solve(&equation, &Variable::new("x"));
+    assert!(result.is_ok());
+
+    let (solution, _path) = result.unwrap();
+    match solution {
+        Solution::Multiple(roots) => {
+            assert_eq!(roots.len(), 4);
+            // Should have two real roots (1, -1) and two complex roots (±i)
+            let mut real_roots = Vec::new();
+            let mut complex_roots = Vec::new();
+            for root in &roots {
+                match root {
+                    Expression::Integer(n) => real_roots.push(*n as f64),
+                    Expression::Float(f) => real_roots.push(*f),
+                    Expression::Complex(c) if c.im.abs() < 1e-10 => real_roots.push(c.re),
+                    Expression::Complex(_) => complex_roots.push(root.clone()),
+                    _ => {}
+                }
+            }
+            assert!(real_roots.iter().any(|v| (v - 1.0).abs() < 1e-10));
+            assert!(real_roots.iter().any(|v| (v + 1.0).abs() < 1e-10));
+            assert_eq!(complex_roots.len(), 2);
+        }
+        _ => panic!("Expected multiple solutions"),
+    }
+}
+
+#[test]
+fn test_quartic_solver_biquadratic() {
+    // x^4 - 5x^2 + 4 = 0 => x = ±1, ±2
+    let x4 = pow(var("x"), int(4));
+    let x2 = pow(var("x"), int(2));
+    let left = add(add(x4, mul(int(-5), x2)), int(4));
+    let right = int(0);
+    let equation = Equation::new("test", left, right);
+
+    let solver = PolynomialSolver::new();
+    let result = solver.solve(&equation, &Variable::new("x"));
+    assert!(result.is_ok());
+
+    let (solution, _path) = result.unwrap();
+    match solution {
+        Solution::Multiple(roots) => {
+            assert_eq!(roots.len(), 4);
+            let vals: Vec<f64> = roots
+                .iter()
+                .filter_map(|r| r.evaluate(&HashMap::new()))
+                .collect();
+            assert!(vals.iter().any(|v| (v - 1.0).abs() < 1e-10));
+            assert!(vals.iter().any(|v| (v + 1.0).abs() < 1e-10));
+            assert!(vals.iter().any(|v| (v - 2.0).abs() < 1e-10));
+            assert!(vals.iter().any(|v| (v + 2.0).abs() < 1e-10));
+        }
+        _ => panic!("Expected multiple solutions"),
+    }
+}
+
+// ============================================================================
+// PolynomialSolver (Higher Degree - Numerical) Tests
+// ============================================================================
+
+#[test]
+fn test_polynomial_solver_quintic_numerical() {
+    // x^5 - x - 1 = 0 (has one real root ≈ 1.1673)
+    let x5 = pow(var("x"), int(5));
+    let left = add(add(x5, mul(int(-1), var("x"))), int(-1));
+    let right = int(0);
+    let equation = Equation::new("test", left, right);
+
+    let solver = PolynomialSolver::new();
+    let result = solver.solve(&equation, &Variable::new("x"));
+    assert!(result.is_ok());
+
+    let (solution, _path) = result.unwrap();
+    match solution {
+        Solution::Multiple(roots) => {
+            assert_eq!(roots.len(), 5);
+            // Find the real root ≈ 1.1673
+            let real_roots: Vec<f64> = roots
+                .iter()
+                .filter_map(|r| r.evaluate(&HashMap::new()))
+                .filter(|v| v.is_finite())
+                .collect();
+            assert!(!real_roots.is_empty());
+            assert!(real_roots.iter().any(|v| (v - 1.1673).abs() < 0.01));
+        }
+        _ => panic!("Expected multiple solutions"),
+    }
+}
