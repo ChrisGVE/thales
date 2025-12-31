@@ -379,6 +379,7 @@
 // Public module exports
 pub mod ast;
 pub mod dimensions;
+pub mod latex;
 pub mod numerical;
 pub mod parser;
 pub mod resolution_path;
@@ -393,6 +394,7 @@ pub mod ffi;
 pub use ast::{BinaryOp, Equation, Expression, Function, UnaryOp, Variable};
 pub use dimensions::{Dimension, Quantity, Unit, UnitRegistry};
 pub use numerical::{NumericalConfig, NumericalSolution, SmartNumericalSolver};
+pub use latex::{parse_latex, parse_latex_equation};
 pub use parser::{parse_equation, parse_expression};
 pub use resolution_path::{Operation, ResolutionPath, ResolutionStep};
 pub use solver::{SmartSolver, Solution, Solver};
