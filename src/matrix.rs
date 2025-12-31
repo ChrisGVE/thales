@@ -618,6 +618,307 @@ impl MatrixExpr {
         }
     }
 
+    /// Get the submatrix by removing row `row_idx` and column `col_idx`.
+    ///
+    /// This is used for computing minors and cofactors.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the matrix is 1x1 or smaller.
+    pub fn submatrix(&self, row_idx: usize, col_idx: usize) -> MatrixResult<MatrixExpr> {
+        if self.rows <= 1 || self.cols <= 1 {
+            return Err(MatrixError::InvalidOperation(
+                "Cannot compute submatrix of 1x1 or smaller matrix".to_string(),
+            ));
+        }
+
+        let elements: Vec<Vec<Expression>> = self
+            .elements
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != row_idx)
+            .map(|(_, row)| {
+                row.iter()
+                    .enumerate()
+                    .filter(|(j, _)| *j != col_idx)
+                    .map(|(_, elem)| elem.clone())
+                    .collect()
+            })
+            .collect();
+
+        MatrixExpr::from_elements(elements)
+    }
+
+    /// Compute the minor M(i, j) - the determinant of the submatrix excluding row i and column j.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the matrix is not square or is 1x1.
+    pub fn minor(&self, row: usize, col: usize) -> MatrixResult<Expression> {
+        if !self.is_square() {
+            return Err(MatrixError::InvalidOperation(
+                "Minor requires a square matrix".to_string(),
+            ));
+        }
+        let sub = self.submatrix(row, col)?;
+        sub.determinant()
+    }
+
+    /// Compute the cofactor C(i, j) = (-1)^(i+j) * M(i, j).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the matrix is not square or is 1x1.
+    pub fn cofactor(&self, row: usize, col: usize) -> MatrixResult<Expression> {
+        let minor = self.minor(row, col)?;
+        if (row + col) % 2 == 0 {
+            Ok(minor)
+        } else {
+            Ok(Expression::Unary(
+                crate::ast::UnaryOp::Neg,
+                Box::new(minor),
+            )
+            .simplify())
+        }
+    }
+
+    /// Compute the determinant of the matrix.
+    ///
+    /// Uses the following algorithms:
+    /// - 1x1: Returns the single element
+    /// - 2x2: Uses ad - bc formula
+    /// - NxN: Uses cofactor expansion along the first row
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the matrix is not square.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::matrix::MatrixExpr;
+    /// use mathsolver_core::ast::Expression;
+    /// use std::collections::HashMap;
+    ///
+    /// // 2x2 matrix: [[1, 2], [3, 4]]
+    /// let m = MatrixExpr::from_elements(vec![
+    ///     vec![Expression::Integer(1), Expression::Integer(2)],
+    ///     vec![Expression::Integer(3), Expression::Integer(4)],
+    /// ]).unwrap();
+    ///
+    /// let det = m.determinant().unwrap();
+    /// // det = 1*4 - 2*3 = -2
+    /// assert_eq!(det.evaluate(&HashMap::new()), Some(-2.0));
+    /// ```
+    pub fn determinant(&self) -> MatrixResult<Expression> {
+        if !self.is_square() {
+            return Err(MatrixError::InvalidOperation(
+                "Determinant requires a square matrix".to_string(),
+            ));
+        }
+
+        match self.rows {
+            1 => Ok(self.elements[0][0].clone()),
+            2 => {
+                // det = a*d - b*c for [[a, b], [c, d]]
+                let a = &self.elements[0][0];
+                let b = &self.elements[0][1];
+                let c = &self.elements[1][0];
+                let d = &self.elements[1][1];
+
+                let ad = Expression::Binary(
+                    crate::ast::BinaryOp::Mul,
+                    Box::new(a.clone()),
+                    Box::new(d.clone()),
+                );
+                let bc = Expression::Binary(
+                    crate::ast::BinaryOp::Mul,
+                    Box::new(b.clone()),
+                    Box::new(c.clone()),
+                );
+                Ok(Expression::Binary(
+                    crate::ast::BinaryOp::Sub,
+                    Box::new(ad),
+                    Box::new(bc),
+                )
+                .simplify())
+            }
+            _ => {
+                // Cofactor expansion along first row
+                let mut det = Expression::Integer(0);
+                for j in 0..self.cols {
+                    let cofactor = self.cofactor(0, j)?;
+                    let term = Expression::Binary(
+                        crate::ast::BinaryOp::Mul,
+                        Box::new(self.elements[0][j].clone()),
+                        Box::new(cofactor),
+                    );
+                    det = Expression::Binary(
+                        crate::ast::BinaryOp::Add,
+                        Box::new(det),
+                        Box::new(term),
+                    );
+                }
+                Ok(det.simplify())
+            }
+        }
+    }
+
+    /// Compute the cofactor matrix (matrix of all cofactors).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the matrix is not square or is 1x1.
+    pub fn cofactor_matrix(&self) -> MatrixResult<MatrixExpr> {
+        if !self.is_square() {
+            return Err(MatrixError::InvalidOperation(
+                "Cofactor matrix requires a square matrix".to_string(),
+            ));
+        }
+        if self.rows == 1 {
+            return Err(MatrixError::InvalidOperation(
+                "Cofactor matrix not defined for 1x1 matrix".to_string(),
+            ));
+        }
+
+        let mut elements = Vec::with_capacity(self.rows);
+        for i in 0..self.rows {
+            let mut row = Vec::with_capacity(self.cols);
+            for j in 0..self.cols {
+                row.push(self.cofactor(i, j)?);
+            }
+            elements.push(row);
+        }
+
+        MatrixExpr::from_elements(elements)
+    }
+
+    /// Compute the adjugate (classical adjoint) matrix.
+    ///
+    /// The adjugate is the transpose of the cofactor matrix.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the matrix is not square.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::matrix::MatrixExpr;
+    /// use mathsolver_core::ast::Expression;
+    ///
+    /// let m = MatrixExpr::from_elements(vec![
+    ///     vec![Expression::Integer(1), Expression::Integer(2)],
+    ///     vec![Expression::Integer(3), Expression::Integer(4)],
+    /// ]).unwrap();
+    ///
+    /// let adj = m.adjugate().unwrap();
+    /// // adj = [[4, -2], [-3, 1]]
+    /// ```
+    pub fn adjugate(&self) -> MatrixResult<MatrixExpr> {
+        if !self.is_square() {
+            return Err(MatrixError::InvalidOperation(
+                "Adjugate requires a square matrix".to_string(),
+            ));
+        }
+
+        // Special case for 1x1 matrix
+        if self.rows == 1 {
+            return Ok(MatrixExpr::from_elements(vec![vec![Expression::Integer(1)]]).unwrap());
+        }
+
+        let cofactor_mat = self.cofactor_matrix()?;
+        Ok(cofactor_mat.transpose())
+    }
+
+    /// Compute the inverse of the matrix.
+    ///
+    /// Uses the formula: A^(-1) = adj(A) / det(A)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The matrix is not square
+    /// - The matrix is singular (determinant is zero)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::matrix::MatrixExpr;
+    /// use mathsolver_core::ast::Expression;
+    /// use std::collections::HashMap;
+    ///
+    /// let m = MatrixExpr::from_elements(vec![
+    ///     vec![Expression::Integer(4), Expression::Integer(7)],
+    ///     vec![Expression::Integer(2), Expression::Integer(6)],
+    /// ]).unwrap();
+    ///
+    /// let inv = m.inverse().unwrap();
+    /// // Verify A * A^(-1) = I
+    /// let product = m.mul(&inv).unwrap();
+    /// let vars = HashMap::new();
+    /// let result = product.evaluate(&vars).unwrap();
+    /// assert!((result[0][0] - 1.0).abs() < 1e-10);
+    /// assert!((result[1][1] - 1.0).abs() < 1e-10);
+    /// ```
+    pub fn inverse(&self) -> MatrixResult<MatrixExpr> {
+        if !self.is_square() {
+            return Err(MatrixError::InvalidOperation(
+                "Inverse requires a square matrix".to_string(),
+            ));
+        }
+
+        let det = self.determinant()?;
+
+        // Check if determinant is zero (symbolically or numerically)
+        let is_zero = match &det {
+            Expression::Integer(0) => true,
+            Expression::Float(f) if f.abs() < 1e-10 => true,
+            _ => {
+                // Try numerical evaluation for expressions that simplify to zero
+                let empty = std::collections::HashMap::new();
+                det.evaluate(&empty).map_or(false, |v| v.abs() < 1e-10)
+            }
+        };
+
+        if is_zero {
+            return Err(MatrixError::InvalidOperation(
+                "Matrix is singular (determinant is zero)".to_string(),
+            ));
+        }
+
+        // For 1x1 matrix
+        if self.rows == 1 {
+            let inv_element = Expression::Binary(
+                crate::ast::BinaryOp::Div,
+                Box::new(Expression::Integer(1)),
+                Box::new(self.elements[0][0].clone()),
+            )
+            .simplify();
+            return MatrixExpr::from_elements(vec![vec![inv_element]]);
+        }
+
+        let adj = self.adjugate()?;
+
+        // Multiply adjugate by 1/det
+        let inv_det = Expression::Binary(
+            crate::ast::BinaryOp::Div,
+            Box::new(Expression::Integer(1)),
+            Box::new(det),
+        );
+
+        Ok(adj.scalar_mul(&inv_det).simplify())
+    }
+
+    /// Check if the matrix is singular (determinant is zero when evaluated numerically).
+    ///
+    /// Returns `None` if the determinant cannot be evaluated numerically.
+    pub fn is_singular(&self, vars: &std::collections::HashMap<String, f64>) -> Option<bool> {
+        let det = self.determinant().ok()?;
+        let det_value = det.evaluate(vars)?;
+        Some(det_value.abs() < 1e-10)
+    }
+
     /// Render the matrix as LaTeX.
     ///
     /// # Examples
@@ -954,6 +1255,233 @@ mod tests {
                     ab_t.get(i, j).unwrap().evaluate(&vars),
                     bt_at.get(i, j).unwrap().evaluate(&vars)
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn test_determinant_2x2() {
+        // det([[1, 2], [3, 4]]) = 1*4 - 2*3 = -2
+        let m = MatrixExpr::from_elements(vec![
+            vec![int(1), int(2)],
+            vec![int(3), int(4)],
+        ])
+        .unwrap();
+
+        let det = m.determinant().unwrap();
+        let vars = HashMap::new();
+        assert_eq!(det.evaluate(&vars), Some(-2.0));
+    }
+
+    #[test]
+    fn test_determinant_3x3() {
+        // det([[1, 2, 3], [4, 5, 6], [7, 8, 9]]) = 0 (rows are linearly dependent)
+        let m = MatrixExpr::from_elements(vec![
+            vec![int(1), int(2), int(3)],
+            vec![int(4), int(5), int(6)],
+            vec![int(7), int(8), int(9)],
+        ])
+        .unwrap();
+
+        let det = m.determinant().unwrap();
+        let vars = HashMap::new();
+        assert_eq!(det.evaluate(&vars), Some(0.0));
+    }
+
+    #[test]
+    fn test_determinant_3x3_nonzero() {
+        // det([[1, 2, 3], [0, 1, 4], [5, 6, 0]]) = 1
+        let m = MatrixExpr::from_elements(vec![
+            vec![int(1), int(2), int(3)],
+            vec![int(0), int(1), int(4)],
+            vec![int(5), int(6), int(0)],
+        ])
+        .unwrap();
+
+        let det = m.determinant().unwrap();
+        let vars = HashMap::new();
+        assert_eq!(det.evaluate(&vars), Some(1.0));
+    }
+
+    #[test]
+    fn test_determinant_identity() {
+        // det(I) = 1
+        let i3 = MatrixExpr::identity(3);
+        let det = i3.determinant().unwrap();
+        let vars = HashMap::new();
+        assert_eq!(det.evaluate(&vars), Some(1.0));
+    }
+
+    #[test]
+    fn test_determinant_non_square() {
+        let m = MatrixExpr::from_elements(vec![
+            vec![int(1), int(2), int(3)],
+            vec![int(4), int(5), int(6)],
+        ])
+        .unwrap();
+
+        let result = m.determinant();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_inverse_2x2() {
+        // A = [[4, 7], [2, 6]], det(A) = 24 - 14 = 10
+        // A^(-1) = (1/10) * [[6, -7], [-2, 4]] = [[0.6, -0.7], [-0.2, 0.4]]
+        let m = MatrixExpr::from_elements(vec![
+            vec![int(4), int(7)],
+            vec![int(2), int(6)],
+        ])
+        .unwrap();
+
+        let inv = m.inverse().unwrap();
+        let vars = HashMap::new();
+
+        // Verify A * A^(-1) = I
+        let product = m.mul(&inv).unwrap();
+        let result = product.evaluate(&vars).unwrap();
+
+        assert!((result[0][0] - 1.0).abs() < 1e-10);
+        assert!((result[0][1] - 0.0).abs() < 1e-10);
+        assert!((result[1][0] - 0.0).abs() < 1e-10);
+        assert!((result[1][1] - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_inverse_3x3() {
+        // A = [[1, 2, 3], [0, 1, 4], [5, 6, 0]]
+        let m = MatrixExpr::from_elements(vec![
+            vec![int(1), int(2), int(3)],
+            vec![int(0), int(1), int(4)],
+            vec![int(5), int(6), int(0)],
+        ])
+        .unwrap();
+
+        let inv = m.inverse().unwrap();
+        let vars = HashMap::new();
+
+        // Verify A * A^(-1) = I
+        let product = m.mul(&inv).unwrap();
+        let result = product.evaluate(&vars).unwrap();
+
+        for i in 0..3 {
+            for j in 0..3 {
+                let expected = if i == j { 1.0 } else { 0.0 };
+                assert!(
+                    (result[i][j] - expected).abs() < 1e-10,
+                    "Expected {} at ({}, {}), got {}",
+                    expected,
+                    i,
+                    j,
+                    result[i][j]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_inverse_singular_matrix() {
+        // Singular matrix (det = 0)
+        let m = MatrixExpr::from_elements(vec![
+            vec![int(1), int(2)],
+            vec![int(2), int(4)],
+        ])
+        .unwrap();
+
+        let result = m.inverse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_determinant_symbolic() {
+        // det([[a, b], [c, d]]) = ad - bc
+        let m = MatrixExpr::from_elements(vec![
+            vec![var("a"), var("b")],
+            vec![var("c"), var("d")],
+        ])
+        .unwrap();
+
+        let det = m.determinant().unwrap();
+
+        let mut vars = HashMap::new();
+        vars.insert("a".to_string(), 2.0);
+        vars.insert("b".to_string(), 3.0);
+        vars.insert("c".to_string(), 4.0);
+        vars.insert("d".to_string(), 5.0);
+
+        // det = 2*5 - 3*4 = 10 - 12 = -2
+        assert_eq!(det.evaluate(&vars), Some(-2.0));
+    }
+
+    #[test]
+    fn test_submatrix() {
+        let m = MatrixExpr::from_elements(vec![
+            vec![int(1), int(2), int(3)],
+            vec![int(4), int(5), int(6)],
+            vec![int(7), int(8), int(9)],
+        ])
+        .unwrap();
+
+        // Remove row 1, col 1 -> [[1, 3], [7, 9]]
+        let sub = m.submatrix(1, 1).unwrap();
+        let vars = HashMap::new();
+
+        assert_eq!(sub.rows(), 2);
+        assert_eq!(sub.cols(), 2);
+        assert_eq!(sub.get(0, 0).unwrap().evaluate(&vars), Some(1.0));
+        assert_eq!(sub.get(0, 1).unwrap().evaluate(&vars), Some(3.0));
+        assert_eq!(sub.get(1, 0).unwrap().evaluate(&vars), Some(7.0));
+        assert_eq!(sub.get(1, 1).unwrap().evaluate(&vars), Some(9.0));
+    }
+
+    #[test]
+    fn test_adjugate_2x2() {
+        // adj([[a, b], [c, d]]) = [[d, -b], [-c, a]]
+        let m = MatrixExpr::from_elements(vec![
+            vec![int(1), int(2)],
+            vec![int(3), int(4)],
+        ])
+        .unwrap();
+
+        let adj = m.adjugate().unwrap();
+        let vars = HashMap::new();
+
+        assert_eq!(adj.get(0, 0).unwrap().evaluate(&vars), Some(4.0));
+        assert_eq!(adj.get(0, 1).unwrap().evaluate(&vars), Some(-2.0));
+        assert_eq!(adj.get(1, 0).unwrap().evaluate(&vars), Some(-3.0));
+        assert_eq!(adj.get(1, 1).unwrap().evaluate(&vars), Some(1.0));
+    }
+
+    #[test]
+    fn test_is_singular() {
+        let singular = MatrixExpr::from_elements(vec![
+            vec![int(1), int(2)],
+            vec![int(2), int(4)],
+        ])
+        .unwrap();
+
+        let non_singular = MatrixExpr::from_elements(vec![
+            vec![int(1), int(2)],
+            vec![int(3), int(4)],
+        ])
+        .unwrap();
+
+        let vars = HashMap::new();
+        assert_eq!(singular.is_singular(&vars), Some(true));
+        assert_eq!(non_singular.is_singular(&vars), Some(false));
+    }
+
+    #[test]
+    fn test_inverse_identity() {
+        // I^(-1) = I
+        let i3 = MatrixExpr::identity(3);
+        let inv = i3.inverse().unwrap();
+        let vars = HashMap::new();
+
+        for i in 0..3 {
+            for j in 0..3 {
+                let expected = if i == j { 1.0 } else { 0.0 };
+                assert_eq!(inv.get(i, j).unwrap().evaluate(&vars), Some(expected));
             }
         }
     }
