@@ -558,3 +558,188 @@ fn test_equation_creation() {
     assert_eq!(format!("{}", eq.left), "x");
     assert_eq!(format!("{}", eq.right), "5");
 }
+
+// ============================================================================
+// Symbolic Constants Tests
+// ============================================================================
+
+#[test]
+fn test_symbolic_constant_pi_display() {
+    let pi = SymbolicConstant::Pi;
+    assert_eq!(format!("{}", pi), "π");
+}
+
+#[test]
+fn test_symbolic_constant_e_display() {
+    let e = SymbolicConstant::E;
+    assert_eq!(format!("{}", e), "e");
+}
+
+#[test]
+fn test_symbolic_constant_i_display() {
+    let i = SymbolicConstant::I;
+    assert_eq!(format!("{}", i), "i");
+}
+
+#[test]
+fn test_expression_constant_pi_display() {
+    let expr = Expression::Constant(SymbolicConstant::Pi);
+    assert_eq!(format!("{}", expr), "π");
+}
+
+#[test]
+fn test_expression_constant_e_display() {
+    let expr = Expression::Constant(SymbolicConstant::E);
+    assert_eq!(format!("{}", expr), "e");
+}
+
+#[test]
+fn test_expression_constant_i_display() {
+    let expr = Expression::Constant(SymbolicConstant::I);
+    assert_eq!(format!("{}", expr), "i");
+}
+
+#[test]
+fn test_helper_constructor_pi() {
+    let pi = Expression::pi();
+    assert!(matches!(pi, Expression::Constant(SymbolicConstant::Pi)));
+    assert_eq!(format!("{}", pi), "π");
+}
+
+#[test]
+fn test_helper_constructor_euler() {
+    let e = Expression::euler();
+    assert!(matches!(e, Expression::Constant(SymbolicConstant::E)));
+    assert_eq!(format!("{}", e), "e");
+}
+
+#[test]
+fn test_helper_constructor_i() {
+    let i = Expression::i();
+    assert!(matches!(i, Expression::Constant(SymbolicConstant::I)));
+    assert_eq!(format!("{}", i), "i");
+}
+
+#[test]
+fn test_evaluate_constant_pi() {
+    let pi = Expression::pi();
+    let vars = HashMap::new();
+    let result = pi.evaluate(&vars);
+    assert!(result.is_some());
+    let val = result.unwrap();
+    // Check it's approximately π
+    assert!((val - std::f64::consts::PI).abs() < 1e-15);
+}
+
+#[test]
+fn test_evaluate_constant_e() {
+    let e = Expression::euler();
+    let vars = HashMap::new();
+    let result = e.evaluate(&vars);
+    assert!(result.is_some());
+    let val = result.unwrap();
+    // Check it's approximately e
+    assert!((val - std::f64::consts::E).abs() < 1e-15);
+}
+
+#[test]
+fn test_evaluate_constant_i_returns_none() {
+    // The imaginary unit cannot be evaluated to a real f64
+    let i = Expression::i();
+    let vars = HashMap::new();
+    let result = i.evaluate(&vars);
+    assert!(result.is_none());
+}
+
+#[test]
+fn test_differentiate_constant_pi() {
+    // d/dx(π) = 0
+    let pi = Expression::pi();
+    let derivative = pi.differentiate("x");
+    assert!(matches!(derivative, Expression::Integer(0)));
+}
+
+#[test]
+fn test_differentiate_constant_e() {
+    // d/dx(e) = 0
+    let e = Expression::euler();
+    let derivative = e.differentiate("x");
+    assert!(matches!(derivative, Expression::Integer(0)));
+}
+
+#[test]
+fn test_differentiate_constant_i() {
+    // d/dx(i) = 0
+    let i = Expression::i();
+    let derivative = i.differentiate("x");
+    assert!(matches!(derivative, Expression::Integer(0)));
+}
+
+#[test]
+fn test_constant_in_expression_2_pi_r() {
+    // 2 * π * r
+    let two = Expression::Integer(2);
+    let pi = Expression::pi();
+    let r = Expression::Variable(Variable::new("r"));
+
+    let two_pi = Expression::Binary(BinaryOp::Mul, Box::new(two), Box::new(pi));
+    let circumference = Expression::Binary(BinaryOp::Mul, Box::new(two_pi), Box::new(r));
+
+    assert_eq!(format!("{}", circumference), "2 * π * r");
+
+    // Evaluate with r = 1
+    let mut vars = HashMap::new();
+    vars.insert("r".to_string(), 1.0);
+    let result = circumference.evaluate(&vars);
+    assert!(result.is_some());
+    let val = result.unwrap();
+    assert!((val - 2.0 * std::f64::consts::PI).abs() < 1e-14);
+}
+
+#[test]
+fn test_constant_in_expression_e_to_x() {
+    // e^x
+    let e = Expression::euler();
+    let x = Expression::Variable(Variable::new("x"));
+    let expr = Expression::Power(Box::new(e), Box::new(x));
+
+    assert_eq!(format!("{}", expr), "e^x");
+
+    // Evaluate with x = 1 => e^1 = e
+    let mut vars = HashMap::new();
+    vars.insert("x".to_string(), 1.0);
+    let result = expr.evaluate(&vars);
+    assert!(result.is_some());
+    let val = result.unwrap();
+    assert!((val - std::f64::consts::E).abs() < 1e-14);
+
+    // Evaluate with x = 0 => e^0 = 1
+    vars.insert("x".to_string(), 0.0);
+    let result = expr.evaluate(&vars);
+    assert!(result.is_some());
+    assert!((result.unwrap() - 1.0).abs() < 1e-14);
+}
+
+#[test]
+fn test_symbolic_constant_equality() {
+    assert_eq!(SymbolicConstant::Pi, SymbolicConstant::Pi);
+    assert_eq!(SymbolicConstant::E, SymbolicConstant::E);
+    assert_eq!(SymbolicConstant::I, SymbolicConstant::I);
+    assert_ne!(SymbolicConstant::Pi, SymbolicConstant::E);
+    assert_ne!(SymbolicConstant::E, SymbolicConstant::I);
+    assert_ne!(SymbolicConstant::Pi, SymbolicConstant::I);
+}
+
+#[test]
+fn test_symbolic_constant_clone() {
+    let pi = SymbolicConstant::Pi;
+    let pi_clone = pi.clone();
+    assert_eq!(pi, pi_clone);
+}
+
+#[test]
+fn test_expression_constant_clone() {
+    let expr = Expression::Constant(SymbolicConstant::Pi);
+    let expr_clone = expr.clone();
+    assert_eq!(format!("{}", expr), format!("{}", expr_clone));
+}

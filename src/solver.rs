@@ -1029,6 +1029,7 @@ fn is_linear_equation(expr: &Expression) -> bool {
         | Expression::Rational(_)
         | Expression::Float(_)
         | Expression::Complex(_)
+        | Expression::Constant(_)
         | Expression::Variable(_) => true,
 
         Expression::Unary(_, inner) => is_linear_equation(inner),
@@ -1084,7 +1085,8 @@ fn is_linear_in_variable(expr: &Expression, var: &str) -> bool {
         Expression::Integer(_)
         | Expression::Rational(_)
         | Expression::Float(_)
-        | Expression::Complex(_) => true,
+        | Expression::Complex(_)
+        | Expression::Constant(_) => true,
 
         Expression::Variable(v) => {
             // The target variable itself is linear

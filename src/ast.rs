@@ -500,6 +500,57 @@ impl Equation {
 /// - [`UnaryOp`] - Available unary operators
 /// - [`BinaryOp`] - Available binary operators
 /// - [`Function`] - Available mathematical functions
+/// - [`SymbolicConstant`] - Mathematical constants (Pi, E, I)
+
+/// Symbolic mathematical constants.
+///
+/// Represents well-known mathematical constants that should be preserved symbolically
+/// during manipulation and only evaluated numerically when explicitly requested.
+///
+/// # Examples
+///
+/// ```
+/// use mathsolver_core::ast::{Expression, SymbolicConstant};
+///
+/// // Create symbolic pi
+/// let pi = Expression::Constant(SymbolicConstant::Pi);
+/// assert_eq!(format!("{}", pi), "π");
+///
+/// // Create Euler's number
+/// let e = Expression::Constant(SymbolicConstant::E);
+/// assert_eq!(format!("{}", e), "e");
+///
+/// // Create imaginary unit
+/// let i = Expression::Constant(SymbolicConstant::I);
+/// assert_eq!(format!("{}", i), "i");
+/// ```
+///
+/// # Numerical Values
+///
+/// When evaluated numerically:
+/// - `Pi` → 3.141592653589793 (std::f64::consts::PI)
+/// - `E` → 2.718281828459045 (std::f64::consts::E)
+/// - `I` → Complex(0, 1) (imaginary unit)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SymbolicConstant {
+    /// Pi (π ≈ 3.14159...) - ratio of circle's circumference to diameter
+    Pi,
+    /// Euler's number (e ≈ 2.71828...) - base of natural logarithm
+    E,
+    /// Imaginary unit (i) - satisfies i² = -1
+    I,
+}
+
+impl fmt::Display for SymbolicConstant {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SymbolicConstant::Pi => write!(f, "π"),
+            SymbolicConstant::E => write!(f, "e"),
+            SymbolicConstant::I => write!(f, "i"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     /// Integer literal.
@@ -568,6 +619,31 @@ pub enum Expression {
     /// let z2 = Expression::Complex(Complex64::new(0.0, -2.0));
     /// ```
     Complex(Complex64),
+
+    /// Symbolic mathematical constant.
+    ///
+    /// Represents well-known constants (π, e, i) that are preserved symbolically
+    /// during manipulation and only evaluated numerically when requested.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::{Expression, SymbolicConstant};
+    ///
+    /// // Pi: π
+    /// let pi = Expression::Constant(SymbolicConstant::Pi);
+    ///
+    /// // Euler's number: e
+    /// let euler = Expression::Constant(SymbolicConstant::E);
+    ///
+    /// // Imaginary unit: i
+    /// let imag = Expression::Constant(SymbolicConstant::I);
+    /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`SymbolicConstant`] - Available symbolic constants
+    Constant(SymbolicConstant),
 
     /// Variable reference.
     ///
@@ -1276,6 +1352,7 @@ impl Expression {
                     write!(f, "{}{}i", c.re, c.im)
                 }
             }
+            Expression::Constant(c) => write!(f, "{}", c),
             Expression::Variable(v) => write!(f, "{}", v),
             Expression::Unary(UnaryOp::Neg, expr) => {
                 write!(f, "-")?;
@@ -1346,6 +1423,60 @@ impl Expression {
                 Ok(())
             }
         }
+    }
+
+    /// Create a symbolic Pi (π) constant.
+    ///
+    /// Returns an expression representing the mathematical constant π (approximately 3.14159).
+    /// This is preserved symbolically during manipulation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::Expression;
+    ///
+    /// let pi = Expression::pi();
+    /// assert_eq!(format!("{}", pi), "π");
+    /// ```
+    #[inline]
+    pub fn pi() -> Self {
+        Expression::Constant(SymbolicConstant::Pi)
+    }
+
+    /// Create a symbolic Euler's number (e) constant.
+    ///
+    /// Returns an expression representing Euler's number e (approximately 2.71828).
+    /// This is the base of the natural logarithm.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::Expression;
+    ///
+    /// let e = Expression::euler();
+    /// assert_eq!(format!("{}", e), "e");
+    /// ```
+    #[inline]
+    pub fn euler() -> Self {
+        Expression::Constant(SymbolicConstant::E)
+    }
+
+    /// Create a symbolic imaginary unit (i) constant.
+    ///
+    /// Returns an expression representing the imaginary unit i, where i² = -1.
+    /// This allows symbolic manipulation of complex expressions.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mathsolver_core::ast::Expression;
+    ///
+    /// let i = Expression::i();
+    /// assert_eq!(format!("{}", i), "i");
+    /// ```
+    #[inline]
+    pub fn i() -> Self {
+        Expression::Constant(SymbolicConstant::I)
     }
 
     /// Returns a HashSet of all variable names in the expression.
@@ -2345,11 +2476,12 @@ impl Expression {
     /// - [`evaluate`](Expression::evaluate) - Numerically evaluate the derivative at specific variable values
     pub fn differentiate(&self, with_respect_to: &str) -> Expression {
         match self {
-            // Constant rule: d/dx[c] = 0
+            // Constant rule: d/dx[c] = 0 (for any constant including π, e, i)
             Expression::Integer(_)
             | Expression::Rational(_)
             | Expression::Float(_)
-            | Expression::Complex(_) => Expression::Integer(0),
+            | Expression::Complex(_)
+            | Expression::Constant(_) => Expression::Integer(0),
 
             // Variable rule: d/dx[x] = 1, d/dx[y] = 0
             Expression::Variable(v) => {
@@ -2900,6 +3032,11 @@ impl Expression {
                     None
                 }
             }
+            Expression::Constant(c) => match c {
+                SymbolicConstant::Pi => Some(std::f64::consts::PI),
+                SymbolicConstant::E => Some(std::f64::consts::E),
+                SymbolicConstant::I => None, // Imaginary unit cannot be evaluated to real f64
+            },
             Expression::Variable(v) => vars.get(&v.name).copied(),
             Expression::Unary(op, expr) => {
                 let val = expr.evaluate(vars)?;
