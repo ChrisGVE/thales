@@ -412,7 +412,8 @@ pub use transforms::{
 pub use matrix::{MatrixExpr, MatrixError, BracketStyle};
 pub use precision::{EvalContext, EvalError, PrecisionMode, RoundingMode, Value};
 pub use integration::{
-    integrate, integrate_by_substitution, integrate_with_substitution, IntegrationError,
+    integrate, integrate_by_parts, integrate_by_parts_with_steps, integrate_by_substitution,
+    integrate_with_substitution, tabular_integration, IntegrationError,
 };
 pub use inequality::{
     solve_inequality, solve_system, Bound, Inequality, InequalityError, IntervalSolution,
