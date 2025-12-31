@@ -380,6 +380,7 @@
 pub mod ast;
 pub mod dimensions;
 pub mod latex;
+pub mod limits;
 pub mod numerical;
 pub mod parser;
 pub mod pattern;
