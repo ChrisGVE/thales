@@ -392,6 +392,7 @@ pub mod precision;
 pub mod integration;
 pub mod inequality;
 pub mod trigonometric;
+pub mod ode;
 
 // FFI module (conditionally compiled for FFI builds)
 #[cfg(feature = "ffi")]
@@ -426,6 +427,9 @@ pub use trigonometric::{
     pythagorean_rules, quotient_rules, simplify_double_angle, simplify_pythagorean,
     simplify_quotient, simplify_trig, simplify_trig_step, simplify_trig_with_steps,
     special_value_rules,
+};
+pub use ode::{
+    solve_ivp, solve_linear, solve_separable, FirstOrderODE, ODEError, ODESolution,
 };
 
 /// Library version information.
