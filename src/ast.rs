@@ -1919,12 +1919,63 @@ impl Expression {
                         if Self::is_zero(&right_simplified) {
                             return left_simplified;
                         }
+                        // Like terms: 2x + 3x → 5x
+                        let (coef1, base1) = Self::extract_coefficient_and_base(&left_simplified);
+                        let (coef2, base2) = Self::extract_coefficient_and_base(&right_simplified);
+                        if Self::bases_equal(&base1, &base2) && !Self::is_one(&base1) {
+                            let new_coef = coef1 + coef2;
+                            if new_coef.abs() < 1e-10 {
+                                return Expression::Integer(0);
+                            }
+                            let coef_expr = Self::from_numeric_value(new_coef);
+                            if Self::is_one(&coef_expr) {
+                                return base1;
+                            }
+                            return Expression::Binary(
+                                BinaryOp::Mul,
+                                Box::new(coef_expr),
+                                Box::new(base1),
+                            );
+                        }
                         None
                     }
                     BinaryOp::Sub => {
                         // x - 0 → x
                         if Self::is_zero(&right_simplified) {
                             return left_simplified;
+                        }
+                        // x - x → 0
+                        if left_simplified == right_simplified {
+                            return Expression::Integer(0);
+                        }
+                        // Like terms: 5x - 3x → 2x
+                        let (coef1, base1) = Self::extract_coefficient_and_base(&left_simplified);
+                        let (coef2, base2) = Self::extract_coefficient_and_base(&right_simplified);
+                        if Self::bases_equal(&base1, &base2) && !Self::is_one(&base1) {
+                            let new_coef = coef1 - coef2;
+                            if new_coef.abs() < 1e-10 {
+                                return Expression::Integer(0);
+                            }
+                            let coef_expr = Self::from_numeric_value(new_coef);
+                            if Self::is_one(&coef_expr) {
+                                return base1;
+                            }
+                            if new_coef < 0.0 {
+                                // Negative coefficient: return as -|coef| * base
+                                return Expression::Unary(
+                                    UnaryOp::Neg,
+                                    Box::new(Expression::Binary(
+                                        BinaryOp::Mul,
+                                        Box::new(Self::from_numeric_value(-new_coef)),
+                                        Box::new(base1),
+                                    )),
+                                );
+                            }
+                            return Expression::Binary(
+                                BinaryOp::Mul,
+                                Box::new(coef_expr),
+                                Box::new(base1),
+                            );
                         }
                         None
                     }
@@ -1944,6 +1995,53 @@ impl Expression {
                         // x * 1 → x
                         if Self::is_one(&right_simplified) {
                             return left_simplified;
+                        }
+                        // x^a * x^b → x^(a+b) - power law for same base
+                        if let (
+                            Expression::Power(base1, exp1),
+                            Expression::Power(base2, exp2),
+                        ) = (&left_simplified, &right_simplified)
+                        {
+                            if base1 == base2 {
+                                let new_exp = Expression::Binary(
+                                    BinaryOp::Add,
+                                    exp1.clone(),
+                                    exp2.clone(),
+                                )
+                                .simplify();
+                                return Expression::Power(base1.clone(), Box::new(new_exp));
+                            }
+                        }
+                        // x * x → x^2
+                        if left_simplified == right_simplified {
+                            return Expression::Power(
+                                Box::new(left_simplified),
+                                Box::new(Expression::Integer(2)),
+                            );
+                        }
+                        // x * x^n → x^(n+1)
+                        if let Expression::Power(base, exp) = &right_simplified {
+                            if **base == left_simplified {
+                                let new_exp = Expression::Binary(
+                                    BinaryOp::Add,
+                                    exp.clone(),
+                                    Box::new(Expression::Integer(1)),
+                                )
+                                .simplify();
+                                return Expression::Power(base.clone(), Box::new(new_exp));
+                            }
+                        }
+                        // x^n * x → x^(n+1)
+                        if let Expression::Power(base, exp) = &left_simplified {
+                            if **base == right_simplified {
+                                let new_exp = Expression::Binary(
+                                    BinaryOp::Add,
+                                    exp.clone(),
+                                    Box::new(Expression::Integer(1)),
+                                )
+                                .simplify();
+                                return Expression::Power(base.clone(), Box::new(new_exp));
+                            }
                         }
                         None
                     }
@@ -2017,6 +2115,16 @@ impl Expression {
                 // x^1 → x
                 if Self::is_one(&exp_simplified) {
                     return base_simplified;
+                }
+                // (x^a)^b → x^(a*b) - power of power law
+                if let Expression::Power(inner_base, inner_exp) = &base_simplified {
+                    let new_exp = Expression::Binary(
+                        BinaryOp::Mul,
+                        inner_exp.clone(),
+                        Box::new(exp_simplified.clone()),
+                    )
+                    .simplify();
+                    return Expression::Power(inner_base.clone(), Box::new(new_exp));
                 }
 
                 // Constant folding: if both base and exponent are numeric constants, evaluate
@@ -2222,6 +2330,69 @@ impl Expression {
         } else {
             Expression::Float(value)
         }
+    }
+
+    /// Extract coefficient and base from a term for like-terms collection.
+    ///
+    /// Decomposes expressions into (coefficient, base) pairs:
+    /// - `c * x` → `(c, x)` where c is numeric
+    /// - `x * c` → `(c, x)` where c is numeric
+    /// - `x` → `(1, x)` for any non-numeric expression
+    /// - `-x` → `(-1, x)` for negated expressions
+    /// - `c` → `(c, 1)` for pure numeric constants
+    ///
+    /// Used by `simplify()` to combine like terms (e.g., 2x + 3x → 5x).
+    fn extract_coefficient_and_base(expr: &Expression) -> (f64, Expression) {
+        match expr {
+            // Pure numeric constant: coefficient with base 1
+            Expression::Integer(n) => (*n as f64, Expression::Integer(1)),
+            Expression::Float(x) => (*x, Expression::Integer(1)),
+            Expression::Rational(r) => {
+                (*r.numer() as f64 / *r.denom() as f64, Expression::Integer(1))
+            }
+            // Negation: extract inner and negate coefficient
+            Expression::Unary(UnaryOp::Neg, inner) => {
+                let (coef, base) = Self::extract_coefficient_and_base(inner);
+                (-coef, base)
+            }
+            // Multiplication: check if one side is numeric
+            Expression::Binary(BinaryOp::Mul, left, right) => {
+                if let Some(coef) = Self::extract_numeric_value(left) {
+                    // c * expr
+                    let (inner_coef, base) = Self::extract_coefficient_and_base(right);
+                    (coef * inner_coef, base)
+                } else if let Some(coef) = Self::extract_numeric_value(right) {
+                    // expr * c
+                    let (inner_coef, base) = Self::extract_coefficient_and_base(left);
+                    (coef * inner_coef, base)
+                } else {
+                    // Neither side is numeric, treat whole expr as base
+                    (1.0, expr.clone())
+                }
+            }
+            // Division by constant: treat as multiplication by 1/c
+            Expression::Binary(BinaryOp::Div, left, right) => {
+                if let Some(divisor) = Self::extract_numeric_value(right) {
+                    if divisor.abs() > 1e-10 {
+                        let (coef, base) = Self::extract_coefficient_and_base(left);
+                        (coef / divisor, base)
+                    } else {
+                        (1.0, expr.clone())
+                    }
+                } else {
+                    (1.0, expr.clone())
+                }
+            }
+            // Any other expression: coefficient is 1
+            _ => (1.0, expr.clone()),
+        }
+    }
+
+    /// Check if two expressions are structurally equal as bases for like-terms.
+    ///
+    /// Used by `simplify()` to determine if two terms can be combined.
+    fn bases_equal(base1: &Expression, base2: &Expression) -> bool {
+        base1 == base2
     }
 
     /// Compute the symbolic derivative of this expression with respect to a variable.

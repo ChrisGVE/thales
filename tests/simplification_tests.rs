@@ -518,3 +518,328 @@ fn test_identity_operations_priority_over_folding() {
     let simplified = mul.simplify();
     assert_eq!(simplified, Expression::Integer(0));
 }
+
+// ============================================================================
+// Power Law Tests
+// ============================================================================
+
+#[test]
+fn test_power_law_same_base_multiply() {
+    // x^2 * x^3 → x^5
+    let x = Expression::Variable(Variable::new("x"));
+    let x_squared = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(2)));
+    let x_cubed = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(3)));
+    let product = Expression::Binary(BinaryOp::Mul, Box::new(x_squared), Box::new(x_cubed));
+
+    let simplified = product.simplify();
+
+    if let Expression::Power(base, exp) = simplified {
+        assert_eq!(*base, x);
+        assert_eq!(*exp, Expression::Integer(5));
+    } else {
+        panic!("Expected Power, got {:?}", simplified);
+    }
+}
+
+#[test]
+fn test_power_law_x_times_x() {
+    // x * x → x^2
+    let x = Expression::Variable(Variable::new("x"));
+    let product = Expression::Binary(BinaryOp::Mul, Box::new(x.clone()), Box::new(x.clone()));
+
+    let simplified = product.simplify();
+
+    if let Expression::Power(base, exp) = simplified {
+        assert_eq!(*base, x);
+        assert_eq!(*exp, Expression::Integer(2));
+    } else {
+        panic!("Expected Power, got {:?}", simplified);
+    }
+}
+
+#[test]
+fn test_power_law_x_times_x_squared() {
+    // x * x^2 → x^3
+    let x = Expression::Variable(Variable::new("x"));
+    let x_squared = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(2)));
+    let product = Expression::Binary(BinaryOp::Mul, Box::new(x.clone()), Box::new(x_squared));
+
+    let simplified = product.simplify();
+
+    if let Expression::Power(base, exp) = simplified {
+        assert_eq!(*base, x);
+        assert_eq!(*exp, Expression::Integer(3));
+    } else {
+        panic!("Expected Power, got {:?}", simplified);
+    }
+}
+
+#[test]
+fn test_power_law_x_squared_times_x() {
+    // x^2 * x → x^3
+    let x = Expression::Variable(Variable::new("x"));
+    let x_squared = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(2)));
+    let product = Expression::Binary(BinaryOp::Mul, Box::new(x_squared), Box::new(x.clone()));
+
+    let simplified = product.simplify();
+
+    if let Expression::Power(base, exp) = simplified {
+        assert_eq!(*base, x);
+        assert_eq!(*exp, Expression::Integer(3));
+    } else {
+        panic!("Expected Power, got {:?}", simplified);
+    }
+}
+
+#[test]
+fn test_power_of_power() {
+    // (x^2)^3 → x^6
+    let x = Expression::Variable(Variable::new("x"));
+    let x_squared = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(2)));
+    let power_of_power = Expression::Power(Box::new(x_squared), Box::new(Expression::Integer(3)));
+
+    let simplified = power_of_power.simplify();
+
+    if let Expression::Power(base, exp) = simplified {
+        assert_eq!(*base, x);
+        assert_eq!(*exp, Expression::Integer(6));
+    } else {
+        panic!("Expected Power, got {:?}", simplified);
+    }
+}
+
+#[test]
+fn test_power_of_power_with_variables() {
+    // (x^a)^b → x^(a*b)
+    let x = Expression::Variable(Variable::new("x"));
+    let a = Expression::Variable(Variable::new("a"));
+    let b = Expression::Variable(Variable::new("b"));
+    let x_to_a = Expression::Power(Box::new(x.clone()), Box::new(a.clone()));
+    let power_of_power = Expression::Power(Box::new(x_to_a), Box::new(b.clone()));
+
+    let simplified = power_of_power.simplify();
+
+    if let Expression::Power(base, exp) = simplified {
+        assert_eq!(*base, x);
+        // exp should be a * b
+        if let Expression::Binary(BinaryOp::Mul, left, right) = *exp {
+            assert_eq!(*left, a);
+            assert_eq!(*right, b);
+        } else {
+            panic!("Expected Binary Mul for exponent, got {:?}", exp);
+        }
+    } else {
+        panic!("Expected Power, got {:?}", simplified);
+    }
+}
+
+#[test]
+fn test_power_law_chain() {
+    // x^2 * x^3 * x → x^6 (via multiple simplifications)
+    let x = Expression::Variable(Variable::new("x"));
+    let x_squared = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(2)));
+    let x_cubed = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(3)));
+
+    // (x^2 * x^3) * x
+    let first_product = Expression::Binary(BinaryOp::Mul, Box::new(x_squared), Box::new(x_cubed));
+    let full_product =
+        Expression::Binary(BinaryOp::Mul, Box::new(first_product), Box::new(x.clone()));
+
+    let simplified = full_product.simplify();
+
+    if let Expression::Power(base, exp) = simplified {
+        assert_eq!(*base, x);
+        assert_eq!(*exp, Expression::Integer(6));
+    } else {
+        panic!("Expected Power, got {:?}", simplified);
+    }
+}
+
+// ============================================================================
+// Like Terms Collection Tests
+// ============================================================================
+
+#[test]
+fn test_like_terms_2x_plus_3x() {
+    // 2x + 3x → 5x
+    let x = Expression::Variable(Variable::new("x"));
+    let two_x = Expression::Binary(
+        BinaryOp::Mul,
+        Box::new(Expression::Integer(2)),
+        Box::new(x.clone()),
+    );
+    let three_x = Expression::Binary(
+        BinaryOp::Mul,
+        Box::new(Expression::Integer(3)),
+        Box::new(x.clone()),
+    );
+    let sum = Expression::Binary(BinaryOp::Add, Box::new(two_x), Box::new(three_x));
+
+    let simplified = sum.simplify();
+
+    if let Expression::Binary(BinaryOp::Mul, coef, base) = simplified {
+        assert_eq!(*coef, Expression::Integer(5));
+        assert_eq!(*base, x);
+    } else {
+        panic!("Expected Binary Mul, got {:?}", simplified);
+    }
+}
+
+#[test]
+fn test_like_terms_x_plus_x() {
+    // x + x → 2x
+    let x = Expression::Variable(Variable::new("x"));
+    let sum = Expression::Binary(BinaryOp::Add, Box::new(x.clone()), Box::new(x.clone()));
+
+    let simplified = sum.simplify();
+
+    if let Expression::Binary(BinaryOp::Mul, coef, base) = simplified {
+        assert_eq!(*coef, Expression::Integer(2));
+        assert_eq!(*base, x);
+    } else {
+        panic!("Expected Binary Mul, got {:?}", simplified);
+    }
+}
+
+#[test]
+fn test_like_terms_5x_minus_3x() {
+    // 5x - 3x → 2x
+    let x = Expression::Variable(Variable::new("x"));
+    let five_x = Expression::Binary(
+        BinaryOp::Mul,
+        Box::new(Expression::Integer(5)),
+        Box::new(x.clone()),
+    );
+    let three_x = Expression::Binary(
+        BinaryOp::Mul,
+        Box::new(Expression::Integer(3)),
+        Box::new(x.clone()),
+    );
+    let diff = Expression::Binary(BinaryOp::Sub, Box::new(five_x), Box::new(three_x));
+
+    let simplified = diff.simplify();
+
+    if let Expression::Binary(BinaryOp::Mul, coef, base) = simplified {
+        assert_eq!(*coef, Expression::Integer(2));
+        assert_eq!(*base, x);
+    } else {
+        panic!("Expected Binary Mul, got {:?}", simplified);
+    }
+}
+
+#[test]
+fn test_like_terms_x_minus_x() {
+    // x - x → 0
+    let x = Expression::Variable(Variable::new("x"));
+    let diff = Expression::Binary(BinaryOp::Sub, Box::new(x.clone()), Box::new(x.clone()));
+
+    let simplified = diff.simplify();
+    assert_eq!(simplified, Expression::Integer(0));
+}
+
+#[test]
+fn test_like_terms_3x_minus_3x() {
+    // 3x - 3x → 0
+    let x = Expression::Variable(Variable::new("x"));
+    let three_x = Expression::Binary(
+        BinaryOp::Mul,
+        Box::new(Expression::Integer(3)),
+        Box::new(x.clone()),
+    );
+    let diff = Expression::Binary(BinaryOp::Sub, Box::new(three_x.clone()), Box::new(three_x));
+
+    let simplified = diff.simplify();
+    assert_eq!(simplified, Expression::Integer(0));
+}
+
+#[test]
+fn test_like_terms_x_squared_plus_3x_squared() {
+    // x^2 + 3x^2 → 4x^2
+    let x = Expression::Variable(Variable::new("x"));
+    let x_squared = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(2)));
+    let three_x_squared = Expression::Binary(
+        BinaryOp::Mul,
+        Box::new(Expression::Integer(3)),
+        Box::new(x_squared.clone()),
+    );
+    let sum = Expression::Binary(
+        BinaryOp::Add,
+        Box::new(x_squared.clone()),
+        Box::new(three_x_squared),
+    );
+
+    let simplified = sum.simplify();
+
+    if let Expression::Binary(BinaryOp::Mul, coef, base) = simplified {
+        assert_eq!(*coef, Expression::Integer(4));
+        // base should be x^2
+        if let Expression::Power(inner_base, exp) = *base {
+            assert_eq!(*inner_base, x);
+            assert_eq!(*exp, Expression::Integer(2));
+        } else {
+            panic!("Expected Power in base, got {:?}", base);
+        }
+    } else {
+        panic!("Expected Binary Mul, got {:?}", simplified);
+    }
+}
+
+#[test]
+fn test_like_terms_with_negation() {
+    // 2x + (-x) → x
+    let x = Expression::Variable(Variable::new("x"));
+    let two_x = Expression::Binary(
+        BinaryOp::Mul,
+        Box::new(Expression::Integer(2)),
+        Box::new(x.clone()),
+    );
+    let neg_x = Expression::Unary(UnaryOp::Neg, Box::new(x.clone()));
+    let sum = Expression::Binary(BinaryOp::Add, Box::new(two_x), Box::new(neg_x));
+
+    let simplified = sum.simplify();
+    assert_eq!(simplified, x);
+}
+
+#[test]
+fn test_like_terms_no_combine_different_bases() {
+    // 2x + 3y should NOT combine (different variables)
+    let x = Expression::Variable(Variable::new("x"));
+    let y = Expression::Variable(Variable::new("y"));
+    let two_x = Expression::Binary(
+        BinaryOp::Mul,
+        Box::new(Expression::Integer(2)),
+        Box::new(x.clone()),
+    );
+    let three_y = Expression::Binary(
+        BinaryOp::Mul,
+        Box::new(Expression::Integer(3)),
+        Box::new(y.clone()),
+    );
+    let sum = Expression::Binary(
+        BinaryOp::Add,
+        Box::new(two_x.clone()),
+        Box::new(three_y.clone()),
+    );
+
+    let simplified = sum.simplify();
+
+    // Should remain as (2 * x) + (3 * y), not combined
+    if let Expression::Binary(BinaryOp::Add, left, right) = simplified {
+        // Left should be 2x
+        if let Expression::Binary(BinaryOp::Mul, l_coef, l_base) = *left {
+            assert_eq!(*l_coef, Expression::Integer(2));
+            assert_eq!(*l_base, x);
+        } else {
+            panic!("Expected left to be 2*x, got {:?}", left);
+        }
+        // Right should be 3y
+        if let Expression::Binary(BinaryOp::Mul, r_coef, r_base) = *right {
+            assert_eq!(*r_coef, Expression::Integer(3));
+            assert_eq!(*r_base, y);
+        } else {
+            panic!("Expected right to be 3*y, got {:?}", right);
+        }
+    } else {
+        panic!("Expected Binary Add, got {:?}", simplified);
+    }
+}
