@@ -389,6 +389,7 @@ pub mod solver;
 pub mod transforms;
 pub mod matrix;
 pub mod precision;
+pub mod integration;
 
 // FFI module (conditionally compiled for FFI builds)
 #[cfg(feature = "ffi")]
@@ -407,6 +408,7 @@ pub use transforms::{
 };
 pub use matrix::{MatrixExpr, MatrixError, BracketStyle};
 pub use precision::{EvalContext, EvalError, PrecisionMode, RoundingMode, Value};
+pub use integration::{integrate, IntegrationError};
 
 /// Library version information.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
