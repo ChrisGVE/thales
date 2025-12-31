@@ -119,6 +119,112 @@
 //! ```
 
 use crate::ast::{Expression, Variable};
+use serde_json::{json, Value as JsonValue};
+
+/// Level of detail for resolution path output.
+///
+/// Controls how much detail is included when rendering a resolution path
+/// to text, LaTeX, or other formats.
+///
+/// # Example
+///
+/// ```rust
+/// use mathsolver_core::resolution_path::{ResolutionPath, Verbosity};
+/// use mathsolver_core::ast::Expression;
+///
+/// let path = ResolutionPath::new(Expression::Integer(10));
+/// let minimal = path.to_text(Verbosity::Minimal);
+/// let detailed = path.to_text(Verbosity::Detailed);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Verbosity {
+    /// Key transformations only - shows just the essential operations.
+    ///
+    /// Best for quick overviews or when the user is already familiar
+    /// with the solution technique.
+    Minimal,
+
+    /// Major steps - standard level of detail for educational purposes.
+    ///
+    /// Shows all significant steps without overwhelming detail.
+    #[default]
+    Standard,
+
+    /// Every algebraic manipulation - maximum detail for learning.
+    ///
+    /// Includes all intermediate steps and detailed explanations,
+    /// ideal for students learning the technique for the first time.
+    Detailed,
+}
+
+/// Statistics about a resolution path.
+///
+/// Provides aggregate information about the solution process, useful for
+/// analyzing problem difficulty, comparing solution methods, or tracking
+/// student progress.
+///
+/// # Example
+///
+/// ```rust
+/// use mathsolver_core::resolution_path::{ResolutionPath, ResolutionStep, Operation};
+/// use mathsolver_core::ast::Expression;
+///
+/// let mut path = ResolutionPath::new(Expression::Integer(10));
+/// path.add_step(ResolutionStep::new(
+///     Operation::Simplify,
+///     "Simplify".to_string(),
+///     Expression::Integer(10),
+/// ));
+/// path.add_step(ResolutionStep::new(
+///     Operation::DivideBothSides(Expression::Integer(2)),
+///     "Divide by 2".to_string(),
+///     Expression::Integer(5),
+/// ));
+///
+/// let stats = path.statistics();
+/// assert_eq!(stats.total_steps, 2);
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct PathStatistics {
+    /// Total number of steps in the path.
+    pub total_steps: usize,
+
+    /// Count of operations by category.
+    pub operation_counts: OperationCounts,
+
+    /// Unique operation types used.
+    pub unique_operations: usize,
+
+    /// Whether the path uses advanced methods (quadratic formula, etc.).
+    pub uses_advanced_methods: bool,
+
+    /// Whether the path involves calculus operations.
+    pub uses_calculus: bool,
+
+    /// Whether the path involves matrix operations.
+    pub uses_matrix_operations: bool,
+}
+
+/// Count of operations by category.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct OperationCounts {
+    /// Both-sides operations (add, subtract, multiply, divide, etc.)
+    pub both_sides: usize,
+    /// Expression transformations (simplify, expand, factor, etc.)
+    pub transformations: usize,
+    /// Variable manipulations (substitute, isolate, move term)
+    pub variable_ops: usize,
+    /// Identity applications (algebraic, trig, log)
+    pub identities: usize,
+    /// Advanced methods (quadratic formula, complete square, numerical)
+    pub advanced: usize,
+    /// Calculus operations (differentiate, integrate, limit, etc.)
+    pub calculus: usize,
+    /// Matrix operations
+    pub matrix: usize,
+    /// Custom operations
+    pub custom: usize,
+}
 
 /// Represents a complete solution path from equation to answer.
 ///
@@ -355,6 +461,313 @@ impl ResolutionPath {
         // TODO: Include reasoning for each operation
         format!("Solution path with {} steps", self.steps.len())
     }
+
+    /// Convert the resolution path to a human-readable text format.
+    ///
+    /// Generates a formatted text representation of the solution path,
+    /// with detail level controlled by the verbosity parameter.
+    ///
+    /// # Arguments
+    ///
+    /// * `verbosity` - Level of detail to include in the output
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use mathsolver_core::resolution_path::{ResolutionPath, ResolutionStep, Operation, Verbosity};
+    /// use mathsolver_core::ast::Expression;
+    ///
+    /// let mut path = ResolutionPath::new(Expression::Integer(10));
+    /// path.add_step(ResolutionStep::new(
+    ///     Operation::SubtractBothSides(Expression::Integer(3)),
+    ///     "Subtract 3 from both sides".to_string(),
+    ///     Expression::Integer(7),
+    /// ));
+    /// path.set_result(Expression::Integer(7));
+    ///
+    /// let text = path.to_text(Verbosity::Standard);
+    /// assert!(text.contains("Step 1"));
+    /// assert!(text.contains("Subtract"));
+    /// ```
+    pub fn to_text(&self, verbosity: Verbosity) -> String {
+        let mut output = String::new();
+
+        match verbosity {
+            Verbosity::Minimal => {
+                // Just initial, key operations, and result
+                output.push_str(&format!("Start: {:?}\n", self.initial));
+                for (i, step) in self.steps.iter().enumerate() {
+                    if step.operation.is_key_operation() {
+                        output.push_str(&format!(
+                            "Step {}: {}\n",
+                            i + 1,
+                            step.operation.describe()
+                        ));
+                    }
+                }
+                output.push_str(&format!("Result: {:?}\n", self.result));
+            }
+            Verbosity::Standard => {
+                // All steps with operation and result
+                output.push_str(&format!("Initial: {:?}\n\n", self.initial));
+                for (i, step) in self.steps.iter().enumerate() {
+                    output.push_str(&format!("Step {}: {}\n", i + 1, step.operation.describe()));
+                    output.push_str(&format!("  → {:?}\n\n", step.result));
+                }
+                output.push_str(&format!("Final result: {:?}\n", self.result));
+            }
+            Verbosity::Detailed => {
+                // Full explanation including reasoning
+                output.push_str(&format!("=== Solution Path ===\n\n"));
+                output.push_str(&format!("Starting expression: {:?}\n\n", self.initial));
+                for (i, step) in self.steps.iter().enumerate() {
+                    output.push_str(&format!("--- Step {} ---\n", i + 1));
+                    output.push_str(&format!("Operation: {}\n", step.operation.describe()));
+                    output.push_str(&format!("Explanation: {}\n", step.explanation));
+                    output.push_str(&format!("Result: {:?}\n\n", step.result));
+                }
+                output.push_str(&format!("=== Final Result ===\n"));
+                output.push_str(&format!("{:?}\n", self.result));
+            }
+        }
+
+        output
+    }
+
+    /// Convert the resolution path to LaTeX format.
+    ///
+    /// Generates a LaTeX representation of the solution path, suitable
+    /// for rendering in documents, educational materials, or web applications.
+    ///
+    /// # Arguments
+    ///
+    /// * `verbosity` - Level of detail to include in the output
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use mathsolver_core::resolution_path::{ResolutionPath, ResolutionStep, Operation, Verbosity};
+    /// use mathsolver_core::ast::Expression;
+    ///
+    /// let mut path = ResolutionPath::new(Expression::Integer(10));
+    /// path.add_step(ResolutionStep::new(
+    ///     Operation::DivideBothSides(Expression::Integer(2)),
+    ///     "Divide by 2".to_string(),
+    ///     Expression::Integer(5),
+    /// ));
+    /// path.set_result(Expression::Integer(5));
+    ///
+    /// let latex = path.to_latex(Verbosity::Standard);
+    /// assert!(latex.contains("\\begin{align*}"));
+    /// ```
+    pub fn to_latex(&self, verbosity: Verbosity) -> String {
+        let mut output = String::new();
+
+        output.push_str("\\begin{align*}\n");
+
+        match verbosity {
+            Verbosity::Minimal => {
+                output.push_str(&format!("  & {} \\\\\n", self.initial.to_latex()));
+                // Show only key steps
+                for step in &self.steps {
+                    if step.operation.is_key_operation() {
+                        output.push_str(&format!(
+                            "  &\\quad \\text{{{}}} \\\\\n",
+                            step.operation.describe_latex()
+                        ));
+                        output.push_str(&format!("  &= {} \\\\\n", step.result.to_latex()));
+                    }
+                }
+            }
+            Verbosity::Standard => {
+                output.push_str(&format!("  & {} \\\\\n", self.initial.to_latex()));
+                for step in &self.steps {
+                    output.push_str(&format!(
+                        "  &\\quad \\text{{{}}} \\\\\n",
+                        step.operation.describe_latex()
+                    ));
+                    output.push_str(&format!("  &= {} \\\\\n", step.result.to_latex()));
+                }
+            }
+            Verbosity::Detailed => {
+                output.push_str(&format!(
+                    "  & \\text{{Initial: }} {} \\\\\n",
+                    self.initial.to_latex()
+                ));
+                for (i, step) in self.steps.iter().enumerate() {
+                    output.push_str(&format!(
+                        "  &\\quad \\text{{Step {}: {}}} \\\\\n",
+                        i + 1,
+                        step.operation.describe_latex()
+                    ));
+                    output.push_str(&format!(
+                        "  &\\quad \\text{{({}}})\\\\\n",
+                        escape_latex_text(&step.explanation)
+                    ));
+                    output.push_str(&format!("  &= {} \\\\\n", step.result.to_latex()));
+                }
+            }
+        }
+
+        output.push_str("\\end{align*}\n");
+        output
+    }
+
+    /// Convert the resolution path to JSON format.
+    ///
+    /// Generates a JSON representation of the complete solution path,
+    /// including all steps, explanations, and metadata. Useful for
+    /// API responses, storage, or programmatic manipulation.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use mathsolver_core::resolution_path::{ResolutionPath, ResolutionStep, Operation};
+    /// use mathsolver_core::ast::Expression;
+    ///
+    /// let mut path = ResolutionPath::new(Expression::Integer(10));
+    /// path.add_step(ResolutionStep::new(
+    ///     Operation::Simplify,
+    ///     "Combine terms".to_string(),
+    ///     Expression::Integer(10),
+    /// ));
+    /// path.set_result(Expression::Integer(10));
+    ///
+    /// let json = path.to_json();
+    /// assert!(json["steps"].is_array());
+    /// assert_eq!(json["step_count"], 1);
+    /// ```
+    pub fn to_json(&self) -> JsonValue {
+        let steps: Vec<JsonValue> = self
+            .steps
+            .iter()
+            .enumerate()
+            .map(|(i, step)| {
+                json!({
+                    "step_number": i + 1,
+                    "operation": step.operation.describe(),
+                    "operation_category": step.operation.category(),
+                    "explanation": step.explanation,
+                    "result": format!("{:?}", step.result),
+                    "result_latex": step.result.to_latex(),
+                })
+            })
+            .collect();
+
+        let stats = self.statistics();
+
+        json!({
+            "initial": format!("{:?}", self.initial),
+            "initial_latex": self.initial.to_latex(),
+            "steps": steps,
+            "result": format!("{:?}", self.result),
+            "result_latex": self.result.to_latex(),
+            "step_count": self.steps.len(),
+            "statistics": {
+                "total_steps": stats.total_steps,
+                "unique_operations": stats.unique_operations,
+                "uses_advanced_methods": stats.uses_advanced_methods,
+                "uses_calculus": stats.uses_calculus,
+                "uses_matrix_operations": stats.uses_matrix_operations,
+                "operation_counts": {
+                    "both_sides": stats.operation_counts.both_sides,
+                    "transformations": stats.operation_counts.transformations,
+                    "variable_ops": stats.operation_counts.variable_ops,
+                    "identities": stats.operation_counts.identities,
+                    "advanced": stats.operation_counts.advanced,
+                    "calculus": stats.operation_counts.calculus,
+                    "matrix": stats.operation_counts.matrix,
+                    "custom": stats.operation_counts.custom,
+                }
+            }
+        })
+    }
+
+    /// Calculate statistics about the resolution path.
+    ///
+    /// Returns aggregate information about the solution process, including
+    /// operation counts by category and flags for advanced methods.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use mathsolver_core::resolution_path::{ResolutionPath, ResolutionStep, Operation};
+    /// use mathsolver_core::ast::Expression;
+    ///
+    /// let mut path = ResolutionPath::new(Expression::Integer(20));
+    /// path.add_step(ResolutionStep::new(
+    ///     Operation::Simplify,
+    ///     "Simplify".to_string(),
+    ///     Expression::Integer(20),
+    /// ));
+    /// path.add_step(ResolutionStep::new(
+    ///     Operation::QuadraticFormula,
+    ///     "Apply quadratic formula".to_string(),
+    ///     Expression::Integer(5),
+    /// ));
+    ///
+    /// let stats = path.statistics();
+    /// assert_eq!(stats.total_steps, 2);
+    /// assert!(stats.uses_advanced_methods);
+    /// assert_eq!(stats.operation_counts.transformations, 1);
+    /// assert_eq!(stats.operation_counts.advanced, 1);
+    /// ```
+    pub fn statistics(&self) -> PathStatistics {
+        let mut counts = OperationCounts::default();
+        let mut unique_ops: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut uses_advanced = false;
+        let mut uses_calculus = false;
+        let mut uses_matrix = false;
+
+        for step in &self.steps {
+            let category = step.operation.category();
+            unique_ops.insert(step.operation.describe());
+
+            match category.as_str() {
+                "both_sides" => counts.both_sides += 1,
+                "transformation" => counts.transformations += 1,
+                "variable" => counts.variable_ops += 1,
+                "identity" => counts.identities += 1,
+                "advanced" => {
+                    counts.advanced += 1;
+                    uses_advanced = true;
+                }
+                "calculus" => {
+                    counts.calculus += 1;
+                    uses_calculus = true;
+                }
+                "matrix" => {
+                    counts.matrix += 1;
+                    uses_matrix = true;
+                }
+                "custom" => counts.custom += 1,
+                _ => {}
+            }
+        }
+
+        PathStatistics {
+            total_steps: self.steps.len(),
+            operation_counts: counts,
+            unique_operations: unique_ops.len(),
+            uses_advanced_methods: uses_advanced,
+            uses_calculus,
+            uses_matrix_operations: uses_matrix,
+        }
+    }
+}
+
+/// Escape special LaTeX characters in text.
+fn escape_latex_text(text: &str) -> String {
+    text.replace('\\', "\\textbackslash{}")
+        .replace('{', "\\{")
+        .replace('}', "\\}")
+        .replace('$', "\\$")
+        .replace('%', "\\%")
+        .replace('&', "\\&")
+        .replace('#', "\\#")
+        .replace('_', "\\_")
+        .replace('^', "\\^{}")
+        .replace('~', "\\~{}")
 }
 
 /// A single step in the solution process.
@@ -706,6 +1119,81 @@ pub enum Operation {
     /// Applied when symbolic methods fail or exact solutions are impractical
     NumericalApproximation,
 
+    // ===== Calculus Operations =====
+    /// Differentiate an expression with respect to a variable.
+    ///
+    /// # Example
+    ///
+    /// Differentiate `x^3 + 2x` with respect to x: `3x^2 + 2`
+    Differentiate {
+        /// The variable to differentiate with respect to
+        variable: Variable,
+        /// The differentiation rule applied (e.g., "power rule", "chain rule")
+        rule: String,
+    },
+
+    /// Integrate an expression with respect to a variable.
+    ///
+    /// # Example
+    ///
+    /// Integrate `2x` with respect to x: `x^2 + C`
+    Integrate {
+        /// The variable of integration
+        variable: Variable,
+        /// The integration technique used
+        technique: String,
+    },
+
+    /// Evaluate a limit.
+    ///
+    /// # Example
+    ///
+    /// Evaluate `lim_{x->0} sin(x)/x = 1`
+    EvaluateLimit {
+        /// The variable approaching a value
+        variable: Variable,
+        /// The value being approached
+        approaches: Expression,
+        /// The method used (e.g., "direct substitution", "L'Hôpital's rule")
+        method: String,
+    },
+
+    /// Apply integration by parts: ∫u dv = uv - ∫v du
+    IntegrationByParts {
+        /// The function chosen as u
+        u: Expression,
+        /// The function chosen as dv
+        dv: Expression,
+    },
+
+    /// Apply u-substitution for integration.
+    USubstitution {
+        /// The substitution u = g(x)
+        substitution: Expression,
+    },
+
+    /// Solve an ODE.
+    SolveODE {
+        /// The method used (e.g., "separation of variables", "integrating factor")
+        method: String,
+    },
+
+    // ===== Matrix Operations =====
+    /// Perform a matrix operation.
+    MatrixOperation {
+        /// The type of operation (e.g., "row reduction", "transpose", "inverse")
+        operation: String,
+    },
+
+    /// Apply Gaussian elimination.
+    GaussianElimination,
+
+    /// Compute determinant using a specific method.
+    ComputeDeterminant {
+        /// The method used (e.g., "cofactor expansion", "LU decomposition")
+        method: String,
+    },
+
     /// Custom operation with a free-form description.
     ///
     /// Use this for operations not covered by the other variants
@@ -776,7 +1264,210 @@ impl Operation {
             Operation::QuadraticFormula => "Apply quadratic formula".to_string(),
             Operation::CompleteSquare => "Complete the square".to_string(),
             Operation::NumericalApproximation => "Use numerical approximation".to_string(),
+            // Calculus operations
+            Operation::Differentiate { variable, rule } => {
+                format!("Differentiate with respect to {} ({})", variable, rule)
+            }
+            Operation::Integrate { variable, technique } => {
+                format!("Integrate with respect to {} ({})", variable, technique)
+            }
+            Operation::EvaluateLimit {
+                variable,
+                approaches,
+                method,
+            } => {
+                format!(
+                    "Evaluate limit as {} → {:?} ({})",
+                    variable, approaches, method
+                )
+            }
+            Operation::IntegrationByParts { u, dv } => {
+                format!("Integration by parts: u = {:?}, dv = {:?}", u, dv)
+            }
+            Operation::USubstitution { substitution } => {
+                format!("U-substitution: u = {:?}", substitution)
+            }
+            Operation::SolveODE { method } => format!("Solve ODE ({})", method),
+            // Matrix operations
+            Operation::MatrixOperation { operation } => {
+                format!("Matrix operation: {}", operation)
+            }
+            Operation::GaussianElimination => "Apply Gaussian elimination".to_string(),
+            Operation::ComputeDeterminant { method } => {
+                format!("Compute determinant ({})", method)
+            }
             Operation::Custom(desc) => desc.clone(),
+        }
+    }
+
+    /// Get a LaTeX-friendly description of this operation.
+    ///
+    /// Similar to `describe()` but with proper escaping for LaTeX text mode.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use mathsolver_core::resolution_path::Operation;
+    /// use mathsolver_core::ast::Expression;
+    ///
+    /// let op = Operation::QuadraticFormula;
+    /// assert_eq!(op.describe_latex(), "Apply quadratic formula");
+    /// ```
+    pub fn describe_latex(&self) -> String {
+        // For now, reuse describe() - most descriptions are already LaTeX-safe
+        // Special characters in expressions would need escaping
+        match self {
+            Operation::AddBothSides(expr) => {
+                format!("Add {} to both sides", expr.to_latex())
+            }
+            Operation::SubtractBothSides(expr) => {
+                format!("Subtract {} from both sides", expr.to_latex())
+            }
+            Operation::MultiplyBothSides(expr) => {
+                format!("Multiply both sides by {}", expr.to_latex())
+            }
+            Operation::DivideBothSides(expr) => {
+                format!("Divide both sides by {}", expr.to_latex())
+            }
+            Operation::PowerBothSides(expr) => {
+                format!("Raise both sides to power {}", expr.to_latex())
+            }
+            Operation::RootBothSides(expr) => {
+                format!("Take {} root of both sides", expr.to_latex())
+            }
+            Operation::Substitute { variable, value } => {
+                format!("Substitute {} = {}", variable, value.to_latex())
+            }
+            Operation::MoveTerm(expr) => {
+                format!("Move {} to other side", expr.to_latex())
+            }
+            Operation::IntegrationByParts { u, dv } => {
+                format!(
+                    "Integration by parts: u = {}, dv = {}",
+                    u.to_latex(),
+                    dv.to_latex()
+                )
+            }
+            Operation::USubstitution { substitution } => {
+                format!("U-substitution: u = {}", substitution.to_latex())
+            }
+            Operation::EvaluateLimit {
+                variable,
+                approaches,
+                method,
+            } => {
+                format!(
+                    "Evaluate limit as {} \\to {} ({})",
+                    variable,
+                    approaches.to_latex(),
+                    method
+                )
+            }
+            _ => self.describe(),
+        }
+    }
+
+    /// Get the category of this operation for statistics.
+    ///
+    /// Returns a string identifier for the operation category.
+    ///
+    /// # Categories
+    ///
+    /// - `"both_sides"`: Operations applied to both sides of equation
+    /// - `"transformation"`: Expression transformations (simplify, expand, etc.)
+    /// - `"variable"`: Variable manipulations (substitute, isolate)
+    /// - `"identity"`: Identity applications (algebraic, trig, log)
+    /// - `"advanced"`: Advanced methods (quadratic formula, etc.)
+    /// - `"calculus"`: Calculus operations (differentiate, integrate, etc.)
+    /// - `"matrix"`: Matrix operations
+    /// - `"custom"`: Custom operations
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use mathsolver_core::resolution_path::Operation;
+    /// use mathsolver_core::ast::Expression;
+    ///
+    /// let op = Operation::Simplify;
+    /// assert_eq!(op.category(), "transformation");
+    ///
+    /// let op2 = Operation::QuadraticFormula;
+    /// assert_eq!(op2.category(), "advanced");
+    /// ```
+    pub fn category(&self) -> String {
+        match self {
+            // Both-sides operations
+            Operation::AddBothSides(_)
+            | Operation::SubtractBothSides(_)
+            | Operation::MultiplyBothSides(_)
+            | Operation::DivideBothSides(_)
+            | Operation::PowerBothSides(_)
+            | Operation::RootBothSides(_)
+            | Operation::ApplyFunction(_) => "both_sides".to_string(),
+
+            // Transformations
+            Operation::Simplify
+            | Operation::Expand
+            | Operation::Factor
+            | Operation::CombineFractions
+            | Operation::Cancel => "transformation".to_string(),
+
+            // Variable operations
+            Operation::Substitute { .. } | Operation::Isolate(_) | Operation::MoveTerm(_) => {
+                "variable".to_string()
+            }
+
+            // Identity applications
+            Operation::ApplyIdentity(_)
+            | Operation::ApplyTrigIdentity(_)
+            | Operation::ApplyLogProperty(_) => "identity".to_string(),
+
+            // Advanced methods
+            Operation::QuadraticFormula
+            | Operation::CompleteSquare
+            | Operation::NumericalApproximation => "advanced".to_string(),
+
+            // Calculus operations
+            Operation::Differentiate { .. }
+            | Operation::Integrate { .. }
+            | Operation::EvaluateLimit { .. }
+            | Operation::IntegrationByParts { .. }
+            | Operation::USubstitution { .. }
+            | Operation::SolveODE { .. } => "calculus".to_string(),
+
+            // Matrix operations
+            Operation::MatrixOperation { .. }
+            | Operation::GaussianElimination
+            | Operation::ComputeDeterminant { .. } => "matrix".to_string(),
+
+            // Custom
+            Operation::Custom(_) => "custom".to_string(),
+        }
+    }
+
+    /// Check if this operation is a "key" operation for minimal verbosity.
+    ///
+    /// Key operations are major transformations that significantly change
+    /// the equation state. Simplification and other minor adjustments
+    /// are typically not considered key operations.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use mathsolver_core::resolution_path::Operation;
+    /// use mathsolver_core::ast::Expression;
+    ///
+    /// assert!(!Operation::Simplify.is_key_operation());
+    /// assert!(Operation::QuadraticFormula.is_key_operation());
+    /// assert!(Operation::DivideBothSides(Expression::Integer(2)).is_key_operation());
+    /// ```
+    pub fn is_key_operation(&self) -> bool {
+        match self {
+            // Minor operations - not key
+            Operation::Simplify | Operation::Cancel => false,
+
+            // All other operations are considered key
+            _ => true,
         }
     }
 }
@@ -1029,8 +1720,328 @@ impl ResolutionPathBuilder {
 
 // TODO: Add validation that steps are mathematically sound
 // TODO: Add ability to replay/verify steps
-// TODO: Add LaTeX rendering of steps
 // TODO: Add support for branching paths (multiple solution methods)
 // TODO: Add difficulty rating for each step
 // TODO: Add hints generation from resolution path
 // TODO: Add support for partial paths (incomplete solutions)
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::Expression;
+
+    #[test]
+    fn test_verbosity_default() {
+        let verbosity = Verbosity::default();
+        assert_eq!(verbosity, Verbosity::Standard);
+    }
+
+    #[test]
+    fn test_to_text_minimal() {
+        let mut path = ResolutionPath::new(Expression::Integer(10));
+        path.add_step(ResolutionStep::new(
+            Operation::Simplify,
+            "Simplify".to_string(),
+            Expression::Integer(10),
+        ));
+        path.add_step(ResolutionStep::new(
+            Operation::DivideBothSides(Expression::Integer(2)),
+            "Divide by 2".to_string(),
+            Expression::Integer(5),
+        ));
+        path.set_result(Expression::Integer(5));
+
+        let text = path.to_text(Verbosity::Minimal);
+        // Minimal should skip Simplify (not a key operation)
+        assert!(text.contains("Start:"));
+        assert!(text.contains("Result:"));
+        assert!(text.contains("Divide"));
+        // Should NOT contain the simplify step in minimal mode
+        assert!(!text.contains("Simplify"));
+    }
+
+    #[test]
+    fn test_to_text_standard() {
+        let mut path = ResolutionPath::new(Expression::Integer(10));
+        path.add_step(ResolutionStep::new(
+            Operation::SubtractBothSides(Expression::Integer(3)),
+            "Subtract 3".to_string(),
+            Expression::Integer(7),
+        ));
+        path.set_result(Expression::Integer(7));
+
+        let text = path.to_text(Verbosity::Standard);
+        assert!(text.contains("Initial:"));
+        assert!(text.contains("Step 1:"));
+        assert!(text.contains("Subtract"));
+        assert!(text.contains("Final result:"));
+    }
+
+    #[test]
+    fn test_to_text_detailed() {
+        let mut path = ResolutionPath::new(Expression::Integer(10));
+        path.add_step(ResolutionStep::new(
+            Operation::AddBothSides(Expression::Integer(5)),
+            "Add 5 to isolate the term".to_string(),
+            Expression::Integer(15),
+        ));
+        path.set_result(Expression::Integer(15));
+
+        let text = path.to_text(Verbosity::Detailed);
+        assert!(text.contains("=== Solution Path ==="));
+        assert!(text.contains("Starting expression:"));
+        assert!(text.contains("--- Step 1 ---"));
+        assert!(text.contains("Operation:"));
+        assert!(text.contains("Explanation:"));
+        assert!(text.contains("Add 5 to isolate the term"));
+        assert!(text.contains("=== Final Result ==="));
+    }
+
+    #[test]
+    fn test_to_latex_standard() {
+        let mut path = ResolutionPath::new(Expression::Integer(10));
+        path.add_step(ResolutionStep::new(
+            Operation::DivideBothSides(Expression::Integer(2)),
+            "Divide by 2".to_string(),
+            Expression::Integer(5),
+        ));
+        path.set_result(Expression::Integer(5));
+
+        let latex = path.to_latex(Verbosity::Standard);
+        assert!(latex.contains("\\begin{align*}"));
+        assert!(latex.contains("\\end{align*}"));
+        assert!(latex.contains("\\text{"));
+    }
+
+    #[test]
+    fn test_to_json() {
+        let mut path = ResolutionPath::new(Expression::Integer(20));
+        path.add_step(ResolutionStep::new(
+            Operation::Simplify,
+            "Combine like terms".to_string(),
+            Expression::Integer(20),
+        ));
+        path.add_step(ResolutionStep::new(
+            Operation::QuadraticFormula,
+            "Apply quadratic formula".to_string(),
+            Expression::Integer(5),
+        ));
+        path.set_result(Expression::Integer(5));
+
+        let json = path.to_json();
+        assert!(json["steps"].is_array());
+        assert_eq!(json["step_count"], 2);
+        assert_eq!(json["statistics"]["total_steps"], 2);
+        assert_eq!(json["statistics"]["uses_advanced_methods"], true);
+        assert_eq!(json["statistics"]["operation_counts"]["transformations"], 1);
+        assert_eq!(json["statistics"]["operation_counts"]["advanced"], 1);
+    }
+
+    #[test]
+    fn test_statistics() {
+        let mut path = ResolutionPath::new(Expression::Integer(100));
+
+        // Add various operations
+        path.add_step(ResolutionStep::new(
+            Operation::AddBothSides(Expression::Integer(5)),
+            "Add".to_string(),
+            Expression::Integer(105),
+        ));
+        path.add_step(ResolutionStep::new(
+            Operation::Simplify,
+            "Simplify".to_string(),
+            Expression::Integer(105),
+        ));
+        path.add_step(ResolutionStep::new(
+            Operation::Factor,
+            "Factor".to_string(),
+            Expression::Integer(105),
+        ));
+        path.add_step(ResolutionStep::new(
+            Operation::Isolate(Variable::new("x")),
+            "Isolate x".to_string(),
+            Expression::Integer(21),
+        ));
+        path.add_step(ResolutionStep::new(
+            Operation::QuadraticFormula,
+            "Apply quadratic formula".to_string(),
+            Expression::Integer(7),
+        ));
+
+        let stats = path.statistics();
+
+        assert_eq!(stats.total_steps, 5);
+        assert_eq!(stats.operation_counts.both_sides, 1);
+        assert_eq!(stats.operation_counts.transformations, 2); // Simplify + Factor
+        assert_eq!(stats.operation_counts.variable_ops, 1);
+        assert_eq!(stats.operation_counts.advanced, 1);
+        assert!(stats.uses_advanced_methods);
+        assert!(!stats.uses_calculus);
+        assert!(!stats.uses_matrix_operations);
+    }
+
+    #[test]
+    fn test_statistics_calculus() {
+        let mut path = ResolutionPath::new(Expression::Integer(0));
+        path.add_step(ResolutionStep::new(
+            Operation::Differentiate {
+                variable: Variable::new("x"),
+                rule: "power rule".to_string(),
+            },
+            "Differentiate".to_string(),
+            Expression::Integer(0),
+        ));
+        path.add_step(ResolutionStep::new(
+            Operation::Integrate {
+                variable: Variable::new("x"),
+                technique: "substitution".to_string(),
+            },
+            "Integrate".to_string(),
+            Expression::Integer(0),
+        ));
+
+        let stats = path.statistics();
+        assert!(stats.uses_calculus);
+        assert_eq!(stats.operation_counts.calculus, 2);
+    }
+
+    #[test]
+    fn test_statistics_matrix() {
+        let mut path = ResolutionPath::new(Expression::Integer(0));
+        path.add_step(ResolutionStep::new(
+            Operation::GaussianElimination,
+            "Apply Gaussian elimination".to_string(),
+            Expression::Integer(0),
+        ));
+        path.add_step(ResolutionStep::new(
+            Operation::ComputeDeterminant {
+                method: "cofactor expansion".to_string(),
+            },
+            "Compute determinant".to_string(),
+            Expression::Integer(0),
+        ));
+
+        let stats = path.statistics();
+        assert!(stats.uses_matrix_operations);
+        assert_eq!(stats.operation_counts.matrix, 2);
+    }
+
+    #[test]
+    fn test_operation_category() {
+        assert_eq!(
+            Operation::AddBothSides(Expression::Integer(1)).category(),
+            "both_sides"
+        );
+        assert_eq!(Operation::Simplify.category(), "transformation");
+        assert_eq!(
+            Operation::Isolate(Variable::new("x")).category(),
+            "variable"
+        );
+        assert_eq!(
+            Operation::ApplyIdentity("difference of squares".to_string()).category(),
+            "identity"
+        );
+        assert_eq!(Operation::QuadraticFormula.category(), "advanced");
+        assert_eq!(
+            Operation::Differentiate {
+                variable: Variable::new("x"),
+                rule: "power".to_string()
+            }
+            .category(),
+            "calculus"
+        );
+        assert_eq!(Operation::GaussianElimination.category(), "matrix");
+        assert_eq!(
+            Operation::Custom("custom op".to_string()).category(),
+            "custom"
+        );
+    }
+
+    #[test]
+    fn test_is_key_operation() {
+        assert!(!Operation::Simplify.is_key_operation());
+        assert!(!Operation::Cancel.is_key_operation());
+        assert!(Operation::QuadraticFormula.is_key_operation());
+        assert!(Operation::DivideBothSides(Expression::Integer(2)).is_key_operation());
+        assert!(Operation::Factor.is_key_operation());
+        assert!(Operation::GaussianElimination.is_key_operation());
+    }
+
+    #[test]
+    fn test_describe_latex() {
+        let op = Operation::AddBothSides(Expression::Integer(5));
+        let latex = op.describe_latex();
+        assert!(latex.contains("Add"));
+        assert!(latex.contains("5"));
+        assert!(latex.contains("both sides"));
+
+        let op2 = Operation::QuadraticFormula;
+        assert_eq!(op2.describe_latex(), "Apply quadratic formula");
+    }
+
+    #[test]
+    fn test_operation_counts_default() {
+        let counts = OperationCounts::default();
+        assert_eq!(counts.both_sides, 0);
+        assert_eq!(counts.transformations, 0);
+        assert_eq!(counts.variable_ops, 0);
+        assert_eq!(counts.identities, 0);
+        assert_eq!(counts.advanced, 0);
+        assert_eq!(counts.calculus, 0);
+        assert_eq!(counts.matrix, 0);
+        assert_eq!(counts.custom, 0);
+    }
+
+    #[test]
+    fn test_empty_path_statistics() {
+        let path = ResolutionPath::new(Expression::Integer(42));
+        let stats = path.statistics();
+
+        assert_eq!(stats.total_steps, 0);
+        assert_eq!(stats.unique_operations, 0);
+        assert!(!stats.uses_advanced_methods);
+        assert!(!stats.uses_calculus);
+        assert!(!stats.uses_matrix_operations);
+    }
+
+    #[test]
+    fn test_unique_operations_count() {
+        let mut path = ResolutionPath::new(Expression::Integer(10));
+
+        // Add same operation twice
+        path.add_step(ResolutionStep::new(
+            Operation::Simplify,
+            "First simplify".to_string(),
+            Expression::Integer(10),
+        ));
+        path.add_step(ResolutionStep::new(
+            Operation::Simplify,
+            "Second simplify".to_string(),
+            Expression::Integer(10),
+        ));
+        // Add different operation
+        path.add_step(ResolutionStep::new(
+            Operation::Factor,
+            "Factor".to_string(),
+            Expression::Integer(10),
+        ));
+
+        let stats = path.statistics();
+        assert_eq!(stats.total_steps, 3);
+        // Unique operations should be 2 (Simplify and Factor)
+        assert_eq!(stats.unique_operations, 2);
+    }
+
+    #[test]
+    fn test_escape_latex_text() {
+        let text = "Use $x_1$ and {braces} with 50% & 100#";
+        let escaped = escape_latex_text(text);
+        assert!(escaped.contains("\\$"));
+        assert!(escaped.contains("\\_"));
+        assert!(escaped.contains("\\{"));
+        assert!(escaped.contains("\\}"));
+        assert!(escaped.contains("\\%"));
+        assert!(escaped.contains("\\&"));
+        assert!(escaped.contains("\\#"));
+    }
+}

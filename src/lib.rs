@@ -404,7 +404,10 @@ pub use dimensions::{Dimension, Quantity, Unit, UnitRegistry};
 pub use numerical::{NumericalConfig, NumericalSolution, SmartNumericalSolver};
 pub use latex::{parse_latex, parse_latex_equation};
 pub use parser::{parse_equation, parse_expression};
-pub use resolution_path::{Operation, ResolutionPath, ResolutionStep};
+pub use resolution_path::{
+    Operation, OperationCounts, PathStatistics, ResolutionPath, ResolutionPathBuilder,
+    ResolutionStep, Verbosity,
+};
 pub use solver::{
     LinearSystem, SmartSolver, Solution, Solver, SystemSolution, SystemSolver,
 };
