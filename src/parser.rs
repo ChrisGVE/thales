@@ -108,16 +108,39 @@
 //! The parser runs in O(n) time complexity where n is the length of the input string.
 //! Memory complexity is O(d) where d is the maximum nesting depth of the expression.
 //!
+//! # Implicit Multiplication
+//!
+//! The parser supports implicit multiplication in several forms:
+//!
+//! | Pattern | Interpretation | Example |
+//! |---------|----------------|---------|
+//! | Number-Variable | Coefficient | `2x` → `2 * x` |
+//! | Number-Parenthesis | Coefficient | `2(x+1)` → `2 * (x+1)` |
+//! | Parenthesis-Parenthesis | Product | `(a)(b)` → `a * b` |
+//! | Variable Variable (spaced) | Product | `x y` → `x * y` |
+//!
+//! Note: Multi-character identifiers like `xy` or `theta` are NOT split into
+//! separate variables. Use spaces to separate variables: `x y` not `xy`.
+//!
+//! # Symbolic Constants
+//!
+//! The parser recognizes the following symbolic constants:
+//!
+//! | Constant | Keyword | Value |
+//! |----------|---------|-------|
+//! | π (pi) | `pi` | 3.14159... |
+//! | e (Euler's number) | `e` | 2.71828... |
+//! | i (imaginary unit) | `i` | √(-1) |
+//!
 //! # Limitations
 //!
-//! - **No implicit multiplication**: `2x` is invalid, must write `2 * x`
 //! - **No equation systems**: Only single equations supported
 //! - **No LaTeX input**: Plain ASCII notation only
 //! - **No MathML**: Plain text input only
 //!
 //! See TODO comments at end of file for planned enhancements.
 
-use crate::ast::{BinaryOp, Equation, Expression, Function, UnaryOp, Variable};
+use crate::ast::{BinaryOp, Equation, Expression, Function, SymbolicConstant, UnaryOp, Variable};
 use chumsky::prelude::*;
 
 /// Parse error type with detailed position information.
@@ -375,7 +398,8 @@ fn expression_parser<'src>(
             .to_slice()
             .padded();
 
-        // Parse function calls OR variables (function calls have precedence)
+        // Parse function calls, symbolic constants, or variables
+        // Priority: function calls > symbolic constants > variables
         let identifier_expr = identifier
             .then(
                 expr.clone()
@@ -395,12 +419,24 @@ fn expression_parser<'src>(
                             })
                     }
                     None => {
-                        // It's a variable
-                        Ok(Expression::Variable(Variable::new(name)))
+                        // Check for symbolic constants first
+                        match name {
+                            "pi" => Ok(Expression::Constant(SymbolicConstant::Pi)),
+                            "e" => Ok(Expression::Constant(SymbolicConstant::E)),
+                            "i" => Ok(Expression::Constant(SymbolicConstant::I)),
+                            _ => {
+                                // It's a variable
+                                Ok(Expression::Variable(Variable::new(name)))
+                            }
+                        }
                     }
                 }
             })
             .padded();
+
+        // Clone parsers for later use in implicit multiplication
+        let number_for_implicit = number.clone();
+        let identifier_for_implicit = identifier_expr.clone();
 
         // Primary expressions: numbers, identifier expressions, or parenthesized expressions
         let primary = choice((
@@ -441,14 +477,64 @@ fn expression_parser<'src>(
                 }
             });
 
+        // Implicit multiplication: handles 2x, xy, 2(x+1), (x)(y)
+        // This parses one or more power expressions without operators between them
+        // and treats juxtaposition as multiplication.
+        // IMPORTANT: We only allow implicit multiplication for expressions that
+        // start with a number, identifier, or opening paren - NOT unary minus.
+        // This prevents "a - b" from being parsed as "a * (-b)".
+        let implicit_mul_operand = choice((
+            number_for_implicit,
+            identifier_for_implicit,
+            expr.clone().delimited_by(just('('), just(')')),
+        ))
+        .padded()
+        .then(
+            just('^')
+                .padded()
+                .ignore_then(unary.clone())
+                .repeated()
+                .collect::<Vec<_>>(),
+        )
+        .map(|(first, rest)| {
+            if rest.is_empty() {
+                first
+            } else {
+                // Build right-associative power chain
+                let result = rest.into_iter().rev().fold(None, |acc, curr| match acc {
+                    None => Some(curr),
+                    Some(right) => Some(Expression::Power(Box::new(curr), Box::new(right))),
+                });
+                match result {
+                    Some(right) => Expression::Power(Box::new(first), Box::new(right)),
+                    None => first,
+                }
+            }
+        });
+
+        let implicit_product = power
+            .clone()
+            .then(implicit_mul_operand.repeated().collect::<Vec<_>>())
+            .map(|(first, rest)| {
+                if rest.is_empty() {
+                    first
+                } else {
+                    // Fold multiple juxtaposed expressions into multiplications
+                    rest.into_iter().fold(first, |acc, curr| {
+                        Expression::Binary(BinaryOp::Mul, Box::new(acc), Box::new(curr))
+                    })
+                }
+            });
+
         // Multiplication and division (left-associative)
-        let product = power.clone().foldl(
+        // Uses implicit_product as the base to include implicit multiplication
+        let product = implicit_product.clone().foldl(
             choice((
                 just('*').padded().to(BinaryOp::Mul),
                 just('/').padded().to(BinaryOp::Div),
                 just('%').padded().to(BinaryOp::Mod),
             ))
-            .then(power)
+            .then(implicit_product.clone())
             .repeated(),
             |lhs, (op, rhs)| Expression::Binary(op, Box::new(lhs), Box::new(rhs)),
         );

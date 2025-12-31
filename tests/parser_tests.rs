@@ -615,3 +615,263 @@ fn test_scientific_e_lower() {
         _ => panic!("Expected Float"),
     }
 }
+
+// ============================================================================
+// Symbolic Constants Parsing Tests
+// ============================================================================
+
+use mathsolver_core::ast::SymbolicConstant;
+
+#[test]
+fn test_parse_pi() {
+    let result = parse_expression("pi");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Constant(SymbolicConstant::Pi) => {}
+        other => panic!("Expected Constant(Pi), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_e() {
+    let result = parse_expression("e");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Constant(SymbolicConstant::E) => {}
+        other => panic!("Expected Constant(E), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_i() {
+    let result = parse_expression("i");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Constant(SymbolicConstant::I) => {}
+        other => panic!("Expected Constant(I), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_two_pi() {
+    let result = parse_expression("2 * pi");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Binary(BinaryOp::Mul, left, right) => {
+            assert!(matches!(*left, Expression::Float(n) if n == 2.0));
+            assert!(matches!(*right, Expression::Constant(SymbolicConstant::Pi)));
+        }
+        other => panic!("Expected Binary Mul, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_e_power_x() {
+    let result = parse_expression("e ^ x");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Power(base, exp) => {
+            assert!(matches!(*base, Expression::Constant(SymbolicConstant::E)));
+            assert!(matches!(*exp, Expression::Variable(ref v) if v.name == "x"));
+        }
+        other => panic!("Expected Power, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_parse_complex_number_form() {
+    // 3 + 2 * i should parse correctly
+    let result = parse_expression("3 + 2 * i");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Binary(BinaryOp::Add, left, right) => {
+            assert!(matches!(*left, Expression::Float(n) if n == 3.0));
+            match *right {
+                Expression::Binary(BinaryOp::Mul, l, r) => {
+                    assert!(matches!(*l, Expression::Float(n) if n == 2.0));
+                    assert!(matches!(*r, Expression::Constant(SymbolicConstant::I)));
+                }
+                other => panic!("Expected Binary Mul, got {:?}", other),
+            }
+        }
+        other => panic!("Expected Binary Add, got {:?}", other),
+    }
+}
+
+// ============================================================================
+// Implicit Multiplication Tests
+// ============================================================================
+
+#[test]
+fn test_implicit_mul_number_variable() {
+    // 2x should parse as 2 * x
+    let result = parse_expression("2x");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Binary(BinaryOp::Mul, left, right) => {
+            assert!(matches!(*left, Expression::Float(n) if n == 2.0));
+            assert!(matches!(*right, Expression::Variable(ref v) if v.name == "x"));
+        }
+        other => panic!("Expected Binary Mul, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_implicit_mul_variable_variable_with_space() {
+    // x y (with space) should parse as x * y
+    // Note: "xy" without space is parsed as single variable "xy"
+    let result = parse_expression("x y");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Binary(BinaryOp::Mul, left, right) => {
+            assert!(matches!(*left, Expression::Variable(ref v) if v.name == "x"));
+            assert!(matches!(*right, Expression::Variable(ref v) if v.name == "y"));
+        }
+        other => panic!("Expected Binary Mul, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_multichar_variable_not_split() {
+    // xy without space should be parsed as single variable "xy"
+    // This is correct for multi-character variable names like "theta"
+    let result = parse_expression("xy");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Variable(v) => assert_eq!(v.name, "xy"),
+        other => panic!("Expected Variable 'xy', got {:?}", other),
+    }
+}
+
+#[test]
+fn test_implicit_mul_number_paren() {
+    // 2(x+1) should parse as 2 * (x+1)
+    let result = parse_expression("2(x+1)");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Binary(BinaryOp::Mul, left, right) => {
+            assert!(matches!(*left, Expression::Float(n) if n == 2.0));
+            match *right {
+                Expression::Binary(BinaryOp::Add, _, _) => {}
+                other => panic!("Expected Binary Add in parens, got {:?}", other),
+            }
+        }
+        other => panic!("Expected Binary Mul, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_implicit_mul_paren_paren() {
+    // (x)(y) should parse as x * y
+    let result = parse_expression("(x)(y)");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Binary(BinaryOp::Mul, left, right) => {
+            assert!(matches!(*left, Expression::Variable(ref v) if v.name == "x"));
+            assert!(matches!(*right, Expression::Variable(ref v) if v.name == "y"));
+        }
+        other => panic!("Expected Binary Mul, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_implicit_mul_with_spaces() {
+    // 2 x should also work as implicit multiplication
+    let result = parse_expression("2 x");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Binary(BinaryOp::Mul, left, right) => {
+            assert!(matches!(*left, Expression::Float(n) if n == 2.0));
+            assert!(matches!(*right, Expression::Variable(ref v) if v.name == "x"));
+        }
+        other => panic!("Expected Binary Mul, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_implicit_mul_three_terms() {
+    // 2 x y (with spaces) should parse as (2 * x) * y
+    let result = parse_expression("2 x y");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Binary(BinaryOp::Mul, left, right) => {
+            match *left {
+                Expression::Binary(BinaryOp::Mul, ll, lr) => {
+                    assert!(matches!(*ll, Expression::Float(n) if n == 2.0));
+                    assert!(matches!(*lr, Expression::Variable(ref v) if v.name == "x"));
+                }
+                other => panic!("Expected Binary Mul on left, got {:?}", other),
+            }
+            assert!(matches!(*right, Expression::Variable(ref v) if v.name == "y"));
+        }
+        other => panic!("Expected Binary Mul, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_implicit_mul_number_multichar_var() {
+    // 2xy (no space) should parse as 2 * xy (single variable)
+    let result = parse_expression("2xy");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Binary(BinaryOp::Mul, left, right) => {
+            assert!(matches!(*left, Expression::Float(n) if n == 2.0));
+            assert!(matches!(*right, Expression::Variable(ref v) if v.name == "xy"));
+        }
+        other => panic!("Expected Binary Mul, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_implicit_mul_with_pi() {
+    // 2pi should parse as 2 * π
+    let result = parse_expression("2pi");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Binary(BinaryOp::Mul, left, right) => {
+            assert!(matches!(*left, Expression::Float(n) if n == 2.0));
+            assert!(matches!(*right, Expression::Constant(SymbolicConstant::Pi)));
+        }
+        other => panic!("Expected Binary Mul, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_subtraction_not_implicit_mul() {
+    // a - b should be subtraction, NOT a * (-b)
+    let result = parse_expression("a - b");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Binary(BinaryOp::Sub, left, right) => {
+            assert!(matches!(*left, Expression::Variable(ref v) if v.name == "a"));
+            assert!(matches!(*right, Expression::Variable(ref v) if v.name == "b"));
+        }
+        other => panic!("Expected Binary Sub, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_complex_expr_with_implicit_mul() {
+    // 2x + 3y should parse as (2*x) + (3*y)
+    let result = parse_expression("2x + 3y");
+    assert!(result.is_ok());
+    match result.unwrap() {
+        Expression::Binary(BinaryOp::Add, left, right) => {
+            match *left {
+                Expression::Binary(BinaryOp::Mul, ll, lr) => {
+                    assert!(matches!(*ll, Expression::Float(n) if n == 2.0));
+                    assert!(matches!(*lr, Expression::Variable(ref v) if v.name == "x"));
+                }
+                other => panic!("Expected Binary Mul on left, got {:?}", other),
+            }
+            match *right {
+                Expression::Binary(BinaryOp::Mul, rl, rr) => {
+                    assert!(matches!(*rl, Expression::Float(n) if n == 3.0));
+                    assert!(matches!(*rr, Expression::Variable(ref v) if v.name == "y"));
+                }
+                other => panic!("Expected Binary Mul on right, got {:?}", other),
+            }
+        }
+        other => panic!("Expected Binary Add, got {:?}", other),
+    }
+}
