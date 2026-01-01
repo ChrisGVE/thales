@@ -394,6 +394,7 @@ pub mod inequality;
 pub mod trigonometric;
 pub mod ode;
 pub mod partial_fractions;
+pub mod equation_system;
 
 // FFI module (conditionally compiled for FFI builds)
 #[cfg(feature = "ffi")]
@@ -438,6 +439,12 @@ pub use ode::{
 pub use partial_fractions::{
     decompose, is_polynomial, is_rational_function, DecomposeError, PartialFractionResult,
     PartialFractionTerm,
+};
+pub use equation_system::{
+    Constraint, DependencyGraph, EquationSystem, EquationType, IntegralInfo,
+    MultiEquationSolver, MultiEquationSolution, NamedEquation, ODEInfo, SolutionStrategy,
+    SolutionValue, SolveMethod, SolveStep, SolverConfig, SystemContext, SystemError,
+    SystemOperation, SystemResolutionPath, SystemStep, StepResult,
 };
 
 /// Library version information.

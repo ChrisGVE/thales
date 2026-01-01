@@ -833,6 +833,42 @@ mod ffi {
         /// * `Err(String)` - Error description
         #[swift_bridge(return_with = Result)]
         fn partial_fractions_ffi(numerator: &str, denominator: &str, variable: &str) -> Result<String, String>;
+
+        /// Solve a multi-equation system.
+        ///
+        /// Takes multiple equations of any type (algebraic, ODE, differential, etc.),
+        /// known values, and target variables. Automatically determines solving order
+        /// using dependency analysis and chains solutions through equations.
+        ///
+        /// # Arguments
+        /// * `equations_json` - JSON object: {"eq1": "F = m * a", "eq2": "v = u + a * t"}
+        /// * `known_values_json` - JSON object: {"F": 100.0, "m": 20.0, "u": 0.0, "t": 5.0}
+        /// * `targets_json` - JSON array: ["a", "v"]
+        ///
+        /// # Returns
+        /// * `Ok(String)` - JSON with solutions and step-by-step resolution path
+        /// * `Err(String)` - Error description
+        ///
+        /// # Example (Swift)
+        /// ```swift
+        /// let equations = """
+        ///     {"newton": "F = m * a", "kinematic": "v = u + a * t"}
+        /// """
+        /// let known = """
+        ///     {"F": 100.0, "m": 20.0, "u": 0.0, "t": 5.0}
+        /// """
+        /// let targets = """
+        ///     ["a", "v"]
+        /// """
+        /// let result = try solve_equation_system_ffi(equations, known, targets)
+        /// // Returns: {"solutions": {"a": 5.0, "v": 25.0}, "steps": [...]}
+        /// ```
+        #[swift_bridge(return_with = Result)]
+        fn solve_equation_system_ffi(
+            equations_json: &str,
+            known_values_json: &str,
+            targets_json: &str,
+        ) -> Result<String, String>;
     }
 }
 
@@ -1612,6 +1648,82 @@ fn partial_fractions_ffi(numerator: &str, denominator: &str, variable: &str) -> 
         }
         Err(e) => Err(format!("Decomposition failed: {:?}", e)),
     }
+}
+
+/// Solve a multi-equation system.
+fn solve_equation_system_ffi(
+    equations_json: &str,
+    known_values_json: &str,
+    targets_json: &str,
+) -> Result<String, String> {
+    use crate::equation_system::{EquationSystem, MultiEquationSolver, SystemContext};
+    use crate::parser::parse_equation;
+    use std::collections::HashMap;
+
+    // Parse equations JSON: {"id": "equation_str", ...}
+    let equations_map: HashMap<String, String> = serde_json::from_str(equations_json)
+        .map_err(|e| format!("Failed to parse equations JSON: {}", e))?;
+
+    // Parse known values JSON: {"var": value, ...}
+    let known_values: HashMap<String, f64> = serde_json::from_str(known_values_json)
+        .map_err(|e| format!("Failed to parse known values JSON: {}", e))?;
+
+    // Parse targets JSON: ["var1", "var2", ...]
+    let targets: Vec<String> = serde_json::from_str(targets_json)
+        .map_err(|e| format!("Failed to parse targets JSON: {}", e))?;
+
+    // Build the equation system
+    let mut system = EquationSystem::new();
+    for (id, eq_str) in equations_map {
+        let equation = parse_equation(&eq_str)
+            .map_err(|e| format!("Failed to parse equation '{}': {:?}", id, e))?;
+        system.add_equation(id, equation);
+    }
+
+    // Build the context
+    let mut context = SystemContext::new();
+    for (var, val) in known_values {
+        context = context.with_known_value(var, val);
+    }
+    for target in targets {
+        context = context.with_target(target);
+    }
+
+    // Solve the system
+    let solver = MultiEquationSolver::new();
+    let solution = solver.solve(&system, &context)
+        .map_err(|e| format!("Failed to solve system: {}", e))?;
+
+    // Build the result JSON
+    let mut solutions_map: HashMap<String, serde_json::Value> = HashMap::new();
+    for (var, val) in &solution.solutions {
+        if let Some(num) = val.as_numeric() {
+            solutions_map.insert(var.clone(), serde_json::json!(num));
+        } else {
+            solutions_map.insert(var.clone(), serde_json::json!(format!("{}", val.to_expression())));
+        }
+    }
+
+    // Build step descriptions
+    let steps: Vec<serde_json::Value> = solution.resolution_path.steps.iter().map(|step| {
+        serde_json::json!({
+            "step_number": step.step_number,
+            "equation_id": step.equation_id,
+            "operation": format!("{}", step.operation),
+            "explanation": step.explanation
+        })
+    }).collect();
+
+    let output = serde_json::json!({
+        "solutions": solutions_map,
+        "steps": steps,
+        "unsolved": solution.unsolved,
+        "warnings": solution.warnings,
+        "is_complete": solution.is_complete()
+    });
+
+    serde_json::to_string(&output)
+        .map_err(|e| format!("Failed to serialize result: {}", e))
 }
 
 // TODO: Add async FFI support for long-running operations
