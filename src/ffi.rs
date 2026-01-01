@@ -479,6 +479,361 @@ mod ffi {
         pub real: f64,
         pub imaginary: f64,
     }
+
+    // =========================================================================
+    // New CAS Operation Types and Functions
+    // =========================================================================
+
+    /// Result of symbolic differentiation.
+    ///
+    /// # Fields
+    /// * `original` - The original expression
+    /// * `variable` - Variable with respect to which we differentiated
+    /// * `derivative` - The derivative expression as a string
+    /// * `derivative_latex` - The derivative in LaTeX format
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct DifferentiationResultFFI {
+        pub original: String,
+        pub variable: String,
+        pub derivative: String,
+        pub derivative_latex: String,
+    }
+
+    /// Result of symbolic integration.
+    ///
+    /// # Fields
+    /// * `original` - The original expression
+    /// * `variable` - Variable of integration
+    /// * `integral` - The integral expression as a string (empty if failed)
+    /// * `integral_latex` - The integral in LaTeX format
+    /// * `success` - Whether integration succeeded
+    /// * `error_message` - Error description if failed
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct IntegrationResultFFI {
+        pub original: String,
+        pub variable: String,
+        pub integral: String,
+        pub integral_latex: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    /// Result of definite integral evaluation.
+    ///
+    /// # Fields
+    /// * `original` - The original expression
+    /// * `variable` - Variable of integration
+    /// * `lower_bound` - Lower limit of integration
+    /// * `upper_bound` - Upper limit of integration
+    /// * `value` - The result expression as a string
+    /// * `value_latex` - The result in LaTeX format
+    /// * `numeric_value` - Numerical value (NaN if not evaluable)
+    /// * `success` - Whether evaluation succeeded
+    /// * `error_message` - Error description if failed
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct DefiniteIntegralResultFFI {
+        pub original: String,
+        pub variable: String,
+        pub lower_bound: f64,
+        pub upper_bound: f64,
+        pub value: String,
+        pub value_latex: String,
+        pub numeric_value: f64,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    /// Result of limit evaluation.
+    ///
+    /// # Fields
+    /// * `original` - The original expression
+    /// * `variable` - The variable approaching the limit
+    /// * `approaches` - The value being approached
+    /// * `value` - The limit value as a string
+    /// * `value_latex` - The limit in LaTeX format
+    /// * `numeric_value` - Numerical value (NaN if symbolic)
+    /// * `success` - Whether evaluation succeeded
+    /// * `error_message` - Error description if failed
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct LimitResultFFI {
+        pub original: String,
+        pub variable: String,
+        pub approaches: String,
+        pub value: String,
+        pub value_latex: String,
+        pub numeric_value: f64,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    /// Result of expression evaluation.
+    ///
+    /// # Fields
+    /// * `original` - The original expression
+    /// * `value` - The numerical result
+    /// * `success` - Whether evaluation succeeded
+    /// * `error_message` - Error description if failed
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct EvaluationResultFFI {
+        pub original: String,
+        pub value: f64,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    /// Result of expression simplification.
+    ///
+    /// # Fields
+    /// * `original` - The original expression
+    /// * `simplified` - The simplified expression as a string
+    /// * `simplified_latex` - The simplified expression in LaTeX format
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct SimplificationResultFFI {
+        pub original: String,
+        pub simplified: String,
+        pub simplified_latex: String,
+    }
+
+    /// LaTeX parsing and rendering functions.
+    extern "Rust" {
+        /// Parse a LaTeX expression and return its AST representation.
+        ///
+        /// # Arguments
+        /// * `input` - LaTeX expression string (e.g., "\\frac{1}{2}")
+        ///
+        /// # Returns
+        /// * `Ok(String)` - Debug representation of parsed expression
+        /// * `Err(String)` - Parse error description
+        #[swift_bridge(return_with = Result)]
+        fn parse_latex_ffi(input: &str) -> Result<String, String>;
+
+        /// Parse a LaTeX expression and return it as normalized LaTeX.
+        ///
+        /// # Arguments
+        /// * `input` - LaTeX expression string
+        ///
+        /// # Returns
+        /// * `Ok(String)` - Normalized LaTeX output
+        /// * `Err(String)` - Parse error description
+        #[swift_bridge(return_with = Result)]
+        fn parse_latex_to_latex_ffi(input: &str) -> Result<String, String>;
+
+        /// Convert a mathematical expression to LaTeX format.
+        ///
+        /// # Arguments
+        /// * `expression` - Expression string (e.g., "x^2 + 2*x + 1")
+        ///
+        /// # Returns
+        /// * `Ok(String)` - LaTeX representation
+        /// * `Err(String)` - Parse error description
+        #[swift_bridge(return_with = Result)]
+        fn to_latex_ffi(expression: &str) -> Result<String, String>;
+    }
+
+    /// Calculus operations: differentiation, integration, limits.
+    extern "Rust" {
+        /// Compute the symbolic derivative of an expression.
+        ///
+        /// # Arguments
+        /// * `expression` - Expression to differentiate (e.g., "x^2 + 2*x")
+        /// * `variable` - Variable to differentiate with respect to (e.g., "x")
+        ///
+        /// # Returns
+        /// * `Ok(DifferentiationResultFFI)` - The derivative with metadata
+        /// * `Err(String)` - Error description
+        ///
+        /// # Example (Swift)
+        /// ```swift
+        /// let result = try differentiate_ffi("x^3 + 2*x", "x")
+        /// print("d/dx = \(result.derivative)")  // "3*x^2 + 2"
+        /// print("LaTeX: \(result.derivative_latex)")
+        /// ```
+        #[swift_bridge(return_with = Result)]
+        fn differentiate_ffi(expression: &str, variable: &str) -> Result<DifferentiationResultFFI, String>;
+
+        /// Compute the nth derivative of an expression.
+        ///
+        /// # Arguments
+        /// * `expression` - Expression to differentiate
+        /// * `variable` - Variable to differentiate with respect to
+        /// * `n` - Number of times to differentiate
+        ///
+        /// # Returns
+        /// * `Ok(DifferentiationResultFFI)` - The nth derivative
+        /// * `Err(String)` - Error description
+        #[swift_bridge(return_with = Result)]
+        fn differentiate_n_ffi(expression: &str, variable: &str, n: u32) -> Result<DifferentiationResultFFI, String>;
+
+        /// Compute the gradient of an expression.
+        ///
+        /// # Arguments
+        /// * `expression` - Expression to compute gradient for
+        /// * `variables_json` - JSON array of variable names: ["x", "y", "z"]
+        ///
+        /// # Returns
+        /// * `Ok(String)` - JSON array of partial derivatives
+        /// * `Err(String)` - Error description
+        #[swift_bridge(return_with = Result)]
+        fn gradient_ffi(expression: &str, variables_json: &str) -> Result<String, String>;
+
+        /// Compute the indefinite integral of an expression.
+        ///
+        /// # Arguments
+        /// * `expression` - Expression to integrate
+        /// * `variable` - Variable of integration
+        ///
+        /// # Returns
+        /// * `Ok(IntegrationResultFFI)` - The integral with metadata
+        /// * `Err(String)` - Error description
+        ///
+        /// # Example (Swift)
+        /// ```swift
+        /// let result = try integrate_ffi("x^2", "x")
+        /// if result.success {
+        ///     print("∫ = \(result.integral)")  // "x^3/3"
+        /// }
+        /// ```
+        #[swift_bridge(return_with = Result)]
+        fn integrate_ffi(expression: &str, variable: &str) -> Result<IntegrationResultFFI, String>;
+
+        /// Compute a definite integral.
+        ///
+        /// # Arguments
+        /// * `expression` - Expression to integrate
+        /// * `variable` - Variable of integration
+        /// * `lower` - Lower bound
+        /// * `upper` - Upper bound
+        ///
+        /// # Returns
+        /// * `Ok(DefiniteIntegralResultFFI)` - The definite integral value
+        /// * `Err(String)` - Error description
+        #[swift_bridge(return_with = Result)]
+        fn definite_integral_ffi(expression: &str, variable: &str, lower: f64, upper: f64) -> Result<DefiniteIntegralResultFFI, String>;
+
+        /// Evaluate a limit.
+        ///
+        /// # Arguments
+        /// * `expression` - Expression to evaluate limit of
+        /// * `variable` - Variable approaching the limit
+        /// * `approaches` - Value the variable approaches
+        ///
+        /// # Returns
+        /// * `Ok(LimitResultFFI)` - The limit value
+        /// * `Err(String)` - Error description
+        ///
+        /// # Example (Swift)
+        /// ```swift
+        /// let result = try limit_ffi("sin(x)/x", "x", 0.0)
+        /// print("lim = \(result.value)")  // "1"
+        /// ```
+        #[swift_bridge(return_with = Result)]
+        fn limit_ffi(expression: &str, variable: &str, approaches: f64) -> Result<LimitResultFFI, String>;
+
+        /// Evaluate a limit at positive infinity.
+        ///
+        /// # Arguments
+        /// * `expression` - Expression to evaluate limit of
+        /// * `variable` - Variable approaching infinity
+        ///
+        /// # Returns
+        /// * `Ok(LimitResultFFI)` - The limit value
+        /// * `Err(String)` - Error description
+        #[swift_bridge(return_with = Result)]
+        fn limit_infinity_ffi(expression: &str, variable: &str) -> Result<LimitResultFFI, String>;
+    }
+
+    /// Expression evaluation and simplification.
+    extern "Rust" {
+        /// Evaluate an expression numerically with given variable values.
+        ///
+        /// # Arguments
+        /// * `expression` - Expression to evaluate
+        /// * `values_json` - JSON object mapping variable names to values: {"x": 2.0, "y": 3.0}
+        ///
+        /// # Returns
+        /// * `Ok(EvaluationResultFFI)` - The numerical result
+        /// * `Err(String)` - Error description
+        ///
+        /// # Example (Swift)
+        /// ```swift
+        /// let result = try evaluate_ffi("x^2 + y", "{\"x\": 3.0, \"y\": 1.0}")
+        /// print("value = \(result.value)")  // 10.0
+        /// ```
+        #[swift_bridge(return_with = Result)]
+        fn evaluate_ffi(expression: &str, values_json: &str) -> Result<EvaluationResultFFI, String>;
+
+        /// Simplify an algebraic expression.
+        ///
+        /// # Arguments
+        /// * `expression` - Expression to simplify
+        ///
+        /// # Returns
+        /// * `Ok(SimplificationResultFFI)` - The simplified expression
+        /// * `Err(String)` - Error description
+        #[swift_bridge(return_with = Result)]
+        fn simplify_ffi(expression: &str) -> Result<SimplificationResultFFI, String>;
+
+        /// Simplify a trigonometric expression.
+        ///
+        /// # Arguments
+        /// * `expression` - Expression to simplify
+        ///
+        /// # Returns
+        /// * `Ok(SimplificationResultFFI)` - The simplified expression
+        /// * `Err(String)` - Error description
+        #[swift_bridge(return_with = Result)]
+        fn simplify_trig_ffi(expression: &str) -> Result<SimplificationResultFFI, String>;
+
+        /// Simplify a trigonometric expression with step-by-step output.
+        ///
+        /// # Arguments
+        /// * `expression` - Expression to simplify
+        ///
+        /// # Returns
+        /// * `Ok(String)` - JSON with simplified expression and steps
+        /// * `Err(String)` - Error description
+        #[swift_bridge(return_with = Result)]
+        fn simplify_trig_with_steps_ffi(expression: &str) -> Result<String, String>;
+    }
+
+    /// Advanced solving operations.
+    extern "Rust" {
+        /// Solve a system of linear equations.
+        ///
+        /// # Arguments
+        /// * `equations_json` - JSON array of equation strings: ["2*x + y = 5", "x - y = 1"]
+        ///
+        /// # Returns
+        /// * `Ok(String)` - JSON object mapping variables to solutions
+        /// * `Err(String)` - Error description
+        #[swift_bridge(return_with = Result)]
+        fn solve_system_ffi(equations_json: &str) -> Result<String, String>;
+
+        /// Solve an inequality.
+        ///
+        /// # Arguments
+        /// * `inequality` - Inequality string (e.g., "x^2 - 4 < 0")
+        /// * `variable` - Variable to solve for
+        ///
+        /// # Returns
+        /// * `Ok(String)` - Solution interval description
+        /// * `Err(String)` - Error description
+        #[swift_bridge(return_with = Result)]
+        fn solve_inequality_ffi(inequality: &str, variable: &str) -> Result<String, String>;
+
+        /// Perform partial fraction decomposition.
+        ///
+        /// # Arguments
+        /// * `numerator` - Numerator polynomial
+        /// * `denominator` - Denominator polynomial
+        /// * `variable` - Variable name
+        ///
+        /// # Returns
+        /// * `Ok(String)` - JSON with decomposition details
+        /// * `Err(String)` - Error description
+        #[swift_bridge(return_with = Result)]
+        fn partial_fractions_ffi(numerator: &str, denominator: &str, variable: &str) -> Result<String, String>;
+    }
 }
 
 // Implementation of FFI functions
@@ -688,9 +1043,577 @@ fn solve_with_values_ffi(
     })
 }
 
-// TODO: Add FFI for unit conversions
-// TODO: Add FFI for expression evaluation
-// TODO: Add FFI for expression simplification
+// =============================================================================
+// New CAS Operations FFI Functions
+// =============================================================================
+
+/// Parse LaTeX expression and return string representation.
+fn parse_latex_ffi(input: &str) -> Result<String, String> {
+    use crate::latex::parse_latex;
+    parse_latex(input)
+        .map(|expr| format!("{:?}", expr))
+        .map_err(|e| format!("LaTeX parse error: {:?}", e))
+}
+
+/// Parse LaTeX expression and return as LaTeX output.
+fn parse_latex_to_latex_ffi(input: &str) -> Result<String, String> {
+    use crate::latex::parse_latex;
+    parse_latex(input)
+        .map(|expr| expr.to_latex())
+        .map_err(|e| format!("LaTeX parse error: {:?}", e))
+}
+
+/// Differentiate an expression with respect to a variable.
+fn differentiate_ffi(expression: &str, variable: &str) -> Result<ffi::DifferentiationResultFFI, String> {
+    use crate::parser::parse_expression;
+
+    let expr = parse_expression(expression)
+        .map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let derivative = expr.differentiate(variable);
+    let simplified = derivative.simplify();
+
+    Ok(ffi::DifferentiationResultFFI {
+        original: expression.to_string(),
+        variable: variable.to_string(),
+        derivative: format!("{}", simplified),
+        derivative_latex: simplified.to_latex(),
+    })
+}
+
+/// Differentiate an expression n times.
+fn differentiate_n_ffi(expression: &str, variable: &str, n: u32) -> Result<ffi::DifferentiationResultFFI, String> {
+    use crate::parser::parse_expression;
+
+    let expr = parse_expression(expression)
+        .map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let mut result = expr;
+    for _ in 0..n {
+        result = result.differentiate(variable).simplify();
+    }
+
+    Ok(ffi::DifferentiationResultFFI {
+        original: expression.to_string(),
+        variable: variable.to_string(),
+        derivative: format!("{}", result),
+        derivative_latex: result.to_latex(),
+    })
+}
+
+/// Compute the gradient of an expression with respect to multiple variables.
+fn gradient_ffi(expression: &str, variables_json: &str) -> Result<String, String> {
+    use crate::parser::parse_expression;
+
+    let expr = parse_expression(expression)
+        .map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let variables: Vec<String> = serde_json::from_str(variables_json)
+        .map_err(|e| format!("Failed to parse variables JSON: {}", e))?;
+
+    let gradient: Vec<serde_json::Value> = variables
+        .iter()
+        .map(|var| {
+            let deriv = expr.differentiate(var).simplify();
+            serde_json::json!({
+                "variable": var,
+                "partial_derivative": format!("{}", deriv),
+                "latex": deriv.to_latex()
+            })
+        })
+        .collect();
+
+    serde_json::to_string(&gradient)
+        .map_err(|e| format!("Failed to serialize gradient: {}", e))
+}
+
+/// Integrate an expression with respect to a variable (indefinite integral).
+fn integrate_ffi(expression: &str, variable: &str) -> Result<ffi::IntegrationResultFFI, String> {
+    use crate::integration::integrate;
+    use crate::parser::parse_expression;
+
+    let expr = parse_expression(expression)
+        .map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let result = integrate(&expr, variable);
+
+    match result {
+        Ok(integral) => {
+            let simplified = integral.simplify();
+            Ok(ffi::IntegrationResultFFI {
+                original: expression.to_string(),
+                variable: variable.to_string(),
+                integral: format!("{}", simplified),
+                integral_latex: simplified.to_latex(),
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::IntegrationResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            integral: String::new(),
+            integral_latex: String::new(),
+            success: false,
+            error_message: format!("{:?}", e),
+        }),
+    }
+}
+
+/// Compute a definite integral.
+fn definite_integral_ffi(
+    expression: &str,
+    variable: &str,
+    lower: f64,
+    upper: f64,
+) -> Result<ffi::DefiniteIntegralResultFFI, String> {
+    use crate::ast::Expression;
+    use crate::integration::definite_integral;
+    use crate::parser::parse_expression;
+
+    let expr = parse_expression(expression)
+        .map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let lower_expr = Expression::Float(lower);
+    let upper_expr = Expression::Float(upper);
+
+    let result = definite_integral(&expr, variable, &lower_expr, &upper_expr);
+
+    match result {
+        Ok(value) => Ok(ffi::DefiniteIntegralResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            lower_bound: lower,
+            upper_bound: upper,
+            value: format!("{}", value),
+            value_latex: value.to_latex(),
+            numeric_value: evaluate_to_f64(&value),
+            success: true,
+            error_message: String::new(),
+        }),
+        Err(e) => Ok(ffi::DefiniteIntegralResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            lower_bound: lower,
+            upper_bound: upper,
+            value: String::new(),
+            value_latex: String::new(),
+            numeric_value: f64::NAN,
+            success: false,
+            error_message: format!("{:?}", e),
+        }),
+    }
+}
+
+/// Helper to evaluate expression to f64 if possible.
+fn evaluate_to_f64(expr: &crate::ast::Expression) -> f64 {
+    use crate::ast::Expression;
+    match expr {
+        Expression::Integer(n) => *n as f64,
+        Expression::Float(f) => *f,
+        Expression::Rational(r) => *r.numer() as f64 / *r.denom() as f64,
+        _ => f64::NAN,
+    }
+}
+
+/// Evaluate a limit.
+fn limit_ffi(
+    expression: &str,
+    variable: &str,
+    approaches: f64,
+) -> Result<ffi::LimitResultFFI, String> {
+    use crate::limits::{limit, LimitPoint};
+    use crate::parser::parse_expression;
+
+    let expr = parse_expression(expression)
+        .map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let result = limit(&expr, variable, LimitPoint::Value(approaches));
+
+    match result {
+        Ok(lim_result) => {
+            let (value_str, value_latex, numeric) = format_limit_result(&lim_result);
+            Ok(ffi::LimitResultFFI {
+                original: expression.to_string(),
+                variable: variable.to_string(),
+                approaches: format!("{}", approaches),
+                value: value_str,
+                value_latex,
+                numeric_value: numeric,
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::LimitResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            approaches: format!("{}", approaches),
+            value: String::new(),
+            value_latex: String::new(),
+            numeric_value: f64::NAN,
+            success: false,
+            error_message: format!("{:?}", e),
+        }),
+    }
+}
+
+/// Evaluate a limit at positive infinity.
+fn limit_infinity_ffi(expression: &str, variable: &str) -> Result<ffi::LimitResultFFI, String> {
+    use crate::limits::{limit, LimitPoint};
+    use crate::parser::parse_expression;
+
+    let expr = parse_expression(expression)
+        .map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let result = limit(&expr, variable, LimitPoint::PositiveInfinity);
+
+    match result {
+        Ok(lim_result) => {
+            let (value_str, value_latex, numeric) = format_limit_result(&lim_result);
+            Ok(ffi::LimitResultFFI {
+                original: expression.to_string(),
+                variable: variable.to_string(),
+                approaches: "∞".to_string(),
+                value: value_str,
+                value_latex,
+                numeric_value: numeric,
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::LimitResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            approaches: "∞".to_string(),
+            value: String::new(),
+            value_latex: String::new(),
+            numeric_value: f64::NAN,
+            success: false,
+            error_message: format!("{:?}", e),
+        }),
+    }
+}
+
+/// Helper to format limit result.
+fn format_limit_result(result: &crate::limits::LimitResult) -> (String, String, f64) {
+    use crate::limits::LimitResult;
+    match result {
+        LimitResult::Value(v) => (format!("{}", v), format!("{}", v), *v),
+        LimitResult::PositiveInfinity => ("∞".to_string(), "\\infty".to_string(), f64::INFINITY),
+        LimitResult::NegativeInfinity => ("-∞".to_string(), "-\\infty".to_string(), f64::NEG_INFINITY),
+        LimitResult::Expression(expr) => (format!("{}", expr), expr.to_latex(), f64::NAN),
+    }
+}
+
+/// Evaluate an expression with given variable values.
+fn evaluate_ffi(expression: &str, values_json: &str) -> Result<ffi::EvaluationResultFFI, String> {
+    use crate::parser::parse_expression;
+    use std::collections::HashMap;
+
+    let expr = parse_expression(expression)
+        .map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let values: HashMap<String, f64> = serde_json::from_str(values_json)
+        .map_err(|e| format!("Failed to parse values JSON: {}", e))?;
+
+    let result = evaluate_expression(&expr, &values);
+
+    match result {
+        Some(value) => Ok(ffi::EvaluationResultFFI {
+            original: expression.to_string(),
+            value,
+            success: true,
+            error_message: String::new(),
+        }),
+        None => Ok(ffi::EvaluationResultFFI {
+            original: expression.to_string(),
+            value: f64::NAN,
+            success: false,
+            error_message: "Cannot evaluate expression (may contain undefined variables or operations)".to_string(),
+        }),
+    }
+}
+
+/// Helper to evaluate expression with variable substitution.
+fn evaluate_expression(expr: &crate::ast::Expression, values: &std::collections::HashMap<String, f64>) -> Option<f64> {
+    use crate::ast::{BinaryOp, Expression, Function, UnaryOp};
+
+    match expr {
+        Expression::Integer(n) => Some(*n as f64),
+        Expression::Float(f) => Some(*f),
+        Expression::Rational(r) => Some(*r.numer() as f64 / *r.denom() as f64),
+        Expression::Variable(v) => values.get(&v.name).copied(),
+        Expression::Constant(c) => {
+            use crate::ast::SymbolicConstant;
+            match c {
+                SymbolicConstant::Pi => Some(std::f64::consts::PI),
+                SymbolicConstant::E => Some(std::f64::consts::E),
+                SymbolicConstant::I => None, // Complex not supported in f64
+            }
+        }
+        Expression::Unary(op, inner) => {
+            let v = evaluate_expression(inner, values)?;
+            match op {
+                UnaryOp::Neg => Some(-v),
+                UnaryOp::Pos => Some(v),
+                UnaryOp::Factorial => {
+                    if v >= 0.0 && v == v.floor() {
+                        Some((1..=(v as u64)).product::<u64>() as f64)
+                    } else {
+                        None
+                    }
+                }
+            }
+        }
+        Expression::Binary(op, left, right) => {
+            let l = evaluate_expression(left, values)?;
+            let r = evaluate_expression(right, values)?;
+            match op {
+                BinaryOp::Add => Some(l + r),
+                BinaryOp::Sub => Some(l - r),
+                BinaryOp::Mul => Some(l * r),
+                BinaryOp::Div => if r != 0.0 { Some(l / r) } else { None },
+                BinaryOp::Mod => if r != 0.0 { Some(l % r) } else { None },
+            }
+        }
+        Expression::Power(base, exp) => {
+            let b = evaluate_expression(base, values)?;
+            let e = evaluate_expression(exp, values)?;
+            Some(b.powf(e))
+        }
+        Expression::Function(func, args) => {
+            let arg_values: Option<Vec<f64>> = args.iter()
+                .map(|a| evaluate_expression(a, values))
+                .collect();
+            let arg_values = arg_values?;
+
+            match func {
+                Function::Sin => Some(arg_values[0].sin()),
+                Function::Cos => Some(arg_values[0].cos()),
+                Function::Tan => Some(arg_values[0].tan()),
+                Function::Asin => Some(arg_values[0].asin()),
+                Function::Acos => Some(arg_values[0].acos()),
+                Function::Atan => Some(arg_values[0].atan()),
+                Function::Sinh => Some(arg_values[0].sinh()),
+                Function::Cosh => Some(arg_values[0].cosh()),
+                Function::Tanh => Some(arg_values[0].tanh()),
+                Function::Exp => Some(arg_values[0].exp()),
+                Function::Ln => if arg_values[0] > 0.0 { Some(arg_values[0].ln()) } else { None },
+                Function::Log => {
+                    if arg_values.len() == 2 && arg_values[0] > 0.0 && arg_values[1] > 0.0 {
+                        Some(arg_values[1].log(arg_values[0]))
+                    } else if arg_values.len() == 1 && arg_values[0] > 0.0 {
+                        Some(arg_values[0].log10())
+                    } else {
+                        None
+                    }
+                }
+                Function::Sqrt => if arg_values[0] >= 0.0 { Some(arg_values[0].sqrt()) } else { None },
+                Function::Abs => Some(arg_values[0].abs()),
+                Function::Floor => Some(arg_values[0].floor()),
+                Function::Ceil => Some(arg_values[0].ceil()),
+                Function::Round => Some(arg_values[0].round()),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Simplify an expression.
+fn simplify_ffi(expression: &str) -> Result<ffi::SimplificationResultFFI, String> {
+    use crate::parser::parse_expression;
+
+    let expr = parse_expression(expression)
+        .map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let simplified = expr.simplify();
+
+    Ok(ffi::SimplificationResultFFI {
+        original: expression.to_string(),
+        simplified: format!("{}", simplified),
+        simplified_latex: simplified.to_latex(),
+    })
+}
+
+/// Simplify trigonometric expression.
+fn simplify_trig_ffi(expression: &str) -> Result<ffi::SimplificationResultFFI, String> {
+    use crate::parser::parse_expression;
+    use crate::trigonometric::simplify_trig;
+
+    let expr = parse_expression(expression)
+        .map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let simplified = simplify_trig(&expr);
+
+    Ok(ffi::SimplificationResultFFI {
+        original: expression.to_string(),
+        simplified: format!("{}", simplified),
+        simplified_latex: simplified.to_latex(),
+    })
+}
+
+/// Simplify trigonometric expression with steps.
+fn simplify_trig_with_steps_ffi(expression: &str) -> Result<String, String> {
+    use crate::parser::parse_expression;
+    use crate::trigonometric::simplify_trig_with_steps;
+
+    let expr = parse_expression(expression)
+        .map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let (simplified, steps) = simplify_trig_with_steps(&expr);
+
+    let result = serde_json::json!({
+        "original": expression,
+        "simplified": format!("{}", simplified),
+        "simplified_latex": simplified.to_latex(),
+        "steps": steps
+    });
+
+    serde_json::to_string(&result)
+        .map_err(|e| format!("Failed to serialize result: {}", e))
+}
+
+/// Solve a system of linear equations.
+fn solve_system_ffi(equations_json: &str) -> Result<String, String> {
+    use crate::ast::Variable;
+    use crate::solver::{LinearSystem, SystemSolver};
+
+    let equations: Vec<String> = serde_json::from_str(equations_json)
+        .map_err(|e| format!("Failed to parse equations JSON: {}", e))?;
+
+    let mut parsed_equations = Vec::new();
+    for eq_str in &equations {
+        let eq = crate::parser::parse_equation(eq_str)
+            .map_err(|e| format!("Failed to parse equation '{}': {:?}", eq_str, e))?;
+        parsed_equations.push(eq);
+    }
+
+    // Extract variables from equations
+    let mut vars = std::collections::HashSet::new();
+    for eq in &parsed_equations {
+        collect_variables(&eq.left, &mut vars);
+        collect_variables(&eq.right, &mut vars);
+    }
+    let variables: Vec<Variable> = vars.into_iter().map(|s| Variable::new(&s)).collect();
+
+    let system = LinearSystem::new(parsed_equations, variables);
+    let solver = SystemSolver::new();
+
+    match solver.solve(&system) {
+        Ok(solution) => {
+            let result: std::collections::HashMap<String, String> = solution
+                .solutions
+                .iter()
+                .map(|(var, expr)| (var.name.clone(), format!("{}", expr)))
+                .collect();
+            serde_json::to_string(&result)
+                .map_err(|e| format!("Failed to serialize result: {}", e))
+        }
+        Err(e) => Err(format!("Failed to solve system: {:?}", e)),
+    }
+}
+
+/// Helper to collect variable names from expression.
+fn collect_variables(expr: &crate::ast::Expression, vars: &mut std::collections::HashSet<String>) {
+    use crate::ast::Expression;
+    match expr {
+        Expression::Variable(v) => { vars.insert(v.name.clone()); }
+        Expression::Unary(_, inner) => collect_variables(inner, vars),
+        Expression::Binary(_, left, right) => {
+            collect_variables(left, vars);
+            collect_variables(right, vars);
+        }
+        Expression::Power(base, exp) => {
+            collect_variables(base, vars);
+            collect_variables(exp, vars);
+        }
+        Expression::Function(_, args) => {
+            for arg in args {
+                collect_variables(arg, vars);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Solve an inequality.
+fn solve_inequality_ffi(inequality: &str, variable: &str) -> Result<String, String> {
+    use crate::ast::Variable;
+    use crate::inequality::{solve_inequality, Inequality};
+    use crate::parser::parse_expression;
+
+    // Parse inequality (expects format like "expr < value" or "expr > value")
+    let parts: Vec<&str> = if inequality.contains("<=") {
+        vec![&inequality[..inequality.find("<=").unwrap()], &inequality[inequality.find("<=").unwrap()+2..], "<="]
+    } else if inequality.contains(">=") {
+        vec![&inequality[..inequality.find(">=").unwrap()], &inequality[inequality.find(">=").unwrap()+2..], ">="]
+    } else if inequality.contains("<") {
+        vec![&inequality[..inequality.find('<').unwrap()], &inequality[inequality.find('<').unwrap()+1..], "<"]
+    } else if inequality.contains(">") {
+        vec![&inequality[..inequality.find('>').unwrap()], &inequality[inequality.find('>').unwrap()+1..], ">"]
+    } else {
+        return Err("Invalid inequality format. Use <, >, <=, or >=".to_string());
+    };
+
+    let left = parse_expression(parts[0].trim())
+        .map_err(|e| format!("Parse error in left side: {:?}", e))?;
+    let right = parse_expression(parts[1].trim())
+        .map_err(|e| format!("Parse error in right side: {:?}", e))?;
+
+    let ineq = match parts[2] {
+        "<" => Inequality::LessThan(left, right),
+        ">" => Inequality::GreaterThan(left, right),
+        "<=" => Inequality::LessEqual(left, right),
+        ">=" => Inequality::GreaterEqual(left, right),
+        _ => return Err("Invalid operator".to_string()),
+    };
+
+    match solve_inequality(&ineq, &Variable::new(variable)) {
+        Ok(solution) => Ok(format!("{:?}", solution)),
+        Err(e) => Err(format!("Failed to solve inequality: {:?}", e)),
+    }
+}
+
+/// Get the LaTeX representation of an expression.
+fn to_latex_ffi(expression: &str) -> Result<String, String> {
+    use crate::parser::parse_expression;
+
+    let expr = parse_expression(expression)
+        .map_err(|e| format!("Parse error: {:?}", e))?;
+
+    Ok(expr.to_latex())
+}
+
+/// Partial fraction decomposition.
+fn partial_fractions_ffi(numerator: &str, denominator: &str, variable: &str) -> Result<String, String> {
+    use crate::ast::Variable;
+    use crate::parser::parse_expression;
+    use crate::partial_fractions::decompose;
+
+    let num = parse_expression(numerator)
+        .map_err(|e| format!("Parse error in numerator: {:?}", e))?;
+    let denom = parse_expression(denominator)
+        .map_err(|e| format!("Parse error in denominator: {:?}", e))?;
+
+    match decompose(&num, &denom, &Variable::new(variable)) {
+        Ok(result) => {
+            let expr = result.to_expression();
+            let output = serde_json::json!({
+                "original_numerator": numerator,
+                "original_denominator": denominator,
+                "decomposition": format!("{}", expr),
+                "decomposition_latex": expr.to_latex(),
+                "terms_count": result.terms.len(),
+                "steps": result.steps
+            });
+            serde_json::to_string(&output)
+                .map_err(|e| format!("Failed to serialize result: {}", e))
+        }
+        Err(e) => Err(format!("Decomposition failed: {:?}", e)),
+    }
+}
+
 // TODO: Add async FFI support for long-running operations
 // TODO: Add callback support for progress updates
 // TODO: Add memory-safe buffer passing for large data
