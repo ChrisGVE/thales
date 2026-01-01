@@ -24,8 +24,8 @@
 //! ## Simple Fraction
 //!
 //! ```
-//! use mathsolver_core::latex::parse_latex;
-//! use mathsolver_core::ast::Expression;
+//! use thales::latex::parse_latex;
+//! use thales::ast::Expression;
 //!
 //! let expr = parse_latex(r"\frac{1}{2}").unwrap();
 //! // Parses to: 1 / 2
@@ -34,7 +34,7 @@
 //! ## Square Root
 //!
 //! ```
-//! use mathsolver_core::latex::parse_latex;
+//! use thales::latex::parse_latex;
 //!
 //! let expr = parse_latex(r"\sqrt{x}").unwrap();
 //! // Parses to: sqrt(x)
@@ -43,8 +43,8 @@
 //! ## Greek Letters
 //!
 //! ```
-//! use mathsolver_core::latex::parse_latex;
-//! use mathsolver_core::ast::{Expression, SymbolicConstant};
+//! use thales::latex::parse_latex;
+//! use thales::ast::{Expression, SymbolicConstant};
 //!
 //! let expr = parse_latex(r"\pi").unwrap();
 //! assert!(matches!(expr, Expression::Constant(SymbolicConstant::Pi)));
@@ -53,7 +53,7 @@
 //! ## Complex Expression
 //!
 //! ```
-//! use mathsolver_core::latex::parse_latex;
+//! use thales::latex::parse_latex;
 //!
 //! let expr = parse_latex(r"\frac{-b \pm \sqrt{b^2 - 4ac}}{2a}").unwrap();
 //! // Parses the quadratic formula
@@ -62,7 +62,7 @@
 //! # Error Handling
 //!
 //! ```
-//! use mathsolver_core::latex::{parse_latex, LaTeXParseError};
+//! use thales::latex::{parse_latex, LaTeXParseError};
 //!
 //! match parse_latex(r"\frac{1}") {
 //!     Ok(expr) => println!("Parsed: {:?}", expr),
@@ -461,7 +461,7 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
 /// ## Basic Fraction
 ///
 /// ```
-/// use mathsolver_core::latex::parse_latex;
+/// use thales::latex::parse_latex;
 ///
 /// let expr = parse_latex(r"\frac{1}{2}").unwrap();
 /// // Creates: 1 / 2
@@ -470,7 +470,7 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
 /// ## Square Root
 ///
 /// ```
-/// use mathsolver_core::latex::parse_latex;
+/// use thales::latex::parse_latex;
 ///
 /// let expr = parse_latex(r"\sqrt{x^2 + 1}").unwrap();
 /// // Creates: sqrt(x^2 + 1)
@@ -479,7 +479,7 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
 /// ## Nth Root
 ///
 /// ```
-/// use mathsolver_core::latex::parse_latex;
+/// use thales::latex::parse_latex;
 ///
 /// let expr = parse_latex(r"\sqrt[3]{8}").unwrap();
 /// // Creates: 8^(1/3)
@@ -488,8 +488,8 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
 /// ## Greek Letters
 ///
 /// ```
-/// use mathsolver_core::latex::parse_latex;
-/// use mathsolver_core::ast::{Expression, SymbolicConstant};
+/// use thales::latex::parse_latex;
+/// use thales::ast::{Expression, SymbolicConstant};
 ///
 /// let expr = parse_latex(r"2\pi r").unwrap();
 /// // Creates: 2 * π * r
@@ -498,7 +498,7 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
 /// ## Trigonometric Functions
 ///
 /// ```
-/// use mathsolver_core::latex::parse_latex;
+/// use thales::latex::parse_latex;
 ///
 /// let expr = parse_latex(r"\sin{\theta} + \cos{\theta}").unwrap();
 /// // Creates: sin(theta) + cos(theta)
@@ -568,7 +568,7 @@ pub fn parse_latex(input: &str) -> Result<Expression, Vec<LaTeXParseError>> {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::latex::parse_latex_equation;
+/// use thales::latex::parse_latex_equation;
 ///
 /// let (left, right) = parse_latex_equation(r"x^2 = 4").unwrap();
 /// // left = x^2, right = 4

@@ -2,8 +2,8 @@
 //!
 //! Tests trigonometric, logarithmic, and exponential equation solving capabilities.
 
-use mathsolver_core::ast::{BinaryOp, Equation, Expression, Function, Variable};
-use mathsolver_core::solver::{Solver, TranscendentalSolver};
+use thales::ast::{BinaryOp, Equation, Expression, Function, Variable};
+use thales::solver::{Solver, TranscendentalSolver};
 use std::f64::consts::{E, PI};
 
 // ============================================================================
@@ -80,7 +80,7 @@ fn test_sin_equation_simple() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             // Should be asin(0.5)
             if let Some(val) = extract_float(&expr) {
                 // asin(0.5) = π/6 ≈ 0.5236
@@ -105,7 +105,7 @@ fn test_cos_equation_simple() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             if let Some(val) = extract_float(&expr) {
                 // acos(0.5) = π/3 ≈ 1.0472
                 assert!(approx_eq(val, PI / 3.0, 1e-4), "Expected π/3, got {}", val);
@@ -129,7 +129,7 @@ fn test_tan_equation_simple() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             if let Some(val) = extract_float(&expr) {
                 // atan(1) = π/4 ≈ 0.7854
                 assert!(approx_eq(val, PI / 4.0, 1e-4), "Expected π/4, got {}", val);
@@ -153,7 +153,7 @@ fn test_sin_equation_reversed() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             if let Some(val) = extract_float(&expr) {
                 assert!(approx_eq(val, PI / 6.0, 1e-4));
             } else {
@@ -180,7 +180,7 @@ fn test_trig_with_coefficient() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             if let Some(val) = extract_float(&expr) {
                 assert!(approx_eq(val, PI / 6.0, 1e-4));
             } else {
@@ -218,7 +218,7 @@ fn test_ln_equation_simple() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             if let Some(val) = extract_float(&expr) {
                 // e^2 ≈ 7.389
                 assert!(
@@ -246,7 +246,7 @@ fn test_log10_equation_simple() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             if let Some(val) = extract_float(&expr) {
                 assert!(approx_eq(val, 100.0, 1e-4), "Expected 100, got {}", val);
             } else {
@@ -273,7 +273,7 @@ fn test_log_base_equation() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             if let Some(val) = extract_float(&expr) {
                 assert!(approx_eq(val, 8.0, 1e-4), "Expected 8, got {}", val);
             } else {
@@ -296,7 +296,7 @@ fn test_ln_equation_reversed() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             if let Some(val) = extract_float(&expr) {
                 assert!(approx_eq(val, E.powf(2.0), 1e-4));
             } else {
@@ -323,7 +323,7 @@ fn test_exp_equation_simple() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             if let Some(val) = extract_float(&expr) {
                 // ln(10) ≈ 2.3026
                 assert!(
@@ -351,7 +351,7 @@ fn test_power_equation_simple() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             if let Some(val) = extract_float(&expr) {
                 assert!(approx_eq(val, 3.0, 1e-4), "Expected 3, got {}", val);
             } else {
@@ -374,7 +374,7 @@ fn test_power_equation_reversed() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             if let Some(val) = extract_float(&expr) {
                 assert!(approx_eq(val, 3.0, 1e-4));
             } else {
@@ -401,7 +401,7 @@ fn test_exp_with_coefficient() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             if let Some(val) = extract_float(&expr) {
                 // ln(5) ≈ 1.6094
                 assert!(
@@ -441,7 +441,7 @@ fn test_projectile_range_solve_for_theta() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             // theta = asin(0.5) / 2 = (π/6) / 2 = π/12
             if let Some(val) = extract_float(&expr) {
                 assert!(

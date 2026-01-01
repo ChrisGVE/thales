@@ -49,8 +49,8 @@
 //! ## Simple Expression
 //!
 //! ```
-//! use mathsolver_core::parser::parse_expression;
-//! use mathsolver_core::ast::{Expression, BinaryOp};
+//! use thales::parser::parse_expression;
+//! use thales::ast::{Expression, BinaryOp};
 //!
 //! let expr = parse_expression("2 + 3").unwrap();
 //! match expr {
@@ -62,7 +62,7 @@
 //! ## Complex Expression with Functions
 //!
 //! ```
-//! use mathsolver_core::parser::parse_expression;
+//! use thales::parser::parse_expression;
 //!
 //! let expr = parse_expression("sin(x) + cos(y) * 2").unwrap();
 //! // Parses as: (sin(x)) + ((cos(y)) * 2)
@@ -71,8 +71,8 @@
 //! ## Power Expression (Right-Associative)
 //!
 //! ```
-//! use mathsolver_core::parser::parse_expression;
-//! use mathsolver_core::ast::Expression;
+//! use thales::parser::parse_expression;
+//! use thales::ast::Expression;
 //!
 //! let expr = parse_expression("2 ^ 3 ^ 4").unwrap();
 //! // Parses as: 2 ^ (3 ^ 4) = 2 ^ 81, not (2 ^ 3) ^ 4
@@ -81,7 +81,7 @@
 //! ## Equation Parsing
 //!
 //! ```
-//! use mathsolver_core::parser::parse_equation;
+//! use thales::parser::parse_equation;
 //!
 //! let eq = parse_equation("x + 2 = 5").unwrap();
 //! println!("Left side: {:?}", eq.left);
@@ -91,7 +91,7 @@
 //! ## Error Handling
 //!
 //! ```
-//! use mathsolver_core::parser::{parse_expression, ParseError};
+//! use thales::parser::{parse_expression, ParseError};
 //!
 //! match parse_expression("2 + + 3") {
 //!     Ok(expr) => println!("Parsed: {:?}", expr),
@@ -160,7 +160,7 @@ use chumsky::prelude::*;
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::parser::{parse_expression, ParseError};
+/// use thales::parser::{parse_expression, ParseError};
 ///
 /// // Unexpected character
 /// match parse_expression("2 @ 3") {
@@ -311,8 +311,8 @@ impl std::error::Error for ParseError {}
 /// # Examples
 ///
 /// ```
-/// # use mathsolver_core::parser::parse_expression;
-/// # use mathsolver_core::ast::{Expression, Function};
+/// # use thales::parser::parse_expression;
+/// # use thales::ast::{Expression, Function};
 /// // Recognized function
 /// let expr = parse_expression("sin(0.5)").unwrap();
 /// match expr {
@@ -579,8 +579,8 @@ fn expression_parser<'src>(
 /// ## Simple Arithmetic
 ///
 /// ```
-/// use mathsolver_core::parser::parse_expression;
-/// use mathsolver_core::ast::{Expression, BinaryOp};
+/// use thales::parser::parse_expression;
+/// use thales::ast::{Expression, BinaryOp};
 ///
 /// let expr = parse_expression("2 + 3").unwrap();
 /// match expr {
@@ -592,8 +592,8 @@ fn expression_parser<'src>(
 /// ## Scientific Notation
 ///
 /// ```
-/// use mathsolver_core::parser::parse_expression;
-/// use mathsolver_core::ast::Expression;
+/// use thales::parser::parse_expression;
+/// use thales::ast::Expression;
 ///
 /// let expr = parse_expression("1.5e-10").unwrap();
 /// match expr {
@@ -605,7 +605,7 @@ fn expression_parser<'src>(
 /// ## Nested Functions
 ///
 /// ```
-/// use mathsolver_core::parser::parse_expression;
+/// use thales::parser::parse_expression;
 ///
 /// let expr = parse_expression("sqrt(abs(-16))").unwrap();
 /// // Parses as: sqrt(abs(-16)) = sqrt(16) = 4
@@ -614,7 +614,7 @@ fn expression_parser<'src>(
 /// ## Operator Precedence
 ///
 /// ```
-/// use mathsolver_core::parser::parse_expression;
+/// use thales::parser::parse_expression;
 ///
 /// // Multiplication before addition
 /// let expr = parse_expression("2 + 3 * 4").unwrap();
@@ -628,7 +628,7 @@ fn expression_parser<'src>(
 /// ## Multiple Variables
 ///
 /// ```
-/// use mathsolver_core::parser::parse_expression;
+/// use thales::parser::parse_expression;
 ///
 /// let expr = parse_expression("x * y + z").unwrap();
 /// // Expression with three variables
@@ -637,7 +637,7 @@ fn expression_parser<'src>(
 /// ## Complex Expression
 ///
 /// ```
-/// use mathsolver_core::parser::parse_expression;
+/// use thales::parser::parse_expression;
 ///
 /// let expr = parse_expression("sin(x) ^ 2 + cos(x) ^ 2").unwrap();
 /// // Trigonometric identity expression
@@ -646,7 +646,7 @@ fn expression_parser<'src>(
 /// ## Error Handling
 ///
 /// ```
-/// use mathsolver_core::parser::{parse_expression, ParseError};
+/// use thales::parser::{parse_expression, ParseError};
 ///
 /// // Invalid syntax
 /// match parse_expression("2 + + 3") {
@@ -736,7 +736,7 @@ pub fn parse_expression(input: &str) -> Result<Expression, Vec<ParseError>> {
 /// ## Simple Linear Equation
 ///
 /// ```
-/// use mathsolver_core::parser::parse_equation;
+/// use thales::parser::parse_equation;
 ///
 /// let eq = parse_equation("x + 2 = 5").unwrap();
 /// assert_eq!(eq.id, "");
@@ -747,7 +747,7 @@ pub fn parse_expression(input: &str) -> Result<Expression, Vec<ParseError>> {
 /// ## Quadratic Equation
 ///
 /// ```
-/// use mathsolver_core::parser::parse_equation;
+/// use thales::parser::parse_equation;
 ///
 /// let eq = parse_equation("x^2 + 3*x - 4 = 0").unwrap();
 /// // Standard form quadratic equation
@@ -756,7 +756,7 @@ pub fn parse_expression(input: &str) -> Result<Expression, Vec<ParseError>> {
 /// ## Equation with Functions
 ///
 /// ```
-/// use mathsolver_core::parser::parse_equation;
+/// use thales::parser::parse_equation;
 ///
 /// let eq = parse_equation("sin(x) = 0.5").unwrap();
 /// // Trigonometric equation
@@ -765,7 +765,7 @@ pub fn parse_expression(input: &str) -> Result<Expression, Vec<ParseError>> {
 /// ## Complex Equation
 ///
 /// ```
-/// use mathsolver_core::parser::parse_equation;
+/// use thales::parser::parse_equation;
 ///
 /// let eq = parse_equation("sqrt(x^2 + y^2) = r").unwrap();
 /// // Distance formula equation
@@ -774,7 +774,7 @@ pub fn parse_expression(input: &str) -> Result<Expression, Vec<ParseError>> {
 /// ## Setting an ID
 ///
 /// ```
-/// use mathsolver_core::parser::parse_equation;
+/// use thales::parser::parse_equation;
 ///
 /// let mut eq = parse_equation("F = m * a").unwrap();
 /// eq.id = "newton_second_law".to_string();
@@ -784,7 +784,7 @@ pub fn parse_expression(input: &str) -> Result<Expression, Vec<ParseError>> {
 /// ## Error Handling
 ///
 /// ```
-/// use mathsolver_core::parser::parse_equation;
+/// use thales::parser::parse_equation;
 ///
 /// // Missing equals sign
 /// assert!(parse_equation("x + 2").is_err());

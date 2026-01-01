@@ -26,7 +26,7 @@
 //! ## Creating and Using Units
 //!
 //! ```
-//! use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit, Quantity};
+//! use thales::dimensions::{BaseDimension, Dimension, Unit, Quantity};
 //!
 //! // Create a velocity dimension: Length / Time
 //! let length_dim = Dimension::from_base(BaseDimension::Length, 1);
@@ -44,7 +44,7 @@
 //! ## Unit Conversion
 //!
 //! ```
-//! use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit};
+//! use thales::dimensions::{BaseDimension, Dimension, Unit};
 //!
 //! // Create length dimension and units
 //! let length_dim = Dimension::from_base(BaseDimension::Length, 1);
@@ -59,7 +59,7 @@
 //! ## Temperature with Offset (Affine Units)
 //!
 //! ```
-//! use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit};
+//! use thales::dimensions::{BaseDimension, Dimension, Unit};
 //!
 //! // Create temperature dimension
 //! let temp_dim = Dimension::from_base(BaseDimension::Temperature, 1);
@@ -78,7 +78,7 @@
 //! ## Derived Units (Force)
 //!
 //! ```
-//! use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit};
+//! use thales::dimensions::{BaseDimension, Dimension, Unit};
 //!
 //! // Force dimension: Mass × Length × Time⁻²
 //! let mass_dim = Dimension::from_base(BaseDimension::Mass, 1);
@@ -99,7 +99,7 @@
 //! ## Using UnitRegistry
 //!
 //! ```
-//! use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit, UnitRegistry};
+//! use thales::dimensions::{BaseDimension, Dimension, Unit, UnitRegistry};
 //!
 //! let mut registry = UnitRegistry::new();
 //!
@@ -148,7 +148,7 @@ use std::fmt;
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::dimensions::BaseDimension;
+/// use thales::dimensions::BaseDimension;
 ///
 /// // Each base dimension represents a fundamental physical property
 /// let length = BaseDimension::Length;
@@ -208,7 +208,7 @@ pub enum BaseDimension {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::dimensions::{BaseDimension, Dimension};
+/// use thales::dimensions::{BaseDimension, Dimension};
 ///
 /// // Create velocity dimension: Length / Time = Length¹ × Time⁻¹
 /// let length_dim = Dimension::from_base(BaseDimension::Length, 1);
@@ -244,7 +244,7 @@ impl Dimension {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::Dimension;
+    /// use thales::dimensions::Dimension;
     ///
     /// let dimensionless = Dimension::dimensionless();
     /// assert!(dimensionless.is_dimensionless());
@@ -265,7 +265,7 @@ impl Dimension {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension};
+    /// use thales::dimensions::{BaseDimension, Dimension};
     ///
     /// // Create area dimension: Length²
     /// let area = Dimension::from_base(BaseDimension::Length, 2);
@@ -293,7 +293,7 @@ impl Dimension {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension};
+    /// use thales::dimensions::{BaseDimension, Dimension};
     ///
     /// let dimensionless = Dimension::dimensionless();
     /// assert!(dimensionless.is_dimensionless());
@@ -314,7 +314,7 @@ impl Dimension {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension};
+    /// use thales::dimensions::{BaseDimension, Dimension};
     ///
     /// // Velocity × Time = Distance
     /// let velocity = Dimension::from_base(BaseDimension::Length, 1)
@@ -342,7 +342,7 @@ impl Dimension {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension};
+    /// use thales::dimensions::{BaseDimension, Dimension};
     ///
     /// // Distance / Time = Velocity
     /// let distance = Dimension::from_base(BaseDimension::Length, 1);
@@ -369,7 +369,7 @@ impl Dimension {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension};
+    /// use thales::dimensions::{BaseDimension, Dimension};
     ///
     /// // Square a velocity to get (m/s)²
     /// let velocity = Dimension::from_base(BaseDimension::Length, 1)
@@ -396,7 +396,7 @@ impl Dimension {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension};
+    /// use thales::dimensions::{BaseDimension, Dimension};
     ///
     /// let length1 = Dimension::from_base(BaseDimension::Length, 1);
     /// let length2 = Dimension::from_base(BaseDimension::Length, 1);
@@ -438,7 +438,7 @@ impl fmt::Display for Dimension {
 /// ## Linear Units (Length)
 ///
 /// ```
-/// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit};
+/// use thales::dimensions::{BaseDimension, Dimension, Unit};
 ///
 /// let length_dim = Dimension::from_base(BaseDimension::Length, 1);
 ///
@@ -457,7 +457,7 @@ impl fmt::Display for Dimension {
 /// Temperature units require an offset for absolute temperature scales:
 ///
 /// ```
-/// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit};
+/// use thales::dimensions::{BaseDimension, Dimension, Unit};
 ///
 /// let temp_dim = Dimension::from_base(BaseDimension::Temperature, 1);
 ///
@@ -518,7 +518,7 @@ impl Unit {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit};
+    /// use thales::dimensions::{BaseDimension, Dimension, Unit};
     ///
     /// let length_dim = Dimension::from_base(BaseDimension::Length, 1);
     ///
@@ -566,7 +566,7 @@ impl Unit {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit};
+    /// use thales::dimensions::{BaseDimension, Dimension, Unit};
     ///
     /// let temp_dim = Dimension::from_base(BaseDimension::Temperature, 1);
     ///
@@ -602,7 +602,7 @@ impl Unit {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit};
+    /// use thales::dimensions::{BaseDimension, Dimension, Unit};
     ///
     /// let length_dim = Dimension::from_base(BaseDimension::Length, 1);
     /// let kilometer = Unit::new("kilometer", "km", length_dim, 1000.0);
@@ -621,7 +621,7 @@ impl Unit {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit};
+    /// use thales::dimensions::{BaseDimension, Dimension, Unit};
     ///
     /// let length_dim = Dimension::from_base(BaseDimension::Length, 1);
     /// let foot = Unit::new("foot", "ft", length_dim, 0.3048);
@@ -651,7 +651,7 @@ impl Unit {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit};
+    /// use thales::dimensions::{BaseDimension, Dimension, Unit};
     ///
     /// let length_dim = Dimension::from_base(BaseDimension::Length, 1);
     /// let mile = Unit::new("mile", "mi", length_dim.clone(), 1609.344);
@@ -686,7 +686,7 @@ impl Unit {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit, UnitRegistry};
+/// use thales::dimensions::{BaseDimension, Dimension, Unit, UnitRegistry};
 ///
 /// let mut registry = UnitRegistry::new();
 ///
@@ -713,7 +713,7 @@ impl UnitRegistry {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::UnitRegistry;
+    /// use thales::dimensions::UnitRegistry;
     ///
     /// let registry = UnitRegistry::new();
     /// // Registry is empty, ready for custom units
@@ -776,7 +776,7 @@ impl UnitRegistry {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit, UnitRegistry};
+    /// use thales::dimensions::{BaseDimension, Dimension, Unit, UnitRegistry};
     ///
     /// let mut registry = UnitRegistry::new();
     /// let length_dim = Dimension::from_base(BaseDimension::Length, 1);
@@ -803,7 +803,7 @@ impl UnitRegistry {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit, UnitRegistry};
+    /// use thales::dimensions::{BaseDimension, Dimension, Unit, UnitRegistry};
     ///
     /// let mut registry = UnitRegistry::new();
     /// let length_dim = Dimension::from_base(BaseDimension::Length, 1);
@@ -838,7 +838,7 @@ impl UnitRegistry {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit, UnitRegistry};
+    /// use thales::dimensions::{BaseDimension, Dimension, Unit, UnitRegistry};
     ///
     /// let mut registry = UnitRegistry::new();
     /// let length_dim = Dimension::from_base(BaseDimension::Length, 1);
@@ -878,7 +878,7 @@ impl Default for UnitRegistry {
 /// ## Creating Quantities
 ///
 /// ```
-/// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit, Quantity};
+/// use thales::dimensions::{BaseDimension, Dimension, Unit, Quantity};
 ///
 /// let length_dim = Dimension::from_base(BaseDimension::Length, 1);
 /// let meter = Unit::new("meter", "m", length_dim, 1.0);
@@ -890,7 +890,7 @@ impl Default for UnitRegistry {
 /// ## Converting Quantities
 ///
 /// ```
-/// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit, Quantity};
+/// use thales::dimensions::{BaseDimension, Dimension, Unit, Quantity};
 ///
 /// let length_dim = Dimension::from_base(BaseDimension::Length, 1);
 /// let meter = Unit::new("meter", "m", length_dim.clone(), 1.0);
@@ -922,7 +922,7 @@ impl Quantity {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit, Quantity};
+    /// use thales::dimensions::{BaseDimension, Dimension, Unit, Quantity};
     ///
     /// let mass_dim = Dimension::from_base(BaseDimension::Mass, 1);
     /// let kilogram = Unit::new("kilogram", "kg", mass_dim, 1.0);
@@ -951,7 +951,7 @@ impl Quantity {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit, Quantity};
+    /// use thales::dimensions::{BaseDimension, Dimension, Unit, Quantity};
     ///
     /// let time_dim = Dimension::from_base(BaseDimension::Time, 1);
     /// let second = Unit::new("second", "s", time_dim.clone(), 1.0);
@@ -977,7 +977,7 @@ impl Quantity {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::dimensions::{BaseDimension, Dimension, Unit, Quantity};
+    /// use thales::dimensions::{BaseDimension, Dimension, Unit, Quantity};
     ///
     /// let length_dim = Dimension::from_base(BaseDimension::Length, 1);
     /// let kilometer = Unit::new("kilometer", "km", length_dim, 1000.0);

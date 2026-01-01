@@ -17,8 +17,8 @@
 //! ## Direct Substitution
 //!
 //! ```
-//! use mathsolver_core::limits::{limit, LimitPoint};
-//! use mathsolver_core::parser::parse_expression;
+//! use thales::limits::{limit, LimitPoint};
+//! use thales::parser::parse_expression;
 //!
 //! // lim_{x->2} x^2 = 4
 //! let expr = parse_expression("x^2").unwrap();
@@ -29,8 +29,8 @@
 //! ## Limit at Infinity
 //!
 //! ```
-//! use mathsolver_core::limits::{limit, LimitPoint};
-//! use mathsolver_core::parser::parse_expression;
+//! use thales::limits::{limit, LimitPoint};
+//! use thales::parser::parse_expression;
 //!
 //! // lim_{x->∞} 1/x = 0
 //! let expr = parse_expression("1/x").unwrap();
@@ -209,8 +209,8 @@ impl LimitResult {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::limits::{limit, LimitPoint, LimitResult};
-/// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+/// use thales::limits::{limit, LimitPoint, LimitResult};
+/// use thales::ast::{Expression, Variable, BinaryOp};
 ///
 /// // lim_{x->3} 2x = 6
 /// let x = Expression::Variable(Variable::new("x"));
@@ -323,8 +323,8 @@ pub fn limit_right(expr: &Expression, var: &str, approaches: f64) -> Result<Limi
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::limits::{limit_with_lhopital, LimitPoint, LimitResult};
-/// use mathsolver_core::parser::parse_expression;
+/// use thales::limits::{limit_with_lhopital, LimitPoint, LimitResult};
+/// use thales::parser::parse_expression;
 ///
 /// // lim_{x->0} sin(x)/x = 1 (using L'Hôpital: cos(x)/1 at x=0 = 1)
 /// let expr = parse_expression("sin(x)/x").unwrap();

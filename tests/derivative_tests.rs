@@ -8,8 +8,8 @@
 //! - Partial derivative computation
 //! - Comparison with numerical derivatives
 
-use mathsolver_core::ast::{BinaryOp, Equation, Expression, Function, UnaryOp, Variable};
-use mathsolver_core::solver::{compute_all_partial_derivatives, compute_partial_derivative};
+use thales::ast::{BinaryOp, Equation, Expression, Function, UnaryOp, Variable};
+use thales::solver::{compute_all_partial_derivatives, compute_partial_derivative};
 use std::collections::HashMap;
 
 // Helper function to create a variable expression

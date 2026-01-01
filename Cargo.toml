@@ -1,11 +1,15 @@
 [package]
-name = "mathsolver-core"
-version = "0.1.0"
+name = "thales"
+version = "0.2.0"
 edition = "2021"
 authors = ["Christian C. Berclaz"]
 license = "MIT"
-description = "Mathematical equation parsing, solving, and coordinate transformations"
-repository = "https://github.com/cberclaz/mathsolver-core"
+description = "A comprehensive Computer Algebra System (CAS) library for symbolic mathematics, equation solving, calculus, and linear algebra"
+repository = "https://github.com/ChrisGVE/thales"
+documentation = "https://docs.rs/thales"
+homepage = "https://github.com/ChrisGVE/thales"
+keywords = ["math", "algebra", "calculus", "symbolic", "cas"]
+categories = ["mathematics", "science"]
 readme = "README.md"
 
 [lib]

@@ -15,8 +15,8 @@
 //! # Example
 //!
 //! ```
-//! use mathsolver_core::partial_fractions::{decompose, is_rational_function};
-//! use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+//! use thales::partial_fractions::{decompose, is_rational_function};
+//! use thales::ast::{Expression, Variable, BinaryOp};
 //!
 //! // Check if 1/(x²-1) is a rational function
 //! let x = Expression::Variable(Variable::new("x"));
@@ -122,8 +122,8 @@ pub struct PartialFractionResult {
 /// # Example
 ///
 /// ```
-/// use mathsolver_core::partial_fractions::is_rational_function;
-/// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+/// use thales::partial_fractions::is_rational_function;
+/// use thales::ast::{Expression, Variable, BinaryOp};
 ///
 /// let x = Expression::Variable(Variable::new("x"));
 /// let rational = Expression::Binary(
@@ -554,8 +554,8 @@ fn is_irreducible_quadratic(p: f64, q: f64) -> bool {
 /// # Example
 ///
 /// ```
-/// use mathsolver_core::partial_fractions::decompose;
-/// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+/// use thales::partial_fractions::decompose;
+/// use thales::ast::{Expression, Variable, BinaryOp};
 ///
 /// // Decompose 1/(x²-1) = 1/((x-1)(x+1))
 /// let x = Expression::Variable(Variable::new("x"));

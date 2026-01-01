@@ -7,8 +7,8 @@
 //! # Examples
 //!
 //! ```
-//! use mathsolver_core::matrix::MatrixExpr;
-//! use mathsolver_core::ast::Expression;
+//! use thales::matrix::MatrixExpr;
+//! use thales::ast::Expression;
 //!
 //! // Create a 2x2 identity matrix
 //! let identity = MatrixExpr::identity(2);
@@ -107,8 +107,8 @@ impl Default for BracketStyle {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::matrix::MatrixExpr;
-/// use mathsolver_core::ast::{Expression, Variable};
+/// use thales::matrix::MatrixExpr;
+/// use thales::ast::{Expression, Variable};
 ///
 /// // Create a 2x2 matrix with symbolic entries
 /// let x = Expression::Variable(Variable::new("x"));
@@ -144,8 +144,8 @@ impl MatrixExpr {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::matrix::MatrixExpr;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::matrix::MatrixExpr;
+    /// use thales::ast::Expression;
     ///
     /// let m = MatrixExpr::from_elements(vec![
     ///     vec![Expression::Integer(1), Expression::Integer(2)],
@@ -173,7 +173,7 @@ impl MatrixExpr {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::matrix::MatrixExpr;
+    /// use thales::matrix::MatrixExpr;
     ///
     /// let i3 = MatrixExpr::identity(3);
     /// assert_eq!(i3.rows(), 3);
@@ -201,7 +201,7 @@ impl MatrixExpr {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::matrix::MatrixExpr;
+    /// use thales::matrix::MatrixExpr;
     ///
     /// let z = MatrixExpr::zero(2, 3);
     /// assert_eq!(z.rows(), 2);
@@ -219,8 +219,8 @@ impl MatrixExpr {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::matrix::MatrixExpr;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::matrix::MatrixExpr;
+    /// use thales::ast::Expression;
     ///
     /// let diag = MatrixExpr::diagonal(vec![
     ///     Expression::Integer(1),
@@ -334,8 +334,8 @@ impl MatrixExpr {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::matrix::MatrixExpr;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::matrix::MatrixExpr;
+    /// use thales::ast::Expression;
     ///
     /// let m = MatrixExpr::from_elements(vec![
     ///     vec![Expression::Integer(1), Expression::Integer(2), Expression::Integer(3)],
@@ -366,8 +366,8 @@ impl MatrixExpr {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::matrix::MatrixExpr;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::matrix::MatrixExpr;
+    /// use thales::ast::Expression;
     /// use std::collections::HashMap;
     ///
     /// let m = MatrixExpr::from_elements(vec![
@@ -406,8 +406,8 @@ impl MatrixExpr {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::matrix::MatrixExpr;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::matrix::MatrixExpr;
+    /// use thales::ast::Expression;
     ///
     /// let a = MatrixExpr::from_elements(vec![
     ///     vec![Expression::Integer(1), Expression::Integer(2)],
@@ -493,8 +493,8 @@ impl MatrixExpr {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::matrix::MatrixExpr;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::matrix::MatrixExpr;
+    /// use thales::ast::Expression;
     ///
     /// let m = MatrixExpr::identity(2);
     /// let scaled = m.scalar_mul(&Expression::Integer(3));
@@ -535,8 +535,8 @@ impl MatrixExpr {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::matrix::MatrixExpr;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::matrix::MatrixExpr;
+    /// use thales::ast::Expression;
     ///
     /// // 2x3 matrix
     /// let a = MatrixExpr::from_elements(vec![
@@ -696,8 +696,8 @@ impl MatrixExpr {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::matrix::MatrixExpr;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::matrix::MatrixExpr;
+    /// use thales::ast::Expression;
     /// use std::collections::HashMap;
     ///
     /// // 2x2 matrix: [[1, 2], [3, 4]]
@@ -804,8 +804,8 @@ impl MatrixExpr {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::matrix::MatrixExpr;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::matrix::MatrixExpr;
+    /// use thales::ast::Expression;
     ///
     /// let m = MatrixExpr::from_elements(vec![
     ///     vec![Expression::Integer(1), Expression::Integer(2)],
@@ -844,8 +844,8 @@ impl MatrixExpr {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::matrix::MatrixExpr;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::matrix::MatrixExpr;
+    /// use thales::ast::Expression;
     /// use std::collections::HashMap;
     ///
     /// let m = MatrixExpr::from_elements(vec![
@@ -930,8 +930,8 @@ impl MatrixExpr {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::matrix::MatrixExpr;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::matrix::MatrixExpr;
+    /// use thales::ast::Expression;
     /// use std::collections::HashMap;
     ///
     /// let m = MatrixExpr::from_elements(vec![
@@ -971,8 +971,8 @@ impl MatrixExpr {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::matrix::MatrixExpr;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::matrix::MatrixExpr;
+    /// use thales::ast::Expression;
     ///
     /// let m = MatrixExpr::from_elements(vec![
     ///     vec![Expression::Integer(2), Expression::Integer(1)],
@@ -1249,8 +1249,8 @@ impl MatrixExpr {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::matrix::{MatrixExpr, BracketStyle};
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::matrix::{MatrixExpr, BracketStyle};
+    /// use thales::ast::Expression;
     ///
     /// let m = MatrixExpr::from_elements(vec![
     ///     vec![Expression::Integer(1), Expression::Integer(2)],

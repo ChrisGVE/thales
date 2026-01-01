@@ -1,7 +1,7 @@
 //! Unit tests for the algebraic equation solver.
 
-use mathsolver_core::ast::{BinaryOp, Equation, Expression, Variable};
-use mathsolver_core::solver::{solve_for, LinearSolver, Solver, SolverError};
+use thales::ast::{BinaryOp, Equation, Expression, Variable};
+use thales::solver::{solve_for, LinearSolver, Solver, SolverError};
 use std::collections::HashMap;
 
 // ============================================================================
@@ -64,7 +64,7 @@ fn test_linear_solver_simple_equality() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             assert_eq!(expr, int(5));
         }
         _ => panic!("Expected unique solution"),
@@ -85,7 +85,7 @@ fn test_linear_solver_multiplication() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             // Should be 10 / 2 = 5
             let expected = int(5);
             assert_eq!(expr, expected);
@@ -108,7 +108,7 @@ fn test_linear_solver_addition() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             // Should be 7 - 3 = 4
             let expected = int(4);
             assert_eq!(expr, expected);
@@ -131,7 +131,7 @@ fn test_linear_solver_ax_plus_b() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             // Should be (7 - 3) / 2 = 2
             let expected = int(2);
             assert_eq!(expr, expected);
@@ -177,7 +177,7 @@ fn test_force_equation_solve_for_f() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             // Should be m * a
             assert_eq!(expr, mul(var("m"), var("a")));
         }
@@ -199,7 +199,7 @@ fn test_force_equation_solve_for_m() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             // Should be F / a
             assert_eq!(expr, div(var("F"), var("a")));
         }
@@ -221,7 +221,7 @@ fn test_force_equation_solve_for_a() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             // Should be F / m
             assert_eq!(expr, div(var("F"), var("m")));
         }
@@ -243,7 +243,7 @@ fn test_velocity_equation_solve_for_v() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             // Should be d / t
             assert_eq!(expr, div(var("d"), var("t")));
         }
@@ -269,7 +269,7 @@ fn test_velocity_equation_solve_for_d() {
     if result.is_ok() {
         let (solution, _path) = result.unwrap();
         match solution {
-            mathsolver_core::solver::Solution::Unique(expr) => {
+            thales::solver::Solution::Unique(expr) => {
                 // Should be v * t (in some form)
                 println!("Got solution: {:?}", expr);
             }
@@ -292,7 +292,7 @@ fn test_energy_equation_solve_for_e() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             // Should be m * c^2
             assert_eq!(expr, mul(var("m"), pow(var("c"), int(2))));
         }
@@ -314,7 +314,7 @@ fn test_energy_equation_solve_for_m() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             // Should be E / c^2
             assert_eq!(expr, div(var("E"), pow(var("c"), int(2))));
         }
@@ -336,7 +336,7 @@ fn test_linear_equation_solve_for_y() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        mathsolver_core::solver::Solution::Unique(expr) => {
+        thales::solver::Solution::Unique(expr) => {
             // Should be m * x + b
             assert_eq!(expr, add(mul(var("m"), var("x")), var("b")));
         }
@@ -473,7 +473,7 @@ fn test_cannot_solve_quadratic() {
 // QuadraticSolver Tests
 // ============================================================================
 
-use mathsolver_core::solver::{QuadraticSolver, PolynomialSolver, Solution};
+use thales::solver::{QuadraticSolver, PolynomialSolver, Solution};
 
 #[test]
 fn test_quadratic_solver_two_real_roots() {

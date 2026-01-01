@@ -1,21 +1,21 @@
-//! Integration tests for mathsolver-core.
+//! Integration tests for thales.
 //!
 //! Tests the complete workflow from parsing through solving.
 
-use mathsolver_core::ast::{Expression, Variable};
-use mathsolver_core::transforms::{Cartesian2D, Cartesian3D, Polar};
+use thales::ast::{Expression, Variable};
+use thales::transforms::{Cartesian2D, Cartesian3D, Polar};
 
 #[test]
 fn test_library_version() {
-    let version = mathsolver_core::version();
+    let version = thales::version();
     assert!(!version.is_empty());
-    assert_eq!(version, "0.1.0");
+    assert_eq!(version, "0.2.0");
 }
 
 #[test]
 fn test_ffi_support() {
     // This will be false unless compiled with --features ffi
-    let _has_ffi = mathsolver_core::has_ffi_support();
+    let _has_ffi = thales::has_ffi_support();
 }
 
 // Parser integration tests
@@ -25,21 +25,21 @@ mod parser_tests {
     #[test]
     #[ignore] // TODO: Remove ignore when parser is implemented
     fn test_parse_simple_equation() {
-        let result = mathsolver_core::parse_equation("x + 2 = 5");
+        let result = thales::parse_equation("x + 2 = 5");
         assert!(result.is_ok());
     }
 
     #[test]
     #[ignore] // TODO: Remove ignore when parser is implemented
     fn test_parse_expression_with_functions() {
-        let result = mathsolver_core::parse_expression("sin(x) + cos(x)");
+        let result = thales::parse_expression("sin(x) + cos(x)");
         assert!(result.is_ok());
     }
 
     #[test]
     #[ignore] // TODO: Remove ignore when parser is implemented
     fn test_parse_complex_equation() {
-        let result = mathsolver_core::parse_equation("2*x^2 + 3*x - 5 = 0");
+        let result = thales::parse_equation("2*x^2 + 3*x - 5 = 0");
         assert!(result.is_ok());
     }
 }
@@ -47,13 +47,13 @@ mod parser_tests {
 // Solver integration tests
 mod solver_tests {
     use super::*;
-    use mathsolver_core::solver::{SmartSolver, Solver};
+    use thales::solver::{SmartSolver, Solver};
 
     #[test]
     #[ignore] // TODO: Remove ignore when solver is implemented
     fn test_solve_linear_equation() {
         // 2x + 3 = 7 => x = 2
-        let equation = mathsolver_core::parse_equation("2*x + 3 = 7").unwrap();
+        let equation = thales::parse_equation("2*x + 3 = 7").unwrap();
         let solver = SmartSolver::new();
         let result = solver.solve(&equation, &Variable::new("x"));
         assert!(result.is_ok());
@@ -63,7 +63,7 @@ mod solver_tests {
     #[ignore] // TODO: Remove ignore when solver is implemented
     fn test_solve_quadratic_equation() {
         // x^2 - 5x + 6 = 0 => x = 2 or x = 3
-        let equation = mathsolver_core::parse_equation("x^2 - 5*x + 6 = 0").unwrap();
+        let equation = thales::parse_equation("x^2 - 5*x + 6 = 0").unwrap();
         let solver = SmartSolver::new();
         let result = solver.solve(&equation, &Variable::new("x"));
         assert!(result.is_ok());
@@ -110,13 +110,13 @@ mod transform_tests {
 // Numerical solver tests
 mod numerical_tests {
     use super::*;
-    use mathsolver_core::numerical::{NumericalConfig, SmartNumericalSolver};
+    use thales::numerical::{NumericalConfig, SmartNumericalSolver};
 
     #[test]
     #[ignore] // TODO: Remove ignore when numerical solver is implemented
     fn test_numerical_root_finding() {
         // Find root of x^2 - 2 = 0 (should be sqrt(2) ≈ 1.414)
-        let equation = mathsolver_core::parse_equation("x^2 - 2 = 0").unwrap();
+        let equation = thales::parse_equation("x^2 - 2 = 0").unwrap();
         let config = NumericalConfig::default();
         let solver = SmartNumericalSolver::new(config);
         let result = solver.solve(&equation, &Variable::new("x"));
@@ -127,7 +127,7 @@ mod numerical_tests {
 // Dimension and unit tests
 mod dimension_tests {
     use super::*;
-    use mathsolver_core::dimensions::{BaseDimension, Dimension, UnitRegistry};
+    use thales::dimensions::{BaseDimension, Dimension, UnitRegistry};
 
     #[test]
     fn test_dimensionless_quantity() {
@@ -154,12 +154,12 @@ mod dimension_tests {
 // Resolution path tests
 mod resolution_path_tests {
     use super::*;
-    use mathsolver_core::resolution_path::{Operation, ResolutionPathBuilder};
+    use thales::resolution_path::{Operation, ResolutionPathBuilder};
 
     #[test]
     fn test_empty_resolution_path() {
         let expr = Expression::Integer(5);
-        let path = mathsolver_core::ResolutionPath::new(expr);
+        let path = thales::ResolutionPath::new(expr);
         assert!(path.is_empty());
         assert_eq!(path.step_count(), 0);
     }

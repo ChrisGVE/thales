@@ -34,8 +34,8 @@
 //! ## Basic Linear Equation
 //!
 //! ```
-//! use mathsolver_core::solver::{LinearSolver, Solver};
-//! use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+//! use thales::solver::{LinearSolver, Solver};
+//! use thales::ast::{Equation, Expression, Variable, BinaryOp};
 //!
 //! // Solve: 2x + 3 = 11
 //! let x = Expression::Variable(Variable::new("x"));
@@ -55,7 +55,7 @@
 //! let (solution, path) = solver.solve(&equation, &Variable::new("x")).unwrap();
 //!
 //! // Solution is x = 4
-//! # use mathsolver_core::solver::Solution;
+//! # use thales::solver::Solution;
 //! # match solution {
 //! #     Solution::Unique(expr) => {
 //! #         assert_eq!(expr.evaluate(&std::collections::HashMap::new()), Some(4.0));
@@ -67,8 +67,8 @@
 //! ## Using SmartSolver
 //!
 //! ```
-//! use mathsolver_core::solver::{SmartSolver, Solver};
-//! use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+//! use thales::solver::{SmartSolver, Solver};
+//! use thales::ast::{Equation, Expression, Variable, BinaryOp};
 //!
 //! // SmartSolver automatically picks the right method
 //! let solver = SmartSolver::new();
@@ -89,8 +89,8 @@
 //! ## High-Level API with Known Values
 //!
 //! ```
-//! use mathsolver_core::solver::solve_for;
-//! use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+//! use thales::solver::solve_for;
+//! use thales::ast::{Equation, Expression, Variable, BinaryOp};
 //! use std::collections::HashMap;
 //!
 //! // Solve: ax + b = c for x, given a=2, b=3, c=11
@@ -125,8 +125,8 @@ use std::collections::HashMap;
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::solver::{SolverError, LinearSolver, Solver};
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::solver::{SolverError, LinearSolver, Solver};
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
 ///
 /// // NoSolution: 0 = 5 (inconsistent equation)
 /// let eq = Equation::new("bad", Expression::Integer(0), Expression::Integer(5));
@@ -192,8 +192,8 @@ pub type SolverResult<T> = Result<T, SolverError>;
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::solver::{Solution, LinearSolver, Solver};
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::solver::{Solution, LinearSolver, Solver};
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
 ///
 /// // Unique solution: 2x = 8 → x = 4
 /// let x = Expression::Variable(Variable::new("x"));
@@ -282,8 +282,8 @@ pub enum Solution {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::ast::{Variable, Expression};
-/// use mathsolver_core::solver::Constraint;
+/// use thales::ast::{Variable, Expression};
+/// use thales::solver::Constraint;
 ///
 /// // Constraint: x != 0 (for denominators)
 /// // Note: The condition expression format depends on application needs
@@ -323,8 +323,8 @@ pub struct Constraint {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::solver::{Solver, LinearSolver};
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::solver::{Solver, LinearSolver};
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
 ///
 /// let solver = LinearSolver::new();
 ///
@@ -388,8 +388,8 @@ pub trait Solver {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::solver::{Solver, LinearSolver};
-    /// use mathsolver_core::ast::{Equation, Expression, Variable};
+    /// use thales::solver::{Solver, LinearSolver};
+    /// use thales::ast::{Equation, Expression, Variable};
     ///
     /// let solver = LinearSolver::new();
     ///
@@ -828,8 +828,8 @@ fn isolate_variable(
 /// ## Simple Linear Equation
 ///
 /// ```
-/// use mathsolver_core::solver::{LinearSolver, Solver};
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::solver::{LinearSolver, Solver};
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
 ///
 /// // Solve: 2x + 3 = 11
 /// let x = Expression::Variable(Variable::new("x"));
@@ -849,7 +849,7 @@ fn isolate_variable(
 /// let (solution, path) = solver.solve(&equation, &Variable::new("x")).unwrap();
 ///
 /// // Verify solution: x = 4
-/// # use mathsolver_core::solver::Solution;
+/// # use thales::solver::Solution;
 /// # use std::collections::HashMap;
 /// # match solution {
 /// #     Solution::Unique(expr) => {
@@ -862,8 +862,8 @@ fn isolate_variable(
 /// ## Equation with Parametric Coefficients
 ///
 /// ```
-/// use mathsolver_core::solver::{LinearSolver, Solver};
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::solver::{LinearSolver, Solver};
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
 /// use std::collections::HashMap;
 ///
 /// // Solve: ax = b for x (symbolic)
@@ -878,7 +878,7 @@ fn isolate_variable(
 /// let (solution, _path) = solver.solve(&equation, &Variable::new("x")).unwrap();
 ///
 /// // Solution is symbolic: x = b/a
-/// # use mathsolver_core::solver::Solution;
+/// # use thales::solver::Solution;
 /// # match solution {
 /// #     Solution::Unique(expr) => {
 /// #         // Can substitute values later
@@ -894,8 +894,8 @@ fn isolate_variable(
 /// ## Checking Solver Applicability
 ///
 /// ```
-/// use mathsolver_core::solver::{LinearSolver, Solver};
-/// use mathsolver_core::ast::{Equation, Expression, Variable};
+/// use thales::solver::{LinearSolver, Solver};
+/// use thales::ast::{Equation, Expression, Variable};
 ///
 /// let solver = LinearSolver::new();
 ///
@@ -931,7 +931,7 @@ impl LinearSolver {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::solver::LinearSolver;
+    /// use thales::solver::LinearSolver;
     ///
     /// let solver = LinearSolver::new();
     /// ```
@@ -1889,7 +1889,7 @@ impl QuadraticSolver {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::solver::QuadraticSolver;
+    /// use thales::solver::QuadraticSolver;
     ///
     /// let solver = QuadraticSolver::new();
     /// ```
@@ -2136,7 +2136,7 @@ impl PolynomialSolver {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::solver::PolynomialSolver;
+    /// use thales::solver::PolynomialSolver;
     ///
     /// let solver = PolynomialSolver::new();
     /// ```
@@ -2297,8 +2297,8 @@ impl Solver for PolynomialSolver {
 /// ## Solving sin(x) = 0.5
 ///
 /// ```
-/// use mathsolver_core::solver::{TranscendentalSolver, Solver};
-/// use mathsolver_core::ast::{Equation, Expression, Variable, Function};
+/// use thales::solver::{TranscendentalSolver, Solver};
+/// use thales::ast::{Equation, Expression, Variable, Function};
 ///
 /// // Build equation: sin(x) = 0.5
 /// let x = Expression::Variable(Variable::new("x"));
@@ -2310,7 +2310,7 @@ impl Solver for PolynomialSolver {
 /// let (solution, path) = solver.solve(&equation, &Variable::new("x")).unwrap();
 ///
 /// // Solution is x = asin(0.5) ≈ 0.5236 radians (30 degrees)
-/// # use mathsolver_core::solver::Solution;
+/// # use thales::solver::Solution;
 /// # use std::collections::HashMap;
 /// # match solution {
 /// #     Solution::Unique(expr) => {
@@ -2324,8 +2324,8 @@ impl Solver for PolynomialSolver {
 /// ## Solving ln(x) = 2
 ///
 /// ```
-/// use mathsolver_core::solver::{TranscendentalSolver, Solver};
-/// use mathsolver_core::ast::{Equation, Expression, Variable, Function};
+/// use thales::solver::{TranscendentalSolver, Solver};
+/// use thales::ast::{Equation, Expression, Variable, Function};
 ///
 /// // Build equation: ln(x) = 2
 /// let x = Expression::Variable(Variable::new("x"));
@@ -2337,7 +2337,7 @@ impl Solver for PolynomialSolver {
 /// let (solution, path) = solver.solve(&equation, &Variable::new("x")).unwrap();
 ///
 /// // Solution is x = exp(2) ≈ 7.389
-/// # use mathsolver_core::solver::Solution;
+/// # use thales::solver::Solution;
 /// # use std::collections::HashMap;
 /// # match solution {
 /// #     Solution::Unique(expr) => {
@@ -2351,8 +2351,8 @@ impl Solver for PolynomialSolver {
 /// ## Solving 2^x = 8
 ///
 /// ```
-/// use mathsolver_core::solver::{TranscendentalSolver, Solver};
-/// use mathsolver_core::ast::{Equation, Expression, Variable};
+/// use thales::solver::{TranscendentalSolver, Solver};
+/// use thales::ast::{Equation, Expression, Variable};
 ///
 /// // Build equation: 2^x = 8
 /// let x = Expression::Variable(Variable::new("x"));
@@ -2367,7 +2367,7 @@ impl Solver for PolynomialSolver {
 /// let (solution, path) = solver.solve(&equation, &Variable::new("x")).unwrap();
 ///
 /// // Solution is x = ln(8)/ln(2) = 3
-/// # use mathsolver_core::solver::Solution;
+/// # use thales::solver::Solution;
 /// # use std::collections::HashMap;
 /// # match solution {
 /// #     Solution::Unique(expr) => {
@@ -3189,8 +3189,8 @@ impl TranscendentalSolver {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::solver::TranscendentalSolver;
-    /// use mathsolver_core::ast::{Expression, Variable, Function};
+    /// use thales::solver::TranscendentalSolver;
+    /// use thales::ast::{Expression, Variable, Function};
     ///
     /// // sin(x) contains transcendental function
     /// let x = Expression::Variable(Variable::new("x"));
@@ -3870,8 +3870,8 @@ impl SystemSolver {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::solver::{SystemSolver, SystemSolution};
-    /// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+    /// use thales::solver::{SystemSolver, SystemSolution};
+    /// use thales::ast::{Equation, Expression, Variable, BinaryOp};
     ///
     /// let solver = SystemSolver::new();
     ///
@@ -3987,8 +3987,8 @@ impl SystemSolver {
 /// ## Linear Equation
 ///
 /// ```
-/// use mathsolver_core::solver::{SmartSolver, Solver, Solution};
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::solver::{SmartSolver, Solver, Solution};
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
 ///
 /// let solver = SmartSolver::new();
 ///
@@ -4020,8 +4020,8 @@ impl SystemSolver {
 /// ## Transcendental Equation
 ///
 /// ```no_run
-/// use mathsolver_core::solver::{SmartSolver, Solver, Solution};
-/// use mathsolver_core::ast::{Equation, Expression, Variable, Function};
+/// use thales::solver::{SmartSolver, Solver, Solution};
+/// use thales::ast::{Equation, Expression, Variable, Function};
 ///
 /// let solver = SmartSolver::new();
 ///
@@ -4046,8 +4046,8 @@ impl SystemSolver {
 /// ## Error Handling
 ///
 /// ```
-/// use mathsolver_core::solver::{SmartSolver, Solver, SolverError};
-/// use mathsolver_core::ast::{Equation, Expression, Variable};
+/// use thales::solver::{SmartSolver, Solver, SolverError};
+/// use thales::ast::{Equation, Expression, Variable};
 ///
 /// let solver = SmartSolver::new();
 ///
@@ -4174,8 +4174,8 @@ impl Solver for SmartSolver {
 /// ## Basic Linear Equation with Substitution
 ///
 /// ```
-/// use mathsolver_core::solver::solve_for;
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::solver::solve_for;
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
 /// use std::collections::HashMap;
 ///
 /// // Solve: ax + b = c for x, given a=2, b=3, c=11
@@ -4205,8 +4205,8 @@ impl Solver for SmartSolver {
 /// ## Physics Formula: Ohm's Law
 ///
 /// ```
-/// use mathsolver_core::solver::solve_for;
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::solver::solve_for;
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
 /// use std::collections::HashMap;
 ///
 /// // V = I * R, solve for I given V=12V, R=4Ω
@@ -4230,8 +4230,8 @@ impl Solver for SmartSolver {
 /// ## Symbolic Solution (No Known Values)
 ///
 /// ```
-/// use mathsolver_core::solver::solve_for;
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::solver::solve_for;
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
 /// use std::collections::HashMap;
 ///
 /// // Solve: 2x + 3 = y for x (no known values)
@@ -4263,8 +4263,8 @@ impl Solver for SmartSolver {
 /// ## Error Handling
 ///
 /// ```
-/// use mathsolver_core::solver::{solve_for, SolverError};
-/// use mathsolver_core::ast::{Equation, Expression};
+/// use thales::solver::{solve_for, SolverError};
+/// use thales::ast::{Equation, Expression};
 /// use std::collections::HashMap;
 ///
 /// // Variable not in equation: 0 = 5
@@ -4460,8 +4460,8 @@ fn substitute_values(expr: &Expression, values: &HashMap<String, f64>) -> Expres
 /// ## Box Volume Derivative
 ///
 /// ```
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
-/// use mathsolver_core::solver::compute_partial_derivative;
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::solver::compute_partial_derivative;
 /// use std::collections::HashMap;
 ///
 /// // Equation: V = l * w * h
@@ -4495,8 +4495,8 @@ fn substitute_values(expr: &Expression, values: &HashMap<String, f64>) -> Expres
 /// ## Ohm's Law Sensitivity
 ///
 /// ```
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
-/// use mathsolver_core::solver::compute_partial_derivative;
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::solver::compute_partial_derivative;
 /// use std::collections::HashMap;
 ///
 /// // P = V² / R (power dissipation)
@@ -4522,8 +4522,8 @@ fn substitute_values(expr: &Expression, values: &HashMap<String, f64>) -> Expres
 /// ## Uncertainty Propagation Example
 ///
 /// ```
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
-/// use mathsolver_core::solver::compute_partial_derivative;
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::solver::compute_partial_derivative;
 /// use std::collections::HashMap;
 ///
 /// // Area = π * r² with r = 5.0 ± 0.1 cm
@@ -4669,8 +4669,8 @@ pub fn compute_partial_derivative(
 /// ## Box Volume with Complete Uncertainty
 ///
 /// ```
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
-/// use mathsolver_core::solver::compute_all_partial_derivatives;
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::solver::compute_all_partial_derivatives;
 /// use std::collections::HashMap;
 ///
 /// // Equation: V = l * w * h
@@ -4720,8 +4720,8 @@ pub fn compute_partial_derivative(
 /// ## Slide Rule Calculation with Error Propagation
 ///
 /// ```
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
-/// use mathsolver_core::solver::compute_all_partial_derivatives;
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::solver::compute_all_partial_derivatives;
 /// use std::collections::HashMap;
 ///
 /// // Power: P = V * I with measurement errors
@@ -4767,8 +4767,8 @@ pub fn compute_partial_derivative(
 /// ## Sensitivity Analysis
 ///
 /// ```
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
-/// use mathsolver_core::solver::compute_all_partial_derivatives;
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::solver::compute_all_partial_derivatives;
 /// use std::collections::HashMap;
 ///
 /// // Area = length * width (simple formula for sensitivity analysis)

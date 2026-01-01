@@ -20,7 +20,7 @@
 //! # Examples
 //!
 //! ```
-//! use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+//! use thales::ast::{Expression, Variable, BinaryOp};
 //! use std::collections::HashMap;
 //!
 //! // Create expression: x + 2
@@ -70,7 +70,7 @@ use std::fmt;
 /// ## Linear equations
 ///
 /// ```
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
 ///
 /// // Create equation: x + 2 = 5
 /// let left = Expression::Binary(
@@ -87,7 +87,7 @@ use std::fmt;
 /// ## Quadratic equations
 ///
 /// ```
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
 ///
 /// // Create equation: x² - 5x + 6 = 0
 /// let x = Expression::Variable(Variable::new("x"));
@@ -126,7 +126,7 @@ use std::fmt;
 /// ## Transcendental equations
 ///
 /// ```
-/// use mathsolver_core::ast::{Equation, Expression, Variable, Function, BinaryOp};
+/// use thales::ast::{Equation, Expression, Variable, Function, BinaryOp};
 ///
 /// // Create equation: sin(x) = 0.5
 /// let x = Expression::Variable(Variable::new("x"));
@@ -140,7 +140,7 @@ use std::fmt;
 /// ## Physics equations
 ///
 /// ```
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
 ///
 /// // Ohm's Law: V = I × R
 /// let v = Expression::Variable(Variable::with_dimension("V", "volts"));
@@ -162,7 +162,7 @@ use std::fmt;
 /// Extract all variables from both sides of an equation:
 ///
 /// ```
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
 /// use std::collections::HashSet;
 ///
 /// // Create equation: a + b = c
@@ -211,8 +211,8 @@ use std::fmt;
 ///
 /// ```ignore
 /// // This example shows the typical workflow (solver module not yet implemented)
-/// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
-/// // use mathsolver_core::solver::Solver; // Future solver module
+/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
+/// // use thales::solver::Solver; // Future solver module
 ///
 /// // Create equation: 2x + 3 = 7
 /// let x = Expression::Variable(Variable::new("x"));
@@ -282,7 +282,7 @@ impl Equation {
     /// ## Simple constant equation
     ///
     /// ```
-    /// use mathsolver_core::ast::{Equation, Expression};
+    /// use thales::ast::{Equation, Expression};
     ///
     /// // Create equation: 3 = 3
     /// let eq = Equation::new(
@@ -296,7 +296,7 @@ impl Equation {
     /// ## Linear equation with variable
     ///
     /// ```
-    /// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+    /// use thales::ast::{Equation, Expression, Variable, BinaryOp};
     ///
     /// // Create equation: 2x = 10
     /// let x = Expression::Variable(Variable::new("x"));
@@ -314,7 +314,7 @@ impl Equation {
     /// ## Pythagorean theorem
     ///
     /// ```
-    /// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp};
+    /// use thales::ast::{Equation, Expression, Variable, BinaryOp};
     ///
     /// // Create equation: a² + b² = c²
     /// let a = Expression::Variable(Variable::new("a"));
@@ -347,7 +347,7 @@ impl Equation {
     /// ## Using owned String for ID
     ///
     /// ```
-    /// use mathsolver_core::ast::{Equation, Expression};
+    /// use thales::ast::{Equation, Expression};
     ///
     /// let equation_name = format!("eq_{}", 42);
     /// let eq = Equation::new(
@@ -361,7 +361,7 @@ impl Equation {
     /// ## Creating equation from parser output
     ///
     /// ```
-    /// use mathsolver_core::ast::{Equation, Expression, Variable, BinaryOp, Function};
+    /// use thales::ast::{Equation, Expression, Variable, BinaryOp, Function};
     ///
     /// // Typical use case: wrapping parsed expressions into an equation
     /// // Example: exp(x) = 2.718
@@ -410,7 +410,7 @@ impl Equation {
 /// ## Creating expressions programmatically
 ///
 /// ```
-/// use mathsolver_core::ast::{Expression, Variable, BinaryOp, UnaryOp, Function};
+/// use thales::ast::{Expression, Variable, BinaryOp, UnaryOp, Function};
 ///
 /// // Simple constant: 42
 /// let constant = Expression::Integer(42);
@@ -441,7 +441,7 @@ impl Equation {
 /// ## Simplification
 ///
 /// ```
-/// use mathsolver_core::ast::{Expression, BinaryOp};
+/// use thales::ast::{Expression, BinaryOp};
 ///
 /// // Create: 0 + 5
 /// let expr = Expression::Binary(
@@ -458,7 +458,7 @@ impl Equation {
 /// ## Evaluation
 ///
 /// ```
-/// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+/// use thales::ast::{Expression, Variable, BinaryOp};
 /// use std::collections::HashMap;
 ///
 /// // Create: x * 2 + 3
@@ -483,7 +483,7 @@ impl Equation {
 /// ## Symbolic differentiation
 ///
 /// ```
-/// use mathsolver_core::ast::{Expression, Variable, Function};
+/// use thales::ast::{Expression, Variable, Function};
 ///
 /// // Create: sin(x)
 /// let x = Expression::Variable(Variable::new("x"));
@@ -510,7 +510,7 @@ impl Equation {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::ast::{Expression, SymbolicConstant};
+/// use thales::ast::{Expression, SymbolicConstant};
 ///
 /// // Create symbolic pi
 /// let pi = Expression::Constant(SymbolicConstant::Pi);
@@ -560,7 +560,7 @@ pub enum Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::ast::Expression;
     ///
     /// let zero = Expression::Integer(0);
     /// let answer = Expression::Integer(42);
@@ -576,7 +576,7 @@ pub enum Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::ast::Expression;
     /// use num_rational::Rational64;
     ///
     /// // One half: 1/2
@@ -594,7 +594,7 @@ pub enum Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::ast::Expression;
     ///
     /// let pi = Expression::Float(3.14159);
     /// let e = Expression::Float(2.71828);
@@ -609,7 +609,7 @@ pub enum Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::ast::Expression;
     /// use num_complex::Complex64;
     ///
     /// // 3 + 4i
@@ -628,7 +628,7 @@ pub enum Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, SymbolicConstant};
+    /// use thales::ast::{Expression, SymbolicConstant};
     ///
     /// // Pi: π
     /// let pi = Expression::Constant(SymbolicConstant::Pi);
@@ -653,7 +653,7 @@ pub enum Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable};
+    /// use thales::ast::{Expression, Variable};
     ///
     /// // Simple variable: x
     /// let x = Expression::Variable(Variable::new("x"));
@@ -674,7 +674,7 @@ pub enum Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, UnaryOp};
+    /// use thales::ast::{Expression, Variable, UnaryOp};
     ///
     /// let x = Expression::Variable(Variable::new("x"));
     ///
@@ -697,7 +697,7 @@ pub enum Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    /// use thales::ast::{Expression, Variable, BinaryOp};
     ///
     /// let x = Expression::Variable(Variable::new("x"));
     /// let y = Expression::Variable(Variable::new("y"));
@@ -721,7 +721,7 @@ pub enum Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, Function};
+    /// use thales::ast::{Expression, Variable, Function};
     ///
     /// let x = Expression::Variable(Variable::new("x"));
     ///
@@ -750,7 +750,7 @@ pub enum Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable};
+    /// use thales::ast::{Expression, Variable};
     ///
     /// let x = Expression::Variable(Variable::new("x"));
     ///
@@ -777,7 +777,7 @@ pub enum Expression {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::ast::Variable;
+/// use thales::ast::Variable;
 ///
 /// // Simple variable without dimension
 /// let x = Variable::new("x");
@@ -813,7 +813,7 @@ impl Variable {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::Variable;
+    /// use thales::ast::Variable;
     ///
     /// let x = Variable::new("x");
     /// let theta = Variable::new("theta");
@@ -838,7 +838,7 @@ impl Variable {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::Variable;
+    /// use thales::ast::Variable;
     ///
     /// let velocity = Variable::with_dimension("v", "m/s");
     /// let mass = Variable::with_dimension("m", "kg");
@@ -871,7 +871,7 @@ impl fmt::Display for Variable {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::ast::{Expression, Variable, UnaryOp};
+/// use thales::ast::{Expression, Variable, UnaryOp};
 ///
 /// let x = Expression::Variable(Variable::new("x"));
 ///
@@ -930,7 +930,7 @@ pub enum UnaryOp {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::ast::{Expression, BinaryOp};
+/// use thales::ast::{Expression, BinaryOp};
 ///
 /// let two = Expression::Integer(2);
 /// let three = Expression::Integer(3);
@@ -998,7 +998,7 @@ impl BinaryOp {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::BinaryOp;
+    /// use thales::ast::BinaryOp;
     ///
     /// assert_eq!(BinaryOp::Add.precedence(), 1);
     /// assert_eq!(BinaryOp::Mul.precedence(), 2);
@@ -1044,7 +1044,7 @@ impl BinaryOp {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::ast::{Expression, Variable, Function};
+/// use thales::ast::{Expression, Variable, Function};
 /// use std::collections::HashMap;
 ///
 /// let x = Expression::Variable(Variable::new("x"));
@@ -1433,7 +1433,7 @@ impl Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::ast::Expression;
     ///
     /// let pi = Expression::pi();
     /// assert_eq!(format!("{}", pi), "π");
@@ -1451,7 +1451,7 @@ impl Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::ast::Expression;
     ///
     /// let e = Expression::euler();
     /// assert_eq!(format!("{}", e), "e");
@@ -1469,7 +1469,7 @@ impl Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::ast::Expression;
     ///
     /// let i = Expression::i();
     /// assert_eq!(format!("{}", i), "i");
@@ -1490,7 +1490,7 @@ impl Expression {
     /// ## Simple Expression
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, BinaryOp};
+    /// use thales::ast::{Expression, BinaryOp};
     ///
     /// let expr = Expression::Binary(
     ///     BinaryOp::Div,
@@ -1503,7 +1503,7 @@ impl Expression {
     /// ## Power Expression
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable};
+    /// use thales::ast::{Expression, Variable};
     ///
     /// let x = Expression::Variable(Variable::new("x"));
     /// let expr = Expression::Power(Box::new(x), Box::new(Expression::Integer(2)));
@@ -1513,7 +1513,7 @@ impl Expression {
     /// ## Symbolic Constant
     ///
     /// ```
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::ast::Expression;
     ///
     /// let pi = Expression::pi();
     /// assert_eq!(pi.to_latex(), r"\pi");
@@ -1522,7 +1522,7 @@ impl Expression {
     /// ## Square Root
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Function, Variable};
+    /// use thales::ast::{Expression, Function, Variable};
     ///
     /// let x = Expression::Variable(Variable::new("x"));
     /// let sqrt_x = Expression::Function(Function::Sqrt, vec![x]);
@@ -1539,7 +1539,7 @@ impl Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::ast::Expression;
     ///
     /// let expr = Expression::Integer(42);
     /// assert_eq!(expr.to_latex_display(), r"\[42\]");
@@ -1555,7 +1555,7 @@ impl Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::ast::Expression;
     ///
     /// let expr = Expression::Integer(42);
     /// assert_eq!(expr.to_latex_inline(), "$42$");
@@ -1793,7 +1793,7 @@ impl Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    /// use thales::ast::{Expression, Variable, BinaryOp};
     ///
     /// // x + y * x
     /// let x = Expression::Variable(Variable::new("x"));
@@ -1857,7 +1857,7 @@ impl Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    /// use thales::ast::{Expression, Variable, BinaryOp};
     ///
     /// // x + 5
     /// let x = Expression::Variable(Variable::new("x"));
@@ -1909,7 +1909,7 @@ impl Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    /// use thales::ast::{Expression, Variable, BinaryOp};
     ///
     /// // Replace all variables named "x" with constant 10
     /// let x = Expression::Variable(Variable::new("x"));
@@ -1969,7 +1969,7 @@ impl Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    /// use thales::ast::{Expression, Variable, BinaryOp};
     ///
     /// // Count all nodes in the expression tree
     /// let x = Expression::Variable(Variable::new("x"));
@@ -2081,7 +2081,7 @@ impl Expression {
     /// ## Identity simplification
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    /// use thales::ast::{Expression, Variable, BinaryOp};
     ///
     /// // 0 + x simplifies to x
     /// let x = Expression::Variable(Variable::new("x"));
@@ -2111,7 +2111,7 @@ impl Expression {
     /// ## Constant folding
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, BinaryOp, Function};
+    /// use thales::ast::{Expression, BinaryOp, Function};
     ///
     /// // 2 + 3 simplifies to 5
     /// let expr = Expression::Binary(
@@ -2139,7 +2139,7 @@ impl Expression {
     /// ## Double negation elimination
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, UnaryOp};
+    /// use thales::ast::{Expression, Variable, UnaryOp};
     ///
     /// // -(-x) simplifies to x
     /// let x = Expression::Variable(Variable::new("x"));
@@ -2151,7 +2151,7 @@ impl Expression {
     /// ## Recursive simplification
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    /// use thales::ast::{Expression, Variable, BinaryOp};
     ///
     /// // (x + 0) * 1 simplifies to x
     /// let x = Expression::Variable(Variable::new("x"));
@@ -2171,7 +2171,7 @@ impl Expression {
     /// ## Zero annihilation
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    /// use thales::ast::{Expression, Variable, BinaryOp};
     ///
     /// // x * 0 simplifies to 0
     /// let x = Expression::Variable(Variable::new("x"));
@@ -2801,7 +2801,7 @@ impl Expression {
     /// ## Power Rule Example
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable};
+    /// use thales::ast::{Expression, Variable};
     ///
     /// // Differentiate x^3 with respect to x
     /// // d/dx[x^3] = 3·x^2
@@ -2817,7 +2817,7 @@ impl Expression {
     /// ## Polynomial Derivative
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+    /// use thales::ast::{Expression, Variable, BinaryOp};
     ///
     /// // Differentiate 3x^2 + 2x + 1 with respect to x
     /// // d/dx[3x^2 + 2x + 1] = 6x + 2
@@ -2863,7 +2863,7 @@ impl Expression {
     /// ## Chain Rule Example
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, Function};
+    /// use thales::ast::{Expression, Variable, Function};
     ///
     /// // Differentiate sin(x^2) with respect to x
     /// // d/dx[sin(x^2)] = cos(x^2)·2x
@@ -2882,7 +2882,7 @@ impl Expression {
     /// ## Product Rule Example
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp, Function};
+    /// use thales::ast::{Expression, Variable, BinaryOp, Function};
     ///
     /// // Differentiate x·sin(x) with respect to x
     /// // d/dx[x·sin(x)] = x·cos(x) + sin(x)·1 = x·cos(x) + sin(x)
@@ -2901,7 +2901,7 @@ impl Expression {
     /// ## Exponential Function Example
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp, Function};
+    /// use thales::ast::{Expression, Variable, BinaryOp, Function};
     ///
     /// // Differentiate exp(2x) with respect to x
     /// // d/dx[exp(2x)] = exp(2x)·2
@@ -2920,7 +2920,7 @@ impl Expression {
     /// ## Logarithmic Function Example
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp, Function};
+    /// use thales::ast::{Expression, Variable, BinaryOp, Function};
     ///
     /// // Differentiate ln(x^2 + 1) with respect to x
     /// // d/dx[ln(x^2 + 1)] = (1/(x^2 + 1))·2x
@@ -3463,7 +3463,7 @@ impl Expression {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::ast::{Expression, Variable, BinaryOp, Function};
+    /// use thales::ast::{Expression, Variable, BinaryOp, Function};
     /// use std::collections::HashMap;
     ///
     /// // Evaluate: x^2 + 2*x + 1 with x = 3

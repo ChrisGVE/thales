@@ -1,7 +1,7 @@
 //! Unit tests for the mathematical expression parser.
 
-use mathsolver_core::ast::{BinaryOp, Expression, Function, UnaryOp};
-use mathsolver_core::parser::{parse_equation, parse_expression};
+use thales::ast::{BinaryOp, Expression, Function, UnaryOp};
+use thales::parser::{parse_equation, parse_expression};
 
 #[test]
 fn test_simple_integer() {
@@ -620,7 +620,7 @@ fn test_scientific_e_lower() {
 // Symbolic Constants Parsing Tests
 // ============================================================================
 
-use mathsolver_core::ast::SymbolicConstant;
+use thales::ast::SymbolicConstant;
 
 #[test]
 fn test_parse_pi() {

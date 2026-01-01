@@ -28,8 +28,8 @@
 //! # Example: Building a Solution Path
 //!
 //! ```rust
-//! use mathsolver_core::resolution_path::{ResolutionPathBuilder, Operation};
-//! use mathsolver_core::ast::{Expression, Variable};
+//! use thales::resolution_path::{ResolutionPathBuilder, Operation};
+//! use thales::ast::{Expression, Variable};
 //!
 //! // Solve: 2x + 3 = 7
 //! let initial = Expression::Integer(7); // Starting from right side
@@ -55,8 +55,8 @@
 //! # Example: Using the Fluent Builder API
 //!
 //! ```rust
-//! use mathsolver_core::resolution_path::ResolutionPathBuilder;
-//! use mathsolver_core::ast::{Expression, Variable};
+//! use thales::resolution_path::ResolutionPathBuilder;
+//! use thales::ast::{Expression, Variable};
 //!
 //! let x = Variable::new("x");
 //! let initial = Expression::Integer(10);
@@ -76,8 +76,8 @@
 //! and the resolution path, enabling applications to show the work:
 //!
 //! ```ignore
-//! use mathsolver_core::solver::Solver;
-//! use mathsolver_core::ast::{Equation, Variable};
+//! use thales::solver::Solver;
+//! use thales::ast::{Equation, Variable};
 //!
 //! let equation = /* ... */;
 //! let variable = Variable::new("x");
@@ -129,8 +129,8 @@ use serde_json::{json, Value as JsonValue};
 /// # Example
 ///
 /// ```rust
-/// use mathsolver_core::resolution_path::{ResolutionPath, Verbosity};
-/// use mathsolver_core::ast::Expression;
+/// use thales::resolution_path::{ResolutionPath, Verbosity};
+/// use thales::ast::Expression;
 ///
 /// let path = ResolutionPath::new(Expression::Integer(10));
 /// let minimal = path.to_text(Verbosity::Minimal);
@@ -166,8 +166,8 @@ pub enum Verbosity {
 /// # Example
 ///
 /// ```rust
-/// use mathsolver_core::resolution_path::{ResolutionPath, ResolutionStep, Operation};
-/// use mathsolver_core::ast::Expression;
+/// use thales::resolution_path::{ResolutionPath, ResolutionStep, Operation};
+/// use thales::ast::Expression;
 ///
 /// let mut path = ResolutionPath::new(Expression::Integer(10));
 /// path.add_step(ResolutionStep::new(
@@ -241,8 +241,8 @@ pub struct OperationCounts {
 /// # Example
 ///
 /// ```rust
-/// use mathsolver_core::resolution_path::{ResolutionPath, ResolutionStep, Operation};
-/// use mathsolver_core::ast::Expression;
+/// use thales::resolution_path::{ResolutionPath, ResolutionStep, Operation};
+/// use thales::ast::Expression;
 ///
 /// // Create a path for solving 5x = 15
 /// let mut path = ResolutionPath::new(Expression::Integer(15));
@@ -265,8 +265,8 @@ pub struct OperationCounts {
 /// Resolution paths support progressive hint systems:
 ///
 /// ```rust
-/// use mathsolver_core::resolution_path::ResolutionPath;
-/// use mathsolver_core::ast::Expression;
+/// use thales::resolution_path::ResolutionPath;
+/// use thales::ast::Expression;
 ///
 /// let path = ResolutionPath::new(Expression::Integer(10));
 /// // ... add steps ...
@@ -314,8 +314,8 @@ impl ResolutionPath {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::ResolutionPath;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::ResolutionPath;
+    /// use thales::ast::Expression;
     ///
     /// let initial = Expression::Integer(42);
     /// let path = ResolutionPath::new(initial.clone());
@@ -341,8 +341,8 @@ impl ResolutionPath {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::{ResolutionPath, ResolutionStep, Operation};
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::{ResolutionPath, ResolutionStep, Operation};
+    /// use thales::ast::Expression;
     ///
     /// let mut path = ResolutionPath::new(Expression::Integer(10));
     ///
@@ -366,8 +366,8 @@ impl ResolutionPath {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::ResolutionPath;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::ResolutionPath;
+    /// use thales::ast::Expression;
     ///
     /// let mut path = ResolutionPath::new(Expression::Integer(10));
     /// // ... add steps ...
@@ -388,8 +388,8 @@ impl ResolutionPath {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::{ResolutionPath, ResolutionStep, Operation};
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::{ResolutionPath, ResolutionStep, Operation};
+    /// use thales::ast::Expression;
     ///
     /// let mut path = ResolutionPath::new(Expression::Integer(20));
     ///
@@ -414,8 +414,8 @@ impl ResolutionPath {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::{ResolutionPath, ResolutionStep, Operation};
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::{ResolutionPath, ResolutionStep, Operation};
+    /// use thales::ast::Expression;
     ///
     /// let mut path = ResolutionPath::new(Expression::Integer(100));
     /// assert!(path.is_empty());
@@ -448,8 +448,8 @@ impl ResolutionPath {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::ResolutionPath;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::ResolutionPath;
+    /// use thales::ast::Expression;
     ///
     /// let path = ResolutionPath::new(Expression::Integer(7));
     /// let explanation = path.explain();
@@ -474,8 +474,8 @@ impl ResolutionPath {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::{ResolutionPath, ResolutionStep, Operation, Verbosity};
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::{ResolutionPath, ResolutionStep, Operation, Verbosity};
+    /// use thales::ast::Expression;
     ///
     /// let mut path = ResolutionPath::new(Expression::Integer(10));
     /// path.add_step(ResolutionStep::new(
@@ -546,8 +546,8 @@ impl ResolutionPath {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::{ResolutionPath, ResolutionStep, Operation, Verbosity};
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::{ResolutionPath, ResolutionStep, Operation, Verbosity};
+    /// use thales::ast::Expression;
     ///
     /// let mut path = ResolutionPath::new(Expression::Integer(10));
     /// path.add_step(ResolutionStep::new(
@@ -622,8 +622,8 @@ impl ResolutionPath {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::{ResolutionPath, ResolutionStep, Operation};
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::{ResolutionPath, ResolutionStep, Operation};
+    /// use thales::ast::Expression;
     ///
     /// let mut path = ResolutionPath::new(Expression::Integer(10));
     /// path.add_step(ResolutionStep::new(
@@ -691,8 +691,8 @@ impl ResolutionPath {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::{ResolutionPath, ResolutionStep, Operation};
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::{ResolutionPath, ResolutionStep, Operation};
+    /// use thales::ast::Expression;
     ///
     /// let mut path = ResolutionPath::new(Expression::Integer(20));
     /// path.add_step(ResolutionStep::new(
@@ -784,8 +784,8 @@ fn escape_latex_text(text: &str) -> String {
 /// # Example
 ///
 /// ```rust
-/// use mathsolver_core::resolution_path::{ResolutionStep, Operation};
-/// use mathsolver_core::ast::Expression;
+/// use thales::resolution_path::{ResolutionStep, Operation};
+/// use thales::ast::Expression;
 ///
 /// // Step: Divide both sides by 2
 /// let step = ResolutionStep::new(
@@ -803,8 +803,8 @@ fn escape_latex_text(text: &str) -> String {
 /// Steps can be revealed progressively to provide hints:
 ///
 /// ```rust
-/// use mathsolver_core::resolution_path::{ResolutionStep, Operation};
-/// use mathsolver_core::ast::Expression;
+/// use thales::resolution_path::{ResolutionStep, Operation};
+/// use thales::ast::Expression;
 ///
 /// let step = ResolutionStep::new(
 ///     Operation::Simplify,
@@ -857,8 +857,8 @@ impl ResolutionStep {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::{ResolutionStep, Operation};
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::{ResolutionStep, Operation};
+    /// use thales::ast::Expression;
     ///
     /// let step = ResolutionStep::new(
     ///     Operation::AddBothSides(Expression::Integer(5)),
@@ -924,8 +924,8 @@ impl ResolutionStep {
 /// # Example
 ///
 /// ```rust
-/// use mathsolver_core::resolution_path::Operation;
-/// use mathsolver_core::ast::{Expression, Variable};
+/// use thales::resolution_path::Operation;
+/// use thales::ast::{Expression, Variable};
 ///
 /// // Both-sides operation
 /// let op1 = Operation::AddBothSides(Expression::Integer(5));
@@ -1209,8 +1209,8 @@ impl Operation {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::Operation;
-    /// use mathsolver_core::ast::{Expression, Variable};
+    /// use thales::resolution_path::Operation;
+    /// use thales::ast::{Expression, Variable};
     ///
     /// let op = Operation::DivideBothSides(Expression::Integer(3));
     /// assert_eq!(op.describe(), "Divide both sides by Integer(3)");
@@ -1226,8 +1226,8 @@ impl Operation {
     /// # Usage in Educational Applications
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::{ResolutionStep, Operation};
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::{ResolutionStep, Operation};
+    /// use thales::ast::Expression;
     ///
     /// let step = ResolutionStep::new(
     ///     Operation::AddBothSides(Expression::Integer(7)),
@@ -1307,8 +1307,8 @@ impl Operation {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::Operation;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::Operation;
+    /// use thales::ast::Expression;
     ///
     /// let op = Operation::QuadraticFormula;
     /// assert_eq!(op.describe_latex(), "Apply quadratic formula");
@@ -1385,8 +1385,8 @@ impl Operation {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::Operation;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::Operation;
+    /// use thales::ast::Expression;
     ///
     /// let op = Operation::Simplify;
     /// assert_eq!(op.category(), "transformation");
@@ -1454,8 +1454,8 @@ impl Operation {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::Operation;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::Operation;
+    /// use thales::ast::Expression;
     ///
     /// assert!(!Operation::Simplify.is_key_operation());
     /// assert!(Operation::QuadraticFormula.is_key_operation());
@@ -1487,8 +1487,8 @@ impl Operation {
 /// # Example: Basic Usage
 ///
 /// ```rust
-/// use mathsolver_core::resolution_path::{ResolutionPathBuilder, Operation};
-/// use mathsolver_core::ast::{Expression, Variable};
+/// use thales::resolution_path::{ResolutionPathBuilder, Operation};
+/// use thales::ast::{Expression, Variable};
 ///
 /// // Solve: 2x + 3 = 11
 /// let path = ResolutionPathBuilder::new(Expression::Integer(11))
@@ -1510,8 +1510,8 @@ impl Operation {
 /// # Example: Using Specialized Methods
 ///
 /// ```rust
-/// use mathsolver_core::resolution_path::ResolutionPathBuilder;
-/// use mathsolver_core::ast::{Expression, Variable};
+/// use thales::resolution_path::ResolutionPathBuilder;
+/// use thales::ast::{Expression, Variable};
 ///
 /// let x = Variable::new("x");
 ///
@@ -1526,8 +1526,8 @@ impl Operation {
 /// # Example: Complex Multi-Step Solution
 ///
 /// ```rust
-/// use mathsolver_core::resolution_path::{ResolutionPathBuilder, Operation};
-/// use mathsolver_core::ast::{Expression, Variable};
+/// use thales::resolution_path::{ResolutionPathBuilder, Operation};
+/// use thales::ast::{Expression, Variable};
 ///
 /// // Solve: x² = 16
 /// let x = Variable::new("x");
@@ -1567,8 +1567,8 @@ impl ResolutionPathBuilder {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::ResolutionPathBuilder;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::ResolutionPathBuilder;
+    /// use thales::ast::Expression;
     ///
     /// let builder = ResolutionPathBuilder::new(Expression::Integer(42));
     /// // Add steps and finish...
@@ -1599,8 +1599,8 @@ impl ResolutionPathBuilder {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::{ResolutionPathBuilder, Operation};
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::{ResolutionPathBuilder, Operation};
+    /// use thales::ast::Expression;
     ///
     /// let path = ResolutionPathBuilder::new(Expression::Integer(15))
     ///     .step(
@@ -1636,14 +1636,14 @@ impl ResolutionPathBuilder {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::ResolutionPathBuilder;
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::ResolutionPathBuilder;
+    /// use thales::ast::Expression;
     ///
     /// let path = ResolutionPathBuilder::new(Expression::Integer(12))
     ///     .simplify("Combine like terms".to_string(), Expression::Integer(12))
     ///     .finish(Expression::Integer(12));
     ///
-    /// assert_eq!(path.steps[0].operation, mathsolver_core::resolution_path::Operation::Simplify);
+    /// assert_eq!(path.steps[0].operation, thales::resolution_path::Operation::Simplify);
     /// ```
     pub fn simplify(self, explanation: String, result: Expression) -> Self {
         self.step(Operation::Simplify, explanation, result)
@@ -1667,8 +1667,8 @@ impl ResolutionPathBuilder {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::ResolutionPathBuilder;
-    /// use mathsolver_core::ast::{Expression, Variable};
+    /// use thales::resolution_path::ResolutionPathBuilder;
+    /// use thales::ast::{Expression, Variable};
     ///
     /// let x = Variable::new("x");
     ///
@@ -1698,8 +1698,8 @@ impl ResolutionPathBuilder {
     /// # Example
     ///
     /// ```rust
-    /// use mathsolver_core::resolution_path::{ResolutionPathBuilder, Operation};
-    /// use mathsolver_core::ast::Expression;
+    /// use thales::resolution_path::{ResolutionPathBuilder, Operation};
+    /// use thales::ast::Expression;
     ///
     /// let path = ResolutionPathBuilder::new(Expression::Integer(10))
     ///     .step(

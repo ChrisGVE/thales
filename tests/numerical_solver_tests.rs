@@ -1,5 +1,5 @@
-use mathsolver_core::ast::{BinaryOp, Equation, Expression, Function, Variable};
-use mathsolver_core::numerical::{
+use thales::ast::{BinaryOp, Equation, Expression, Function, Variable};
+use thales::numerical::{
     BisectionMethod, NewtonRaphson, NumericalConfig, SmartNumericalSolver,
 };
 

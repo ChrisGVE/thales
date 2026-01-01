@@ -29,8 +29,8 @@
 //! # Example
 //!
 //! ```ignore
-//! use mathsolver_core::numerical::{NewtonRaphson, NumericalConfig};
-//! use mathsolver_core::ast::{Equation, Expression, Variable};
+//! use thales::numerical::{NewtonRaphson, NumericalConfig};
+//! use thales::ast::{Equation, Expression, Variable};
 //!
 //! // Solve x^2 = 5
 //! let equation = Equation::new("quad",
@@ -112,7 +112,7 @@ pub type NumericalResult<T> = Result<T, NumericalError>;
 /// # Example
 ///
 /// ```
-/// use mathsolver_core::numerical::NumericalConfig;
+/// use thales::numerical::NumericalConfig;
 ///
 /// // Use default configuration
 /// let config = NumericalConfig::default();
@@ -170,8 +170,8 @@ impl Default for NumericalConfig {
 /// # Example
 ///
 /// ```
-/// use mathsolver_core::numerical::{NewtonRaphson, NumericalConfig};
-/// use mathsolver_core::ast::{Equation, Expression, Variable};
+/// use thales::numerical::{NewtonRaphson, NumericalConfig};
+/// use thales::ast::{Equation, Expression, Variable};
 ///
 /// // Solve x^2 = 5
 /// let equation = Equation::new(
@@ -247,8 +247,8 @@ pub struct NumericalSolution {
 /// # Example: Square Root
 ///
 /// ```
-/// use mathsolver_core::numerical::{NewtonRaphson, NumericalConfig};
-/// use mathsolver_core::ast::{Equation, Expression, Variable};
+/// use thales::numerical::{NewtonRaphson, NumericalConfig};
+/// use thales::ast::{Equation, Expression, Variable};
 ///
 /// // Solve x^2 = 5 to find √5
 /// let equation = Equation::new(
@@ -271,8 +271,8 @@ pub struct NumericalSolution {
 /// # Example: Custom Configuration
 ///
 /// ```
-/// use mathsolver_core::numerical::{NewtonRaphson, NumericalConfig};
-/// use mathsolver_core::ast::{Equation, Expression, Variable};
+/// use thales::numerical::{NewtonRaphson, NumericalConfig};
+/// use thales::ast::{Equation, Expression, Variable};
 ///
 /// // High precision configuration
 /// let config = NumericalConfig {
@@ -311,7 +311,7 @@ impl NewtonRaphson {
     /// # Example
     ///
     /// ```
-    /// use mathsolver_core::numerical::{NewtonRaphson, NumericalConfig};
+    /// use thales::numerical::{NewtonRaphson, NumericalConfig};
     ///
     /// let config = NumericalConfig {
     ///     max_iterations: 500,
@@ -337,7 +337,7 @@ impl NewtonRaphson {
     /// # Example
     ///
     /// ```
-    /// use mathsolver_core::numerical::NewtonRaphson;
+    /// use thales::numerical::NewtonRaphson;
     ///
     /// let solver = NewtonRaphson::with_default_config();
     /// ```
@@ -377,8 +377,8 @@ impl NewtonRaphson {
     /// # Example
     ///
     /// ```
-    /// use mathsolver_core::numerical::NewtonRaphson;
-    /// use mathsolver_core::ast::{Equation, Expression, Variable};
+    /// use thales::numerical::NewtonRaphson;
+    /// use thales::ast::{Equation, Expression, Variable};
     ///
     /// // Solve x^2 = 5
     /// let equation = Equation::new(
@@ -616,8 +616,8 @@ impl SecantMethod {
 /// # Example: Square Root
 ///
 /// ```
-/// use mathsolver_core::numerical::BisectionMethod;
-/// use mathsolver_core::ast::{Equation, Expression, Variable};
+/// use thales::numerical::BisectionMethod;
+/// use thales::ast::{Equation, Expression, Variable};
 ///
 /// // Solve x^2 = 5 to find √5
 /// // We know root is between 2 and 3 because 2² = 4 < 5 and 3² = 9 > 5
@@ -641,14 +641,14 @@ impl SecantMethod {
 /// # Example: Finding Multiple Roots
 ///
 /// ```
-/// use mathsolver_core::numerical::BisectionMethod;
-/// use mathsolver_core::ast::{Equation, Expression, Variable};
+/// use thales::numerical::BisectionMethod;
+/// use thales::ast::{Equation, Expression, Variable};
 ///
 /// // Solve x^2 - 1 = 0 which has roots at x = -1 and x = 1
 /// let equation = Equation::new(
 ///     "quadratic",
 ///     Expression::Binary(
-///         mathsolver_core::ast::BinaryOp::Sub,
+///         thales::ast::BinaryOp::Sub,
 ///         Box::new(Expression::Power(
 ///             Box::new(Expression::Variable(Variable::new("x"))),
 ///             Box::new(Expression::Integer(2))
@@ -995,8 +995,8 @@ impl LevenbergMarquardt {
 /// ## Basic Usage
 ///
 /// ```
-/// use mathsolver_core::numerical::SmartNumericalSolver;
-/// use mathsolver_core::ast::{Equation, Expression, Variable};
+/// use thales::numerical::SmartNumericalSolver;
+/// use thales::ast::{Equation, Expression, Variable};
 ///
 /// // Solve x^3 = 27 (we don't know a good initial guess)
 /// let equation = Equation::new(
@@ -1018,8 +1018,8 @@ impl LevenbergMarquardt {
 /// ## With Known Interval
 ///
 /// ```
-/// use mathsolver_core::numerical::SmartNumericalSolver;
-/// use mathsolver_core::ast::{Equation, Expression, Variable};
+/// use thales::numerical::SmartNumericalSolver;
+/// use thales::ast::{Equation, Expression, Variable};
 ///
 /// // Solve x^2 = 5, we know root is between 2 and 3
 /// let equation = Equation::new(
@@ -1045,8 +1045,8 @@ impl LevenbergMarquardt {
 /// ## With Initial Guess
 ///
 /// ```
-/// use mathsolver_core::numerical::{SmartNumericalSolver, NumericalConfig};
-/// use mathsolver_core::ast::{Equation, Expression, Variable};
+/// use thales::numerical::{SmartNumericalSolver, NumericalConfig};
+/// use thales::ast::{Equation, Expression, Variable};
 ///
 /// // Provide initial guess to use fast Newton-Raphson first
 /// let config = NumericalConfig {

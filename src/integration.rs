@@ -11,8 +11,8 @@
 //! # Example
 //!
 //! ```
-//! use mathsolver_core::integration::{integrate, IntegrationError};
-//! use mathsolver_core::ast::{Expression, Variable};
+//! use thales::integration::{integrate, IntegrationError};
+//! use thales::ast::{Expression, Variable};
 //!
 //! // Integrate x^2 with respect to x
 //! let x = Expression::Variable(Variable::new("x"));
@@ -85,8 +85,8 @@ pub type IntegrationResult = Result<Expression, IntegrationError>;
 /// # Example
 ///
 /// ```
-/// use mathsolver_core::integration::integrate;
-/// use mathsolver_core::ast::{Expression, Variable};
+/// use thales::integration::integrate;
+/// use thales::ast::{Expression, Variable};
 ///
 /// let x = Expression::Variable(Variable::new("x"));
 /// let expr = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(3)));
@@ -1311,12 +1311,12 @@ fn liate_priority(expr: &Expression, var: &str) -> u8 {
 /// # Example
 ///
 /// ```
-/// use mathsolver_core::integration::integrate_by_parts;
-/// use mathsolver_core::ast::{Expression, Variable, BinaryOp};
+/// use thales::integration::integrate_by_parts;
+/// use thales::ast::{Expression, Variable, BinaryOp};
 ///
 /// // ∫x * e^x dx
 /// let x = Expression::Variable(Variable::new("x"));
-/// let e_x = Expression::Function(mathsolver_core::ast::Function::Exp, vec![x.clone()]);
+/// let e_x = Expression::Function(thales::ast::Function::Exp, vec![x.clone()]);
 /// let expr = Expression::Binary(BinaryOp::Mul, Box::new(x), Box::new(e_x));
 ///
 /// let result = integrate_by_parts(&expr, "x");
@@ -1721,8 +1721,8 @@ pub fn tabular_integration(
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::integration::definite_integral;
-/// use mathsolver_core::ast::{Expression, Variable};
+/// use thales::integration::definite_integral;
+/// use thales::ast::{Expression, Variable};
 /// use std::collections::HashMap;
 ///
 /// // ∫_0^1 x^2 dx = 1/3

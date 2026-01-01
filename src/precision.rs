@@ -13,14 +13,14 @@
 //! # Examples
 //!
 //! ```
-//! use mathsolver_core::precision::{PrecisionMode, EvalContext, RoundingMode};
-//! use mathsolver_core::ast::Expression;
+//! use thales::precision::{PrecisionMode, EvalContext, RoundingMode};
+//! use thales::ast::Expression;
 //! use std::collections::HashMap;
 //!
 //! // Evaluate 1/3 with 6 decimal places
 //! let ctx = EvalContext::new(PrecisionMode::FixedDecimal(6));
 //! let expr = Expression::Binary(
-//!     mathsolver_core::ast::BinaryOp::Div,
+//!     thales::ast::BinaryOp::Div,
 //!     Box::new(Expression::Integer(1)),
 //!     Box::new(Expression::Integer(3)),
 //! );

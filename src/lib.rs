@@ -28,7 +28,7 @@
 //! Convert between Cartesian and polar coordinate systems:
 //!
 //! ```rust
-//! use mathsolver_core::{Cartesian2D, Polar};
+//! use thales::{Cartesian2D, Polar};
 //!
 //! // 2D Cartesian to Polar
 //! let cartesian = Cartesian2D::new(3.0, 4.0);
@@ -47,7 +47,7 @@
 //! Convert between Cartesian and spherical coordinates:
 //!
 //! ```rust
-//! use mathsolver_core::{Cartesian3D, Spherical};
+//! use thales::{Cartesian3D, Spherical};
 //!
 //! // Cartesian to Spherical
 //! let cart3d = Cartesian3D::new(1.0, 1.0, 1.0);
@@ -66,7 +66,7 @@
 //! Work with complex numbers and polar form:
 //!
 //! ```rust
-//! use mathsolver_core::ComplexOps;
+//! use thales::ComplexOps;
 //! use num_complex::Complex64;
 //!
 //! // De Moivre's theorem: (r∠θ)^n = r^n∠(nθ)
@@ -88,7 +88,7 @@
 //! Build mathematical expressions using the AST:
 //!
 //! ```rust
-//! use mathsolver_core::{Expression, Variable, BinaryOp};
+//! use thales::{Expression, Variable, BinaryOp};
 //!
 //! // Create expression: 2*x + 5
 //! let x = Variable::new("x");
@@ -296,9 +296,9 @@
 //!
 //! # Build universal library with lipo
 //! lipo -create \
-//!   target/aarch64-apple-ios-sim/release/libmathsolver_core.a \
-//!   target/x86_64-apple-ios/release/libmathsolver_core.a \
-//!   -output libmathsolver_core_universal.a
+//!   target/aarch64-apple-ios-sim/release/libthales.a \
+//!   target/x86_64-apple-ios/release/libthales.a \
+//!   -output libthales_universal.a
 //! ```
 //!
 //! ## Tier 2: Standard Rust Targets
@@ -339,7 +339,7 @@
 //! - Resolution path generation
 //! - Unit and dimension system
 //!
-//! See [CHANGELOG.md](https://github.com/cberclaz/mathsolver-core/blob/main/CHANGELOG.md)
+//! See [CHANGELOG.md](https://github.com/ChrisGVE/thales/blob/main/CHANGELOG.md)
 //! for detailed version history.
 //!
 //! # Module Documentation

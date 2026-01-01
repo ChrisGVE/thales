@@ -16,8 +16,8 @@
 //! ## Simple Pattern Matching
 //!
 //! ```
-//! use mathsolver_core::pattern::{Pattern, match_pattern};
-//! use mathsolver_core::ast::{Expression, BinaryOp, Variable};
+//! use thales::pattern::{Pattern, match_pattern};
+//! use thales::ast::{Expression, BinaryOp, Variable};
 //!
 //! // Pattern: a + b (wildcards for any expressions)
 //! let pattern = Pattern::Binary(
@@ -40,8 +40,8 @@
 //! ## Transformation Rules
 //!
 //! ```
-//! use mathsolver_core::pattern::{Pattern, Rule, apply_rule};
-//! use mathsolver_core::ast::{Expression, BinaryOp};
+//! use thales::pattern::{Pattern, Rule, apply_rule};
+//! use thales::ast::{Expression, BinaryOp};
 //!
 //! // Rule: x + 0 = x (additive identity)
 //! let rule = Rule::new(
@@ -54,7 +54,7 @@
 //! );
 //!
 //! // Apply rule to: y + 0
-//! let y = Expression::Variable(mathsolver_core::ast::Variable::new("y"));
+//! let y = Expression::Variable(thales::ast::Variable::new("y"));
 //! let expr = Expression::Binary(BinaryOp::Add, Box::new(y.clone()), Box::new(Expression::Integer(0)));
 //!
 //! let result = apply_rule(&expr, &rule);
@@ -180,8 +180,8 @@ impl Pattern {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::pattern::{Pattern, match_pattern};
-/// use mathsolver_core::ast::{Expression, BinaryOp, Variable};
+/// use thales::pattern::{Pattern, match_pattern};
+/// use thales::ast::{Expression, BinaryOp, Variable};
 ///
 /// // Match x + y against a + b pattern
 /// let pattern = Pattern::add(
@@ -334,8 +334,8 @@ fn match_pattern_internal(
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::pattern::{Pattern, apply_pattern};
-/// use mathsolver_core::ast::{Expression, Variable};
+/// use thales::pattern::{Pattern, apply_pattern};
+/// use thales::ast::{Expression, Variable};
 /// use std::collections::HashMap;
 ///
 /// let mut bindings = HashMap::new();
@@ -424,8 +424,8 @@ impl Rule {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::pattern::{Pattern, Rule};
-    /// use mathsolver_core::ast::{Expression, BinaryOp};
+    /// use thales::pattern::{Pattern, Rule};
+    /// use thales::ast::{Expression, BinaryOp};
     ///
     /// // Rule: x + 0 = x
     /// let rule = Rule::new(
@@ -471,8 +471,8 @@ impl Rule {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::pattern::{Pattern, Rule, apply_rule};
-/// use mathsolver_core::ast::{Expression, BinaryOp, Variable};
+/// use thales::pattern::{Pattern, Rule, apply_rule};
+/// use thales::ast::{Expression, BinaryOp, Variable};
 ///
 /// // Rule: x * 1 = x
 /// let rule = Rule::new(

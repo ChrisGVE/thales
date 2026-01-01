@@ -1,11 +1,14 @@
-# mathsolver-core
+# thales
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/ChrisGVE/mathsolver-core)
+[![Crates.io](https://img.shields.io/crates/v/thales.svg)](https://crates.io/crates/thales)
+[![Documentation](https://docs.rs/thales/badge.svg)](https://docs.rs/thales)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://www.rust-lang.org/what/embedded)
 [![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](https://www.rust-lang.org)
 
-A high-performance Rust library for mathematical equation parsing, symbolic solving, numerical approximation, and coordinate transformations. Designed for cross-platform use with first-class iOS support via FFI bindings.
+A comprehensive Computer Algebra System (CAS) library for symbolic mathematics, equation solving, calculus, and linear algebra. Named after [Thales of Miletus](https://en.wikipedia.org/wiki/Thales_of_Miletus), the first mathematician in the Greek tradition.
+
+Designed for cross-platform use with first-class iOS support via FFI bindings.
 
 ## Features
 
@@ -63,14 +66,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-mathsolver-core = "0.1.0"
+thales = "0.2.0"
 ```
 
 Or install from GitHub:
 
 ```toml
 [dependencies]
-mathsolver-core = { git = "https://github.com/ChrisGVE/mathsolver-core", branch = "main" }
+thales = { git = "https://github.com/ChrisGVE/thales", branch = "main" }
 ```
 
 ## Quick Start
@@ -80,7 +83,7 @@ mathsolver-core = { git = "https://github.com/ChrisGVE/mathsolver-core", branch 
 Convert between 2D Cartesian and polar coordinate systems:
 
 ```rust
-use mathsolver_core::{Cartesian2D, Polar};
+use thales::{Cartesian2D, Polar};
 
 fn main() {
     // Create a 2D Cartesian point
@@ -103,7 +106,7 @@ fn main() {
 Convert between Cartesian and spherical coordinates:
 
 ```rust
-use mathsolver_core::{Cartesian3D, Spherical};
+use thales::{Cartesian3D, Spherical};
 
 fn main() {
     // Create a 3D Cartesian point
@@ -126,7 +129,7 @@ fn main() {
 Work with complex numbers using polar form and De Moivre's theorem:
 
 ```rust
-use mathsolver_core::ComplexOps;
+use thales::ComplexOps;
 use num_complex::Complex64;
 
 fn main() {
@@ -152,7 +155,7 @@ fn main() {
 Build mathematical expressions using the AST:
 
 ```rust
-use mathsolver_core::{Expression, Variable, BinaryOp};
+use thales::{Expression, Variable, BinaryOp};
 
 fn main() {
     // Create expression: 2*x + 5
@@ -177,7 +180,7 @@ fn main() {
 For complete parsing and solving capabilities (parser implementation in progress):
 
 ```rust
-use mathsolver_core::{parse_equation, SmartSolver, Solver, Variable};
+use thales::{parse_equation, SmartSolver, Solver, Variable};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse equation from string
@@ -202,7 +205,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 Convert between Cartesian and cylindrical coordinates:
 
 ```rust
-use mathsolver_core::{Cartesian3D, Cylindrical};
+use thales::{Cartesian3D, Cylindrical};
 
 fn main() {
     // Create Cartesian point
@@ -225,7 +228,7 @@ fn main() {
 Solve systems of equations with automatic dependency analysis:
 
 ```rust
-use mathsolver_core::{
+use thales::{
     EquationSystem, SystemContext, MultiEquationSolver, parse_equation
 };
 
@@ -269,9 +272,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 Differentiation, integration, and limits:
 
 ```rust
-use mathsolver_core::{parse_expression, integrate, limit};
-use mathsolver_core::ast::Variable;
-use mathsolver_core::limits::{compute_limit, LimitPoint};
+use thales::{parse_expression, integrate, limit};
+use thales::ast::Variable;
+use thales::limits::{compute_limit, LimitPoint};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Differentiation
@@ -294,7 +297,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## API Reference
 
-The library is organized into focused modules. See [full documentation on docs.rs](https://docs.rs/mathsolver-core) or build locally:
+The library is organized into focused modules. See the [full documentation on docs.rs](https://docs.rs/thales) or build locally:
 
 ```bash
 cargo doc --open
@@ -327,7 +330,7 @@ cargo doc --open
 Commonly used types re-exported at crate root:
 
 ```rust
-use mathsolver_core::{
+use thales::{
     // AST types
     Expression, Equation, Variable, BinaryOp, UnaryOp, Function,
 
@@ -348,7 +351,7 @@ use mathsolver_core::{
     solve_separable, solve_linear, FirstOrderODE, ODESolution,
 
     // Limits
-    // (use mathsolver_core::limits::{compute_limit, LimitPoint, ...})
+    // (use thales::limits::{compute_limit, LimitPoint, ...})
 
     // Inequalities
     solve_inequality, Inequality, IntervalSolution,
@@ -357,7 +360,7 @@ use mathsolver_core::{
     decompose, PartialFractionResult, PartialFractionTerm,
 
     // Pattern Matching
-    // (use mathsolver_core::pattern::{Pattern, match_pattern, ...})
+    // (use thales::pattern::{Pattern, match_pattern, ...})
 
     // Trigonometric
     simplify_trig, simplify_trig_with_steps,
@@ -382,7 +385,7 @@ Enable FFI in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-mathsolver-core = { version = "0.1.0", features = ["ffi"] }
+thales = { version = "0.2.0", features = ["ffi"] }
 ```
 
 ## Building from Source
@@ -391,8 +394,8 @@ mathsolver-core = { version = "0.1.0", features = ["ffi"] }
 
 ```bash
 # Clone repository
-git clone https://github.com/ChrisGVE/mathsolver-core.git
-cd mathsolver-core
+git clone https://github.com/ChrisGVE/thales.git
+cd thales
 
 # Build library
 cargo build --release
@@ -502,7 +505,7 @@ rustup target add x86_64-apple-ios           # iOS simulator (Intel)
 cargo build --release --target aarch64-apple-ios
 ```
 
-Output: `target/aarch64-apple-ios/release/libmathsolver_core.a`
+Output: `target/aarch64-apple-ios/release/libthales.a`
 
 ### Build for iOS Simulator
 
@@ -522,19 +525,19 @@ Combine Intel and ARM simulator builds into a universal library:
 
 ```bash
 lipo -create \
-  target/aarch64-apple-ios-sim/release/libmathsolver_core.a \
-  target/x86_64-apple-ios/release/libmathsolver_core.a \
-  -output target/libmathsolver_core_sim.a
+  target/aarch64-apple-ios-sim/release/libthales.a \
+  target/x86_64-apple-ios/release/libthales.a \
+  -output target/libthales_sim.a
 ```
 
 ### Verify Library Architectures
 
 ```bash
 # Check device library (should show arm64)
-lipo -info target/aarch64-apple-ios/release/libmathsolver_core.a
+lipo -info target/aarch64-apple-ios/release/libthales.a
 
 # Check simulator library (should show x86_64 and arm64)
-lipo -info target/libmathsolver_core_sim.a
+lipo -info target/libthales_sim.a
 ```
 
 ### Automated Build Script
@@ -568,8 +571,8 @@ cargo build --release --features ffi --target aarch64-apple-ios
 
 Generated files:
 - `target/SwiftBridgeCore.swift` - Core Swift bridge code
-- `target/mathsolver_core.swift` - Generated Swift API
-- `target/mathsolver-core-Bridging-Header.h` - Objective-C bridging header
+- `target/thales.swift` - Generated Swift API
+- `target/thales-Bridging-Header.h` - Objective-C bridging header
 
 ## Contributing
 
@@ -701,7 +704,7 @@ All pull requests require:
 
 MIT License
 
-Copyright (c) 2025 Christian C. Berclaz
+Copyright (c) 2026 Christian C. Berclaz
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -932,7 +935,9 @@ SOFTWARE.
 
 ---
 
-**Repository**: [github.com/ChrisGVE/mathsolver-core](https://github.com/ChrisGVE/mathsolver-core)
-**Issues**: [Report bugs and request features](https://github.com/ChrisGVE/mathsolver-core/issues)
+**Crate**: [crates.io/crates/thales](https://crates.io/crates/thales)
+**Documentation**: [docs.rs/thales](https://docs.rs/thales)
+**Repository**: [github.com/ChrisGVE/thales](https://github.com/ChrisGVE/thales)
+**Issues**: [Report bugs and request features](https://github.com/ChrisGVE/thales/issues)
 **Author**: Christian C. Berclaz
 **Status**: Active Development (v0.2.0)

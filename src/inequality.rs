@@ -8,15 +8,15 @@
 //! # Example
 //!
 //! ```
-//! use mathsolver_core::inequality::{Inequality, solve_inequality};
-//! use mathsolver_core::ast::{Expression, Variable};
+//! use thales::inequality::{Inequality, solve_inequality};
+//! use thales::ast::{Expression, Variable};
 //!
 //! // Solve 2x + 3 > 7
 //! let x = Expression::Variable(Variable::new("x"));
 //! let lhs = Expression::Binary(
-//!     mathsolver_core::ast::BinaryOp::Add,
+//!     thales::ast::BinaryOp::Add,
 //!     Box::new(Expression::Binary(
-//!         mathsolver_core::ast::BinaryOp::Mul,
+//!         thales::ast::BinaryOp::Mul,
 //!         Box::new(Expression::Integer(2)),
 //!         Box::new(x.clone()),
 //!     )),

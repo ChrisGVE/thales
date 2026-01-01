@@ -22,7 +22,7 @@ use std::f64::consts::PI;
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::transforms::Cartesian2D;
+/// use thales::transforms::Cartesian2D;
 ///
 /// // Create a point at (3, 4)
 /// let point = Cartesian2D::new(3.0, 4.0);
@@ -47,7 +47,7 @@ impl Cartesian2D {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Cartesian2D;
+    /// use thales::transforms::Cartesian2D;
     ///
     /// let point = Cartesian2D::new(3.0, 4.0);
     /// assert_eq!(point.x, 3.0);
@@ -71,7 +71,7 @@ impl Cartesian2D {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Cartesian2D;
+    /// use thales::transforms::Cartesian2D;
     /// use std::f64::consts::PI;
     ///
     /// // Point at (1, 1) should be at 45 degrees (π/4 radians)
@@ -99,7 +99,7 @@ impl Cartesian2D {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Cartesian2D;
+    /// use thales::transforms::Cartesian2D;
     ///
     /// let point = Cartesian2D::new(3.0, 4.0);
     /// let complex = point.to_complex();
@@ -117,7 +117,7 @@ impl Cartesian2D {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Cartesian2D;
+    /// use thales::transforms::Cartesian2D;
     ///
     /// let point = Cartesian2D::new(3.0, 4.0);
     /// let vec = point.to_vector();
@@ -140,7 +140,7 @@ impl Cartesian2D {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Cartesian2D;
+    /// use thales::transforms::Cartesian2D;
     ///
     /// // 3-4-5 right triangle
     /// let point = Cartesian2D::new(3.0, 4.0);
@@ -187,7 +187,7 @@ impl Cartesian2D {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::transforms::{Polar, Cartesian2D};
+/// use thales::transforms::{Polar, Cartesian2D};
 /// use std::f64::consts::PI;
 ///
 /// // Point at radius 5, angle 45 degrees (π/4 radians)
@@ -219,7 +219,7 @@ impl Polar {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Polar;
+    /// use thales::transforms::Polar;
     /// use std::f64::consts::PI;
     ///
     /// // Point at distance 3 from origin, 60 degrees (π/3 radians)
@@ -239,7 +239,7 @@ impl Polar {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Polar;
+    /// use thales::transforms::Polar;
     /// use std::f64::consts::PI;
     ///
     /// // Angle greater than 2π
@@ -267,7 +267,7 @@ impl Polar {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Polar;
+    /// use thales::transforms::Polar;
     /// use std::f64::consts::PI;
     ///
     /// // Point at radius 2, angle 0 (positive x-axis)
@@ -305,7 +305,7 @@ impl Polar {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Polar;
+    /// use thales::transforms::Polar;
     /// use std::f64::consts::PI;
     ///
     /// let polar = Polar::new(5.0, PI / 6.0);
@@ -352,7 +352,7 @@ impl Polar {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::transforms::Cartesian3D;
+/// use thales::transforms::Cartesian3D;
 ///
 /// // Create a point at (3, 4, 5)
 /// let point = Cartesian3D::new(3.0, 4.0, 5.0);
@@ -381,7 +381,7 @@ impl Cartesian3D {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Cartesian3D;
+    /// use thales::transforms::Cartesian3D;
     ///
     /// let point = Cartesian3D::new(1.0, 2.0, 3.0);
     /// assert_eq!(point.x, 1.0);
@@ -427,7 +427,7 @@ impl Cartesian3D {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Cartesian3D;
+    /// use thales::transforms::Cartesian3D;
     /// use std::f64::consts::PI;
     ///
     /// // Point on positive z-axis
@@ -484,7 +484,7 @@ impl Cartesian3D {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Cartesian3D;
+    /// use thales::transforms::Cartesian3D;
     /// use std::f64::consts::PI;
     ///
     /// // Point at (3, 4, 5)
@@ -513,7 +513,7 @@ impl Cartesian3D {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Cartesian3D;
+    /// use thales::transforms::Cartesian3D;
     ///
     /// let point = Cartesian3D::new(1.0, 2.0, 3.0);
     /// let vec = point.to_vector();
@@ -537,7 +537,7 @@ impl Cartesian3D {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Cartesian3D;
+    /// use thales::transforms::Cartesian3D;
     ///
     /// // 3-4-5 right triangle in 3D space
     /// let point = Cartesian3D::new(0.0, 3.0, 4.0);
@@ -618,7 +618,7 @@ impl Cartesian3D {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::transforms::{Spherical, Cartesian3D};
+/// use thales::transforms::{Spherical, Cartesian3D};
 /// use std::f64::consts::PI;
 ///
 /// // Point on positive z-axis at distance 5
@@ -657,7 +657,7 @@ impl Spherical {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Spherical;
+    /// use thales::transforms::Spherical;
     /// use std::f64::consts::PI;
     ///
     /// // Point at radius 5, 30° azimuthal, 45° polar
@@ -682,7 +682,7 @@ impl Spherical {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Spherical;
+    /// use thales::transforms::Spherical;
     /// use std::f64::consts::PI;
     ///
     /// // Point at radius 1 on positive x-axis
@@ -726,7 +726,7 @@ impl Spherical {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Spherical;
+    /// use thales::transforms::Spherical;
     /// use std::f64::consts::PI;
     ///
     /// // Point at radius 2, θ=30°, φ=60°
@@ -819,7 +819,7 @@ impl Spherical {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::transforms::{Cylindrical, Cartesian3D};
+/// use thales::transforms::{Cylindrical, Cartesian3D};
 /// use std::f64::consts::PI;
 ///
 /// // Point at radius 3 from z-axis, angle 60°, height 4
@@ -856,7 +856,7 @@ impl Cylindrical {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Cylindrical;
+    /// use thales::transforms::Cylindrical;
     /// use std::f64::consts::PI;
     ///
     /// // Point at radius 2 from z-axis, 45°, height 3
@@ -881,7 +881,7 @@ impl Cylindrical {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Cylindrical;
+    /// use thales::transforms::Cylindrical;
     /// use std::f64::consts::PI;
     ///
     /// // Point at radius 5 on positive x-axis, height 2
@@ -924,7 +924,7 @@ impl Cylindrical {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Cylindrical;
+    /// use thales::transforms::Cylindrical;
     /// use std::f64::consts::PI;
     ///
     /// // Point at radius 3, angle 30°, height 4
@@ -982,7 +982,7 @@ impl Cylindrical {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::transforms::ComplexOps;
+/// use thales::transforms::ComplexOps;
 /// use num_complex::Complex64;
 /// use std::f64::consts::PI;
 ///
@@ -1032,7 +1032,7 @@ impl ComplexOps {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::ComplexOps;
+    /// use thales::transforms::ComplexOps;
     /// use num_complex::Complex64;
     /// use std::f64::consts::PI;
     ///
@@ -1088,7 +1088,7 @@ impl ComplexOps {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::{ComplexOps, Polar};
+    /// use thales::transforms::{ComplexOps, Polar};
     /// use std::f64::consts::PI;
     ///
     /// // Convert polar form to Cartesian
@@ -1156,7 +1156,7 @@ impl ComplexOps {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::ComplexOps;
+    /// use thales::transforms::ComplexOps;
     /// use num_complex::Complex64;
     /// use std::f64::consts::PI;
     ///
@@ -1218,7 +1218,7 @@ impl ComplexOps {
     /// # Examples (when implemented)
     ///
     /// ```ignore
-    /// use mathsolver_core::transforms::ComplexOps;
+    /// use thales::transforms::ComplexOps;
     /// use num_complex::Complex64;
     ///
     /// // Find all cube roots of 8 (real number)
@@ -1304,7 +1304,7 @@ impl ComplexOps {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::transforms::{Transform2D, Cartesian2D};
+/// use thales::transforms::{Transform2D, Cartesian2D};
 ///
 /// // Identity transformation leaves points unchanged
 /// let identity = Transform2D::identity();
@@ -1334,7 +1334,7 @@ impl Transform2D {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::{Transform2D, Cartesian2D};
+    /// use thales::transforms::{Transform2D, Cartesian2D};
     ///
     /// let identity = Transform2D::identity();
     /// let point = Cartesian2D::new(5.0, -3.0);
@@ -1506,7 +1506,7 @@ impl Transform2D {
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::transforms::{Rotation3D, Cartesian3D};
+/// use thales::transforms::{Rotation3D, Cartesian3D};
 /// use std::f64::consts::PI;
 ///
 /// // Rotate point around z-axis by 90 degrees
@@ -1568,7 +1568,7 @@ impl Rotation3D {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Rotation3D;
+    /// use thales::transforms::Rotation3D;
     /// use nalgebra::Vector3;
     /// use std::f64::consts::PI;
     ///
@@ -1641,7 +1641,7 @@ impl Rotation3D {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Rotation3D;
+    /// use thales::transforms::Rotation3D;
     /// use nalgebra::Vector3;
     /// use std::f64::consts::PI;
     ///
@@ -1714,7 +1714,7 @@ impl Rotation3D {
     /// # Examples
     ///
     /// ```
-    /// use mathsolver_core::transforms::Rotation3D;
+    /// use thales::transforms::Rotation3D;
     /// use nalgebra::Vector3;
     /// use std::f64::consts::PI;
     ///

@@ -8,14 +8,14 @@
 //! # Examples
 //!
 //! ```rust
-//! use mathsolver_core::ode::{FirstOrderODE, solve_separable, solve_linear};
-//! use mathsolver_core::ast::{Expression, Variable};
+//! use thales::ode::{FirstOrderODE, solve_separable, solve_linear};
+//! use thales::ast::{Expression, Variable};
 //!
 //! // Create an ODE: dy/dx = x*y (separable)
 //! let x = Expression::Variable(Variable::new("x"));
 //! let y = Expression::Variable(Variable::new("y"));
 //! let rhs = Expression::Binary(
-//!     mathsolver_core::ast::BinaryOp::Mul,
+//!     thales::ast::BinaryOp::Mul,
 //!     Box::new(x),
 //!     Box::new(y),
 //! );

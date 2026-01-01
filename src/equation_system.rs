@@ -10,8 +10,8 @@
 //! # Example
 //!
 //! ```rust
-//! use mathsolver_core::equation_system::{EquationSystem, SystemContext, MultiEquationSolver};
-//! use mathsolver_core::parse_equation;
+//! use thales::equation_system::{EquationSystem, SystemContext, MultiEquationSolver};
+//! use thales::parse_equation;
 //!
 //! // Create a system of equations
 //! let mut system = EquationSystem::new();

@@ -1,4 +1,4 @@
-use mathsolver_core::ast::*;
+use thales::ast::*;
 
 // ============================================================================
 // Constant Folding Tests - Binary Operations

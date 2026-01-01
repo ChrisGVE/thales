@@ -11,8 +11,8 @@
 //! # Examples
 //!
 //! ```
-//! use mathsolver_core::trigonometric::simplify_trig;
-//! use mathsolver_core::ast::{Expression, Variable, Function, BinaryOp};
+//! use thales::trigonometric::simplify_trig;
+//! use thales::ast::{Expression, Variable, Function, BinaryOp};
 //!
 //! // sin²(x) + cos²(x) simplifies to 1
 //! let x = Expression::Variable(Variable::new("x"));
@@ -524,8 +524,8 @@ const MAX_ITERATIONS: usize = 100;
 /// # Examples
 ///
 /// ```
-/// use mathsolver_core::trigonometric::simplify_trig;
-/// use mathsolver_core::ast::{Expression, Variable, Function, BinaryOp};
+/// use thales::trigonometric::simplify_trig;
+/// use thales::ast::{Expression, Variable, Function, BinaryOp};
 ///
 /// // sin²(x) + cos²(x) = 1
 /// let x = Expression::Variable(Variable::new("x"));
