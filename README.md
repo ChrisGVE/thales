@@ -1,6 +1,6 @@
 # mathsolver-core
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/ChrisGVE/mathsolver-core)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/ChrisGVE/mathsolver-core)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://www.rust-lang.org/what/embedded)
 [![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](https://www.rust-lang.org)
@@ -9,13 +9,36 @@ A high-performance Rust library for mathematical equation parsing, symbolic solv
 
 ## Features
 
+### Parsing & Expression Handling
 - **Expression Parsing**: Parse mathematical expressions and equations with full operator precedence using chumsky parser combinators
+- **LaTeX Parsing**: Parse LaTeX mathematical notation (`\frac`, `\sqrt`, Greek letters, etc.)
+- **LaTeX Rendering**: Convert expressions to LaTeX output for display
+- **Pattern Matching**: Rule-based expression rewriting with wildcard matching and commutativity awareness
+
+### Equation Solving
 - **Symbolic Solving**: Solve linear, quadratic, polynomial, and transcendental equations using algebraic manipulation
-- **Numerical Methods**: Newton-Raphson, secant method, bisection, Brent's method for equations that cannot be solved symbolically
+- **Multi-Equation Systems**: Solve systems of arbitrary equations with automatic dependency analysis and solving order determination
+- **Inequality Solving**: Solve inequalities and systems of inequalities with interval solutions
+- **Numerical Methods**: Newton-Raphson, secant method, bisection, Brent's method, Levenberg-Marquardt for equations that cannot be solved symbolically
+
+### Calculus
+- **Differentiation**: Symbolic differentiation with support for all elementary functions
+- **Integration**: Indefinite and definite integration, integration by parts, substitution, tabular method
+- **Limits**: Limit evaluation with L'Hôpital's rule for indeterminate forms (0/0, ∞/∞)
+- **ODEs**: First-order ODE solving (separable and linear equations)
+
+### Advanced Features
+- **Partial Fractions**: Decompose rational functions into partial fractions
+- **Trigonometric Simplification**: Apply Pythagorean identities, double angle formulas, and more
+- **Matrix Operations**: Matrix expressions with LaTeX rendering
+
+### Coordinate Systems
 - **Coordinate Transformations**: Convert between Cartesian, polar, spherical, and cylindrical coordinate systems with full precision
 - **Complex Numbers**: Complete support for complex arithmetic, polar form operations, and De Moivre's theorem
-- **Unit System**: Dimensional analysis and automatic unit conversion for physics calculations
+
+### Infrastructure
 - **Resolution Paths**: Track step-by-step solution processes for educational applications
+- **Unit System**: Dimensional analysis and automatic unit conversion for physics calculations
 - **FFI Support**: Swift bindings for seamless iOS/macOS integration via swift-bridge
 - **Memory Safety**: Zero unsafe code in core logic, all abstractions are zero-cost
 - **Performance**: Link-time optimization, single codegen unit, aggressive compiler optimizations
@@ -197,6 +220,78 @@ fn main() {
 }
 ```
 
+### Example 6: Multi-Equation System Solver
+
+Solve systems of equations with automatic dependency analysis:
+
+```rust
+use mathsolver_core::{
+    EquationSystem, SystemContext, MultiEquationSolver, parse_equation
+};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create a system of physics equations
+    let mut system = EquationSystem::new();
+    system.add_equation("newton", parse_equation("F = m * a")?);
+    system.add_equation("kinematic", parse_equation("v = u + a * t")?);
+
+    // Set up known values and targets
+    let context = SystemContext::new()
+        .with_known_value("F", 100.0)   // Force = 100 N
+        .with_known_value("m", 20.0)    // Mass = 20 kg
+        .with_known_value("u", 0.0)     // Initial velocity = 0 m/s
+        .with_known_value("t", 5.0)     // Time = 5 s
+        .with_target("a")               // Find acceleration
+        .with_target("v");              // Find final velocity
+
+    // Solve the system
+    let solver = MultiEquationSolver::new();
+    let solution = solver.solve(&system, &context)?;
+
+    // Get results
+    // From F = m*a: a = F/m = 100/20 = 5 m/s²
+    let a = solution.get_numeric("a").unwrap();
+    assert!((a - 5.0).abs() < 1e-10);
+
+    // From v = u + a*t: v = 0 + 5*5 = 25 m/s
+    let v = solution.get_numeric("v").unwrap();
+    assert!((v - 25.0).abs() < 1e-10);
+
+    // Access step-by-step resolution
+    println!("{}", solution.resolution_path.format_text());
+
+    Ok(())
+}
+```
+
+### Example 7: Calculus Operations
+
+Differentiation, integration, and limits:
+
+```rust
+use mathsolver_core::{parse_expression, integrate, limit};
+use mathsolver_core::ast::Variable;
+use mathsolver_core::limits::{compute_limit, LimitPoint};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Differentiation
+    let expr = parse_expression("x^3 + 2*x^2 - 5*x + 3")?;
+    let derivative = expr.differentiate(&Variable::new("x"));
+    // Result: 3*x^2 + 4*x - 5
+
+    // Integration
+    let integral = integrate(&expr, &Variable::new("x"))?;
+    // Result: (1/4)*x^4 + (2/3)*x^3 - (5/2)*x^2 + 3*x + C
+
+    // Limits with L'Hôpital's rule
+    let sin_x_over_x = parse_expression("sin(x) / x")?;
+    let result = compute_limit(&sin_x_over_x, &Variable::new("x"), LimitPoint::Value(0.0))?;
+    // Result: 1.0 (using L'Hôpital's rule for 0/0 form)
+
+    Ok(())
+}
+```
+
 ## API Reference
 
 The library is organized into focused modules. See [full documentation on docs.rs](https://docs.rs/mathsolver-core) or build locally:
@@ -209,9 +304,20 @@ cargo doc --open
 
 - **`ast`** - Abstract syntax tree definitions for mathematical expressions, equations, variables, operators, and functions
 - **`parser`** - String to AST conversion using chumsky parser combinator library
+- **`latex`** - LaTeX parsing and rendering for mathematical expressions
 - **`solver`** - Symbolic equation solving with specialized solvers for linear, quadratic, polynomial, and transcendental equations
+- **`equation_system`** - Multi-equation system solver with dependency analysis and automatic solving order
 - **`numerical`** - Numerical root-finding methods (Newton-Raphson, bisection, Brent's method) with symbolic differentiation
+- **`limits`** - Limit evaluation with L'Hôpital's rule for indeterminate forms
+- **`integration`** - Symbolic integration with multiple methods (by parts, substitution, tabular)
+- **`ode`** - Ordinary differential equation solving (separable and linear first-order)
+- **`inequality`** - Inequality solving with interval solutions
+- **`partial_fractions`** - Rational function decomposition into partial fractions
+- **`pattern`** - Pattern matching and rule-based expression rewriting
+- **`trigonometric`** - Trigonometric identity simplification
 - **`resolution_path`** - Solution step tracking for educational applications
+- **`precision`** - High-precision evaluation with configurable rounding modes
+- **`matrix`** - Matrix expressions with LaTeX rendering
 - **`dimensions`** - Dimensional analysis and unit conversion system
 - **`transforms`** - Coordinate system conversions (Cartesian, Polar, Spherical, Cylindrical) and complex number operations
 - **`ffi`** - Foreign function interface for Swift via swift-bridge (requires `ffi` feature flag)
@@ -224,16 +330,44 @@ Commonly used types re-exported at crate root:
 use mathsolver_core::{
     // AST types
     Expression, Equation, Variable, BinaryOp, UnaryOp, Function,
+
+    // Equation System Solving
+    EquationSystem, SystemContext, MultiEquationSolver, MultiEquationSolution,
+    NamedEquation, EquationType, SolutionValue, DependencyGraph,
+
     // Coordinate systems
     Cartesian2D, Cartesian3D, Polar, Spherical, Cylindrical,
-    // Complex operations
     ComplexOps,
-    // Solvers
+
+    // Single-equation Solvers
     SmartSolver, Solver, Solution,
-    // Numerical methods
     SmartNumericalSolver, NumericalSolution, NumericalConfig,
+
+    // Calculus
+    integrate, definite_integral, integrate_by_parts,
+    solve_separable, solve_linear, FirstOrderODE, ODESolution,
+
+    // Limits
+    // (use mathsolver_core::limits::{compute_limit, LimitPoint, ...})
+
+    // Inequalities
+    solve_inequality, Inequality, IntervalSolution,
+
+    // Partial Fractions
+    decompose, PartialFractionResult, PartialFractionTerm,
+
+    // Pattern Matching
+    // (use mathsolver_core::pattern::{Pattern, match_pattern, ...})
+
+    // Trigonometric
+    simplify_trig, simplify_trig_with_steps,
+
+    // LaTeX
+    parse_latex, parse_latex_equation,
+
     // Units and dimensions
     Unit, Dimension, Quantity, UnitRegistry,
+
     // Resolution tracking
     ResolutionPath, ResolutionStep, Operation,
 };
@@ -624,6 +758,80 @@ SOFTWARE.
 
 ## Version History
 
+### 0.2.0 (2026-01-01) - Multi-Equation System Solver & Calculus
+
+**New Features:**
+- **Multi-Equation System Solver** (`equation_system` module):
+  - Solve systems of arbitrary equations (algebraic, ODE, differential, integral)
+  - Automatic dependency graph construction
+  - Topological sorting for optimal solving order
+  - Chained solution propagation between equations
+  - Unified `SystemResolutionPath` for step-by-step tracking
+  - FFI bindings via `solve_equation_system_ffi()`
+
+- **Limits with L'Hôpital's Rule** (`limits` module):
+  - Direct substitution for continuous functions
+  - Limits at positive/negative infinity
+  - One-sided limits (left and right)
+  - Automatic L'Hôpital's rule for 0/0 and ∞/∞ indeterminate forms
+  - Detection of all indeterminate forms (0·∞, ∞-∞, 0⁰, 1^∞, ∞⁰)
+  - Special limits (sin(x)/x, tan(x)/x, (1-cos(x))/x²)
+
+- **Partial Fraction Decomposition** (`partial_fractions` module):
+  - Decompose rational functions into partial fractions
+  - Support for linear and repeated linear factors
+  - Symbolic integration of decomposed forms
+
+- **Pattern Matching** (`pattern` module):
+  - Rule-based expression rewriting
+  - Wildcard patterns with binding
+  - Commutativity-aware matching for + and *
+  - Common algebraic rules (identity, zero, double negation, etc.)
+  - Apply rules recursively to fixpoint
+
+- **LaTeX Support** (`latex` module):
+  - Parse LaTeX mathematical notation
+  - Support for `\frac`, `\sqrt`, `\sin`, `\cos`, Greek letters, etc.
+  - Render expressions to LaTeX output
+  - Display and inline math modes
+
+- **Integration Enhancements** (`integration` module):
+  - Integration by parts with step tracking
+  - Integration by substitution
+  - Tabular integration method
+  - Improper integrals to infinity
+
+- **ODE Solving** (`ode` module):
+  - First-order separable ODEs
+  - First-order linear ODEs
+  - Initial value problems
+
+- **Trigonometric Simplification** (`trigonometric` module):
+  - Pythagorean identities
+  - Double angle formulas
+  - Product-to-sum rules
+  - Quotient identities
+  - Step-by-step simplification
+
+- **Inequality Solving** (`inequality` module):
+  - Linear and polynomial inequalities
+  - Interval solution representation
+  - Systems of inequalities
+
+- **Matrix Expressions** (`matrix` module):
+  - Matrix AST representation
+  - LaTeX rendering with bracket styles
+
+- **Precision Control** (`precision` module):
+  - Configurable evaluation context
+  - Multiple rounding modes
+  - High-precision computation
+
+**Improvements:**
+- Extended FFI bindings for all new features
+- 276+ unit tests with comprehensive coverage
+- Enhanced resolution path tracking
+
 ### 0.1.0 (2025-12-17) - Initial Release
 
 **Implemented:**
@@ -637,9 +845,21 @@ SOFTWARE.
   - De Moivre's theorem implementation
   - Polar form conversion
   - Conjugate and modulus operations
+- Expression parser using chumsky with full operator precedence
 - Linear equation solver (ax + b = c form)
 - Quadratic equation solver (ax² + bx + c = 0 with discriminant)
+- Polynomial solver (companion matrix method)
+- Transcendental equation solver (trig/exp/log functions)
 - Smart solver with automatic method dispatch
+- Numerical methods:
+  - Newton-Raphson with symbolic differentiation
+  - Bisection method
+  - Brent's hybrid method
+  - Secant method
+  - Levenberg-Marquardt
+- Resolution path generation for step-by-step solutions
+- Symbolic differentiation engine
+- Basic symbolic integration
 - iOS cross-compilation support:
   - aarch64-apple-ios (device)
   - aarch64-apple-ios-sim (ARM simulator)
@@ -651,50 +871,13 @@ SOFTWARE.
 - Documentation with comprehensive examples
 - Build optimization (LTO, single codegen unit)
 
-**In Progress:**
-- Expression parser using chumsky (structure in place, implementation ongoing)
-- Polynomial solver (degree > 2)
-- Transcendental equation solver (trig/exp/log functions)
-- Numerical methods:
-  - Newton-Raphson with symbolic differentiation
-  - Bisection method
-  - Brent's hybrid method
-  - Secant method
-- Resolution path generation for step-by-step solutions
-- Unit and dimension system:
-  - SI base units (length, mass, time, etc.)
-  - Derived units (velocity, force, energy)
-  - Automatic unit conversion
-  - Dimensional analysis and type safety
-
-**Planned:**
-- Function parsing (sin, cos, tan, log, exp, sqrt)
-- Symbolic differentiation engine
-- Symbolic integration (basic cases)
-- Matrix equation solving
-- System of equations solver
-- Performance optimizations:
-  - Expression simplification
-  - Common subexpression elimination
-  - Constant folding
-- Additional FFI targets:
-  - Python bindings via PyO3
-  - WebAssembly support
-- Enhanced error reporting with source locations
-- Expression DSL macros for ergonomic construction
-
 ### Future Roadmap
 
-**0.2.0** - Parser and Symbolic Solver
-- Complete expression parser
-- Full symbolic equation solving
-- Resolution path generation
-- Enhanced error messages
-
-**0.3.0** - Numerical Methods
-- All numerical root-finding methods
-- Symbolic differentiation
-- Optimization algorithms
+**0.3.0** - Advanced Calculus
+- Higher-order ODEs
+- Systems of ODEs
+- Partial derivatives and gradients
+- Series expansions (Taylor, Fourier)
 
 **0.4.0** - Units and Dimensions
 - Complete unit system
@@ -752,4 +935,4 @@ SOFTWARE.
 **Repository**: [github.com/ChrisGVE/mathsolver-core](https://github.com/ChrisGVE/mathsolver-core)
 **Issues**: [Report bugs and request features](https://github.com/ChrisGVE/mathsolver-core/issues)
 **Author**: Christian C. Berclaz
-**Status**: Active Development (v0.1.0)
+**Status**: Active Development (v0.2.0)
