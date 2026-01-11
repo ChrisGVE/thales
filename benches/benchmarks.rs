@@ -1,9 +1,9 @@
-//! Performance benchmarks for mathsolver-core.
+//! Performance benchmarks for thales.
 //!
 //! Benchmarks critical operations using Criterion.
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use mathsolver_core::transforms::{Cartesian2D, Cartesian3D, Polar, Spherical};
+use thales::transforms::{Cartesian2D, Cartesian3D, Polar, Spherical};
 
 /// Benchmark coordinate transformations.
 fn bench_coordinate_transforms(c: &mut Criterion) {
@@ -38,84 +38,66 @@ fn bench_coordinate_transforms(c: &mut Criterion) {
 fn bench_parsing(c: &mut Criterion) {
     let mut group = c.benchmark_group("parsing");
 
-    // TODO: Add parsing benchmarks when parser is implemented
-    // group.bench_function("parse_simple_equation", |b| {
-    //     b.iter(|| black_box(mathsolver_core::parse_equation("x + 2 = 5")));
-    // });
+    group.bench_function("parse_simple_equation", |b| {
+        b.iter(|| black_box(thales::parse_equation("x + 2 = 5")));
+    });
 
-    // group.bench_function("parse_complex_expression", |b| {
-    //     b.iter(|| black_box(mathsolver_core::parse_expression("sin(x) + cos(y) * tan(z)")));
-    // });
+    group.bench_function("parse_complex_expression", |b| {
+        b.iter(|| black_box(thales::parse_expression("sin(x) + cos(y) * tan(z)")));
+    });
 
-    // group.bench_function("parse_polynomial", |b| {
-    //     b.iter(|| black_box(mathsolver_core::parse_equation("x^4 + 2*x^3 - 5*x^2 + 3*x - 7 = 0")));
-    // });
+    group.bench_function("parse_polynomial", |b| {
+        b.iter(|| black_box(thales::parse_equation("x^4 + 2*x^3 - 5*x^2 + 3*x - 7 = 0")));
+    });
 
     group.finish();
 }
 
 /// Benchmark solver operations.
 fn bench_solving(c: &mut Criterion) {
+    use thales::ast::Variable;
+    use thales::solver::{SmartSolver, Solver};
+
     let mut group = c.benchmark_group("solving");
 
-    // TODO: Add solver benchmarks when solver is implemented
-    // group.bench_function("solve_linear", |b| {
-    //     let eq = mathsolver_core::parse_equation("2*x + 3 = 7").unwrap();
-    //     let solver = mathsolver_core::SmartSolver::new();
-    //     let var = mathsolver_core::Variable::new("x");
-    //     b.iter(|| black_box(solver.solve(&eq, &var)));
-    // });
+    group.bench_function("solve_linear", |b| {
+        let eq = thales::parse_equation("2*x + 3 = 7").unwrap();
+        let solver = SmartSolver::new();
+        let var = Variable::new("x");
+        b.iter(|| black_box(solver.solve(&eq, &var)));
+    });
 
-    // group.bench_function("solve_quadratic", |b| {
-    //     let eq = mathsolver_core::parse_equation("x^2 - 5*x + 6 = 0").unwrap();
-    //     let solver = mathsolver_core::SmartSolver::new();
-    //     let var = mathsolver_core::Variable::new("x");
-    //     b.iter(|| black_box(solver.solve(&eq, &var)));
-    // });
+    group.bench_function("solve_quadratic", |b| {
+        let eq = thales::parse_equation("x^2 - 5*x + 6 = 0").unwrap();
+        let solver = SmartSolver::new();
+        let var = Variable::new("x");
+        b.iter(|| black_box(solver.solve(&eq, &var)));
+    });
 
     group.finish();
 }
 
 /// Benchmark numerical methods.
 fn bench_numerical(c: &mut Criterion) {
-    let mut group = c.benchmark_group("numerical");
+    let group = c.benchmark_group("numerical");
 
-    // TODO: Add numerical solver benchmarks when implemented
-    // group.bench_function("newton_raphson", |b| {
-    //     let eq = mathsolver_core::parse_equation("x^2 - 2 = 0").unwrap();
-    //     let solver = mathsolver_core::numerical::NewtonRaphson::with_default_config();
-    //     let var = mathsolver_core::Variable::new("x");
-    //     b.iter(|| black_box(solver.solve(&eq, &var)));
-    // });
+    // TODO: Add numerical solver benchmarks - Newton-Raphson API differs from SmartSolver
 
     group.finish();
 }
 
 /// Benchmark expression evaluation.
 fn bench_evaluation(c: &mut Criterion) {
-    let mut group = c.benchmark_group("evaluation");
+    let group = c.benchmark_group("evaluation");
 
-    // TODO: Add evaluation benchmarks when evaluator is implemented
-    // group.bench_function("evaluate_simple", |b| {
-    //     let expr = mathsolver_core::parse_expression("2 * x + 3").unwrap();
-    //     let mut evaluator = mathsolver_core::numerical::Evaluator::new();
-    //     evaluator.set_variable(mathsolver_core::Variable::new("x"), 5.0);
-    //     b.iter(|| black_box(evaluator.evaluate(&expr)));
-    // });
-
-    // group.bench_function("evaluate_complex", |b| {
-    //     let expr = mathsolver_core::parse_expression("sin(x) + cos(x) * tan(x)").unwrap();
-    //     let mut evaluator = mathsolver_core::numerical::Evaluator::new();
-    //     evaluator.set_variable(mathsolver_core::Variable::new("x"), 1.5);
-    //     b.iter(|| black_box(evaluator.evaluate(&expr)));
-    // });
+    // TODO: Add evaluation benchmarks - Evaluator API needs review
 
     group.finish();
 }
 
 /// Benchmark complex number operations.
 fn bench_complex_operations(c: &mut Criterion) {
-    use mathsolver_core::transforms::ComplexOps;
+    use thales::transforms::ComplexOps;
     use num_complex::Complex64;
 
     let mut group = c.benchmark_group("complex_operations");
@@ -135,7 +117,7 @@ fn bench_complex_operations(c: &mut Criterion) {
 
 /// Benchmark dimension operations.
 fn bench_dimensions(c: &mut Criterion) {
-    use mathsolver_core::dimensions::{BaseDimension, Dimension};
+    use thales::dimensions::{BaseDimension, Dimension};
 
     let mut group = c.benchmark_group("dimensions");
 

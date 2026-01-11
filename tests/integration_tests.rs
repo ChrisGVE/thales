@@ -9,7 +9,7 @@ use thales::transforms::{Cartesian2D, Cartesian3D, Polar};
 fn test_library_version() {
     let version = thales::version();
     assert!(!version.is_empty());
-    assert_eq!(version, "0.2.0");
+    assert_eq!(version, "0.2.1");
 }
 
 #[test]
@@ -20,24 +20,19 @@ fn test_ffi_support() {
 
 // Parser integration tests
 mod parser_tests {
-    use super::*;
-
     #[test]
-    #[ignore] // TODO: Remove ignore when parser is implemented
     fn test_parse_simple_equation() {
         let result = thales::parse_equation("x + 2 = 5");
         assert!(result.is_ok());
     }
 
     #[test]
-    #[ignore] // TODO: Remove ignore when parser is implemented
     fn test_parse_expression_with_functions() {
         let result = thales::parse_expression("sin(x) + cos(x)");
         assert!(result.is_ok());
     }
 
     #[test]
-    #[ignore] // TODO: Remove ignore when parser is implemented
     fn test_parse_complex_equation() {
         let result = thales::parse_equation("2*x^2 + 3*x - 5 = 0");
         assert!(result.is_ok());
@@ -50,7 +45,6 @@ mod solver_tests {
     use thales::solver::{SmartSolver, Solver};
 
     #[test]
-    #[ignore] // TODO: Remove ignore when solver is implemented
     fn test_solve_linear_equation() {
         // 2x + 3 = 7 => x = 2
         let equation = thales::parse_equation("2*x + 3 = 7").unwrap();
@@ -60,7 +54,6 @@ mod solver_tests {
     }
 
     #[test]
-    #[ignore] // TODO: Remove ignore when solver is implemented
     fn test_solve_quadratic_equation() {
         // x^2 - 5x + 6 = 0 => x = 2 or x = 3
         let equation = thales::parse_equation("x^2 - 5*x + 6 = 0").unwrap();
@@ -113,7 +106,6 @@ mod numerical_tests {
     use thales::numerical::{NumericalConfig, SmartNumericalSolver};
 
     #[test]
-    #[ignore] // TODO: Remove ignore when numerical solver is implemented
     fn test_numerical_root_finding() {
         // Find root of x^2 - 2 = 0 (should be sqrt(2) ≈ 1.414)
         let equation = thales::parse_equation("x^2 - 2 = 0").unwrap();
@@ -126,7 +118,6 @@ mod numerical_tests {
 
 // Dimension and unit tests
 mod dimension_tests {
-    use super::*;
     use thales::dimensions::{BaseDimension, Dimension, UnitRegistry};
 
     #[test]
@@ -142,7 +133,7 @@ mod dimension_tests {
     }
 
     #[test]
-    #[ignore] // TODO: Remove ignore when unit conversion is implemented
+    #[ignore] // Unit conversion planned for v0.4.0
     fn test_unit_conversion() {
         let registry = UnitRegistry::with_common_units();
         let result = registry.convert(1000.0, "m", "km");
