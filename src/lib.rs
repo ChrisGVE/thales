@@ -435,7 +435,9 @@ pub use trigonometric::{
     special_value_rules,
 };
 pub use ode::{
-    solve_ivp, solve_linear, solve_separable, FirstOrderODE, ODEError, ODESolution,
+    solve_ivp, solve_linear, solve_separable, solve_second_order_homogeneous,
+    solve_second_order_ivp, solve_characteristic_equation, FirstOrderODE, ODEError,
+    ODESolution, SecondOrderODE, SecondOrderSolution, CharacteristicRoots, RootType,
 };
 pub use partial_fractions::{
     decompose, is_polynomial, is_rational_function, DecomposeError, PartialFractionResult,
