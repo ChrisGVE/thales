@@ -460,6 +460,8 @@ pub use series::{
     evaluate_at, RemainderTerm, Series, SeriesError, SeriesResult, SeriesTerm,
     // Laurent series support
     LaurentSeries, Singularity, SingularityType, laurent, residue, pole_order, find_singularities,
+    // Series arithmetic (composition and reversion)
+    compose_series, reversion,
 };
 
 /// Library version information.
