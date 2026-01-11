@@ -395,6 +395,7 @@ pub mod trigonometric;
 pub mod ode;
 pub mod partial_fractions;
 pub mod equation_system;
+pub mod series;
 
 // FFI module (conditionally compiled for FFI builds)
 #[cfg(feature = "ffi")]
@@ -445,6 +446,11 @@ pub use equation_system::{
     MultiEquationSolver, MultiEquationSolution, NamedEquation, ODEInfo, SolutionStrategy,
     SolutionValue, SolveMethod, SolveStep, SolverConfig, SystemContext, SystemError,
     SystemOperation, SystemResolutionPath, SystemStep, StepResult,
+};
+pub use series::{
+    arctan_series, binomial_series, cos_series, exp_series, ln_1_plus_x_series,
+    maclaurin, sin_series, taylor, factorial, factorial_expr, compute_nth_derivative,
+    evaluate_at, RemainderTerm, Series, SeriesError, SeriesResult, SeriesTerm,
 };
 
 /// Library version information.
