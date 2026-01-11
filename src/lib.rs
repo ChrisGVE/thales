@@ -396,6 +396,7 @@ pub mod ode;
 pub mod partial_fractions;
 pub mod equation_system;
 pub mod series;
+pub mod optimization;
 
 // FFI module (conditionally compiled for FFI builds)
 #[cfg(feature = "ffi")]
@@ -462,6 +463,11 @@ pub use series::{
     LaurentSeries, Singularity, SingularityType, laurent, residue, pole_order, find_singularities,
     // Series arithmetic (composition and reversion)
     compose_series, reversion,
+};
+pub use optimization::{
+    OperationConfig, OperationType, ComputationStep, StepOperand, MultiplicativeChain,
+    PrecisionReport, ManualStep, find_multiplicative_chains, track_precision,
+    optimize_computation_order, to_manual_steps, analyze_expression,
 };
 
 /// Library version information.
