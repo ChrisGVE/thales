@@ -458,6 +458,8 @@ pub use series::{
     arctan_series, binomial_series, cos_series, exp_series, ln_1_plus_x_series,
     maclaurin, sin_series, taylor, factorial, factorial_expr, compute_nth_derivative,
     evaluate_at, RemainderTerm, Series, SeriesError, SeriesResult, SeriesTerm,
+    // Laurent series support
+    LaurentSeries, Singularity, SingularityType, laurent, residue, pole_order, find_singularities,
 };
 
 /// Library version information.
