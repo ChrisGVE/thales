@@ -132,6 +132,28 @@ mod ffi {
         pub simplified_latex: String,
     }
 
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct TaylorSeriesResultFFI {
+        pub original: String,
+        pub variable: String,
+        pub center: f64,
+        pub order: u32,
+        pub series: String,
+        pub series_latex: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct SpecialFunctionResultFFI {
+        pub value: String,
+        pub value_latex: String,
+        pub numeric_value: f64,
+        pub derivation_steps: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
     extern "Rust" {
         fn parse_equation_ffi(input: &str) -> Result<String, String>;
         fn parse_expression_ffi(input: &str) -> Result<String, String>;
@@ -202,6 +224,22 @@ mod ffi {
             known_values_json: &str,
             targets_json: &str,
         ) -> Result<String, String>;
+    }
+
+    extern "Rust" {
+        fn taylor_series_ffi(
+            expression: &str,
+            variable: &str,
+            center: f64,
+            order: u32,
+        ) -> Result<TaylorSeriesResultFFI, String>;
+        fn maclaurin_series_ffi(
+            expression: &str,
+            variable: &str,
+            order: u32,
+        ) -> Result<TaylorSeriesResultFFI, String>;
+        fn gamma_ffi(x: f64) -> Result<SpecialFunctionResultFFI, String>;
+        fn erf_ffi(x: f64) -> Result<SpecialFunctionResultFFI, String>;
     }
 }
 
@@ -1029,4 +1067,166 @@ fn solve_equation_system_ffi(
 
     serde_json::to_string(&output)
         .map_err(|e| format!("Failed to serialize result: {}", e))
+}
+
+// =============================================================================
+// Series expansion operations
+// =============================================================================
+
+/// Compute Taylor series expansion around a given center point.
+fn taylor_series_ffi(
+    expression: &str,
+    variable: &str,
+    center: f64,
+    order: u32,
+) -> Result<ffi::TaylorSeriesResultFFI, String> {
+    use crate::ast::Variable;
+    use crate::series::taylor;
+
+    let expr = parse_expression(expression)
+        .map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let var = Variable::new(variable);
+    let center_expr = crate::ast::Expression::Float(center);
+
+    let result = taylor(&expr, &var, &center_expr, order);
+
+    match result {
+        Ok(series) => {
+            let series_expr = series.to_expression();
+            Ok(ffi::TaylorSeriesResultFFI {
+                original: expression.to_string(),
+                variable: variable.to_string(),
+                center,
+                order,
+                series: format!("{}", series_expr),
+                series_latex: series_expr.to_latex(),
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::TaylorSeriesResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            center,
+            order,
+            series: String::new(),
+            series_latex: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
+/// Compute Maclaurin series expansion (Taylor series centered at 0).
+fn maclaurin_series_ffi(
+    expression: &str,
+    variable: &str,
+    order: u32,
+) -> Result<ffi::TaylorSeriesResultFFI, String> {
+    use crate::ast::Variable;
+    use crate::series::maclaurin;
+
+    let expr = parse_expression(expression)
+        .map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let var = Variable::new(variable);
+
+    let result = maclaurin(&expr, &var, order);
+
+    match result {
+        Ok(series) => {
+            let series_expr = series.to_expression();
+            Ok(ffi::TaylorSeriesResultFFI {
+                original: expression.to_string(),
+                variable: variable.to_string(),
+                center: 0.0,
+                order,
+                series: format!("{}", series_expr),
+                series_latex: series_expr.to_latex(),
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::TaylorSeriesResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            center: 0.0,
+            order,
+            series: String::new(),
+            series_latex: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
+// =============================================================================
+// Special functions
+// =============================================================================
+
+/// Compute the Gamma function with derivation steps.
+fn gamma_ffi(x: f64) -> Result<ffi::SpecialFunctionResultFFI, String> {
+    use crate::special::gamma;
+
+    let x_expr = crate::ast::Expression::Float(x);
+
+    let result = gamma(&x_expr);
+
+    match result {
+        Ok(gamma_result) => {
+            let steps_json = serde_json::to_string(&gamma_result.derivation_steps)
+                .map_err(|e| format!("Failed to serialize derivation steps: {}", e))?;
+
+            Ok(ffi::SpecialFunctionResultFFI {
+                value: format!("{}", gamma_result.value),
+                value_latex: gamma_result.value.to_latex(),
+                numeric_value: gamma_result.numeric_value.unwrap_or(f64::NAN),
+                derivation_steps: steps_json,
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::SpecialFunctionResultFFI {
+            value: String::new(),
+            value_latex: String::new(),
+            numeric_value: f64::NAN,
+            derivation_steps: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
+/// Compute the error function with derivation steps.
+fn erf_ffi(x: f64) -> Result<ffi::SpecialFunctionResultFFI, String> {
+    use crate::special::erf;
+
+    let x_expr = crate::ast::Expression::Float(x);
+
+    let result = erf(&x_expr);
+
+    match result {
+        Ok(erf_result) => {
+            let steps_json = serde_json::to_string(&erf_result.derivation_steps)
+                .map_err(|e| format!("Failed to serialize derivation steps: {}", e))?;
+
+            Ok(ffi::SpecialFunctionResultFFI {
+                value: format!("{}", erf_result.value),
+                value_latex: erf_result.value.to_latex(),
+                numeric_value: erf_result.numeric_value.unwrap_or(f64::NAN),
+                derivation_steps: steps_json,
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::SpecialFunctionResultFFI {
+            value: String::new(),
+            value_latex: String::new(),
+            numeric_value: f64::NAN,
+            derivation_steps: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
 }
