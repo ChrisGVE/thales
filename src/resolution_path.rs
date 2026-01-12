@@ -1194,6 +1194,18 @@ pub enum Operation {
         method: String,
     },
 
+    /// Apply approximation with error bounds.
+    ///
+    /// Replaces an expression with an approximation (e.g., small angle approximation).
+    ApproximationSubstitution {
+        /// The original exact expression
+        original: Expression,
+        /// The approximation expression
+        approximation: Expression,
+        /// Upper bound on approximation error
+        error_bound: f64,
+    },
+
     /// Custom operation with a free-form description.
     ///
     /// Use this for operations not covered by the other variants
@@ -1295,6 +1307,9 @@ impl Operation {
             Operation::GaussianElimination => "Apply Gaussian elimination".to_string(),
             Operation::ComputeDeterminant { method } => {
                 format!("Compute determinant ({})", method)
+            }
+            Operation::ApproximationSubstitution { original, approximation, error_bound } => {
+                format!("Approximate {:?} ≈ {:?} (error bound: {:.2e})", original, approximation, error_bound)
             }
             Operation::Custom(desc) => desc.clone(),
         }
@@ -1439,6 +1454,9 @@ impl Operation {
             Operation::MatrixOperation { .. }
             | Operation::GaussianElimination
             | Operation::ComputeDeterminant { .. } => "matrix".to_string(),
+
+            // Approximation
+            Operation::ApproximationSubstitution { .. } => "approximation".to_string(),
 
             // Custom
             Operation::Custom(_) => "custom".to_string(),

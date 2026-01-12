@@ -397,6 +397,8 @@ pub mod partial_fractions;
 pub mod equation_system;
 pub mod series;
 pub mod optimization;
+pub mod special;
+pub mod approximations;
 
 // FFI module (conditionally compiled for FFI builds)
 #[cfg(feature = "ffi")]
@@ -463,11 +465,21 @@ pub use series::{
     LaurentSeries, Singularity, SingularityType, laurent, residue, pole_order, find_singularities,
     // Series arithmetic (composition and reversion)
     compose_series, reversion,
+    // Asymptotic expansions
+    AsymptoticDirection, AsymptoticSeries, AsymptoticTerm, BigO, asymptotic, limit_via_asymptotic,
 };
 pub use optimization::{
     OperationConfig, OperationType, ComputationStep, StepOperand, MultiplicativeChain,
     PrecisionReport, ManualStep, find_multiplicative_chains, track_precision,
     optimize_computation_order, to_manual_steps, analyze_expression,
+};
+pub use special::{
+    gamma, beta, erf, erfc, SpecialFunctionError, SpecialFunctionResult,
+};
+pub use approximations::{
+    ApproxResult, ApproxType, ScaledExpForm, apply_small_angle_approx,
+    compute_approximation_error, select_exp_scaling, is_approximation_valid,
+    generate_approximation_step, optimize_pythagorean,
 };
 
 /// Library version information.
