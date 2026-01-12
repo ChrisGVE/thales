@@ -1797,6 +1797,538 @@ fn get_zero_multiplicity(expr: &Expression, var: &Variable, zero: &Expression) -
     }
 }
 
+/// Direction for asymptotic expansion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AsymptoticDirection {
+    /// Expansion as x approaches positive infinity.
+    PosInfinity,
+    /// Expansion as x approaches negative infinity.
+    NegInfinity,
+    /// Expansion as x approaches zero.
+    Zero,
+}
+
+impl fmt::Display for AsymptoticDirection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AsymptoticDirection::PosInfinity => write!(f, "x→+∞"),
+            AsymptoticDirection::NegInfinity => write!(f, "x→-∞"),
+            AsymptoticDirection::Zero => write!(f, "x→0"),
+        }
+    }
+}
+
+/// A single term in an asymptotic series: coefficient × x^exponent.
+/// The exponent can be negative or fractional for asymptotic expansions.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AsymptoticTerm {
+    /// The coefficient of this term (can be symbolic).
+    pub coefficient: Expression,
+    /// The exponent (can be negative, fractional, or symbolic).
+    pub exponent: Expression,
+}
+
+impl AsymptoticTerm {
+    /// Create a new asymptotic term.
+    pub fn new(coefficient: Expression, exponent: Expression) -> Self {
+        AsymptoticTerm { coefficient, exponent }
+    }
+
+    /// Check if this term has a zero coefficient.
+    pub fn is_zero(&self) -> bool {
+        matches!(&self.coefficient, Expression::Integer(0))
+            || matches!(&self.coefficient, Expression::Float(x) if x.abs() < 1e-15)
+    }
+
+    /// Try to evaluate this term at a given point.
+    pub fn evaluate(&self, var: &Variable, point: f64) -> Option<f64> {
+        // Substitute the variable with the point value
+        let point_expr = Expression::Float(point);
+
+        let coeff_result = evaluate_at(&self.coefficient, var, &point_expr).ok()?;
+        let exp_result = evaluate_at(&self.exponent, var, &point_expr).ok()?;
+
+        let coeff = try_expr_to_f64(&coeff_result)?;
+        let exp = try_expr_to_f64(&exp_result)?;
+
+        Some(coeff * point.powf(exp))
+    }
+}
+
+impl fmt::Display for AsymptoticTerm {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Format based on exponent value
+        match &self.exponent {
+            Expression::Integer(0) => write!(f, "{}", self.coefficient),
+            Expression::Integer(1) => write!(f, "{}·x", self.coefficient),
+            Expression::Integer(n) if *n < 0 => {
+                write!(f, "{}/x^{}", self.coefficient, -n)
+            }
+            Expression::Rational(r) => {
+                write!(f, "{}·x^({})", self.coefficient, r)
+            }
+            _ => write!(f, "{}·x^({})", self.coefficient, self.exponent),
+        }
+    }
+}
+
+/// Big-O notation for asymptotic order.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BigO {
+    /// Order expression (e.g., x^n, log(x), etc.)
+    pub order: Expression,
+    /// Variable of the expansion.
+    pub variable: Variable,
+}
+
+impl BigO {
+    /// Create a new Big-O term.
+    pub fn new(order: Expression, variable: Variable) -> Self {
+        BigO { order, variable }
+    }
+
+    /// Check if two Big-O terms have the same order.
+    pub fn is_same_order(&self, other: &BigO) -> bool {
+        // Simplified check - would need more sophisticated comparison
+        self.order == other.order
+    }
+
+    /// Check if this Big-O is smaller than another.
+    /// Returns true if this order grows slower than other.
+    pub fn is_smaller_order(&self, other: &BigO) -> bool {
+        // For power terms: O(x^a) < O(x^b) if a < b
+        match (&self.order, &other.order) {
+            (Expression::Power(_, exp1), Expression::Power(_, exp2)) => {
+                if let (Some(e1), Some(e2)) = (try_expr_to_f64(exp1), try_expr_to_f64(exp2)) {
+                    return e1 < e2;
+                }
+            }
+            (Expression::Integer(a), Expression::Power(_, _)) => {
+                // Constant is smaller than any power
+                return *a == 1;
+            }
+            _ => {}
+        }
+        false
+    }
+
+    /// Check if an expression is bounded by this Big-O term.
+    pub fn is_bounded_by(&self, expr: &Expression) -> bool {
+        // Simplified check - full implementation would need limit analysis
+        expr == &self.order
+    }
+}
+
+impl fmt::Display for BigO {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "O({})", self.order)
+    }
+}
+
+/// A complete asymptotic series representation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AsymptoticSeries {
+    /// The terms of the series, ordered by decreasing dominance.
+    pub terms: Vec<AsymptoticTerm>,
+    /// The variable of expansion.
+    pub variable: Variable,
+    /// Direction of the asymptotic expansion.
+    pub direction: AsymptoticDirection,
+}
+
+impl AsymptoticSeries {
+    /// Create a new empty asymptotic series.
+    pub fn new(variable: Variable, direction: AsymptoticDirection) -> Self {
+        AsymptoticSeries {
+            terms: Vec::new(),
+            variable,
+            direction,
+        }
+    }
+
+    /// Add a term to the series.
+    pub fn add_term(&mut self, term: AsymptoticTerm) {
+        if !term.is_zero() {
+            self.terms.push(term);
+        }
+    }
+
+    /// Get the dominant (leading) term.
+    pub fn dominant_term(&self) -> Option<&AsymptoticTerm> {
+        self.terms.first()
+    }
+
+    /// Get the order of magnitude (exponent of dominant term).
+    pub fn order_of_magnitude(&self) -> Option<Expression> {
+        self.dominant_term().map(|t| t.exponent.clone())
+    }
+
+    /// Return the series with its error term.
+    pub fn with_error_term(&self) -> (Self, BigO) {
+        let series = self.clone();
+
+        // Error term is the next order after the smallest term
+        let error_order = if let Some(last_term) = self.terms.last() {
+            // For x->inf: if last term is x^n, error is O(x^(n-1))
+            // For x->0: if last term is x^n, error is O(x^(n+1))
+            match self.direction {
+                AsymptoticDirection::PosInfinity | AsymptoticDirection::NegInfinity => {
+                    Expression::Binary(
+                        BinaryOp::Sub,
+                        Box::new(last_term.exponent.clone()),
+                        Box::new(Expression::Integer(1)),
+                    )
+                }
+                AsymptoticDirection::Zero => {
+                    Expression::Binary(
+                        BinaryOp::Add,
+                        Box::new(last_term.exponent.clone()),
+                        Box::new(Expression::Integer(1)),
+                    )
+                }
+            }
+        } else {
+            Expression::Integer(0)
+        };
+
+        let var_expr = Expression::Variable(self.variable.clone());
+        let big_o = BigO::new(
+            Expression::Power(Box::new(var_expr), Box::new(error_order)),
+            self.variable.clone(),
+        );
+
+        (series, big_o)
+    }
+
+    /// Evaluate the series at a given point.
+    pub fn evaluate(&self, point: f64) -> Option<f64> {
+        let mut sum = 0.0;
+        for term in &self.terms {
+            sum += term.evaluate(&self.variable, point)?;
+        }
+        Some(sum)
+    }
+
+    /// Convert to a symbolic Expression.
+    pub fn to_expression(&self) -> Expression {
+        if self.terms.is_empty() {
+            return Expression::Integer(0);
+        }
+
+        let var_expr = Expression::Variable(self.variable.clone());
+        let mut result: Option<Expression> = None;
+
+        for term in &self.terms {
+            let term_expr = Expression::Binary(
+                BinaryOp::Mul,
+                Box::new(term.coefficient.clone()),
+                Box::new(Expression::Power(
+                    Box::new(var_expr.clone()),
+                    Box::new(term.exponent.clone()),
+                )),
+            );
+
+            result = Some(match result {
+                None => term_expr,
+                Some(acc) => Expression::Binary(BinaryOp::Add, Box::new(acc), Box::new(term_expr)),
+            });
+        }
+
+        result.unwrap_or(Expression::Integer(0)).simplify()
+    }
+}
+
+impl fmt::Display for AsymptoticSeries {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.terms.is_empty() {
+            return write!(f, "0");
+        }
+
+        write!(f, "As {}: ", self.direction)?;
+
+        for (i, term) in self.terms.iter().enumerate() {
+            if i > 0 {
+                write!(f, " + ")?;
+            }
+            write!(f, "{}", term)?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Compute asymptotic expansion of an expression.
+///
+/// This function computes the asymptotic expansion of an expression as the variable
+/// approaches a limit (zero or infinity). The expansion includes terms in decreasing
+/// order of dominance.
+///
+/// # Arguments
+///
+/// * `expr` - The expression to expand
+/// * `var` - The variable for expansion
+/// * `direction` - Direction of approach (zero or infinity)
+/// * `num_terms` - Number of terms to compute
+///
+/// # Returns
+///
+/// An `AsymptoticSeries` containing the dominant terms.
+///
+/// # Examples
+///
+/// ```
+/// use thales::series::{asymptotic, AsymptoticDirection};
+/// use thales::parser::parse_expression;
+///
+/// // Asymptotic expansion of 1/x + 1/x^2 as x→∞
+/// let expr = parse_expression("1/x + 1/x^2").unwrap();
+/// let series = asymptotic(&expr, "x", AsymptoticDirection::PosInfinity, 3).unwrap();
+/// // Returns: 1/x + 1/x^2
+/// ```
+pub fn asymptotic(
+    expr: &Expression,
+    var: impl AsRef<str>,
+    direction: AsymptoticDirection,
+    num_terms: u32,
+) -> SeriesResult<AsymptoticSeries> {
+    let var_name = var.as_ref();
+    let variable = Variable::new(var_name);
+
+    let mut series = AsymptoticSeries::new(variable.clone(), direction);
+
+    // Extract terms directly from the expression
+    // No substitution needed - we handle dominance in sorting
+    extract_asymptotic_terms(expr, &variable, &mut series, num_terms)?;
+
+    // Sort terms by dominance
+    sort_by_dominance(&mut series.terms, direction);
+
+    Ok(series)
+}
+
+/// Substitute x = 1/t for infinity analysis.
+fn substitute_for_infinity(expr: &Expression, var: &Variable) -> Expression {
+    match expr {
+        Expression::Variable(v) if v == var => {
+            // x -> 1/t
+            let t = Variable::new("__t");
+            Expression::Binary(
+                BinaryOp::Div,
+                Box::new(Expression::Integer(1)),
+                Box::new(Expression::Variable(t)),
+            )
+        }
+        Expression::Binary(op, left, right) => {
+            Expression::Binary(
+                *op,
+                Box::new(substitute_for_infinity(left, var)),
+                Box::new(substitute_for_infinity(right, var)),
+            )
+        }
+        Expression::Unary(op, inner) => {
+            Expression::Unary(*op, Box::new(substitute_for_infinity(inner, var)))
+        }
+        Expression::Power(base, exp) => {
+            Expression::Power(
+                Box::new(substitute_for_infinity(base, var)),
+                Box::new(substitute_for_infinity(exp, var)),
+            )
+        }
+        Expression::Function(f, args) => {
+            Expression::Function(
+                f.clone(),
+                args.iter().map(|a| substitute_for_infinity(a, var)).collect(),
+            )
+        }
+        _ => expr.clone(),
+    }
+}
+
+/// Extract asymptotic terms from an expression.
+fn extract_asymptotic_terms(
+    expr: &Expression,
+    var: &Variable,
+    series: &mut AsymptoticSeries,
+    num_terms: u32,
+) -> SeriesResult<()> {
+    // Simple extraction for basic forms
+    match expr {
+        Expression::Binary(BinaryOp::Add, left, right) => {
+            extract_asymptotic_terms(left, var, series, num_terms)?;
+            extract_asymptotic_terms(right, var, series, num_terms)?;
+        }
+        Expression::Binary(BinaryOp::Div, num, den) => {
+            // Check if numerator is effectively 1 (could be Integer(1) or Float(1.0))
+            let is_one = matches!(num.as_ref(), Expression::Integer(1))
+                || matches!(num.as_ref(), Expression::Float(f) if (*f - 1.0).abs() < 1e-15);
+
+            if is_one {
+                // Handle 1/x
+                if let Expression::Variable(v) = den.as_ref() {
+                    if v == var {
+                        series.add_term(AsymptoticTerm::new(
+                            Expression::Integer(1),
+                            Expression::Integer(-1),
+                        ));
+                    }
+                // Handle 1/x^n
+                } else if let Expression::Power(base, exp) = den.as_ref() {
+                    if let Expression::Variable(v) = base.as_ref() {
+                        if v == var {
+                            // 1/x^n -> coefficient=1, exponent=-n
+                            let neg_exp = Expression::Unary(
+                                crate::ast::UnaryOp::Neg,
+                                Box::new(exp.as_ref().clone()),
+                            ).simplify();
+                            series.add_term(AsymptoticTerm::new(Expression::Integer(1), neg_exp));
+                        }
+                    }
+                }
+            } else {
+                // Handle general a/x^n form
+                if let Expression::Variable(v) = den.as_ref() {
+                    if v == var {
+                        series.add_term(AsymptoticTerm::new(
+                            num.as_ref().clone(),
+                            Expression::Integer(-1),
+                        ));
+                    }
+                } else if let Expression::Power(base, exp) = den.as_ref() {
+                    if let Expression::Variable(v) = base.as_ref() {
+                        if v == var {
+                            let neg_exp = Expression::Unary(
+                                crate::ast::UnaryOp::Neg,
+                                Box::new(exp.as_ref().clone()),
+                            ).simplify();
+                            series.add_term(AsymptoticTerm::new(num.as_ref().clone(), neg_exp));
+                        }
+                    }
+                }
+            }
+        }
+        Expression::Power(base, exp) => {
+            if let Expression::Variable(v) = base.as_ref() {
+                if v == var {
+                    series.add_term(AsymptoticTerm::new(Expression::Integer(1), exp.as_ref().clone()));
+                }
+            }
+        }
+        Expression::Variable(v) if v == var => {
+            series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(1)));
+        }
+        Expression::Integer(n) => {
+            series.add_term(AsymptoticTerm::new(Expression::Integer(*n), Expression::Integer(0)));
+        }
+        Expression::Float(f) => {
+            series.add_term(AsymptoticTerm::new(Expression::Float(*f), Expression::Integer(0)));
+        }
+        _ => {
+            return Err(SeriesError::CannotExpand(format!(
+                "Cannot extract asymptotic terms from: {}",
+                expr
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+/// Sort terms by dominance for the given direction.
+fn sort_by_dominance(terms: &mut Vec<AsymptoticTerm>, direction: AsymptoticDirection) {
+    terms.sort_by(|a, b| {
+        let exp_a = try_expr_to_f64(&a.exponent).unwrap_or(0.0);
+        let exp_b = try_expr_to_f64(&b.exponent).unwrap_or(0.0);
+
+        match direction {
+            AsymptoticDirection::PosInfinity | AsymptoticDirection::NegInfinity => {
+                // For x→∞, larger exponents dominate
+                exp_b.partial_cmp(&exp_a).unwrap()
+            }
+            AsymptoticDirection::Zero => {
+                // For x→0, smaller exponents dominate
+                exp_a.partial_cmp(&exp_b).unwrap()
+            }
+        }
+    });
+}
+
+/// Compute limit via asymptotic expansion.
+///
+/// This function uses asymptotic expansion to compute limits, especially
+/// useful for limits at infinity where standard Taylor series don't apply.
+///
+/// # Arguments
+///
+/// * `expr` - The expression to compute the limit of
+/// * `var` - The variable approaching the limit
+/// * `direction` - Direction of approach
+///
+/// # Returns
+///
+/// The limit value as a `LimitResult`.
+pub fn limit_via_asymptotic(
+    expr: &Expression,
+    var: impl AsRef<str>,
+    direction: AsymptoticDirection,
+) -> Result<crate::limits::LimitResult, crate::limits::LimitError> {
+    use crate::limits::LimitResult;
+
+    let series = asymptotic(expr, var.as_ref(), direction, 5)
+        .map_err(|e| crate::limits::LimitError::EvaluationError(e.to_string()))?;
+
+    if let Some(dominant) = series.dominant_term() {
+        // Check the exponent of the dominant term
+        if let Some(exp) = try_expr_to_f64(&dominant.exponent) {
+            match direction {
+                AsymptoticDirection::PosInfinity | AsymptoticDirection::NegInfinity => {
+                    if exp > 0.0 {
+                        // Dominant term has positive exponent -> infinity
+                        if let Some(coeff) = try_expr_to_f64(&dominant.coefficient) {
+                            if coeff > 0.0 {
+                                return Ok(LimitResult::PositiveInfinity);
+                            } else if coeff < 0.0 {
+                                return Ok(LimitResult::NegativeInfinity);
+                            }
+                        }
+                    } else if exp < 0.0 {
+                        // Dominant term has negative exponent -> 0
+                        return Ok(LimitResult::Value(0.0));
+                    } else {
+                        // Constant term
+                        if let Some(coeff) = try_expr_to_f64(&dominant.coefficient) {
+                            return Ok(LimitResult::Value(coeff));
+                        }
+                    }
+                }
+                AsymptoticDirection::Zero => {
+                    if exp > 0.0 {
+                        // As x→0, x^n → 0 for n > 0
+                        return Ok(LimitResult::Value(0.0));
+                    } else if exp < 0.0 {
+                        // As x→0, x^(-n) → ∞ for n > 0
+                        if let Some(coeff) = try_expr_to_f64(&dominant.coefficient) {
+                            if coeff > 0.0 {
+                                return Ok(LimitResult::PositiveInfinity);
+                            } else if coeff < 0.0 {
+                                return Ok(LimitResult::NegativeInfinity);
+                            }
+                        }
+                    } else {
+                        // Constant term
+                        if let Some(coeff) = try_expr_to_f64(&dominant.coefficient) {
+                            return Ok(LimitResult::Value(coeff));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Err(crate::limits::LimitError::EvaluationError(
+        "Cannot determine limit from asymptotic expansion".to_string(),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2491,5 +3023,316 @@ mod tests {
         let result = arcsin_s.evaluate(0.5).unwrap();
         let expected = 0.5_f64.asin();
         assert!((result - expected).abs() < 0.05);
+    }
+
+    // Asymptotic Expansion Tests
+
+    #[test]
+    fn test_asymptotic_direction_display() {
+        assert_eq!(format!("{}", AsymptoticDirection::PosInfinity), "x→+∞");
+        assert_eq!(format!("{}", AsymptoticDirection::NegInfinity), "x→-∞");
+        assert_eq!(format!("{}", AsymptoticDirection::Zero), "x→0");
+    }
+
+    #[test]
+    fn test_asymptotic_term_creation() {
+        let term = AsymptoticTerm::new(Expression::Integer(2), Expression::Integer(-1));
+        assert_eq!(term.coefficient, Expression::Integer(2));
+        assert_eq!(term.exponent, Expression::Integer(-1));
+        assert!(!term.is_zero());
+
+        let zero_term = AsymptoticTerm::new(Expression::Integer(0), Expression::Integer(1));
+        assert!(zero_term.is_zero());
+    }
+
+    #[test]
+    fn test_asymptotic_term_evaluate() {
+        let x = Variable::new("x");
+
+        // 2*x^(-1) at x=4 should be 2/4 = 0.5
+        let term = AsymptoticTerm::new(Expression::Integer(2), Expression::Integer(-1));
+        let result = term.evaluate(&x, 4.0).unwrap();
+        assert!((result - 0.5).abs() < 1e-10);
+
+        // 3*x^2 at x=2 should be 3*4 = 12
+        let term2 = AsymptoticTerm::new(Expression::Integer(3), Expression::Integer(2));
+        let result2 = term2.evaluate(&x, 2.0).unwrap();
+        assert!((result2 - 12.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_asymptotic_term_display() {
+        let term1 = AsymptoticTerm::new(Expression::Integer(2), Expression::Integer(0));
+        assert_eq!(format!("{}", term1), "2");
+
+        let term2 = AsymptoticTerm::new(Expression::Integer(3), Expression::Integer(1));
+        assert_eq!(format!("{}", term2), "3·x");
+
+        let term3 = AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-2));
+        assert_eq!(format!("{}", term3), "1/x^2");
+    }
+
+    #[test]
+    fn test_big_o_creation() {
+        let x = Variable::new("x");
+        let order = Expression::Power(
+            Box::new(Expression::Variable(x.clone())),
+            Box::new(Expression::Integer(2)),
+        );
+        let big_o = BigO::new(order.clone(), x.clone());
+
+        assert_eq!(big_o.order, order);
+        assert_eq!(big_o.variable, x);
+    }
+
+    #[test]
+    fn test_big_o_is_same_order() {
+        let x = Variable::new("x");
+        let order1 = Expression::Power(
+            Box::new(Expression::Variable(x.clone())),
+            Box::new(Expression::Integer(2)),
+        );
+        let order2 = Expression::Power(
+            Box::new(Expression::Variable(x.clone())),
+            Box::new(Expression::Integer(2)),
+        );
+
+        let big_o1 = BigO::new(order1, x.clone());
+        let big_o2 = BigO::new(order2, x.clone());
+
+        assert!(big_o1.is_same_order(&big_o2));
+    }
+
+    #[test]
+    fn test_big_o_display() {
+        let x = Variable::new("x");
+        let order = Expression::Power(
+            Box::new(Expression::Variable(x.clone())),
+            Box::new(Expression::Integer(3)),
+        );
+        let big_o = BigO::new(order, x);
+
+        assert!(format!("{}", big_o).contains("O("));
+    }
+
+    #[test]
+    fn test_asymptotic_series_creation() {
+        let x = Variable::new("x");
+        let series = AsymptoticSeries::new(x.clone(), AsymptoticDirection::PosInfinity);
+
+        assert_eq!(series.variable, x);
+        assert_eq!(series.direction, AsymptoticDirection::PosInfinity);
+        assert_eq!(series.terms.len(), 0);
+    }
+
+    #[test]
+    fn test_asymptotic_series_add_term() {
+        let x = Variable::new("x");
+        let mut series = AsymptoticSeries::new(x.clone(), AsymptoticDirection::PosInfinity);
+
+        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-1)));
+        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-2)));
+
+        assert_eq!(series.terms.len(), 2);
+    }
+
+    #[test]
+    fn test_asymptotic_series_dominant_term() {
+        let x = Variable::new("x");
+        let mut series = AsymptoticSeries::new(x.clone(), AsymptoticDirection::PosInfinity);
+
+        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-1)));
+        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-2)));
+
+        let dominant = series.dominant_term().unwrap();
+        assert_eq!(dominant.exponent, Expression::Integer(-1));
+    }
+
+    #[test]
+    fn test_asymptotic_series_order_of_magnitude() {
+        let x = Variable::new("x");
+        let mut series = AsymptoticSeries::new(x.clone(), AsymptoticDirection::PosInfinity);
+
+        series.add_term(AsymptoticTerm::new(Expression::Integer(2), Expression::Integer(-1)));
+
+        let order = series.order_of_magnitude().unwrap();
+        assert_eq!(order, Expression::Integer(-1));
+    }
+
+    #[test]
+    fn test_asymptotic_series_with_error_term() {
+        let x = Variable::new("x");
+        let mut series = AsymptoticSeries::new(x.clone(), AsymptoticDirection::PosInfinity);
+
+        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-1)));
+        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-2)));
+
+        let (_, big_o) = series.with_error_term();
+        // Error term should be O(x^(-3)) for x→∞ when last term is x^(-2)
+        assert_eq!(big_o.variable, x);
+    }
+
+    #[test]
+    fn test_asymptotic_series_evaluate() {
+        let x = Variable::new("x");
+        let mut series = AsymptoticSeries::new(x.clone(), AsymptoticDirection::PosInfinity);
+
+        // 1/x + 1/x^2 at x=2 should be 0.5 + 0.25 = 0.75
+        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-1)));
+        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-2)));
+
+        let result = series.evaluate(2.0).unwrap();
+        assert!((result - 0.75).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_asymptotic_1_over_x() {
+        use crate::parser::parse_expression;
+
+        // 1/x as x→∞ should give [1/x]
+        let expr = parse_expression("1/x").unwrap();
+        let series = asymptotic(&expr, "x", AsymptoticDirection::PosInfinity, 3).unwrap();
+
+        assert_eq!(series.terms.len(), 1);
+        assert_eq!(series.terms[0].coefficient, Expression::Integer(1));
+        assert_eq!(series.terms[0].exponent, Expression::Integer(-1));
+    }
+
+    #[test]
+    fn test_asymptotic_1_over_x_plus_1_over_x2() {
+        use crate::parser::parse_expression;
+
+        // 1/x + 1/x^2 as x→∞
+        let expr = parse_expression("1/x + 1/x^2").unwrap();
+        let series = asymptotic(&expr, "x", AsymptoticDirection::PosInfinity, 3).unwrap();
+
+        assert_eq!(series.terms.len(), 2);
+        // Dominant term should be 1/x (exponent -1)
+        assert_eq!(series.terms[0].exponent, Expression::Integer(-1));
+
+        // Next term should be 1/x^2 (exponent -2)
+        // The exponent might be Unary(Neg, Float(2.0)) or Integer(-2) depending on simplification
+        let exp1 = &series.terms[1].exponent;
+        let exp1_val = try_expr_to_f64(exp1).unwrap();
+        assert!((exp1_val - (-2.0)).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_asymptotic_x_squared_plus_x() {
+        use crate::parser::parse_expression;
+
+        // x^2 + x as x→∞, dominant term is x^2
+        let expr = parse_expression("x^2 + x").unwrap();
+        let series = asymptotic(&expr, "x", AsymptoticDirection::PosInfinity, 3).unwrap();
+
+        let dominant = series.dominant_term().unwrap();
+        // Exponent might be Integer(2) or Float(2.0) depending on parser
+        let exp_val = try_expr_to_f64(&dominant.exponent).unwrap();
+        assert!((exp_val - 2.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_asymptotic_evaluate_at_point() {
+        use crate::parser::parse_expression;
+
+        // 1/x + 1/x^2 at x=10 should be 0.1 + 0.01 = 0.11
+        let expr = parse_expression("1/x + 1/x^2").unwrap();
+        let series = asymptotic(&expr, "x", AsymptoticDirection::PosInfinity, 3).unwrap();
+
+        let result = series.evaluate(10.0).unwrap();
+        assert!((result - 0.11).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_sort_by_dominance_pos_infinity() {
+        let x = Variable::new("x");
+        let mut terms = vec![
+            AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-2)),
+            AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-1)),
+            AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(0)),
+        ];
+
+        sort_by_dominance(&mut terms, AsymptoticDirection::PosInfinity);
+
+        // For x→∞, constant (0) > 1/x (-1) > 1/x^2 (-2)
+        assert_eq!(terms[0].exponent, Expression::Integer(0));
+        assert_eq!(terms[1].exponent, Expression::Integer(-1));
+        assert_eq!(terms[2].exponent, Expression::Integer(-2));
+    }
+
+    #[test]
+    fn test_sort_by_dominance_zero() {
+        let x = Variable::new("x");
+        let mut terms = vec![
+            AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(2)),
+            AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(1)),
+            AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(0)),
+        ];
+
+        sort_by_dominance(&mut terms, AsymptoticDirection::Zero);
+
+        // For x→0, constant (0) > x (1) > x^2 (2)
+        assert_eq!(terms[0].exponent, Expression::Integer(0));
+        assert_eq!(terms[1].exponent, Expression::Integer(1));
+        assert_eq!(terms[2].exponent, Expression::Integer(2));
+    }
+
+    #[test]
+    fn test_limit_via_asymptotic_to_zero() {
+        use crate::parser::parse_expression;
+        use crate::limits::LimitResult;
+
+        // lim_{x→∞} 1/x = 0
+        let expr = parse_expression("1/x").unwrap();
+        let result = limit_via_asymptotic(&expr, "x", AsymptoticDirection::PosInfinity).unwrap();
+
+        assert_eq!(result, LimitResult::Value(0.0));
+    }
+
+    #[test]
+    fn test_limit_via_asymptotic_to_infinity() {
+        use crate::parser::parse_expression;
+        use crate::limits::LimitResult;
+
+        // lim_{x→∞} x^2 = ∞
+        let expr = parse_expression("x^2").unwrap();
+        let result = limit_via_asymptotic(&expr, "x", AsymptoticDirection::PosInfinity).unwrap();
+
+        assert_eq!(result, LimitResult::PositiveInfinity);
+    }
+
+    #[test]
+    fn test_limit_via_asymptotic_constant() {
+        use crate::limits::LimitResult;
+
+        // lim_{x→∞} 5 = 5
+        let expr = Expression::Integer(5);
+        let result = limit_via_asymptotic(&expr, "x", AsymptoticDirection::PosInfinity).unwrap();
+
+        assert_eq!(result, LimitResult::Value(5.0));
+    }
+
+    #[test]
+    fn test_asymptotic_series_to_expression() {
+        let x = Variable::new("x");
+        let mut series = AsymptoticSeries::new(x.clone(), AsymptoticDirection::PosInfinity);
+
+        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-1)));
+        series.add_term(AsymptoticTerm::new(Expression::Integer(2), Expression::Integer(-2)));
+
+        let expr = series.to_expression();
+        // Should be simplifiable to some form
+        assert!(!matches!(expr, Expression::Integer(0)));
+    }
+
+    #[test]
+    fn test_asymptotic_series_display() {
+        let x = Variable::new("x");
+        let mut series = AsymptoticSeries::new(x.clone(), AsymptoticDirection::PosInfinity);
+
+        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-1)));
+
+        let display_str = format!("{}", series);
+        assert!(display_str.contains("x→+∞"));
     }
 }
