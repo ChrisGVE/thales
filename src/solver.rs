@@ -144,6 +144,7 @@ use std::collections::HashMap;
 /// assert!(result.is_err());
 /// ```
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum SolverError {
     /// Equation has no solution (inconsistent).
     ///
@@ -180,6 +181,21 @@ pub enum SolverError {
     /// domain errors (e.g., asin(2)) or not-yet-implemented features.
     Other(String),
 }
+
+impl std::fmt::Display for SolverError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SolverError::NoSolution => write!(f, "Equation has no solution"),
+            SolverError::InfiniteSolutions => write!(f, "Equation has infinite solutions"),
+            SolverError::CannotSolve(msg) => write!(f, "Cannot solve: {}", msg),
+            SolverError::UnsupportedEquationType => write!(f, "Equation type is not supported"),
+            SolverError::DivisionByZero => write!(f, "Division by zero encountered"),
+            SolverError::Other(msg) => write!(f, "{}", msg),
+        }
+    }
+}
+
+impl std::error::Error for SolverError {}
 
 /// Result type for solver operations.
 pub type SolverResult<T> = Result<T, SolverError>;

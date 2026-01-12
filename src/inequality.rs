@@ -187,6 +187,7 @@ impl IntervalSolution {
 
 /// Error types for inequality solving.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum InequalityError {
     /// Cannot solve this type of inequality
     CannotSolve(String),

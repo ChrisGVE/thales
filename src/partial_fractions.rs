@@ -37,6 +37,7 @@ use std::fmt;
 
 /// Error types for partial fraction decomposition.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum DecomposeError {
     /// The expression is not a rational function.
     NotRational(String),

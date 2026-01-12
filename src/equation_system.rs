@@ -54,6 +54,7 @@ use crate::solver::{SmartSolver, Solution, SolverError, Solver};
 
 /// Errors that can occur during equation system solving.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum SystemError {
     /// Circular dependency detected between variables/equations.
     CircularDependency(Vec<String>),
@@ -1812,6 +1813,7 @@ mod tests {
 
 /// Errors that can occur during nonlinear system solving.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum NonlinearSystemSolverError {
     /// System did not converge within max iterations.
     NoConvergence {

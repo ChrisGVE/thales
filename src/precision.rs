@@ -35,6 +35,7 @@ use std::fmt;
 
 /// Error types for precision evaluation.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum EvalError {
     /// Division by zero.
     DivisionByZero,

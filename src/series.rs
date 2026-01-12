@@ -69,6 +69,7 @@ fn try_expr_to_f64(expr: &Expression) -> Option<f64> {
 
 /// Error types for series expansion operations.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum SeriesError {
     /// The expression cannot be expanded as a series.
     CannotExpand(String),

@@ -68,6 +68,7 @@ use std::collections::HashMap;
 ///
 /// * `Other` - Any other error with a descriptive message.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum NumericalError {
     /// Failed to converge within iteration limit
     NoConvergence,
@@ -80,6 +81,20 @@ pub enum NumericalError {
     /// Other error
     Other(String),
 }
+
+impl std::fmt::Display for NumericalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NumericalError::NoConvergence => write!(f, "Failed to converge within iteration limit"),
+            NumericalError::Unstable => write!(f, "Numerical instability detected"),
+            NumericalError::InvalidInitialGuess => write!(f, "Invalid initial guess"),
+            NumericalError::EvaluationFailed(msg) => write!(f, "Function evaluation failed: {}", msg),
+            NumericalError::Other(msg) => write!(f, "{}", msg),
+        }
+    }
+}
+
+impl std::error::Error for NumericalError {}
 
 /// Result type for numerical operations.
 pub type NumericalResult<T> = Result<T, NumericalError>;

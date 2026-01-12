@@ -83,6 +83,7 @@ use std::fmt;
 /// Provides detailed information about what went wrong during parsing,
 /// including the position in the input string where the error occurred.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum LaTeXParseError {
     /// An unexpected character was encountered.
     UnexpectedCharacter {
@@ -503,6 +504,7 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
 /// let expr = parse_latex(r"\sin{\theta} + \cos{\theta}").unwrap();
 /// // Creates: sin(theta) + cos(theta)
 /// ```
+#[must_use = "parsing returns a result that should be used"]
 pub fn parse_latex(input: &str) -> Result<Expression, Vec<LaTeXParseError>> {
     latex_expression_parser()
         .padded()
@@ -573,6 +575,7 @@ pub fn parse_latex(input: &str) -> Result<Expression, Vec<LaTeXParseError>> {
 /// let (left, right) = parse_latex_equation(r"x^2 = 4").unwrap();
 /// // left = x^2, right = 4
 /// ```
+#[must_use = "parsing returns a result that should be used"]
 pub fn parse_latex_equation(input: &str) -> Result<(Expression, Expression), Vec<LaTeXParseError>> {
     let parts: Vec<&str> = input.split('=').collect();
 

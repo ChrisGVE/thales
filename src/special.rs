@@ -29,6 +29,7 @@ use std::fmt;
 
 /// Error types for special function computations.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum SpecialFunctionError {
     /// Invalid argument for the function (e.g., negative integer for Gamma).
     InvalidArgument(String),
@@ -118,6 +119,7 @@ impl SpecialFunctionResult {
 /// Returns `InvalidArgument` for:
 /// - Zero or negative integers (Γ function has poles)
 /// - Complex numbers (not yet implemented)
+#[must_use = "computing special functions returns a result that should be used"]
 pub fn gamma(x: &Expression) -> Result<SpecialFunctionResult, SpecialFunctionError> {
     let mut steps = Vec::new();
     steps.push(format!("Computing Gamma function: Γ({})", format_expr(x)));
@@ -291,6 +293,7 @@ pub fn gamma(x: &Expression) -> Result<SpecialFunctionResult, SpecialFunctionErr
 /// let result = beta(&Expression::Integer(1), &Expression::Integer(1)).unwrap();
 /// assert_eq!(result.numeric_value, Some(1.0));
 /// ```
+#[must_use = "computing special functions returns a result that should be used"]
 pub fn beta(
     a: &Expression,
     b: &Expression,
@@ -395,6 +398,7 @@ pub fn beta(
 /// let result = erf(&Expression::Integer(0)).unwrap();
 /// assert_eq!(result.numeric_value, Some(0.0));
 /// ```
+#[must_use = "computing special functions returns a result that should be used"]
 pub fn erf(x: &Expression) -> Result<SpecialFunctionResult, SpecialFunctionError> {
     let mut steps = Vec::new();
     steps.push(format!("Computing error function: erf({})", format_expr(x)));
@@ -484,6 +488,7 @@ pub fn erf(x: &Expression) -> Result<SpecialFunctionResult, SpecialFunctionError
 /// let result = erfc(&Expression::Integer(0)).unwrap();
 /// assert_eq!(result.numeric_value, Some(1.0));
 /// ```
+#[must_use = "computing special functions returns a result that should be used"]
 pub fn erfc(x: &Expression) -> Result<SpecialFunctionResult, SpecialFunctionError> {
     let mut steps = Vec::new();
     steps.push(format!(

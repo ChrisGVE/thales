@@ -185,6 +185,7 @@ use chumsky::prelude::*;
 /// }
 /// ```
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum ParseError {
     /// Encountered a character that doesn't match the expected grammar.
     UnexpectedCharacter {
@@ -677,6 +678,7 @@ fn expression_parser<'src>(
 ///     }
 /// }
 /// ```
+#[must_use = "parsing returns a result that should be used"]
 pub fn parse_expression(input: &str) -> Result<Expression, Vec<ParseError>> {
     expression_parser()
         .then_ignore(end())
@@ -802,6 +804,7 @@ pub fn parse_expression(input: &str) -> Result<Expression, Vec<ParseError>> {
 /// - Only single equations supported (no equation systems)
 /// - Exactly one equals sign required
 /// - Both sides must be valid expressions
+#[must_use = "parsing returns a result that should be used"]
 pub fn parse_equation(input: &str) -> Result<Equation, Vec<ParseError>> {
     let equation_parser = expression_parser()
         .then_ignore(just('=').padded())

@@ -887,6 +887,7 @@ impl fmt::Display for Variable {
 /// - [`Expression::Unary`] - Expression variant using these operators
 /// - [`BinaryOp`] - Binary operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum UnaryOp {
     /// Arithmetic negation: -x
     ///
@@ -947,6 +948,7 @@ pub enum UnaryOp {
 /// - [`Expression::Binary`] - Expression variant using these operators
 /// - [`UnaryOp`] - Unary operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BinaryOp {
     /// Addition: x + y
     ///
@@ -1065,6 +1067,7 @@ impl BinaryOp {
 ///
 /// - [`Expression::Function`] - Expression variant using functions
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Function {
     // Trigonometric functions
     /// Sine function: sin(x)

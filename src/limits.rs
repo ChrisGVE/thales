@@ -62,6 +62,7 @@ const MAX_LHOPITAL_ITERATIONS: u32 = 10;
 
 /// Error type for limit evaluation failures.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum LimitError {
     /// The limit results in an indeterminate form that requires further analysis.
     Indeterminate(IndeterminateForm),
@@ -221,6 +222,7 @@ impl LimitResult {
 ///     assert!((v - 6.0).abs() < 1e-10);
 /// }
 /// ```
+#[must_use = "computing limits returns a result that should be used"]
 pub fn limit(expr: &Expression, var: &str, approaches: LimitPoint) -> Result<LimitResult, LimitError> {
     // First, try direct substitution
     match &approaches {
@@ -239,6 +241,7 @@ pub fn limit(expr: &Expression, var: &str, approaches: LimitPoint) -> Result<Lim
 /// Evaluate limit from the left (approaching from below).
 ///
 /// Computes `lim_{x -> a^-} f(x)`.
+#[must_use = "computing limits returns a result that should be used"]
 pub fn limit_left(expr: &Expression, var: &str, approaches: f64) -> Result<LimitResult, LimitError> {
     // Approach from slightly below
     let epsilon = 1e-10;
@@ -267,6 +270,7 @@ pub fn limit_left(expr: &Expression, var: &str, approaches: f64) -> Result<Limit
 /// Evaluate limit from the right (approaching from above).
 ///
 /// Computes `lim_{x -> a^+} f(x)`.
+#[must_use = "computing limits returns a result that should be used"]
 pub fn limit_right(expr: &Expression, var: &str, approaches: f64) -> Result<LimitResult, LimitError> {
     // Approach from slightly above with progressively smaller epsilon
     let epsilons = [1e-3, 1e-6, 1e-9, 1e-12];
@@ -344,6 +348,7 @@ pub fn limit_right(expr: &Expression, var: &str, approaches: f64) -> Result<Limi
 ///
 /// * `Ok(LimitResult)` - The computed limit value
 /// * `Err(LimitError)` - If the limit cannot be computed
+#[must_use = "computing limits returns a result that should be used"]
 pub fn limit_with_lhopital(expr: &Expression, var: &str, approaches: LimitPoint) -> Result<LimitResult, LimitError> {
     // First try regular limit
     match limit(expr, var, approaches.clone()) {

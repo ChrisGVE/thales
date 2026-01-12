@@ -498,6 +498,213 @@ pub fn has_ffi_support() -> bool {
     cfg!(feature = "ffi")
 }
 
+/// Unified error type for the thales library.
+///
+/// This enum provides a single error type that encompasses all possible errors
+/// that can occur within the library. It wraps error types from individual modules,
+/// allowing for consistent error handling across the entire library.
+///
+/// # Design
+///
+/// The `#[non_exhaustive]` attribute allows future versions to add new error variants
+/// without breaking existing code. Users should always include a wildcard match arm
+/// when matching on this type.
+///
+/// # Examples
+///
+/// ```rust
+/// use thales::{ThalesError, parse_expression};
+///
+/// match parse_expression("2 + x") {
+///     Ok(expr) => println!("Parsed: {:?}", expr),
+///     Err(errors) => {
+///         // parse_expression returns Vec<ParseError>, not ThalesError
+///         println!("Parse errors: {:?}", errors);
+///     }
+/// }
+/// ```
+///
+/// Future usage with unified error handling:
+///
+/// ```rust,ignore
+/// use thales::ThalesError;
+///
+/// fn process() -> Result<(), ThalesError> {
+///     // Future API will return ThalesError
+///     Ok(())
+/// }
+/// ```
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum ThalesError {
+    /// Error from the parser module.
+    Parse(parser::ParseError),
+    /// Error from the solver module.
+    Solver(solver::SolverError),
+    /// Error from the series module.
+    Series(series::SeriesError),
+    /// Error from the matrix module.
+    Matrix(matrix::MatrixError),
+    /// Error from the integration module.
+    Integration(integration::IntegrationError),
+    /// Error from the numerical module.
+    Numerical(numerical::NumericalError),
+    /// Error from the limits module.
+    Limits(limits::LimitError),
+    /// Error from the ODE module.
+    ODE(ode::ODEError),
+    /// Error from the special functions module.
+    SpecialFunction(special::SpecialFunctionError),
+    /// Error from the inequality module.
+    Inequality(inequality::InequalityError),
+    /// Error from the precision module.
+    Evaluation(precision::EvalError),
+    /// Error from the partial fractions module.
+    PartialFractions(partial_fractions::DecomposeError),
+    /// Error from the LaTeX parser module.
+    LaTeXParse(latex::LaTeXParseError),
+    /// Error from the equation system module.
+    System(equation_system::SystemError),
+    /// Error from the nonlinear system solver.
+    NonlinearSystem(equation_system::NonlinearSystemSolverError),
+}
+
+impl std::fmt::Display for ThalesError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ThalesError::Parse(e) => write!(f, "Parse error: {}", e),
+            ThalesError::Solver(e) => write!(f, "Solver error: {}", e),
+            ThalesError::Series(e) => write!(f, "Series error: {}", e),
+            ThalesError::Matrix(e) => write!(f, "Matrix error: {}", e),
+            ThalesError::Integration(e) => write!(f, "Integration error: {}", e),
+            ThalesError::Numerical(e) => write!(f, "Numerical error: {}", e),
+            ThalesError::Limits(e) => write!(f, "Limits error: {}", e),
+            ThalesError::ODE(e) => write!(f, "ODE error: {}", e),
+            ThalesError::SpecialFunction(e) => write!(f, "Special function error: {}", e),
+            ThalesError::Inequality(e) => write!(f, "Inequality error: {}", e),
+            ThalesError::Evaluation(e) => write!(f, "Evaluation error: {}", e),
+            ThalesError::PartialFractions(e) => write!(f, "Partial fractions error: {}", e),
+            ThalesError::LaTeXParse(e) => write!(f, "LaTeX parse error: {}", e),
+            ThalesError::System(e) => write!(f, "System error: {}", e),
+            ThalesError::NonlinearSystem(e) => write!(f, "Nonlinear system error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for ThalesError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ThalesError::Parse(e) => Some(e),
+            ThalesError::Solver(e) => Some(e),
+            ThalesError::Series(e) => Some(e),
+            ThalesError::Matrix(e) => Some(e),
+            ThalesError::Integration(e) => Some(e),
+            ThalesError::Numerical(e) => Some(e),
+            ThalesError::Limits(e) => Some(e),
+            ThalesError::ODE(e) => Some(e),
+            ThalesError::SpecialFunction(e) => Some(e),
+            ThalesError::Inequality(e) => Some(e),
+            ThalesError::Evaluation(e) => Some(e),
+            ThalesError::PartialFractions(e) => Some(e),
+            ThalesError::LaTeXParse(e) => Some(e),
+            // SystemError and NonlinearSystemSolverError don't implement std::error::Error
+            ThalesError::System(_) => None,
+            ThalesError::NonlinearSystem(_) => None,
+        }
+    }
+}
+
+// Implement From conversions for each error type
+impl From<parser::ParseError> for ThalesError {
+    fn from(e: parser::ParseError) -> Self {
+        ThalesError::Parse(e)
+    }
+}
+
+impl From<solver::SolverError> for ThalesError {
+    fn from(e: solver::SolverError) -> Self {
+        ThalesError::Solver(e)
+    }
+}
+
+impl From<series::SeriesError> for ThalesError {
+    fn from(e: series::SeriesError) -> Self {
+        ThalesError::Series(e)
+    }
+}
+
+impl From<matrix::MatrixError> for ThalesError {
+    fn from(e: matrix::MatrixError) -> Self {
+        ThalesError::Matrix(e)
+    }
+}
+
+impl From<integration::IntegrationError> for ThalesError {
+    fn from(e: integration::IntegrationError) -> Self {
+        ThalesError::Integration(e)
+    }
+}
+
+impl From<numerical::NumericalError> for ThalesError {
+    fn from(e: numerical::NumericalError) -> Self {
+        ThalesError::Numerical(e)
+    }
+}
+
+impl From<limits::LimitError> for ThalesError {
+    fn from(e: limits::LimitError) -> Self {
+        ThalesError::Limits(e)
+    }
+}
+
+impl From<ode::ODEError> for ThalesError {
+    fn from(e: ode::ODEError) -> Self {
+        ThalesError::ODE(e)
+    }
+}
+
+impl From<special::SpecialFunctionError> for ThalesError {
+    fn from(e: special::SpecialFunctionError) -> Self {
+        ThalesError::SpecialFunction(e)
+    }
+}
+
+impl From<inequality::InequalityError> for ThalesError {
+    fn from(e: inequality::InequalityError) -> Self {
+        ThalesError::Inequality(e)
+    }
+}
+
+impl From<precision::EvalError> for ThalesError {
+    fn from(e: precision::EvalError) -> Self {
+        ThalesError::Evaluation(e)
+    }
+}
+
+impl From<partial_fractions::DecomposeError> for ThalesError {
+    fn from(e: partial_fractions::DecomposeError) -> Self {
+        ThalesError::PartialFractions(e)
+    }
+}
+
+impl From<latex::LaTeXParseError> for ThalesError {
+    fn from(e: latex::LaTeXParseError) -> Self {
+        ThalesError::LaTeXParse(e)
+    }
+}
+
+impl From<equation_system::SystemError> for ThalesError {
+    fn from(e: equation_system::SystemError) -> Self {
+        ThalesError::System(e)
+    }
+}
+
+impl From<equation_system::NonlinearSystemSolverError> for ThalesError {
+    fn from(e: equation_system::NonlinearSystemSolverError) -> Self {
+        ThalesError::NonlinearSystem(e)
+    }
+}
+
 // TODO: Add prelude module with commonly used imports
 // TODO: Add error types module with unified error handling
 // TODO: Add traits module with common trait definitions
@@ -508,3 +715,83 @@ pub fn has_ffi_support() -> bool {
 // TODO: Add comprehensive integration tests
 // TODO: Add performance benchmarks
 // TODO: Add documentation examples that compile and run
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_thales_error_from_parse_error() {
+        let parse_err = parser::ParseError::UnexpectedCharacter { pos: 0, found: 'x' };
+        let thales_err: ThalesError = parse_err.clone().into();
+
+        match thales_err {
+            ThalesError::Parse(e) => assert_eq!(e, parse_err),
+            _ => panic!("Expected ThalesError::Parse"),
+        }
+    }
+
+    #[test]
+    fn test_thales_error_from_solver_error() {
+        let solver_err = solver::SolverError::NoSolution;
+        let thales_err: ThalesError = solver_err.clone().into();
+
+        match thales_err {
+            ThalesError::Solver(e) => assert_eq!(e, solver_err),
+            _ => panic!("Expected ThalesError::Solver"),
+        }
+    }
+
+    #[test]
+    fn test_thales_error_from_numerical_error() {
+        let num_err = numerical::NumericalError::NoConvergence;
+        let thales_err: ThalesError = num_err.clone().into();
+
+        match thales_err {
+            ThalesError::Numerical(e) => assert_eq!(e, num_err),
+            _ => panic!("Expected ThalesError::Numerical"),
+        }
+    }
+
+    #[test]
+    fn test_thales_error_display() {
+        let solver_err = solver::SolverError::NoSolution;
+        let thales_err: ThalesError = solver_err.into();
+        let display_str = format!("{}", thales_err);
+
+        assert!(display_str.contains("Solver error"));
+        assert!(display_str.contains("no solution"));
+    }
+
+    #[test]
+    fn test_thales_error_source() {
+        use std::error::Error;
+
+        let parse_err = parser::ParseError::UnexpectedCharacter { pos: 5, found: '!' };
+        let thales_err: ThalesError = parse_err.into();
+
+        assert!(thales_err.source().is_some());
+    }
+
+    #[test]
+    fn test_thales_error_from_integration_error() {
+        let int_err = integration::IntegrationError::DivisionByZero;
+        let thales_err: ThalesError = int_err.clone().into();
+
+        match thales_err {
+            ThalesError::Integration(e) => assert_eq!(e, int_err),
+            _ => panic!("Expected ThalesError::Integration"),
+        }
+    }
+
+    #[test]
+    fn test_thales_error_from_matrix_error() {
+        let matrix_err = matrix::MatrixError::EmptyMatrix;
+        let thales_err: ThalesError = matrix_err.clone().into();
+
+        match thales_err {
+            ThalesError::Matrix(e) => assert_eq!(e, matrix_err),
+            _ => panic!("Expected ThalesError::Matrix"),
+        }
+    }
+}

@@ -32,6 +32,7 @@ use std::fmt;
 
 /// Error type for matrix operations.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum MatrixError {
     /// Dimension mismatch for operation.
     DimensionMismatch {

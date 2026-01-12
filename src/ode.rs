@@ -27,6 +27,7 @@ use crate::integration::{integrate, IntegrationError};
 
 /// Error types for ODE solving
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum ODEError {
     /// The equation is not in the expected form
     NotInExpectedForm(String),
@@ -143,6 +144,7 @@ pub struct ODESolution {
 /// # Returns
 ///
 /// The general solution as an expression in terms of y, x, and C.
+#[must_use = "solving returns a result that should be used"]
 pub fn solve_separable(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
     let mut steps = Vec::new();
     steps.push(format!(
@@ -223,6 +225,7 @@ pub fn solve_separable(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
 /// # Returns
 ///
 /// The general solution expression.
+#[must_use = "solving returns a result that should be used"]
 pub fn solve_linear(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
     let mut steps = Vec::new();
     steps.push(format!(
@@ -924,6 +927,7 @@ pub struct SecondOrderSolution {
 }
 
 /// Solve the characteristic equation ar² + br + c = 0
+#[must_use = "solving returns a result that should be used"]
 pub fn solve_characteristic_equation(a: f64, b: f64, c: f64) -> Result<CharacteristicRoots, ODEError> {
     if a.abs() < 1e-15 {
         return Err(ODEError::CharacteristicEquationError(
@@ -1060,6 +1064,7 @@ fn build_solution_complex(alpha: f64, beta: f64, x_var: &str) -> Expression {
 
 /// Solve a homogeneous second-order linear ODE with constant coefficients.
 /// a*y'' + b*y' + c*y = 0
+#[must_use = "solving returns a result that should be used"]
 pub fn solve_second_order_homogeneous(ode: &SecondOrderODE) -> Result<SecondOrderSolution, ODEError> {
     let mut steps = Vec::new();
     steps.push(format!(

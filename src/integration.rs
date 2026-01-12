@@ -27,6 +27,7 @@ use std::fmt;
 
 /// Error types that can occur during integration.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum IntegrationError {
     /// Integration cannot be performed symbolically.
     CannotIntegrate(String),
