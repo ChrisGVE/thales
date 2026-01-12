@@ -18,7 +18,7 @@ let package = Package(
     targets: [
         .target(
             name: "Thales",
-            path: "Sources/Thales",
+            path: "swift/Sources/Thales",
             publicHeadersPath: "include",
             cSettings: [
                 .headerSearchPath("include")
