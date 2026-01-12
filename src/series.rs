@@ -6,7 +6,7 @@
 //! - Taylor series expansion around arbitrary center points
 //! - Maclaurin series (Taylor series centered at 0)
 //! - Built-in series for common functions (exp, sin, cos, ln, arctan)
-//! - Polynomial output and LaTeX rendering
+//! - Polynomial output and LaTeX generation
 //! - Numerical evaluation of series approximations
 //!
 //! # Examples

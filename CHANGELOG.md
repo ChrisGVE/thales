@@ -151,7 +151,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Matrix Expressions** (`matrix` module)
   - Matrix AST representation
-  - LaTeX rendering with bracket styles
+  - LaTeX output with bracket styles
 
 - **Precision Control** (`precision` module)
   - Configurable evaluation context

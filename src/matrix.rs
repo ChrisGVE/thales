@@ -76,7 +76,7 @@ impl std::error::Error for MatrixError {}
 /// Result type for matrix operations.
 pub type MatrixResult<T> = Result<T, MatrixError>;
 
-/// Bracket style for LaTeX rendering.
+/// Bracket style for LaTeX output.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BracketStyle {
     /// Parentheses: `\begin{pmatrix}`

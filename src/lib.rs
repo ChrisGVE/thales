@@ -353,7 +353,7 @@
 //! | [`transforms`] | Coordinate system conversions |
 //! | [`dimensions`] | Units and dimensional analysis |
 //! | [`pattern`] | Rule-based expression rewriting |
-//! | [`latex`] | LaTeX parsing and rendering |
+//! | [`latex`] | LaTeX parsing and generation |
 //! | [`resolution_path`] | Step-by-step solution tracking |
 //! | [`guides`] | User tutorials and workflows |
 //!

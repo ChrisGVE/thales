@@ -1567,7 +1567,7 @@ impl Expression {
         format!("${}$", self.to_latex())
     }
 
-    /// Internal LaTeX rendering with precedence tracking.
+    /// Internal LaTeX generation with precedence tracking.
     fn to_latex_inner(&self, parent_prec: u8) -> String {
         match self {
             Expression::Integer(n) => {
