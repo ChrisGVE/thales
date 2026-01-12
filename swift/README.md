@@ -82,21 +82,33 @@ lipo -create \
 
 ## Usage
 
+Thales provides a clean Swift API through the `Thales` namespace:
+
 ```swift
 import Thales
 
-// Parse and solve an equation
-let equation = parse_equation_ffi("2*x + 5 = 13")
-let solution = solve_equation_ffi(equation, "x")
+// Solve an equation
+let solution = try Thales.solve("2*x + 5 = 13", for: "x")
+print(solution) // "x = 4"
+
+// Differentiate an expression
+let derivative = try Thales.differentiate("x^3 + 2*x", withRespectTo: "x")
+print(derivative.derivative) // "3*x^2 + 2"
+
+// Integrate an expression
+let integral = try Thales.integrate("3*x^2", withRespectTo: "x")
+print(integral.integral) // "x^3 + C"
 
 // Coordinate transformations
-let cartesian = Cartesian2D(x: 3.0, y: 4.0)
-let polar = cartesian_to_polar_ffi(cartesian)
-// polar.r == 5.0, polar.theta == 0.927...
+let point = Point2D(x: 3.0, y: 4.0)
+let polar = point.toPolar()
+print("r = \(polar.r), θ = \(polar.theta)")
+// r = 5.0, θ = 0.927...
 
 // Complex numbers
-let z = Complex64(re: 1.0, im: 1.0)
-let result = de_moivre_ffi(z, 2.0)
+let z = Complex(real: 1.0, imaginary: 1.0)
+let squared = z.power(2)
+print("z² = \(squared.real) + \(squared.imaginary)i")
 ```
 
 ## Available Functions
@@ -104,28 +116,50 @@ let result = de_moivre_ffi(z, 2.0)
 See the [thales documentation](https://docs.rs/thales) for complete API reference.
 
 ### Equation Solving
-- `parse_equation_ffi(_:)` - Parse equation string
-- `parse_expression_ffi(_:)` - Parse expression string
-- `solve_equation_ffi(_:_:)` - Solve for variable
-- `solve_equation_system_ffi(_:_:_:)` - Solve equation systems
-
-### Coordinate Transformations
-- `cartesian_to_polar_ffi(_:)` / `polar_to_cartesian_ffi(_:)`
-- `cartesian_to_spherical_ffi(_:)` / `spherical_to_cartesian_ffi(_:)`
-- `cartesian_to_cylindrical_ffi(_:)` / `cylindrical_to_cartesian_ffi(_:)`
-
-### Complex Numbers
-- `de_moivre_ffi(_:_:)` - De Moivre's theorem
-- `complex_conjugate_ffi(_:)` - Complex conjugate
-- `complex_modulus_ffi(_:)` - Modulus/magnitude
+- `Thales.solve(_:for:)` - Solve an equation for a variable
+- `Thales.solve(_:for:knownValues:)` - Solve with known values
+- `Thales.solveNumerically(_:for:initialGuess:)` - Numerical root finding
+- `Thales.solveSystem(equations:)` - Solve equation systems
+- `Thales.solveEquationSystem(equations:knownValues:targets:)` - Advanced system solver
+- `Thales.solveInequality(_:for:)` - Solve inequalities
 
 ### Calculus
-- `differentiate_ffi(_:_:)` - Symbolic differentiation
-- `integrate_ffi(_:_:)` - Symbolic integration
+- `Thales.differentiate(_:withRespectTo:)` - Symbolic differentiation
+- `Thales.nthDerivative(_:withRespectTo:order:)` - Higher-order derivatives
+- `Thales.gradient(_:variables:)` - Gradient of multivariable functions
+- `Thales.integrate(_:withRespectTo:)` - Indefinite integration
+- `Thales.definiteIntegral(_:withRespectTo:from:to:)` - Definite integrals
+- `Thales.limit(_:as:approaches:)` - Limit computation
+- `Thales.limitToInfinity(_:as:)` - Limits at infinity
 
-### Series
-- `taylor_series_ffi(_:_:_:_:)` - Taylor expansion
-- `maclaurin_series_ffi(_:_:_:)` - Maclaurin expansion
+### Coordinate Systems
+- `Point2D` - 2D Cartesian coordinates with `toPolar()`
+- `Point3D` - 3D Cartesian coordinates with `toSpherical()`
+- `PolarPoint` - 2D polar coordinates with `toCartesian()`
+- `SphericalPoint` - 3D spherical coordinates with `toCartesian()`
+
+### Complex Numbers
+- `Complex` - Complex number type with arithmetic operators
+- `Complex.power(_:)` - De Moivre's theorem
+- `Complex.conjugate` - Complex conjugate
+- `Complex.modulus` - Magnitude
+- `Complex.toPolar()` - Convert to polar form
+
+### Simplification
+- `Thales.simplify(_:)` - Algebraic simplification
+- `Thales.simplifyTrig(_:)` - Trigonometric simplification
+- `Thales.partialFractions(numerator:denominator:variable:)` - Partial fraction decomposition
+
+### LaTeX
+- `Thales.parseLatex(_:)` - Parse LaTeX notation
+- `Thales.toLatex(_:)` - Convert to LaTeX
+
+### Evaluation
+- `Thales.evaluate(_:with:)` - Evaluate expression with values
+
+### Parsing
+- `Thales.parseEquation(_:)` - Parse equation string
+- `Thales.parseExpression(_:)` - Parse expression string
 
 ## License
 
