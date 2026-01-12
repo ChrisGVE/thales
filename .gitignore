@@ -70,3 +70,9 @@ coverage/
 # Temporary files
 tmp/
 *.tmp
+
+# Local development files
+.taskmaster/
+.serena/
+CLAUDE.md
+CLAUDE.local.md
