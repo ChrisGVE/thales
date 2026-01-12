@@ -573,11 +573,11 @@ impl std::fmt::Display for ThalesError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ThalesError::Parse(e) => write!(f, "Parse error: {}", e),
-            ThalesError::Solver(e) => write!(f, "Solver error: {}", e),
+            ThalesError::Solver(e) => write!(f, "Solver error: {:?}", e),
             ThalesError::Series(e) => write!(f, "Series error: {}", e),
             ThalesError::Matrix(e) => write!(f, "Matrix error: {}", e),
             ThalesError::Integration(e) => write!(f, "Integration error: {}", e),
-            ThalesError::Numerical(e) => write!(f, "Numerical error: {}", e),
+            ThalesError::Numerical(e) => write!(f, "Numerical error: {:?}", e),
             ThalesError::Limits(e) => write!(f, "Limits error: {}", e),
             ThalesError::ODE(e) => write!(f, "ODE error: {}", e),
             ThalesError::SpecialFunction(e) => write!(f, "Special function error: {}", e),
@@ -585,8 +585,8 @@ impl std::fmt::Display for ThalesError {
             ThalesError::Evaluation(e) => write!(f, "Evaluation error: {}", e),
             ThalesError::PartialFractions(e) => write!(f, "Partial fractions error: {}", e),
             ThalesError::LaTeXParse(e) => write!(f, "LaTeX parse error: {}", e),
-            ThalesError::System(e) => write!(f, "System error: {}", e),
-            ThalesError::NonlinearSystem(e) => write!(f, "Nonlinear system error: {}", e),
+            ThalesError::System(e) => write!(f, "System error: {:?}", e),
+            ThalesError::NonlinearSystem(e) => write!(f, "Nonlinear system error: {:?}", e),
         }
     }
 }
@@ -595,11 +595,9 @@ impl std::error::Error for ThalesError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             ThalesError::Parse(e) => Some(e),
-            ThalesError::Solver(e) => Some(e),
             ThalesError::Series(e) => Some(e),
             ThalesError::Matrix(e) => Some(e),
             ThalesError::Integration(e) => Some(e),
-            ThalesError::Numerical(e) => Some(e),
             ThalesError::Limits(e) => Some(e),
             ThalesError::ODE(e) => Some(e),
             ThalesError::SpecialFunction(e) => Some(e),
@@ -607,7 +605,9 @@ impl std::error::Error for ThalesError {
             ThalesError::Evaluation(e) => Some(e),
             ThalesError::PartialFractions(e) => Some(e),
             ThalesError::LaTeXParse(e) => Some(e),
-            // SystemError and NonlinearSystemSolverError don't implement std::error::Error
+            // These error types don't implement std::error::Error
+            ThalesError::Solver(_) => None,
+            ThalesError::Numerical(_) => None,
             ThalesError::System(_) => None,
             ThalesError::NonlinearSystem(_) => None,
         }
@@ -760,7 +760,7 @@ mod tests {
         let display_str = format!("{}", thales_err);
 
         assert!(display_str.contains("Solver error"));
-        assert!(display_str.contains("no solution"));
+        assert!(display_str.contains("NoSolution"));
     }
 
     #[test]
