@@ -1,24 +1,27 @@
-//! MathSolver Core - Mathematical equation parsing, solving, and transformations.
+//! # Thales - Computer Algebra System
 //!
-//! A high-performance Rust library providing comprehensive mathematical capabilities for
-//! equation solving, coordinate transformations, and numerical analysis. Designed for
-//! cross-platform use with first-class iOS support via FFI bindings.
+//! A comprehensive Computer Algebra System (CAS) library for symbolic mathematics,
+//! equation solving, calculus, and numerical methods. Named after
+//! [Thales of Miletus](https://en.wikipedia.org/wiki/Thales_of_Miletus),
+//! the first mathematician in the Greek tradition.
 //!
-//! # Executive Summary
+//! ## Overview
 //!
-//! **Primary Use Cases:**
-//! - Parse and solve algebraic equations symbolically
-//! - Perform coordinate system transformations (2D/3D)
-//! - Numerical root-finding for transcendental equations
-//! - Track step-by-step solution paths for educational applications
-//! - Dimensional analysis and unit conversion for physics calculations
-//! - Swift interoperability for iOS/macOS applications
+//! Thales provides:
+//! - **Symbolic equation solving** - Linear, quadratic, polynomial, transcendental, and systems
+//! - **Calculus** - Differentiation, integration, limits, Taylor series, first and second-order ODEs
+//! - **Numerical methods** - Newton-Raphson, bisection, Brent's method, Levenberg-Marquardt
+//! - **Coordinate systems** - 2D/3D transformations, complex numbers, De Moivre's theorem
+//! - **Units & dimensions** - Dimensional analysis and unit conversion
+//! - **Step-by-step solutions** - Resolution paths for educational applications
+//! - **iOS/macOS support** - FFI bindings via swift-bridge
 //!
-//! **Key Strengths:**
+//! ## Key Features
+//!
 //! - Zero-cost abstractions with compile-time guarantees
 //! - Memory-safe implementation (no unsafe code except FFI boundary)
-//! - Comprehensive test coverage including property-based tests
-//! - Optimized for embedded and mobile targets (iOS)
+//! - 970+ tests including property-based tests with proptest
+//! - Optimized for mobile targets (iOS)
 //! - Clear separation between symbolic and numerical methods
 //!
 //! # Quick Start
@@ -108,34 +111,32 @@
 //! assert!(!expr.contains_variable("y"));
 //! ```
 //!
-//! # Feature Matrix
+//! ## User Guides
 //!
-//! | Feature Category | Component | Status | Notes |
-//! |-----------------|-----------|--------|-------|
-//! | **Parsing** | Expression parser | In Progress | Using chumsky parser combinators |
-//! | | Equation parser | In Progress | Full operator precedence support |
-//! | | Function parsing | Planned | Trig, log, exp functions |
-//! | **Symbolic Solving** | Linear equations | Implemented | ax + b = c form |
-//! | | Quadratic equations | Implemented | ax² + bx + c = 0 with discriminant |
-//! | | Polynomial equations | In Progress | General polynomial solving |
-//! | | Transcendental | In Progress | Equations with trig/exp functions |
-//! | **Numerical Methods** | Newton-Raphson | In Progress | With symbolic differentiation |
-//! | | Bisection | Planned | Guaranteed convergence |
-//! | | Brent's method | Planned | Hybrid root-finding |
-//! | | Smart solver | Implemented | Automatic method selection |
-//! | **Transformations** | 2D Cartesian ↔ Polar | **Complete** | Fully tested |
-//! | | 3D Cartesian ↔ Spherical | **Complete** | Fully tested |
-//! | | 3D Cartesian ↔ Cylindrical | **Complete** | Fully tested |
-//! | | Complex polar form | **Complete** | De Moivre, conjugate, modulus |
-//! | | Homogeneous transforms | Stubbed | 2D transformation matrices |
-//! | **Dimensions** | SI base units | Stubbed | Length, mass, time, etc. |
-//! | | Derived units | Stubbed | Velocity, force, energy |
-//! | | Unit conversion | Planned | Automatic conversion |
-//! | | Dimensional analysis | Planned | Type-safe dimension checking |
-//! | **Resolution Paths** | Step tracking | In Progress | Educational solution paths |
-//! | | Operation recording | In Progress | For UI display |
-//! | **FFI** | Swift bindings | Implemented | via swift-bridge |
-//! | | iOS targets | **Complete** | aarch64/x86_64 simulator + device |
+//! For detailed tutorials and workflows, see the [`guides`] module:
+//!
+//! - [`guides::solving_equations`] - Linear, quadratic, polynomial, and systems
+//! - [`guides::calculus_operations`] - Derivatives, integrals, limits, ODEs
+//! - [`guides::series_expansions`] - Taylor, Maclaurin, Laurent, asymptotic
+//! - [`guides::coordinate_systems`] - 2D/3D transforms, complex numbers
+//! - [`guides::numerical_methods`] - Root-finding when symbolic fails
+//! - [`guides::working_with_units`] - Dimensional analysis
+//! - [`guides::error_handling`] - Working with [`ThalesError`]
+//!
+//! ## Feature Summary
+//!
+//! | Category | Features |
+//! |----------|----------|
+//! | **Parsing** | Expression parser, equation parser, LaTeX input/output |
+//! | **Solving** | Linear, quadratic, polynomial, transcendental, multi-equation systems |
+//! | **Calculus** | Differentiation, integration (by parts, substitution), limits, L'Hôpital |
+//! | **ODEs** | First-order (separable, linear), second-order (constant coefficient) |
+//! | **Series** | Taylor, Maclaurin, Laurent, asymptotic expansions, Big-O |
+//! | **Special** | Gamma, beta, error functions with derivation steps |
+//! | **Numerical** | Newton-Raphson, bisection, Brent's, secant, Levenberg-Marquardt |
+//! | **Transforms** | Cartesian ↔ Polar ↔ Spherical ↔ Cylindrical, complex operations |
+//! | **Units** | SI base/derived units, dimensional analysis, conversions |
+//! | **FFI** | Swift bindings via swift-bridge, iOS device + simulator |
 //!
 //! # Architecture Overview
 //!
@@ -318,56 +319,50 @@
 //!
 //! This generates Swift bridge code and C headers for Xcode integration.
 //!
-//! # Version History
+//! ## Version History
 //!
-//! ## 0.1.0 (2025-12-17) - Initial Release
+//! **Current: v0.3.0** - Advanced Calculus & API Stabilization
 //!
-//! **Implemented:**
-//! - Core AST definitions (Expression, Equation, Variable)
-//! - Coordinate transformations (2D/3D) with full test coverage
-//! - Complex number operations (De Moivre, conjugate, modulus)
-//! - Linear and quadratic equation solvers
-//! - Smart solver with automatic method dispatch
-//! - iOS cross-compilation support
-//! - FFI bindings infrastructure
-//! - Test and benchmark framework
-//!
-//! **In Progress:**
-//! - Expression parser using chumsky
-//! - Polynomial and transcendental solvers
-//! - Numerical methods with symbolic differentiation
-//! - Resolution path generation
-//! - Unit and dimension system
+//! - Second-order ODEs with characteristic equation method
+//! - Nonlinear system solver (Newton-Raphson for systems)
+//! - Taylor, Maclaurin, Laurent series expansions
+//! - Asymptotic expansions with Big-O notation
+//! - Special functions (gamma, beta, erf, erfc)
+//! - Small angle approximations with error bounds
+//! - Unified [`ThalesError`] type
+//! - 970+ tests including property-based tests
 //!
 //! See [CHANGELOG.md](https://github.com/ChrisGVE/thales/blob/main/CHANGELOG.md)
-//! for detailed version history.
+//! for complete version history.
 //!
-//! # Module Documentation
+//! ## Module Reference
 //!
-//! Explore detailed documentation for each module:
+//! | Module | Description |
+//! |--------|-------------|
+//! | [`ast`] | Abstract syntax tree types for expressions and equations |
+//! | [`parser`] | String → AST conversion with chumsky |
+//! | [`solver`] | Symbolic equation solving |
+//! | [`equation_system`] | Multi-equation system solver |
+//! | [`numerical`] | Numerical root-finding methods |
+//! | [`integration`] | Symbolic integration |
+//! | [`limits`] | Limit evaluation with L'Hôpital's rule |
+//! | [`ode`] | First and second-order ODE solving |
+//! | [`series`] | Taylor, Laurent, asymptotic series |
+//! | [`special`] | Gamma, beta, error functions |
+//! | [`approximations`] | Small angle and scaled approximations |
+//! | [`transforms`] | Coordinate system conversions |
+//! | [`dimensions`] | Units and dimensional analysis |
+//! | [`pattern`] | Rule-based expression rewriting |
+//! | [`latex`] | LaTeX parsing and rendering |
+//! | [`resolution_path`] | Step-by-step solution tracking |
+//! | [`guides`] | User tutorials and workflows |
 //!
-//! - [`ast`] - Abstract syntax tree types
-//! - [`parser`] - String parsing to AST
-//! - [`solver`] - Symbolic equation solving
-//! - [`numerical`] - Numerical approximation methods
-//! - [`resolution_path`] - Solution step tracking
-//! - [`dimensions`] - Units and dimensional analysis
-//! - [`transforms`] - Coordinate system conversions
-//! - `ffi` - Swift interoperability (requires `ffi` feature)
-//!
-//! # Development Status
-//!
-//! This is version 0.1.0 with foundational infrastructure in place. The coordinate
-//! transformation and complex number modules are production-ready. Parser, solver,
-//! and numerical modules are under active development with many features stubbed
-//! with TODO comments.
-//!
-//! Run the test suite to see current implementation status:
+//! ## Running Tests
 //!
 //! ```bash
-//! cargo test
-//! cargo test --doc        # Documentation examples
-//! cargo test -- --ignored # Requires full implementation
+//! cargo test              # All tests
+//! cargo test --doc        # Documentation examples only
+//! cargo test --release    # Optimized build
 //! ```
 
 #![warn(missing_docs)]

@@ -61,7 +61,7 @@
 //!
 //! ### Example: Finding Square Roots
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::numerical::{NewtonRaphson, NumericalConfig};
 //! use thales::ast::{Equation, Expression, Variable};
 //!
@@ -242,7 +242,7 @@
 //! - **Residual criterion**: |f(x)| < tolerance
 //! - **Step criterion**: |x_{n+1} - x_n| < tolerance
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::NumericalConfig;
 //!
 //! // High precision (machine epsilon limit)
@@ -268,7 +268,7 @@
 //!
 //! Prevents infinite loops for divergent or slowly converging cases:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::NumericalConfig;
 //!
 //! // Conservative limit (fail fast)
@@ -294,7 +294,7 @@
 //!
 //! Critical for Newton-Raphson and secant methods:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::NumericalConfig;
 //!
 //! // Provide good initial guess

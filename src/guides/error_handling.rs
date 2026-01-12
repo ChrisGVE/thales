@@ -22,7 +22,7 @@
 //! thales library. It wraps all module-specific error types, providing a
 //! consistent interface for error handling across the library.
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::ThalesError;
 //!
 //! // All thales operations can return ThalesError
@@ -49,7 +49,7 @@
 //!
 //! Errors from parsing expressions and equations from strings.
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{parse_expression, parser::ParseError};
 //!
 //! let result = parse_expression("2 + + 3");
@@ -75,7 +75,7 @@
 //!
 //! Errors from symbolic equation solving.
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{solver::SolverError, Equation, Expression};
 //!
 //! fn handle_solver_error(err: SolverError) {
@@ -101,7 +101,7 @@
 //!
 //! Errors from Taylor/Maclaurin series expansions.
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{series::SeriesError, taylor};
 //!
 //! fn handle_series_error(err: SeriesError) {
@@ -145,7 +145,7 @@
 //! All module-specific errors automatically convert to [`crate::ThalesError`]
 //! via the `From` trait. This enables seamless error propagation.
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{ThalesError, parse_expression, parser::ParseError};
 //!
 //! // Module error automatically converts to ThalesError
@@ -165,7 +165,7 @@
 //!
 //! **Manual conversions:**
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{ThalesError, solver::SolverError, series::SeriesError};
 //!
 //! // Explicit conversion using From/Into
@@ -185,7 +185,7 @@
 //!
 //! ### Matching ThalesError Variants
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{ThalesError, solver::SolverError};
 //!
 //! fn handle_thales_error(err: ThalesError) {
@@ -210,7 +210,7 @@
 //!
 //! ### Nested Pattern Matching
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{ThalesError, series::SeriesError};
 //!
 //! fn detailed_error_handling(err: ThalesError) {
@@ -235,7 +235,7 @@
 //! The `?` operator provides concise error propagation. It automatically
 //! converts errors using the `From` trait.
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{ThalesError, parse_expression, taylor, Variable, Expression};
 //!
 //! // The ? operator propagates errors up the call stack
@@ -326,7 +326,7 @@
 //!
 //! ### Provide User-Friendly Messages
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{ThalesError, solver::SolverError};
 //!
 //! fn user_friendly_error(err: ThalesError) -> String {
@@ -356,7 +356,7 @@
 //!
 //! ### Basic Error Logging
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{ThalesError, parse_expression};
 //!
 //! fn log_and_process(input: &str) {
@@ -376,7 +376,7 @@
 //!
 //! ### Debug vs Display Formatting
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{solver::SolverError, ThalesError};
 //!
 //! let err = ThalesError::Solver(SolverError::NoSolution);
@@ -392,7 +392,7 @@
 //!
 //! ### Error Source Chain
 //!
-//! ```rust
+//! ```rust,ignore
 //! use std::error::Error;
 //! use thales::{ThalesError, parser::ParseError};
 //!

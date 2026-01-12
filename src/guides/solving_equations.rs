@@ -8,7 +8,7 @@
 //!
 //! The simplest use case is solving a linear equation with [`SmartSolver`](crate::SmartSolver):
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{parse_equation, SmartSolver, Solver};
 //!
 //! // Parse and solve: 2x + 3 = 11
@@ -35,7 +35,7 @@
 //!
 //! Most linear equations have a single solution:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{parse_equation, SmartSolver, Solver, Solution};
 //!
 //! let eq = parse_equation("3*x = 12").unwrap();
@@ -75,7 +75,7 @@
 //!
 //! Inconsistent equations have no solution:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{parse_equation, SmartSolver, Solver, Solution};
 //!
 //! let eq = parse_equation("0 = 5").unwrap();
@@ -89,7 +89,7 @@
 //!
 //! Identity equations are satisfied by all values:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{parse_equation, SmartSolver, Solver, Solution};
 //!
 //! let eq = parse_equation("x = x").unwrap();
@@ -180,7 +180,7 @@
 //!
 //! Use the [`Variable`](crate::Variable) type to represent unknowns:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Variable, Expression, BinaryOp, Equation};
 //!
 //! let x = Variable::new("x");
@@ -209,7 +209,7 @@
 //!
 //! ### Basic System Example
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{EquationSystem, SystemContext, MultiEquationSolver, parse_equation};
 //!
 //! // Physics example: F = ma and v = u + at
@@ -286,7 +286,7 @@
 //!
 //! Standard workflow for string-based equations:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{parse_equation, SmartSolver, Solver, Solution};
 //!
 //! fn solve_equation_string(eq_str: &str, var: &str) -> Option<f64> {

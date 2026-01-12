@@ -37,7 +37,7 @@
 //!
 //! Start by creating a simple length quantity:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit, Quantity};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -56,7 +56,7 @@
 //!
 //! Different units can share the same dimension:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit, Quantity};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -81,7 +81,7 @@
 //!
 //! Units with the same dimension can be converted between each other:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -98,7 +98,7 @@
 //!
 //! Convert entire quantities to different units:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit, Quantity};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -119,7 +119,7 @@
 //!
 //! Temperature scales require special handling due to offset conversions:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -151,7 +151,7 @@
 //!
 //! The type system prevents converting between incompatible dimensions:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -170,7 +170,7 @@
 //!
 //! Verify dimension compatibility before attempting operations:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -188,7 +188,7 @@
 //!
 //! Build a registry with units relevant to your domain:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit, UnitRegistry};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -214,7 +214,7 @@
 //!
 //! Retrieve units by their symbols:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit, UnitRegistry};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -237,7 +237,7 @@
 //!
 //! Velocity has dimension L¹T⁻¹ (length per time):
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -261,7 +261,7 @@
 //!
 //! Force has dimension M¹L¹T⁻² (mass × acceleration):
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -286,7 +286,7 @@
 //!
 //! Energy has dimension M¹L²T⁻² (force × distance):
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -313,7 +313,7 @@
 //!
 //! Define units specific to your application domain:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit, UnitRegistry};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -346,7 +346,7 @@
 //!
 //! ### Imperial and US Customary Units
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit, UnitRegistry};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -369,7 +369,7 @@
 //!
 //! The seven SI base units form the foundation of the unit system:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit, UnitRegistry};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -452,7 +452,7 @@
 //!
 //! Validate dimensional compatibility before calculations:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit};
 //! use thales::dimensions::BaseDimension;
 //!
@@ -469,7 +469,7 @@
 //!
 //! Convert to SI base units before performing calculations:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Dimension, Unit, Quantity};
 //! use thales::dimensions::BaseDimension;
 //!

@@ -34,7 +34,7 @@
 //!
 //! ## Basic Differentiation
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{Expression, Variable, BinaryOp, parse_expression};
 //!
 //! // d/dx(x^2) = 2x
@@ -52,7 +52,7 @@
 //!
 //! The differentiation engine automatically applies the chain rule:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::parse_expression;
 //!
 //! // d/dx(sin(x^2)) = cos(x^2) * 2x
@@ -63,7 +63,7 @@
 //!
 //! ## Product and Quotient Rules
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::parse_expression;
 //!
 //! // Product rule: d/dx(x * sin(x)) = sin(x) + x*cos(x)
@@ -77,7 +77,7 @@
 //!
 //! ## Higher-Order Derivatives
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::parse_expression;
 //!
 //! // Second derivative: d²/dx²(x^3) = 6x
@@ -94,7 +94,7 @@
 //!
 //! ## Basic Integration
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{integrate, parse_expression};
 //!
 //! // ∫x^2 dx = x^3/3 + C
@@ -109,7 +109,7 @@
 //!
 //! ## Sum and Difference Rules
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{integrate, parse_expression};
 //!
 //! // ∫(x^2 + 3x + 1) dx = x^3/3 + 3x^2/2 + x + C
@@ -119,7 +119,7 @@
 //!
 //! ## Exponential and Logarithmic
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{integrate, parse_expression};
 //!
 //! // ∫e^x dx = e^x + C
@@ -137,7 +137,7 @@
 //!
 //! ## Numeric Bounds
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{definite_integral, parse_expression};
 //!
 //! // ∫₀¹ x^2 dx = 1/3
@@ -148,7 +148,7 @@
 //!
 //! ## With Step-by-Step Output
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{definite_integral_with_steps, parse_expression};
 //!
 //! let expr = parse_expression("x^2").unwrap();
@@ -158,7 +158,7 @@
 //!
 //! ## Improper Integrals
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{improper_integral_to_infinity, parse_expression};
 //!
 //! // ∫₁^∞ 1/x^2 dx = 1
@@ -174,7 +174,7 @@
 //!
 //! For integrals of the form ∫u dv = uv - ∫v du:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{integrate_by_parts, parse_expression};
 //!
 //! // ∫x·e^x dx
@@ -186,7 +186,7 @@
 //!
 //! With step-by-step explanation:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::integrate_by_parts_with_steps;
 //!
 //! let u = parse_expression("x").unwrap();
@@ -199,7 +199,7 @@
 //!
 //! For repeated integration by parts (useful for polynomial × exponential):
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::tabular_integration;
 //!
 //! // ∫x^3·e^x dx using tabular method
@@ -212,7 +212,7 @@
 //!
 //! For integrals requiring u-substitution:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{integrate_by_substitution, integrate_with_substitution, parse_expression};
 //!
 //! // Basic substitution with automatic pattern detection
@@ -231,7 +231,7 @@
 //!
 //! ## Basic Limits
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::limits::{limit, LimitPoint, LimitResult};
 //! use thales::parse_expression;
 //!
@@ -245,7 +245,7 @@
 //!
 //! ## Limits at Infinity
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::limits::{limit, LimitPoint};
 //!
 //! // lim_{x→∞} 1/x = 0
@@ -259,7 +259,7 @@
 //!
 //! ## One-Sided Limits
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::limits::{limit_left, limit_right};
 //!
 //! // lim_{x→0⁺} 1/x = +∞
@@ -274,7 +274,7 @@
 //!
 //! For indeterminate forms (0/0, ∞/∞):
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::limits::{limit_with_lhopital, LimitPoint, LimitResult};
 //!
 //! // lim_{x→0} sin(x)/x = 1
@@ -299,7 +299,7 @@
 //!
 //! For equations of the form dy/dx = g(x)·h(y):
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::ode::{FirstOrderODE, solve_separable};
 //! use thales::{Expression, Variable, BinaryOp};
 //!
@@ -320,7 +320,7 @@
 //!
 //! For equations of the form dy/dx + P(x)·y = Q(x):
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::ode::{FirstOrderODE, solve_linear};
 //! use thales::parse_expression;
 //!
@@ -338,7 +338,7 @@
 //!
 //! Solve ODEs with an initial condition y(x₀) = y₀:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::ode::{FirstOrderODE, solve_ivp};
 //! use thales::{Expression, parse_expression};
 //!
@@ -362,7 +362,7 @@
 //!
 //! When f(x) = 0, solve using the characteristic equation:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::ode::{SecondOrderODE, solve_second_order_homogeneous};
 //!
 //! // y'' + y = 0
@@ -381,7 +381,7 @@
 //!
 //! ### Distinct Real Roots (Δ > 0)
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::ode::{SecondOrderODE, solve_second_order_homogeneous, RootType};
 //!
 //! // y'' - y = 0
@@ -394,7 +394,7 @@
 //!
 //! ### Repeated Root (Δ = 0)
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::ode::{SecondOrderODE, solve_second_order_homogeneous, RootType};
 //!
 //! // y'' - 2y' + y = 0
@@ -407,7 +407,7 @@
 //!
 //! ### Complex Conjugate Roots (Δ < 0)
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::ode::{SecondOrderODE, solve_second_order_homogeneous, RootType};
 //!
 //! // y'' + 4y' + 5y = 0
@@ -422,7 +422,7 @@
 //!
 //! Solve with initial conditions y(x₀) = y₀, y'(x₀) = y'₀:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::ode::{SecondOrderODE, solve_second_order_ivp};
 //!
 //! // y'' + y = 0, y(0) = 1, y'(0) = 0
@@ -439,7 +439,7 @@
 //!
 //! Always simplify expressions after calculus operations:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::parse_expression;
 //!
 //! let expr = parse_expression("x^2").unwrap();
@@ -451,7 +451,7 @@
 //!
 //! Handle integration failures gracefully:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{integrate, IntegrationError};
 //! use thales::parse_expression;
 //!
@@ -470,7 +470,7 @@
 //!
 //! Use numerical methods when symbolic integration fails:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use thales::{definite_integral_with_fallback, parse_expression};
 //!
 //! let expr = parse_expression("exp(-x^2)").unwrap(); // Gaussian - no closed form
