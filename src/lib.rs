@@ -400,6 +400,9 @@ pub mod optimization;
 pub mod special;
 pub mod approximations;
 
+// User guides for common workflows
+pub mod guides;
+
 // FFI module (conditionally compiled for FFI builds)
 #[cfg(feature = "ffi")]
 pub mod ffi;
