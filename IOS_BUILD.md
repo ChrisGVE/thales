@@ -1,11 +1,11 @@
 # iOS Build Integration Guide
 
-This document describes how to build the mathsolver-core Rust library for iOS and integrate it with the SlipStick Xcode project.
+This document describes how to build the thales Rust library for iOS and integrate it with your Xcode project.
 
 ## Prerequisites
 
 - Xcode 14+ with command line tools
-- Rust toolchain (install via rustup)
+- Rust toolchain (install via [rustup](https://rustup.rs))
 - iOS targets for Rust
 
 ### Install iOS Targets
@@ -20,17 +20,17 @@ rustup target add x86_64-apple-ios           # iOS simulator (Intel Macs)
 
 ### 1. Build for Each Target
 
-From the `mathsolver-core` directory:
+From the `thales` directory:
 
 ```bash
 # iOS device (arm64)
-cargo build --release --target aarch64-apple-ios
+cargo build --release --features ffi --target aarch64-apple-ios
 
 # iOS simulator (arm64 - Apple Silicon)
-cargo build --release --target aarch64-apple-ios-sim
+cargo build --release --features ffi --target aarch64-apple-ios-sim
 
 # iOS simulator (x86_64 - Intel)
-cargo build --release --target x86_64-apple-ios
+cargo build --release --features ffi --target x86_64-apple-ios
 ```
 
 ### 2. Create Universal Simulator Library
@@ -39,226 +39,225 @@ The iOS simulator needs a universal library that works on both Intel and Apple S
 
 ```bash
 lipo -create \
-  target/aarch64-apple-ios-sim/release/libmathsolver_core.a \
-  target/x86_64-apple-ios/release/libmathsolver_core.a \
-  -output target/libmathsolver_core_sim.a
+  target/aarch64-apple-ios-sim/release/libthales.a \
+  target/x86_64-apple-ios/release/libthales.a \
+  -output target/libthales_sim_universal.a
 ```
 
 ### 3. Verify Library Architectures
 
 ```bash
 # Check device library
-lipo -info target/aarch64-apple-ios/release/libmathsolver_core.a
+lipo -info target/aarch64-apple-ios/release/libthales.a
 # Expected: "Non-fat file ... is architecture: arm64"
 
 # Check simulator library
-lipo -info target/libmathsolver_core_sim.a
+lipo -info target/libthales_sim_universal.a
 # Expected: "Architectures in the fat file ... are: x86_64 arm64"
 ```
 
-## Swift-Bridge Code Generation
+## Swift Package Manager Integration
 
-The swift-bridge crate automatically generates Swift bindings during the build process.
+The easiest way to integrate thales is via Swift Package Manager:
 
-### Generated Files Location
+1. Add the package to your Xcode project:
+   - File > Add Package Dependencies
+   - Enter: `https://github.com/ChrisGVE/thales.git`
+   - Select version `0.3.0` or later
 
-After building, swift-bridge creates:
-- `target/SwiftBridgeCore.swift` - Core Swift bridge code
-- `target/mathsolver-core-Bridging-Header.h` - Objective-C bridging header
-- `target/mathsolver_core.swift` - Generated Swift API
+2. Configure Library Search Paths (Build Settings):
+   ```
+   $(PROJECT_DIR)/path/to/thales/target/aarch64-apple-ios/release
+   $(PROJECT_DIR)/path/to/thales/target
+   ```
 
-### Copy Generated Files to Xcode Project
+3. The Swift bindings are automatically included via the package.
+
+## Manual Integration
+
+### Swift-Bridge Generated Files
+
+The swift-bridge crate generates Swift bindings during the build process. Pre-generated files are included in the `swift/` directory:
+
+- `swift/Sources/Thales/thales.swift` - Generated Swift API
+- `swift/Sources/Thales/SwiftBridgeCore.swift` - Core Swift bridge code
+- `swift/Sources/Thales/include/thales.h` - C header
+- `swift/Sources/Thales/include/SwiftBridgeCore.h` - Bridge header
+
+### Copy Files to Your Project
 
 ```bash
-# From mathsolver-core directory
-cp target/SwiftBridgeCore.swift ../SlipStick/Core/MathSolver/
-cp target/mathsolver_core.swift ../SlipStick/Core/MathSolver/
-cp target/mathsolver-core-Bridging-Header.h ../SlipStick/
+# Copy Swift files
+cp swift/Sources/Thales/*.swift YourProject/Sources/
+
+# Copy headers
+cp swift/Sources/Thales/include/*.h YourProject/Headers/
+```
+
+### Regenerating Swift Files (Optional)
+
+If you modify the FFI interface, regenerate the Swift files:
+
+```bash
+cargo build --features ffi
+# Files are generated in target/debug/build/thales-*/out/
 ```
 
 ## Xcode Project Configuration
 
 ### 1. Add Static Libraries
 
-1. In Xcode, select the SlipStick project
-2. Go to the SlipStick target > Build Phases > Link Binary With Libraries
+1. In Xcode, select your project in the navigator
+2. Select your target > Build Phases > Link Binary With Libraries
 3. Click + and "Add Other..." > "Add Files..."
-4. Add both:
-   - `mathsolver-core/target/aarch64-apple-ios/release/libmathsolver_core.a`
-   - `mathsolver-core/target/libmathsolver_core_sim.a`
+4. Add:
+   - For device: `thales/target/aarch64-apple-ios/release/libthales.a`
+   - For simulator: `thales/target/libthales_sim_universal.a`
 
 ### 2. Configure Library Search Paths
 
-1. Go to Build Settings
-2. Search for "Library Search Paths"
-3. Add for Debug and Release:
-   - `$(PROJECT_DIR)/../mathsolver-core/target/aarch64-apple-ios/release`
-   - `$(PROJECT_DIR)/../mathsolver-core/target`
+In Build Settings > Library Search Paths:
+
+**Debug** (simulator):
+```
+$(PROJECT_DIR)/../thales/target
+```
+
+**Release** (device):
+```
+$(PROJECT_DIR)/../thales/target/aarch64-apple-ios/release
+```
+
+Or use conditional settings:
+```
+$(PROJECT_DIR)/../thales/target/$(PLATFORM_NAME)/release
+$(PROJECT_DIR)/../thales/target
+```
 
 ### 3. Configure Header Search Paths
 
-1. In Build Settings, search for "Header Search Paths"
-2. Add:
-   - `$(PROJECT_DIR)/../mathsolver-core/target`
+In Build Settings > Header Search Paths:
+```
+$(PROJECT_DIR)/../thales/swift/Sources/Thales/include
+```
 
-### 4. Configure Bridging Header
+### 4. Set Up Bridging Header
 
-1. In Build Settings, search for "Objective-C Bridging Header"
-2. Set to: `SlipStick/mathsolver-core-Bridging-Header.h`
+If not using SPM, create `YourProject-Bridging-Header.h`:
 
-### 5. Add Swift Files to Project
+```c
+#ifndef YourProject_Bridging_Header_h
+#define YourProject_Bridging_Header_h
 
-1. In Xcode navigator, right-click SlipStick/Core/MathSolver
-2. Choose "Add Files to SlipStick..."
-3. Add:
-   - `SwiftBridgeCore.swift`
-   - `mathsolver_core.swift`
-   - `MathSolverBridge.swift` (wrapper)
+#import "SwiftBridgeCore.h"
+#import "thales.h"
 
-## Build Configuration by Platform
+#endif
+```
 
-Xcode automatically selects the correct library based on the build destination:
+In Build Settings > Objective-C Bridging Header:
+```
+$(PROJECT_DIR)/YourProject/YourProject-Bridging-Header.h
+```
 
-- **iOS Device**: Uses `libmathsolver_core.a` (arm64)
-- **iOS Simulator**: Uses `libmathsolver_core_sim.a` (arm64 + x86_64)
+### 5. Other Linker Flags
 
-## Automated Build Script
+In Build Settings > Other Linker Flags:
+```
+-lresolv
+```
 
-To automate the build process, create a build script in `mathsolver-core/build_ios.sh`:
+This is required by swift-bridge for DNS resolution support.
+
+## Usage in Swift
+
+```swift
+import Thales  // If using SPM
+
+// Parse and solve an equation
+let equation = parse_equation_ffi("2*x + 5 = 13")
+let solution = solve_equation_ffi(equation, "x")
+
+// Coordinate transformations
+let point = Cartesian2D(x: 3.0, y: 4.0)
+let polar = cartesian_to_polar_ffi(point)
+print("r = \(polar.r), θ = \(polar.theta)")
+
+// Complex number operations
+let z = Complex64(re: 1.0, im: 1.0)
+let squared = de_moivre_ffi(z, 2.0)
+
+// Differentiation
+let expr = parse_expression_ffi("x^3 + 2*x")
+let derivative = differentiate_ffi(expr, "x")
+
+// Taylor series
+let series = taylor_series_ffi("sin(x)", "x", 0.0, 5)
+```
+
+## Build Script (Optional)
+
+Create a `build_ios.sh` script for convenience:
 
 ```bash
 #!/bin/bash
 set -e
 
-echo "Building mathsolver-core for iOS..."
+echo "Building thales for iOS..."
 
-# Clean previous builds
-cargo clean
-
-# Build for all iOS targets
-echo "Building for iOS device (arm64)..."
-cargo build --release --target aarch64-apple-ios
-
-echo "Building for iOS simulator (arm64)..."
-cargo build --release --target aarch64-apple-ios-sim
-
-echo "Building for iOS simulator (x86_64)..."
-cargo build --release --target x86_64-apple-ios
+# Build all targets
+cargo build --release --features ffi --target aarch64-apple-ios
+cargo build --release --features ffi --target aarch64-apple-ios-sim
+cargo build --release --features ffi --target x86_64-apple-ios
 
 # Create universal simulator library
 echo "Creating universal simulator library..."
 lipo -create \
-  target/aarch64-apple-ios-sim/release/libmathsolver_core.a \
-  target/x86_64-apple-ios/release/libmathsolver_core.a \
-  -output target/libmathsolver_core_sim.a
+    target/aarch64-apple-ios-sim/release/libthales.a \
+    target/x86_64-apple-ios/release/libthales.a \
+    -output target/libthales_sim_universal.a
 
-echo "Verifying libraries..."
-lipo -info target/aarch64-apple-ios/release/libmathsolver_core.a
-lipo -info target/libmathsolver_core_sim.a
+# Verify
+echo "Verifying architectures..."
+lipo -info target/aarch64-apple-ios/release/libthales.a
+lipo -info target/libthales_sim_universal.a
 
-# Copy generated Swift files
-echo "Copying generated Swift files..."
-mkdir -p ../SlipStick/Core/MathSolver
-cp target/SwiftBridgeCore.swift ../SlipStick/Core/MathSolver/ 2>/dev/null || true
-cp target/mathsolver_core.swift ../SlipStick/Core/MathSolver/ 2>/dev/null || true
-cp target/mathsolver-core-Bridging-Header.h ../SlipStick/ 2>/dev/null || true
-
-echo "iOS build complete!"
-echo "Device library: target/aarch64-apple-ios/release/libmathsolver_core.a"
-echo "Simulator library: target/libmathsolver_core_sim.a"
+echo "Done! Libraries are ready in target/"
 ```
 
 Make it executable:
-
 ```bash
-chmod +x mathsolver-core/build_ios.sh
-```
-
-## Xcode Build Phase Integration
-
-To rebuild the Rust library automatically when building in Xcode:
-
-1. In Xcode, select SlipStick target
-2. Go to Build Phases
-3. Click + > New Run Script Phase
-4. Name it "Build Rust Library"
-5. Add script:
-
-```bash
-cd "${PROJECT_DIR}/../mathsolver-core"
+chmod +x build_ios.sh
 ./build_ios.sh
 ```
 
-6. Drag this phase to run before "Compile Sources"
-
 ## Troubleshooting
 
-### Library Not Found
+### "Library not found for -lthales"
 
-If Xcode shows "library not found for -lmathsolver_core":
-1. Verify library search paths are correct
-2. Check that libraries exist in specified locations
+Ensure Library Search Paths includes the directory containing `libthales.a`.
+
+### "Symbol not found" at runtime
+
+Make sure you're linking the correct architecture:
+- Simulator: `libthales_sim_universal.a`
+- Device: `libthales.a` from `aarch64-apple-ios`
+
+### Swift bridging header errors
+
+1. Verify header search paths include the `include/` directory
+2. Check that both `SwiftBridgeCore.h` and `thales.h` are accessible
 3. Clean build folder (Cmd+Shift+K) and rebuild
 
-### Swift-Bridge Errors
+### FFI function not found
 
-If you get "Use of unresolved identifier" for FFI functions:
-1. Ensure bridging header is correctly set
-2. Verify generated Swift files are in project
-3. Check that swift-bridge version matches between Rust and Swift
-
-### Architecture Mismatch
-
-If you get "architecture arm64 not found":
-1. Verify you built for the correct target
-2. Check lipo output shows expected architectures
-3. Ensure universal library was created successfully
-
-### Build Script Permissions
-
-If build_ios.sh won't execute:
+Ensure the `ffi` feature is enabled when building:
 ```bash
-chmod +x mathsolver-core/build_ios.sh
+cargo build --release --features ffi --target aarch64-apple-ios
 ```
 
-## Testing the Integration
+## Resources
 
-Create a simple test in Swift to verify the integration:
-
-```swift
-import XCTest
-
-class MathSolverBridgeTests: XCTestCase {
-    func testCoordinateTransform() {
-        let solver = MathSolverBridge()
-        let (r, theta) = solver.cartesianToPolar(x: 3.0, y: 4.0)
-
-        XCTAssertEqual(r, 5.0, accuracy: 0.001)
-        XCTAssertEqual(theta, atan2(4.0, 3.0), accuracy: 0.001)
-    }
-
-    func testComplexMultiplication() {
-        let solver = MathSolverBridge()
-        let a = (real: 2.0, imaginary: 3.0)
-        let b = (real: 4.0, imaginary: 5.0)
-        let result = solver.complexMultiply(a: a, b: b)
-
-        // (2+3i)(4+5i) = 8+10i+12i+15i² = 8+22i-15 = -7+22i
-        XCTAssertEqual(result.real, -7.0, accuracy: 0.001)
-        XCTAssertEqual(result.imaginary, 22.0, accuracy: 0.001)
-    }
-}
-```
-
-## Performance Considerations
-
-- Static libraries increase app size (~few MB depending on features)
-- Release builds use full optimizations (LTO enabled in Cargo.toml)
-- Consider using dynamic library for development, static for production
-- Profile hot paths and benchmark if performance is critical
-
-## References
-
-- [swift-bridge Documentation](https://chinedufn.github.io/swift-bridge/)
-- [Rust on iOS - Mozilla Blog](https://blog.mozilla.org/data/2022/01/31/this-week-in-glean-building-and-deploying-a-rust-library-on-ios/)
-- [Apple Developer: Using Swift with C and Objective-C](https://developer.apple.com/documentation/swift/imported-c-and-objective-c-apis)
+- [thales documentation](https://docs.rs/thales)
+- [swift-bridge documentation](https://github.com/chinedufn/swift-bridge)
+- [Rust on iOS guide](https://mozilla.github.io/firefox-browser-architecture/experiments/2017-09-06-rust-on-ios.html)
