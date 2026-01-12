@@ -16,14 +16,14 @@
 //! use thales::approximations::{apply_small_angle_approx, ApproxType, is_approximation_valid};
 //! use thales::ast::{Expression, Variable, Function};
 //!
-//! // Small angle approximation for sin(0.05)
+//! // Small angle approximation for sin(x) with threshold 0.1
 //! let x = Variable::new("x");
 //! let sin_x = Expression::Function(Function::Sin, vec![Expression::Variable(x.clone())]);
 //!
 //! let result = apply_small_angle_approx(&sin_x, &x, 0.1);
 //! if let Some(approx) = result {
-//!     // sin(0.05) ≈ 0.05 with small error
-//!     assert!(approx.error_bound < 2e-5);
+//!     // Error bound is threshold³/6 ≈ 1.67e-4 for threshold=0.1
+//!     assert!(approx.error_bound < 2e-4);
 //! }
 //!
 //! // Check if approximation is valid
@@ -264,8 +264,9 @@ fn is_small_angle_candidate(expr: &Expression, var: &Variable) -> bool {
 /// let exact = Expression::Function(Function::Sin, vec![Expression::Variable(x.clone())]);
 /// let approx = Expression::Variable(x.clone());
 ///
+/// // Error for sin(0.05) ≈ 0.05 is about 2.08e-5
 /// let error = compute_approximation_error(&exact, &approx, &x, 0.05);
-/// assert!(error < 2e-5);
+/// assert!(error < 3e-5);
 /// ```
 pub fn compute_approximation_error(
     exact: &Expression,
