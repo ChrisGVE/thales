@@ -28,11 +28,9 @@
 //! symbolic solving isn't possible.
 
 pub mod solving_equations;
-
-// TODO: Implement remaining guides
-// pub mod calculus_operations;
-// pub mod series_expansions;
-// pub mod coordinate_systems;
-// pub mod numerical_methods;
-// pub mod working_with_units;
-// pub mod error_handling;
+pub mod calculus_operations;
+pub mod series_expansions;
+pub mod coordinate_systems;
+pub mod working_with_units;
+pub mod error_handling;
+pub mod numerical_methods;
