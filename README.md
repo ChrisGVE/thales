@@ -6,6 +6,9 @@
 [![Crates.io](https://img.shields.io/crates/v/thales.svg)](https://crates.io/crates/thales)
 [![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](https://www.rust-lang.org)
 [![Documentation](https://docs.rs/thales/badge.svg)](https://docs.rs/thales)
+[![Swift Versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FChrisGVE%2Fthales%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/ChrisGVE/thales)
+[![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FChrisGVE%2Fthales%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/ChrisGVE/thales)
+[![Swift Documentation](https://img.shields.io/badge/Swift-Documentation-orange)](https://swiftpackageindex.com/ChrisGVE/thales/documentation)
 
 A comprehensive Computer Algebra System (CAS) library for symbolic mathematics, equation solving, calculus, and numerical methods. Named after [Thales of Miletus](https://en.wikipedia.org/wiki/Thales_of_Miletus), the first mathematician in the Greek tradition.
 
