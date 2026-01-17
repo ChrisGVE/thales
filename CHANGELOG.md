@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-01-17
+
+### Added
+
+- GitHub Actions CI workflow with build status badge
+- Automated release workflow for crates.io publishing
+- Swift XCFramework build workflow for iOS/macOS distribution
+- Swift Package Index configuration for DocC documentation hosting
+- DocC documentation catalog for Swift package
+- CONTRIBUTING.md with development and release guidelines
+
+### Fixed
+
+- Resolved compiler warnings (unused imports, variables, unreachable patterns)
+- Fixed version test to use dynamic version from Cargo.toml
+- Applied cargo fmt formatting fixes across codebase
+
 ## [0.3.1] - 2026-01-12
 
 ### Fixed
