@@ -97,8 +97,8 @@ fn bench_evaluation(c: &mut Criterion) {
 
 /// Benchmark complex number operations.
 fn bench_complex_operations(c: &mut Criterion) {
-    use thales::transforms::ComplexOps;
     use num_complex::Complex64;
+    use thales::transforms::ComplexOps;
 
     let mut group = c.benchmark_group("complex_operations");
 

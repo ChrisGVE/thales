@@ -8,9 +8,9 @@
 //! - Partial derivative computation
 //! - Comparison with numerical derivatives
 
+use std::collections::HashMap;
 use thales::ast::{BinaryOp, Equation, Expression, Function, UnaryOp, Variable};
 use thales::solver::{compute_all_partial_derivatives, compute_partial_derivative};
-use std::collections::HashMap;
 
 // Helper function to create a variable expression
 fn var(name: &str) -> Expression {

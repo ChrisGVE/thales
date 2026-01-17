@@ -1,8 +1,8 @@
 //! Unit tests for the algebraic equation solver.
 
+use std::collections::HashMap;
 use thales::ast::{BinaryOp, Equation, Expression, Variable};
 use thales::solver::{solve_for, LinearSolver, Solver, SolverError};
-use std::collections::HashMap;
 
 // ============================================================================
 // Helper Functions
@@ -473,7 +473,7 @@ fn test_cannot_solve_quadratic() {
 // QuadraticSolver Tests
 // ============================================================================
 
-use thales::solver::{QuadraticSolver, PolynomialSolver, Solution};
+use thales::solver::{PolynomialSolver, QuadraticSolver, Solution};
 
 #[test]
 fn test_quadratic_solver_two_real_roots() {

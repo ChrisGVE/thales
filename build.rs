@@ -26,8 +26,7 @@ fn main() {
         println!("cargo::rerun-if-changed={}", path);
     }
 
-    swift_bridge_build::parse_bridges(bridges)
-        .write_all_concatenated(&out_dir, "thales");
+    swift_bridge_build::parse_bridges(bridges).write_all_concatenated(&out_dir, "thales");
 
     // Print the output directory for debugging
     println!("cargo::warning=Swift bridge output: {}", out_dir.display());

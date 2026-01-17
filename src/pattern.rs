@@ -243,7 +243,7 @@ fn match_pattern_internal(
         }
 
         Pattern::AnyVariable(opt_name) => {
-            if let Expression::Variable(v) = expr {
+            if let Expression::Variable(_v) = expr {
                 if let Some(name) = opt_name {
                     bindings.insert(name.clone(), expr.clone());
                 }
@@ -543,7 +543,11 @@ pub fn apply_rule_recursive(expr: &Expression, rule: &Rule) -> Expression {
 /// # Returns
 ///
 /// The transformed expression after applying rules to convergence.
-pub fn apply_rules_to_fixpoint(expr: &Expression, rules: &[Rule], max_iterations: usize) -> Expression {
+pub fn apply_rules_to_fixpoint(
+    expr: &Expression,
+    rules: &[Rule],
+    max_iterations: usize,
+) -> Expression {
     let mut current = expr.clone();
 
     for _ in 0..max_iterations {
@@ -573,7 +577,10 @@ pub mod common_rules {
     /// Create the additive identity rule: x + 0 = x
     pub fn additive_identity() -> Rule {
         Rule::new(
-            Pattern::add(Pattern::wildcard("x"), Pattern::exact(Expression::Integer(0))),
+            Pattern::add(
+                Pattern::wildcard("x"),
+                Pattern::exact(Expression::Integer(0)),
+            ),
             Pattern::wildcard("x"),
         )
         .named("additive_identity")
@@ -582,7 +589,10 @@ pub mod common_rules {
     /// Create the multiplicative identity rule: x * 1 = x
     pub fn multiplicative_identity() -> Rule {
         Rule::new(
-            Pattern::mul(Pattern::wildcard("x"), Pattern::exact(Expression::Integer(1))),
+            Pattern::mul(
+                Pattern::wildcard("x"),
+                Pattern::exact(Expression::Integer(1)),
+            ),
             Pattern::wildcard("x"),
         )
         .named("multiplicative_identity")
@@ -591,7 +601,10 @@ pub mod common_rules {
     /// Create the multiplicative zero rule: x * 0 = 0
     pub fn multiplicative_zero() -> Rule {
         Rule::new(
-            Pattern::mul(Pattern::wildcard("x"), Pattern::exact(Expression::Integer(0))),
+            Pattern::mul(
+                Pattern::wildcard("x"),
+                Pattern::exact(Expression::Integer(0)),
+            ),
             Pattern::exact(Expression::Integer(0)),
         )
         .named("multiplicative_zero")
@@ -600,7 +613,10 @@ pub mod common_rules {
     /// Create the double negation rule: --x = x
     pub fn double_negation() -> Rule {
         Rule::new(
-            Pattern::unary(UnaryOp::Neg, Pattern::unary(UnaryOp::Neg, Pattern::wildcard("x"))),
+            Pattern::unary(
+                UnaryOp::Neg,
+                Pattern::unary(UnaryOp::Neg, Pattern::wildcard("x")),
+            ),
             Pattern::wildcard("x"),
         )
         .named("double_negation")
@@ -609,7 +625,10 @@ pub mod common_rules {
     /// Create the power of zero rule: x^0 = 1 (for x != 0)
     pub fn power_zero() -> Rule {
         Rule::new(
-            Pattern::power(Pattern::wildcard("x"), Pattern::exact(Expression::Integer(0))),
+            Pattern::power(
+                Pattern::wildcard("x"),
+                Pattern::exact(Expression::Integer(0)),
+            ),
             Pattern::exact(Expression::Integer(1)),
         )
         .named("power_zero")
@@ -618,7 +637,10 @@ pub mod common_rules {
     /// Create the power of one rule: x^1 = x
     pub fn power_one() -> Rule {
         Rule::new(
-            Pattern::power(Pattern::wildcard("x"), Pattern::exact(Expression::Integer(1))),
+            Pattern::power(
+                Pattern::wildcard("x"),
+                Pattern::exact(Expression::Integer(1)),
+            ),
             Pattern::wildcard("x"),
         )
         .named("power_one")
@@ -758,7 +780,10 @@ mod tests {
         // Pattern: f(g(a))
         let pattern = Pattern::function(
             Function::Sin,
-            vec![Pattern::function(Function::Cos, vec![Pattern::wildcard("a")])],
+            vec![Pattern::function(
+                Function::Cos,
+                vec![Pattern::wildcard("a")],
+            )],
         );
 
         // Expression: sin(cos(x))

@@ -129,7 +129,11 @@ impl fmt::Display for LaTeXParseError {
                 write!(f, "Unexpected character '{}' at position {}", found, pos)
             }
             LaTeXParseError::UnexpectedEndOfInput { pos, expected } => {
-                write!(f, "Unexpected end of input at position {}: expected {}", pos, expected)
+                write!(
+                    f,
+                    "Unexpected end of input at position {}: expected {}",
+                    pos, expected
+                )
             }
             LaTeXParseError::InvalidCommand { pos, command } => {
                 write!(f, "Invalid LaTeX command '{}' at position {}", command, pos)
@@ -208,7 +212,8 @@ fn greek_letter_to_name(cmd: &str) -> Option<&'static str> {
 }
 
 /// Create the LaTeX expression parser.
-fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::Err<Rich<'a, char>>> {
+fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::Err<Rich<'a, char>>>
+{
     recursive(|expr| {
         // Parse numbers (integers and floats)
         let number = text::int(10)
@@ -234,25 +239,17 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
         });
 
         // Parse braced group: {expr}
-        let braced_expr = expr
-            .clone()
-            .delimited_by(just('{'), just('}'))
-            .padded();
+        let braced_expr = expr.clone().delimited_by(just('{'), just('}')).padded();
 
         // Parse optional bracketed argument: [expr]
-        let bracketed_expr = expr
-            .clone()
-            .delimited_by(just('['), just(']'))
-            .padded();
+        let bracketed_expr = expr.clone().delimited_by(just('['), just(']')).padded();
 
         // Parse \frac{num}{denom}
         let frac = just('\\')
             .ignore_then(just("frac"))
             .ignore_then(braced_expr.clone())
             .then(braced_expr.clone())
-            .map(|(num, denom)| {
-                Expression::Binary(BinaryOp::Div, Box::new(num), Box::new(denom))
-            });
+            .map(|(num, denom)| Expression::Binary(BinaryOp::Div, Box::new(num), Box::new(denom)));
 
         // Parse \sqrt{x} or \sqrt[n]{x}
         let sqrt = just('\\')
@@ -278,16 +275,17 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
         // Parse Greek letters and special constants
         let greek = just('\\')
             .ignore_then(text::ident())
-            .try_map(|cmd: &str, span| {
-                match cmd {
-                    "pi" => Ok(Expression::Constant(SymbolicConstant::Pi)),
-                    "infty" => Ok(Expression::Variable(Variable::new("infinity"))),
-                    _ => {
-                        if let Some(name) = greek_letter_to_name(cmd) {
-                            Ok(Expression::Variable(Variable::new(name)))
-                        } else {
-                            Err(Rich::custom(span, format!("Unknown Greek letter: \\{}", cmd)))
-                        }
+            .try_map(|cmd: &str, span| match cmd {
+                "pi" => Ok(Expression::Constant(SymbolicConstant::Pi)),
+                "infty" => Ok(Expression::Variable(Variable::new("infinity"))),
+                _ => {
+                    if let Some(name) = greek_letter_to_name(cmd) {
+                        Ok(Expression::Variable(Variable::new(name)))
+                    } else {
+                        Err(Rich::custom(
+                            span,
+                            format!("Unknown Greek letter: \\{}", cmd),
+                        ))
                     }
                 }
             });
@@ -296,9 +294,10 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
         let latex_func = just('\\')
             .ignore_then(text::ident())
             .then(
-                braced_expr.clone()
+                braced_expr
+                    .clone()
                     .or(expr.clone().delimited_by(just('('), just(')')).padded())
-                    .or(expr.clone().padded())
+                    .or(expr.clone().padded()),
             )
             .try_map(|(cmd, arg): (&str, Expression), span| {
                 let func = match cmd {
@@ -340,15 +339,18 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
         ));
 
         // Handle subscripts: x_n or x_{12}
-        let with_subscript = primary.clone()
+        let with_subscript = primary
+            .clone()
             .then(
                 just('_')
                     .ignore_then(
-                        braced_expr.clone()
+                        braced_expr
+                            .clone()
                             .or(text::ident().map(|s: &str| Expression::Variable(Variable::new(s))))
-                            .or(text::int(10).map(|s: &str| Expression::Integer(s.parse().unwrap_or(0))))
+                            .or(text::int(10)
+                                .map(|s: &str| Expression::Integer(s.parse().unwrap_or(0)))),
                     )
-                    .or_not()
+                    .or_not(),
             )
             .map(|(base, subscript)| {
                 match subscript {
@@ -367,29 +369,34 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
             });
 
         // Handle exponents: x^n or x^{2}
-        let power = with_subscript.clone()
-            .then(
-                just('^')
-                    .ignore_then(
-                        braced_expr.clone()
-                            .or(just('-').ignore_then(text::int(10)).map(|s: &str| {
-                                Expression::Unary(
-                                    UnaryOp::Neg,
-                                    Box::new(Expression::Integer(s.parse().unwrap_or(0)))
-                                )
-                            }))
-                            .or(text::int(10).map(|s: &str| Expression::Integer(s.parse().unwrap_or(0))))
-                            .or(text::ident().map(|s: &str| Expression::Variable(Variable::new(s))))
-                    )
-                    .repeated()
-                    .collect::<Vec<_>>()
-            )
-            .map(|(base, exponents)| {
-                // Right-associative: x^a^b = x^(a^b)
-                exponents.into_iter().rev().fold(base, |acc, exp| {
-                    Expression::Power(Box::new(acc), Box::new(exp))
-                })
-            });
+        let power =
+            with_subscript
+                .clone()
+                .then(
+                    just('^')
+                        .ignore_then(
+                            braced_expr
+                                .clone()
+                                .or(just('-').ignore_then(text::int(10)).map(|s: &str| {
+                                    Expression::Unary(
+                                        UnaryOp::Neg,
+                                        Box::new(Expression::Integer(s.parse().unwrap_or(0))),
+                                    )
+                                }))
+                                .or(text::int(10)
+                                    .map(|s: &str| Expression::Integer(s.parse().unwrap_or(0))))
+                                .or(text::ident()
+                                    .map(|s: &str| Expression::Variable(Variable::new(s)))),
+                        )
+                        .repeated()
+                        .collect::<Vec<_>>(),
+                )
+                .map(|(base, exponents)| {
+                    // Right-associative: x^a^b = x^(a^b)
+                    exponents.into_iter().rev().fold(base, |acc, exp| {
+                        Expression::Power(Box::new(acc), Box::new(exp))
+                    })
+                });
 
         // Negation: -x
         let negation = just('-')
@@ -405,7 +412,8 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
         // Implicit multiplication: consecutive terms without operator
         // Note: Only first term can have negation; subsequent terms must not start with -
         // This prevents "x - y" from being parsed as "x * (-y)"
-        let implicit_mul = negation.clone()
+        let implicit_mul = negation
+            .clone()
             .then(power.clone().repeated().collect::<Vec<_>>())
             .map(|(first, rest)| {
                 rest.into_iter().fold(first, |acc, curr| {
@@ -422,11 +430,10 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
             just('\\').ignore_then(just("div")).to(BinaryOp::Div),
         ));
 
-        let term = implicit_mul.clone()
-            .foldl(
-                mul_op.padded().then(implicit_mul).repeated(),
-                |left, (op, right)| Expression::Binary(op, Box::new(left), Box::new(right)),
-            );
+        let term = implicit_mul.clone().foldl(
+            mul_op.padded().then(implicit_mul).repeated(),
+            |left, (op, right)| Expression::Binary(op, Box::new(left), Box::new(right)),
+        );
 
         // Addition and subtraction with LaTeX operators
         let add_op = choice((
@@ -435,11 +442,10 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
             just('\\').ignore_then(just("pm")).to(BinaryOp::Add), // Treat ± as + for now
         ));
 
-        term.clone()
-            .foldl(
-                add_op.padded().then(term).repeated(),
-                |left, (op, right)| Expression::Binary(op, Box::new(left), Box::new(right)),
-            )
+        term.clone().foldl(
+            add_op.padded().then(term).repeated(),
+            |left, (op, right)| Expression::Binary(op, Box::new(left), Box::new(right)),
+        )
     })
 }
 
@@ -544,10 +550,6 @@ pub fn parse_latex(input: &str) -> Result<Expression, Vec<LaTeXParseError>> {
                                 }
                             }
                         }
-                        _ => LaTeXParseError::InvalidExpression {
-                            pos,
-                            message: "Parse error".to_string(),
-                        },
                     }
                 })
                 .collect()

@@ -153,8 +153,8 @@ pub fn solve_separable(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
     ));
 
     // Try to separate the equation
-    let (g_x, h_y) = try_separate(&ode.rhs, &ode.independent, &ode.dependent)
-        .ok_or(ODEError::NotSeparable)?;
+    let (g_x, h_y) =
+        try_separate(&ode.rhs, &ode.independent, &ode.dependent).ok_or(ODEError::NotSeparable)?;
 
     steps.push(format!(
         "Separating: d{}/d{} = ({}) * ({})",
@@ -201,7 +201,10 @@ pub fn solve_separable(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
             )
         });
 
-    steps.push(format!("General solution: {} = {}", ode.dependent, solution));
+    steps.push(format!(
+        "General solution: {} = {}",
+        ode.dependent, solution
+    ));
 
     Ok(ODESolution {
         general_solution: solution,
@@ -235,9 +238,8 @@ pub fn solve_linear(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
 
     // Extract P(x) and Q(x) from dy/dx = -P(x)*y + Q(x)
     // which is equivalent to dy/dx + P(x)*y = Q(x)
-    let (p_x, q_x) =
-        extract_linear_coefficients(&ode.rhs, &ode.independent, &ode.dependent)
-            .ok_or(ODEError::NotLinear)?;
+    let (p_x, q_x) = extract_linear_coefficients(&ode.rhs, &ode.independent, &ode.dependent)
+        .ok_or(ODEError::NotLinear)?;
 
     // The ODE is dy/dx = rhs, and we extracted it as dy/dx = -P*y + Q
     // So the standard form is dy/dx + P*y = Q
@@ -326,11 +328,7 @@ pub fn solve_ivp(
 
     // Substitute x = x0 and y = y0 into the general solution to find C
     let substituted = substitute_var(&general.general_solution, &ode.independent, x0);
-    let equation = Expression::Binary(
-        BinaryOp::Sub,
-        Box::new(substituted),
-        Box::new(y0.clone()),
-    );
+    let equation = Expression::Binary(BinaryOp::Sub, Box::new(substituted), Box::new(y0.clone()));
 
     // Try to solve for C
     if let Some(c_value) = solve_for_constant(&equation.simplify(), "C") {
@@ -427,7 +425,7 @@ fn try_separate(expr: &Expression, x_var: &str, y_var: &str) -> Option<(Expressi
 /// Returns (P(x), Q(x)) if linear, None otherwise.
 fn extract_linear_coefficients(
     rhs: &Expression,
-    x_var: &str,
+    _x_var: &str,
     y_var: &str,
 ) -> Option<(Expression, Expression)> {
     // The RHS should be of form: terms with y (linear in y) + terms without y
@@ -644,7 +642,10 @@ fn try_solve_implicit_for_y(
                     Box::new(Expression::Integer(1)),
                     exp.clone(),
                 );
-                return Some(Expression::Power(Box::new(right.clone()), Box::new(one_over_n)));
+                return Some(Expression::Power(
+                    Box::new(right.clone()),
+                    Box::new(one_over_n),
+                ));
             }
         }
     }
@@ -743,11 +744,8 @@ fn try_numerical_solve_for_c(equation: &Expression, const_name: &str) -> Option<
                 if !extract_c_terms(right, c_name, &mut neg_c, &mut neg_const) {
                     return false;
                 }
-                *c_coeff = Expression::Binary(
-                    BinaryOp::Sub,
-                    Box::new(c_coeff.clone()),
-                    Box::new(neg_c),
-                );
+                *c_coeff =
+                    Expression::Binary(BinaryOp::Sub, Box::new(c_coeff.clone()), Box::new(neg_c));
                 *const_part = Expression::Binary(
                     BinaryOp::Sub,
                     Box::new(const_part.clone()),
@@ -780,11 +778,8 @@ fn try_numerical_solve_for_c(equation: &Expression, const_name: &str) -> Option<
                         return true;
                     }
                 } else if matches!(right.as_ref(), Expression::Variable(v) if v.name == c_name) {
-                    *c_coeff = Expression::Binary(
-                        BinaryOp::Add,
-                        Box::new(c_coeff.clone()),
-                        left.clone(),
-                    );
+                    *c_coeff =
+                        Expression::Binary(BinaryOp::Add, Box::new(c_coeff.clone()), left.clone());
                     return true;
                 }
                 false
@@ -795,11 +790,8 @@ fn try_numerical_solve_for_c(equation: &Expression, const_name: &str) -> Option<
                 if !extract_c_terms(inner, c_name, &mut neg_c, &mut neg_const) {
                     return false;
                 }
-                *c_coeff = Expression::Binary(
-                    BinaryOp::Sub,
-                    Box::new(c_coeff.clone()),
-                    Box::new(neg_c),
-                );
+                *c_coeff =
+                    Expression::Binary(BinaryOp::Sub, Box::new(c_coeff.clone()), Box::new(neg_c));
                 *const_part = Expression::Binary(
                     BinaryOp::Sub,
                     Box::new(const_part.clone()),
@@ -928,7 +920,11 @@ pub struct SecondOrderSolution {
 
 /// Solve the characteristic equation ar² + br + c = 0
 #[must_use = "solving returns a result that should be used"]
-pub fn solve_characteristic_equation(a: f64, b: f64, c: f64) -> Result<CharacteristicRoots, ODEError> {
+pub fn solve_characteristic_equation(
+    a: f64,
+    b: f64,
+    c: f64,
+) -> Result<CharacteristicRoots, ODEError> {
     if a.abs() < 1e-15 {
         return Err(ODEError::CharacteristicEquationError(
             "Coefficient 'a' cannot be zero for second-order ODE".to_string(),
@@ -985,11 +981,7 @@ fn build_solution_distinct_real(r1: f64, r2: f64, x_var: &str) -> Expression {
     let term1 = Expression::Binary(BinaryOp::Mul, Box::new(c1), Box::new(exp1));
 
     // C2 * e^(r2*x)
-    let exp2_arg = Expression::Binary(
-        BinaryOp::Mul,
-        Box::new(Expression::Float(r2)),
-        Box::new(x),
-    );
+    let exp2_arg = Expression::Binary(BinaryOp::Mul, Box::new(Expression::Float(r2)), Box::new(x));
     let exp2 = Expression::Function(Function::Exp, vec![exp2_arg]);
     let term2 = Expression::Binary(BinaryOp::Mul, Box::new(c2), Box::new(exp2));
 
@@ -1009,11 +1001,7 @@ fn build_solution_repeated(r: f64, x_var: &str) -> Expression {
     let linear = Expression::Binary(BinaryOp::Add, Box::new(c1), Box::new(c2_x));
 
     // e^(r*x)
-    let exp_arg = Expression::Binary(
-        BinaryOp::Mul,
-        Box::new(Expression::Float(r)),
-        Box::new(x),
-    );
+    let exp_arg = Expression::Binary(BinaryOp::Mul, Box::new(Expression::Float(r)), Box::new(x));
     let exp_term = Expression::Function(Function::Exp, vec![exp_arg]);
 
     // (C1 + C2*x) * e^(r*x)
@@ -1065,7 +1053,9 @@ fn build_solution_complex(alpha: f64, beta: f64, x_var: &str) -> Expression {
 /// Solve a homogeneous second-order linear ODE with constant coefficients.
 /// a*y'' + b*y' + c*y = 0
 #[must_use = "solving returns a result that should be used"]
-pub fn solve_second_order_homogeneous(ode: &SecondOrderODE) -> Result<SecondOrderSolution, ODEError> {
+pub fn solve_second_order_homogeneous(
+    ode: &SecondOrderODE,
+) -> Result<SecondOrderSolution, ODEError> {
     let mut steps = Vec::new();
     steps.push(format!(
         "Given ODE: {}·{}'' + {}·{}' + {}·{} = 0",
@@ -1085,12 +1075,19 @@ pub fn solve_second_order_homogeneous(ode: &SecondOrderODE) -> Result<SecondOrde
         RootType::TwoDistinctReal => {
             steps.push(format!(
                 "Discriminant Δ = {}² - 4·{}·{} = {} > 0",
-                ode.b, ode.a, ode.c,
+                ode.b,
+                ode.a,
+                ode.c,
                 ode.b * ode.b - 4.0 * ode.a * ode.c
             ));
-            steps.push(format!("Two distinct real roots: r₁ = {:.4}, r₂ = {:.4}", roots.r1, roots.r2));
-            steps.push(format!("General solution: y = C1·e^({:.4}·{}) + C2·e^({:.4}·{})",
-                roots.r1, ode.independent, roots.r2, ode.independent));
+            steps.push(format!(
+                "Two distinct real roots: r₁ = {:.4}, r₂ = {:.4}",
+                roots.r1, roots.r2
+            ));
+            steps.push(format!(
+                "General solution: y = C1·e^({:.4}·{}) + C2·e^({:.4}·{})",
+                roots.r1, ode.independent, roots.r2, ode.independent
+            ));
             (
                 "Characteristic equation - distinct real roots".to_string(),
                 build_solution_distinct_real(roots.r1, roots.r2, &ode.independent),
@@ -1102,8 +1099,10 @@ pub fn solve_second_order_homogeneous(ode: &SecondOrderODE) -> Result<SecondOrde
                 ode.b, ode.a, ode.c
             ));
             steps.push(format!("Repeated root: r = {:.4}", roots.r1));
-            steps.push(format!("General solution: y = (C1 + C2·{})·e^({:.4}·{})",
-                ode.independent, roots.r1, ode.independent));
+            steps.push(format!(
+                "General solution: y = (C1 + C2·{})·e^({:.4}·{})",
+                ode.independent, roots.r1, ode.independent
+            ));
             (
                 "Characteristic equation - repeated root".to_string(),
                 build_solution_repeated(roots.r1, &ode.independent),
@@ -1112,16 +1111,25 @@ pub fn solve_second_order_homogeneous(ode: &SecondOrderODE) -> Result<SecondOrde
         RootType::ComplexConjugate => {
             steps.push(format!(
                 "Discriminant Δ = {}² - 4·{}·{} = {} < 0",
-                ode.b, ode.a, ode.c,
+                ode.b,
+                ode.a,
+                ode.c,
                 ode.b * ode.b - 4.0 * ode.a * ode.c
             ));
-            steps.push(format!("Complex conjugate roots: r = {:.4} ± {:.4}i", roots.r1, roots.r2));
+            steps.push(format!(
+                "Complex conjugate roots: r = {:.4} ± {:.4}i",
+                roots.r1, roots.r2
+            ));
             if roots.r1.abs() < 1e-10 {
-                steps.push(format!("General solution: y = C1·cos({:.4}·{}) + C2·sin({:.4}·{})",
-                    roots.r2, ode.independent, roots.r2, ode.independent));
+                steps.push(format!(
+                    "General solution: y = C1·cos({:.4}·{}) + C2·sin({:.4}·{})",
+                    roots.r2, ode.independent, roots.r2, ode.independent
+                ));
             } else {
-                steps.push(format!("General solution: y = e^({:.4}·{})·(C1·cos({:.4}·{}) + C2·sin({:.4}·{}))",
-                    roots.r1, ode.independent, roots.r2, ode.independent, roots.r2, ode.independent));
+                steps.push(format!(
+                    "General solution: y = e^({:.4}·{})·(C1·cos({:.4}·{}) + C2·sin({:.4}·{}))",
+                    roots.r1, ode.independent, roots.r2, ode.independent, roots.r2, ode.independent
+                ));
             }
             (
                 "Characteristic equation - complex conjugate roots".to_string(),
@@ -1330,11 +1338,7 @@ mod tests {
 
         // dy/dx = y^2 is NOT linear
         let y = var("y");
-        let ode2 = FirstOrderODE::new(
-            "y",
-            "x",
-            Expression::Power(Box::new(y), Box::new(int(2))),
-        );
+        let ode2 = FirstOrderODE::new("y", "x", Expression::Power(Box::new(y), Box::new(int(2))));
         assert!(!ode2.is_linear());
     }
 
@@ -1416,7 +1420,10 @@ mod tests {
         let right = add(var("x"), var("C"));
         let result = try_solve_implicit_for_y(&left, &right, "y");
         assert!(result.is_some());
-        assert!(matches!(result.unwrap(), Expression::Function(Function::Exp, _)));
+        assert!(matches!(
+            result.unwrap(),
+            Expression::Function(Function::Exp, _)
+        ));
     }
 
     // =========================================================================
@@ -1456,7 +1463,10 @@ mod tests {
         let ode = SecondOrderODE::homogeneous("y", "x", 1.0, 0.0, -1.0);
         let solution = solve_second_order_homogeneous(&ode).unwrap();
 
-        assert_eq!(solution.method, "Characteristic equation - distinct real roots");
+        assert_eq!(
+            solution.method,
+            "Characteristic equation - distinct real roots"
+        );
         assert_eq!(solution.roots.root_type, RootType::TwoDistinctReal);
         assert!(!solution.steps.is_empty());
     }
@@ -1467,7 +1477,10 @@ mod tests {
         let ode = SecondOrderODE::homogeneous("y", "x", 1.0, 0.0, 1.0);
         let solution = solve_second_order_homogeneous(&ode).unwrap();
 
-        assert_eq!(solution.method, "Characteristic equation - complex conjugate roots");
+        assert_eq!(
+            solution.method,
+            "Characteristic equation - complex conjugate roots"
+        );
         assert_eq!(solution.roots.root_type, RootType::ComplexConjugate);
     }
 

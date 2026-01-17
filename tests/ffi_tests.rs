@@ -55,7 +55,10 @@ fn test_maclaurin_series_sin() {
 
     let series = result.unwrap();
     let series_expr = series.to_expression();
-    assert!(!format!("{}", series_expr).is_empty(), "Series should not be empty");
+    assert!(
+        !format!("{}", series_expr).is_empty(),
+        "Series should not be empty"
+    );
 }
 
 #[test]
@@ -69,7 +72,10 @@ fn test_maclaurin_series_cos() {
 
     let series = result.unwrap();
     let series_expr = series.to_expression();
-    assert!(!format!("{}", series_expr).is_empty(), "Series should not be empty");
+    assert!(
+        !format!("{}", series_expr).is_empty(),
+        "Series should not be empty"
+    );
 }
 
 #[test]
@@ -83,7 +89,10 @@ fn test_maclaurin_series_simple() {
 
     let series = result.unwrap();
     let series_expr = series.to_expression();
-    assert!(!format!("{}", series_expr).is_empty(), "Series should not be empty");
+    assert!(
+        !format!("{}", series_expr).is_empty(),
+        "Series should not be empty"
+    );
 }
 
 // =============================================================================
@@ -103,7 +112,10 @@ fn test_gamma_positive_integer() {
         Some(24.0),
         "Γ(5) should equal 24"
     );
-    assert!(!gamma_result.derivation_steps.is_empty(), "Derivation steps should be present");
+    assert!(
+        !gamma_result.derivation_steps.is_empty(),
+        "Derivation steps should be present"
+    );
 }
 
 #[test]
@@ -113,7 +125,11 @@ fn test_gamma_one() {
     let result = gamma(&x);
 
     assert!(result.is_ok(), "Gamma(1) should succeed");
-    assert_eq!(result.unwrap().numeric_value, Some(1.0), "Γ(1) should equal 1");
+    assert_eq!(
+        result.unwrap().numeric_value,
+        Some(1.0),
+        "Γ(1) should equal 1"
+    );
 }
 
 #[test]
@@ -123,7 +139,11 @@ fn test_gamma_two() {
     let result = gamma(&x);
 
     assert!(result.is_ok(), "Gamma(2) should succeed");
-    assert_eq!(result.unwrap().numeric_value, Some(1.0), "Γ(2) should equal 1");
+    assert_eq!(
+        result.unwrap().numeric_value,
+        Some(1.0),
+        "Γ(2) should equal 1"
+    );
 }
 
 #[test]
@@ -133,7 +153,11 @@ fn test_gamma_three() {
     let result = gamma(&x);
 
     assert!(result.is_ok(), "Gamma(3) should succeed");
-    assert_eq!(result.unwrap().numeric_value, Some(2.0), "Γ(3) should equal 2");
+    assert_eq!(
+        result.unwrap().numeric_value,
+        Some(2.0),
+        "Γ(3) should equal 2"
+    );
 }
 
 #[test]
@@ -143,7 +167,11 @@ fn test_gamma_four() {
     let result = gamma(&x);
 
     assert!(result.is_ok(), "Gamma(4) should succeed");
-    assert_eq!(result.unwrap().numeric_value, Some(6.0), "Γ(4) should equal 6");
+    assert_eq!(
+        result.unwrap().numeric_value,
+        Some(6.0),
+        "Γ(4) should equal 6"
+    );
 }
 
 #[test]
@@ -227,7 +255,10 @@ fn test_erf_has_derivation_steps() {
 
     assert!(result.is_ok(), "erf(1) should succeed");
     let erf_result = result.unwrap();
-    assert!(!erf_result.derivation_steps.is_empty(), "Derivation steps should be present");
+    assert!(
+        !erf_result.derivation_steps.is_empty(),
+        "Derivation steps should be present"
+    );
 }
 
 // =============================================================================

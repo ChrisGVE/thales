@@ -40,9 +40,9 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 use crate::ast::{BinaryOp, Equation, Expression, Variable};
-use crate::numerical::{SmartNumericalSolver, NumericalConfig};
+use crate::numerical::{NumericalConfig, SmartNumericalSolver};
 use crate::resolution_path::{Operation, ResolutionPath};
-use crate::solver::{SmartSolver, Solution, SolverError, Solver};
+use crate::solver::{SmartSolver, Solution, Solver, SolverError};
 
 // Note: ODE and integration imports reserved for future implementation
 // use crate::ode::{FirstOrderODE, ODESolution, solve_separable, solve_linear as solve_linear_ode};
@@ -126,7 +126,10 @@ impl fmt::Display for SystemError {
                     needed, have
                 )
             }
-            Self::OverdeterminedSystem { equations, unknowns } => {
+            Self::OverdeterminedSystem {
+                equations,
+                unknowns,
+            } => {
                 write!(
                     f,
                     "Overdetermined system: {} equations for {} unknowns",
@@ -684,8 +687,7 @@ impl DependencyGraph {
             for eq_id in eqs {
                 if let Some(eq_vars) = self.equation_to_variables.get(eq_id) {
                     for dep_var in eq_vars {
-                        if dep_var != var
-                            && self.has_cycle_dfs(dep_var, known, visited, rec_stack)
+                        if dep_var != var && self.has_cycle_dfs(dep_var, known, visited, rec_stack)
                         {
                             return true;
                         }
@@ -833,7 +835,7 @@ impl SolutionValue {
     /// Get the symbolic expression.
     pub fn as_expression(&self) -> Option<&Expression> {
         match self {
-            Self::Numeric(v) => None,
+            Self::Numeric(_v) => None,
             Self::Symbolic(expr) => Some(expr),
             Self::Multiple(exprs) if exprs.len() == 1 => Some(&exprs[0]),
             _ => None,
@@ -1177,7 +1179,7 @@ impl MultiEquationSolver {
 
         // Note: Circular dependency check is handled in the strategy planning phase
         // where we can detect actual deadlocks (no progress possible)
-        let known = context.known_variable_names();
+        let _known = context.known_variable_names();
 
         // Plan the solution
         let strategy = self.plan_solution(&graph, system, context)?;
@@ -1244,8 +1246,10 @@ impl MultiEquationSolver {
                     // Determine the solve method based on equation type
                     let method = if let Some(eq) = system.get(&eq_id) {
                         match &eq.equation_type {
-                            EquationType::Algebraic | EquationType::Unknown => SolveMethod::Algebraic,
-                            EquationType::ODE(info) => SolveMethod::ODE {
+                            EquationType::Algebraic | EquationType::Unknown => {
+                                SolveMethod::Algebraic
+                            }
+                            EquationType::ODE(_info) => SolveMethod::ODE {
                                 method: "auto".to_string(),
                             },
                             EquationType::Integral(_) => SolveMethod::Integration,
@@ -1304,9 +1308,9 @@ impl MultiEquationSolver {
             step_number += 1;
 
             // Get the equation
-            let eq = system.get(&step.equation_id).ok_or_else(|| {
-                SystemError::EquationNotFound(step.equation_id.clone())
-            })?;
+            let eq = system
+                .get(&step.equation_id)
+                .ok_or_else(|| SystemError::EquationNotFound(step.equation_id.clone()))?;
 
             // Substitute known values into the equation
             let substituted_eq = self.substitute_known(&eq.equation, &known_exprs);
@@ -1473,7 +1477,7 @@ impl MultiEquationSolver {
                         constraints: _,
                     } => SolutionValue::Parametric {
                         expr: expression,
-                        parameter: "t".to_string(),  // Default parameter name
+                        parameter: "t".to_string(), // Default parameter name
                     },
                 };
                 Ok((value, Some(path)))
@@ -1507,7 +1511,7 @@ impl MultiEquationSolver {
     /// Solve an ODE.
     fn solve_ode(
         &self,
-        equation: &Equation,
+        _equation: &Equation,
         _variable: &str,
         _method: &str,
     ) -> Result<(SolutionValue, Option<ResolutionPath>), SystemError> {
@@ -1522,7 +1526,7 @@ impl MultiEquationSolver {
     /// Solve by integration.
     fn solve_integration(
         &self,
-        equation: &Equation,
+        _equation: &Equation,
         _variable: &str,
     ) -> Result<(SolutionValue, Option<ResolutionPath>), SystemError> {
         // TODO: Integrate with integration module
@@ -1696,8 +1700,8 @@ mod tests {
 
     #[test]
     fn test_simple_linear_system() {
-        let system = EquationSystem::new()
-            .with_equation("eq1", parse_equation("F = m * a").unwrap());
+        let system =
+            EquationSystem::new().with_equation("eq1", parse_equation("F = m * a").unwrap());
 
         let context = SystemContext::new()
             .with_known_value("F", 100.0)
@@ -1739,8 +1743,8 @@ mod tests {
 
     #[test]
     fn test_resolution_path() {
-        let system = EquationSystem::new()
-            .with_equation("eq1", parse_equation("F = m * a").unwrap());
+        let system =
+            EquationSystem::new().with_equation("eq1", parse_equation("F = m * a").unwrap());
 
         let context = SystemContext::new()
             .with_known_value("F", 100.0)
@@ -1760,12 +1764,10 @@ mod tests {
 
     #[test]
     fn test_insufficient_equations() {
-        let system = EquationSystem::new()
-            .with_equation("eq1", parse_equation("x + y = 10").unwrap());
+        let system =
+            EquationSystem::new().with_equation("eq1", parse_equation("x + y = 10").unwrap());
 
-        let context = SystemContext::new()
-            .with_target("x")
-            .with_target("y");
+        let context = SystemContext::new().with_target("x").with_target("y");
 
         let solver = MultiEquationSolver::new();
         let result = solver.solve(&system, &context);
@@ -1787,8 +1789,8 @@ mod tests {
     #[test]
     fn test_quadratic_in_system() {
         // x² = 16 => x = ±4
-        let system = EquationSystem::new()
-            .with_equation("eq1", parse_equation("y = x * x").unwrap());
+        let system =
+            EquationSystem::new().with_equation("eq1", parse_equation("y = x * x").unwrap());
 
         let context = SystemContext::new()
             .with_known_value("y", 16.0)
@@ -2096,13 +2098,7 @@ impl NonlinearSystem {
         // Convert each equation to the form: left - right = 0
         let exprs: Vec<Expression> = equations
             .into_iter()
-            .map(|eq| {
-                Expression::Binary(
-                    BinaryOp::Sub,
-                    Box::new(eq.left),
-                    Box::new(eq.right),
-                )
-            })
+            .map(|eq| Expression::Binary(BinaryOp::Sub, Box::new(eq.left), Box::new(eq.right)))
             .collect();
         Self::new(exprs, variables)
     }
@@ -2711,16 +2707,18 @@ impl SmartNonlinearSystemSolver {
             if let Ok(result) = self.solve(system, guess) {
                 if result.converged {
                     // Check if this is a new solution
-                    let is_new = solutions.iter().all(|existing: &NonlinearSystemSolverResult| {
-                        let diff: f64 = existing
-                            .solution
-                            .iter()
-                            .zip(result.solution.iter())
-                            .map(|(a, b)| (a - b).powi(2))
-                            .sum::<f64>()
-                            .sqrt();
-                        diff > tolerance
-                    });
+                    let is_new = solutions
+                        .iter()
+                        .all(|existing: &NonlinearSystemSolverResult| {
+                            let diff: f64 = existing
+                                .solution
+                                .iter()
+                                .zip(result.solution.iter())
+                                .map(|(a, b)| (a - b).powi(2))
+                                .sum::<f64>()
+                                .sqrt();
+                            diff > tolerance
+                        });
 
                     if is_new {
                         solutions.push(result);
@@ -3074,10 +3072,8 @@ mod nonlinear_tests {
         let config = NonlinearSystemConfig::default();
 
         // Test with trait object
-        let solvers: Vec<Box<dyn NonlinearSystemSolver>> = vec![
-            Box::new(NewtonRaphsonSolver),
-            Box::new(BroydenSolver),
-        ];
+        let solvers: Vec<Box<dyn NonlinearSystemSolver>> =
+            vec![Box::new(NewtonRaphsonSolver), Box::new(BroydenSolver)];
 
         for solver in solvers {
             let result = solver.solve(&system, &[0.5, 0.5], &config).unwrap();

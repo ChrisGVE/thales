@@ -88,7 +88,9 @@ impl std::fmt::Display for NumericalError {
             NumericalError::NoConvergence => write!(f, "Failed to converge within iteration limit"),
             NumericalError::Unstable => write!(f, "Numerical instability detected"),
             NumericalError::InvalidInitialGuess => write!(f, "Invalid initial guess"),
-            NumericalError::EvaluationFailed(msg) => write!(f, "Function evaluation failed: {}", msg),
+            NumericalError::EvaluationFailed(msg) => {
+                write!(f, "Function evaluation failed: {}", msg)
+            }
             NumericalError::Other(msg) => write!(f, "{}", msg),
         }
     }

@@ -1,7 +1,5 @@
 use thales::ast::{BinaryOp, Equation, Expression, Function, Variable};
-use thales::numerical::{
-    BisectionMethod, NewtonRaphson, NumericalConfig, SmartNumericalSolver,
-};
+use thales::numerical::{BisectionMethod, NewtonRaphson, NumericalConfig, SmartNumericalSolver};
 
 #[test]
 fn test_newton_raphson_quadratic() {

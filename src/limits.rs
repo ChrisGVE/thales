@@ -152,7 +152,10 @@ pub enum LimitPoint {
 impl LimitPoint {
     /// Check if this is infinity.
     pub fn is_infinite(&self) -> bool {
-        matches!(self, LimitPoint::PositiveInfinity | LimitPoint::NegativeInfinity)
+        matches!(
+            self,
+            LimitPoint::PositiveInfinity | LimitPoint::NegativeInfinity
+        )
     }
 }
 
@@ -187,7 +190,10 @@ impl LimitResult {
 
     /// Check if the result is infinite.
     pub fn is_infinite(&self) -> bool {
-        matches!(self, LimitResult::PositiveInfinity | LimitResult::NegativeInfinity)
+        matches!(
+            self,
+            LimitResult::PositiveInfinity | LimitResult::NegativeInfinity
+        )
     }
 }
 
@@ -223,18 +229,16 @@ impl LimitResult {
 /// }
 /// ```
 #[must_use = "computing limits returns a result that should be used"]
-pub fn limit(expr: &Expression, var: &str, approaches: LimitPoint) -> Result<LimitResult, LimitError> {
+pub fn limit(
+    expr: &Expression,
+    var: &str,
+    approaches: LimitPoint,
+) -> Result<LimitResult, LimitError> {
     // First, try direct substitution
     match &approaches {
-        LimitPoint::Value(val) => {
-            direct_substitution_limit(expr, var, *val)
-        }
-        LimitPoint::PositiveInfinity => {
-            limit_at_infinity(expr, var, true)
-        }
-        LimitPoint::NegativeInfinity => {
-            limit_at_infinity(expr, var, false)
-        }
+        LimitPoint::Value(val) => direct_substitution_limit(expr, var, *val),
+        LimitPoint::PositiveInfinity => limit_at_infinity(expr, var, true),
+        LimitPoint::NegativeInfinity => limit_at_infinity(expr, var, false),
     }
 }
 
@@ -242,7 +246,11 @@ pub fn limit(expr: &Expression, var: &str, approaches: LimitPoint) -> Result<Lim
 ///
 /// Computes `lim_{x -> a^-} f(x)`.
 #[must_use = "computing limits returns a result that should be used"]
-pub fn limit_left(expr: &Expression, var: &str, approaches: f64) -> Result<LimitResult, LimitError> {
+pub fn limit_left(
+    expr: &Expression,
+    var: &str,
+    approaches: f64,
+) -> Result<LimitResult, LimitError> {
     // Approach from slightly below
     let epsilon = 1e-10;
     let test_value = approaches - epsilon;
@@ -252,7 +260,9 @@ pub fn limit_left(expr: &Expression, var: &str, approaches: f64) -> Result<Limit
 
     // Check for division by zero or other issues
     if result.is_nan() {
-        return Err(LimitError::Undefined("Left-hand limit undefined".to_string()));
+        return Err(LimitError::Undefined(
+            "Left-hand limit undefined".to_string(),
+        ));
     }
 
     if result.is_infinite() {
@@ -271,7 +281,11 @@ pub fn limit_left(expr: &Expression, var: &str, approaches: f64) -> Result<Limit
 ///
 /// Computes `lim_{x -> a^+} f(x)`.
 #[must_use = "computing limits returns a result that should be used"]
-pub fn limit_right(expr: &Expression, var: &str, approaches: f64) -> Result<LimitResult, LimitError> {
+pub fn limit_right(
+    expr: &Expression,
+    var: &str,
+    approaches: f64,
+) -> Result<LimitResult, LimitError> {
     // Approach from slightly above with progressively smaller epsilon
     let epsilons = [1e-3, 1e-6, 1e-9, 1e-12];
 
@@ -281,7 +295,9 @@ pub fn limit_right(expr: &Expression, var: &str, approaches: f64) -> Result<Limi
         let result = evaluate_with_values(expr, var, test_value)?;
 
         if result.is_nan() {
-            return Err(LimitError::Undefined("Right-hand limit undefined".to_string()));
+            return Err(LimitError::Undefined(
+                "Right-hand limit undefined".to_string(),
+            ));
         }
 
         if result.is_infinite() {
@@ -349,12 +365,16 @@ pub fn limit_right(expr: &Expression, var: &str, approaches: f64) -> Result<Limi
 /// * `Ok(LimitResult)` - The computed limit value
 /// * `Err(LimitError)` - If the limit cannot be computed
 #[must_use = "computing limits returns a result that should be used"]
-pub fn limit_with_lhopital(expr: &Expression, var: &str, approaches: LimitPoint) -> Result<LimitResult, LimitError> {
+pub fn limit_with_lhopital(
+    expr: &Expression,
+    var: &str,
+    approaches: LimitPoint,
+) -> Result<LimitResult, LimitError> {
     // First try regular limit
     match limit(expr, var, approaches.clone()) {
         Ok(result) => Ok(result),
-        Err(LimitError::Indeterminate(IndeterminateForm::ZeroOverZero)) |
-        Err(LimitError::Indeterminate(IndeterminateForm::InfinityOverInfinity)) => {
+        Err(LimitError::Indeterminate(IndeterminateForm::ZeroOverZero))
+        | Err(LimitError::Indeterminate(IndeterminateForm::InfinityOverInfinity)) => {
             // Apply L'Hôpital's rule
             apply_lhopital_rule(expr, var, &approaches, 0)
         }
@@ -363,7 +383,9 @@ pub fn limit_with_lhopital(expr: &Expression, var: &str, approaches: LimitPoint)
             if let Some(result) = try_transform_zero_times_infinity(expr, var, &approaches) {
                 result
             } else {
-                Err(LimitError::Indeterminate(IndeterminateForm::ZeroTimesInfinity))
+                Err(LimitError::Indeterminate(
+                    IndeterminateForm::ZeroTimesInfinity,
+                ))
             }
         }
         Err(e) => Err(e),
@@ -411,8 +433,8 @@ fn apply_lhopital_rule(
                             // Still indeterminate - need to check form
                             let form = detect_indeterminate_form_type(&new_expr, var, *val);
                             match form {
-                                Some(IndeterminateForm::ZeroOverZero) |
-                                Some(IndeterminateForm::InfinityOverInfinity) => {
+                                Some(IndeterminateForm::ZeroOverZero)
+                                | Some(IndeterminateForm::InfinityOverInfinity) => {
                                     // Apply L'Hôpital again
                                     apply_lhopital_rule(&new_expr, var, approaches, depth + 1)
                                 }
@@ -433,13 +455,13 @@ fn apply_lhopital_rule(
                         // Check if still indeterminate and apply again
                         let form = detect_indeterminate_form_type(&new_expr, var, *val);
                         match form {
-                            Some(IndeterminateForm::ZeroOverZero) |
-                            Some(IndeterminateForm::InfinityOverInfinity) => {
+                            Some(IndeterminateForm::ZeroOverZero)
+                            | Some(IndeterminateForm::InfinityOverInfinity) => {
                                 apply_lhopital_rule(&new_expr, var, approaches, depth + 1)
                             }
                             Some(other) => Err(LimitError::Indeterminate(other)),
                             None => Err(LimitError::EvaluationError(
-                                "Could not evaluate after L'Hôpital's rule".to_string()
+                                "Could not evaluate after L'Hôpital's rule".to_string(),
                             )),
                         }
                     }
@@ -452,13 +474,17 @@ fn apply_lhopital_rule(
         }
     } else {
         Err(LimitError::EvaluationError(
-            "L'Hôpital's rule requires a fraction".to_string()
+            "L'Hôpital's rule requires a fraction".to_string(),
         ))
     }
 }
 
 /// Detect what type of indeterminate form we have, if any.
-fn detect_indeterminate_form_type(expr: &Expression, var: &str, value: f64) -> Option<IndeterminateForm> {
+fn detect_indeterminate_form_type(
+    expr: &Expression,
+    var: &str,
+    value: f64,
+) -> Option<IndeterminateForm> {
     match expr {
         Expression::Binary(BinaryOp::Div, num, denom) => {
             let num_val = evaluate_with_values(num, var, value).unwrap_or(f64::NAN);
@@ -520,11 +546,7 @@ fn try_transform_zero_times_infinity(
                     Box::new(Expression::Integer(1)),
                     right.clone(),
                 );
-                let new_expr = Expression::Binary(
-                    BinaryOp::Div,
-                    left.clone(),
-                    Box::new(new_denom),
-                );
+                let new_expr = Expression::Binary(BinaryOp::Div, left.clone(), Box::new(new_denom));
                 return Some(apply_lhopital_rule(&new_expr, var, approaches, 0));
             } else if left_val.is_infinite() && right_val.abs() < 1e-15 {
                 // Transform f * g (where f->∞, g->0) to g / (1/f)
@@ -533,11 +555,8 @@ fn try_transform_zero_times_infinity(
                     Box::new(Expression::Integer(1)),
                     left.clone(),
                 );
-                let new_expr = Expression::Binary(
-                    BinaryOp::Div,
-                    right.clone(),
-                    Box::new(new_denom),
-                );
+                let new_expr =
+                    Expression::Binary(BinaryOp::Div, right.clone(), Box::new(new_denom));
                 return Some(apply_lhopital_rule(&new_expr, var, approaches, 0));
             }
         }
@@ -546,7 +565,11 @@ fn try_transform_zero_times_infinity(
 }
 
 /// Try direct substitution for computing the limit.
-fn direct_substitution_limit(expr: &Expression, var: &str, value: f64) -> Result<LimitResult, LimitError> {
+fn direct_substitution_limit(
+    expr: &Expression,
+    var: &str,
+    value: f64,
+) -> Result<LimitResult, LimitError> {
     // Check for special limits first
     if let Some(result) = check_special_limits(expr, var, value) {
         return Ok(result);
@@ -584,7 +607,11 @@ fn direct_substitution_limit(expr: &Expression, var: &str, value: f64) -> Result
 }
 
 /// Evaluate the limit as variable approaches infinity.
-fn limit_at_infinity(expr: &Expression, var: &str, positive: bool) -> Result<LimitResult, LimitError> {
+fn limit_at_infinity(
+    expr: &Expression,
+    var: &str,
+    positive: bool,
+) -> Result<LimitResult, LimitError> {
     // For polynomials and rational functions, analyze leading terms
     match expr {
         Expression::Variable(v) if v.name == var => {
@@ -594,7 +621,10 @@ fn limit_at_infinity(expr: &Expression, var: &str, positive: bool) -> Result<Lim
                 Ok(LimitResult::NegativeInfinity)
             }
         }
-        Expression::Integer(_) | Expression::Float(_) | Expression::Rational(_) | Expression::Constant(_) => {
+        Expression::Integer(_)
+        | Expression::Float(_)
+        | Expression::Rational(_)
+        | Expression::Constant(_) => {
             // Constants stay constant
             let val = try_expr_to_f64(expr).unwrap_or(0.0);
             Ok(LimitResult::Value(val))
@@ -606,8 +636,8 @@ fn limit_at_infinity(expr: &Expression, var: &str, positive: bool) -> Result<Lim
 
             if num_degree > denom_degree {
                 // Numerator dominates -> infinity
-                let sign = get_leading_coefficient_sign(num, var) *
-                           get_leading_coefficient_sign(denom, var);
+                let sign = get_leading_coefficient_sign(num, var)
+                    * get_leading_coefficient_sign(denom, var);
                 if (sign > 0.0) == positive {
                     Ok(LimitResult::PositiveInfinity)
                 } else {
@@ -737,7 +767,8 @@ fn check_special_limits(expr: &Expression, var: &str, value: f64) -> Option<Limi
                             if let Expression::Variable(ref v) = args[0] {
                                 if v.name == var {
                                     if let Expression::Power(base, exp) = denom.as_ref() {
-                                        if matches!(**base, Expression::Variable(ref v2) if v2.name == var) {
+                                        if matches!(**base, Expression::Variable(ref v2) if v2.name == var)
+                                        {
                                             if matches!(**exp, Expression::Integer(2)) {
                                                 return Some(LimitResult::Value(0.5));
                                             }
@@ -756,7 +787,11 @@ fn check_special_limits(expr: &Expression, var: &str, value: f64) -> Option<Limi
 }
 
 /// Detect which indeterminate form we have.
-fn detect_indeterminate_form(expr: &Expression, var: &str, value: f64) -> Result<LimitResult, LimitError> {
+fn detect_indeterminate_form(
+    expr: &Expression,
+    var: &str,
+    value: f64,
+) -> Result<LimitResult, LimitError> {
     match expr {
         Expression::Binary(BinaryOp::Div, num, denom) => {
             let num_val = evaluate_with_values(num, var, value).unwrap_or(f64::NAN);
@@ -765,7 +800,9 @@ fn detect_indeterminate_form(expr: &Expression, var: &str, value: f64) -> Result
             if num_val.abs() < 1e-15 && denom_val.abs() < 1e-15 {
                 Err(LimitError::Indeterminate(IndeterminateForm::ZeroOverZero))
             } else if num_val.is_infinite() && denom_val.is_infinite() {
-                Err(LimitError::Indeterminate(IndeterminateForm::InfinityOverInfinity))
+                Err(LimitError::Indeterminate(
+                    IndeterminateForm::InfinityOverInfinity,
+                ))
             } else if denom_val.abs() < 1e-15 {
                 Err(LimitError::DivisionByZero)
             } else {
@@ -779,7 +816,9 @@ fn detect_indeterminate_form(expr: &Expression, var: &str, value: f64) -> Result
             if (left_val.abs() < 1e-15 && right_val.is_infinite())
                 || (left_val.is_infinite() && right_val.abs() < 1e-15)
             {
-                Err(LimitError::Indeterminate(IndeterminateForm::ZeroTimesInfinity))
+                Err(LimitError::Indeterminate(
+                    IndeterminateForm::ZeroTimesInfinity,
+                ))
             } else {
                 Ok(LimitResult::Value(left_val * right_val))
             }
@@ -788,10 +827,13 @@ fn detect_indeterminate_form(expr: &Expression, var: &str, value: f64) -> Result
             let left_val = evaluate_with_values(left, var, value).unwrap_or(f64::NAN);
             let right_val = evaluate_with_values(right, var, value).unwrap_or(f64::NAN);
 
-            if left_val.is_infinite() && right_val.is_infinite()
+            if left_val.is_infinite()
+                && right_val.is_infinite()
                 && (left_val > 0.0) == (right_val > 0.0)
             {
-                Err(LimitError::Indeterminate(IndeterminateForm::InfinityMinusInfinity))
+                Err(LimitError::Indeterminate(
+                    IndeterminateForm::InfinityMinusInfinity,
+                ))
             } else {
                 Ok(LimitResult::Value(left_val - right_val))
             }
@@ -818,7 +860,11 @@ fn detect_indeterminate_form(expr: &Expression, var: &str, value: f64) -> Result
 }
 
 /// Check if a limit goes to +∞ or -∞.
-fn check_infinity_direction(expr: &Expression, var: &str, value: f64) -> Result<LimitResult, LimitError> {
+fn check_infinity_direction(
+    expr: &Expression,
+    var: &str,
+    value: f64,
+) -> Result<LimitResult, LimitError> {
     // Evaluate at points approaching from both sides
     let epsilon = 1e-10;
     let left_val = evaluate_with_values(expr, var, value - epsilon);
@@ -836,14 +882,16 @@ fn check_infinity_direction(expr: &Expression, var: &str, value: f64) -> Result<
                     }
                 } else {
                     Err(LimitError::DoesNotExist(
-                        "Left and right limits differ".to_string()
+                        "Left and right limits differ".to_string(),
                     ))
                 }
             } else {
                 Ok(LimitResult::Value((l + r) / 2.0))
             }
         }
-        _ => Err(LimitError::EvaluationError("Cannot evaluate near limit point".to_string())),
+        _ => Err(LimitError::EvaluationError(
+            "Cannot evaluate near limit point".to_string(),
+        )),
     }
 }
 
@@ -860,26 +908,25 @@ fn evaluate_expr(expr: &Expression, vars: &HashMap<String, f64>) -> Result<f64, 
         Expression::Integer(n) => Ok(*n as f64),
         Expression::Float(f) => Ok(*f),
         Expression::Rational(r) => Ok(*r.numer() as f64 / *r.denom() as f64),
-        Expression::Complex(_) => Err(LimitError::EvaluationError("Complex numbers not supported in limits".to_string())),
+        Expression::Complex(_) => Err(LimitError::EvaluationError(
+            "Complex numbers not supported in limits".to_string(),
+        )),
         Expression::Constant(c) => match c {
             SymbolicConstant::Pi => Ok(std::f64::consts::PI),
             SymbolicConstant::E => Ok(std::f64::consts::E),
-            SymbolicConstant::I => Err(LimitError::EvaluationError("Imaginary unit not supported in limits".to_string())),
+            SymbolicConstant::I => Err(LimitError::EvaluationError(
+                "Imaginary unit not supported in limits".to_string(),
+            )),
         },
-        Expression::Variable(v) => {
-            vars.get(&v.name)
-                .copied()
-                .ok_or_else(|| LimitError::EvaluationError(format!("Unbound variable: {}", v.name)))
-        }
-        Expression::Unary(UnaryOp::Neg, inner) => {
-            Ok(-evaluate_expr(inner, vars)?)
-        }
-        Expression::Unary(UnaryOp::Not, _) => {
-            Err(LimitError::EvaluationError("Logical not not supported".to_string()))
-        }
-        Expression::Unary(UnaryOp::Abs, inner) => {
-            Ok(evaluate_expr(inner, vars)?.abs())
-        }
+        Expression::Variable(v) => vars
+            .get(&v.name)
+            .copied()
+            .ok_or_else(|| LimitError::EvaluationError(format!("Unbound variable: {}", v.name))),
+        Expression::Unary(UnaryOp::Neg, inner) => Ok(-evaluate_expr(inner, vars)?),
+        Expression::Unary(UnaryOp::Not, _) => Err(LimitError::EvaluationError(
+            "Logical not not supported".to_string(),
+        )),
+        Expression::Unary(UnaryOp::Abs, inner) => Ok(evaluate_expr(inner, vars)?.abs()),
         Expression::Binary(op, left, right) => {
             let l = evaluate_expr(left, vars)?;
             let r = evaluate_expr(right, vars)?;
@@ -924,7 +971,9 @@ fn evaluate_expr(expr: &Expression, vars: &HashMap<String, f64>) -> Result<f64, 
                     if args.len() >= 2 {
                         Ok(args[0].atan2(args[1]))
                     } else {
-                        Err(LimitError::EvaluationError("atan2 requires 2 arguments".to_string()))
+                        Err(LimitError::EvaluationError(
+                            "atan2 requires 2 arguments".to_string(),
+                        ))
                     }
                 }
                 Function::Sinh => Ok(args.first().copied().unwrap_or(0.0).sinh()),
@@ -970,12 +1019,14 @@ fn evaluate_expr(expr: &Expression, vars: &HashMap<String, f64>) -> Result<f64, 
                     if args.len() >= 2 {
                         Ok(args[0].powf(args[1]))
                     } else {
-                        Err(LimitError::EvaluationError("pow requires 2 arguments".to_string()))
+                        Err(LimitError::EvaluationError(
+                            "pow requires 2 arguments".to_string(),
+                        ))
                     }
                 }
-                Function::Custom(_) => {
-                    Err(LimitError::EvaluationError("Custom functions not supported".to_string()))
-                }
+                Function::Custom(_) => Err(LimitError::EvaluationError(
+                    "Custom functions not supported".to_string(),
+                )),
             }
         }
     }
@@ -1018,7 +1069,11 @@ fn get_leading_coefficient(expr: &Expression, var: &str) -> f64 {
 /// Get the sign of the leading coefficient.
 fn get_leading_coefficient_sign(expr: &Expression, var: &str) -> f64 {
     let coef = get_leading_coefficient(expr, var);
-    if coef >= 0.0 { 1.0 } else { -1.0 }
+    if coef >= 0.0 {
+        1.0
+    } else {
+        -1.0
+    }
 }
 
 /// Extract coefficient for a specific degree.
@@ -1139,15 +1194,8 @@ mod tests {
         // Note: x/x simplifies to 1, so this would return 1
         // We test a more complex case
         let x = Expression::Variable(Variable::new("x"));
-        let x_squared = Expression::Power(
-            Box::new(x.clone()),
-            Box::new(Expression::Integer(2))
-        );
-        let expr = Expression::Binary(
-            BinaryOp::Div,
-            Box::new(x_squared),
-            Box::new(x)
-        );
+        let x_squared = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(2)));
+        let expr = Expression::Binary(BinaryOp::Div, Box::new(x_squared), Box::new(x));
         // x^2 / x at x=0 is 0/0
         let result = limit(&expr, "x", LimitPoint::Value(0.0));
         // After evaluation, 0^2/0 = 0/0, but the simplified form would be x which is 0
@@ -1262,11 +1310,7 @@ mod tests {
         // A pathological case that never converges (e.g., x/x which should simplify to 1)
         // This tests that we don't loop forever - but x/x should actually work
         let x = Expression::Variable(Variable::new("x"));
-        let expr = Expression::Binary(
-            BinaryOp::Div,
-            Box::new(x.clone()),
-            Box::new(x),
-        );
+        let expr = Expression::Binary(BinaryOp::Div, Box::new(x.clone()), Box::new(x));
         // x/x should simplify via L'Hôpital: 1/1 = 1
         let result = limit_with_lhopital(&expr, "x", LimitPoint::Value(0.0));
         assert!(result.is_ok(), "x/x should work with L'Hôpital");

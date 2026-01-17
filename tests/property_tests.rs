@@ -394,17 +394,11 @@ fn known_trigonometric_values() {
     use std::f64::consts::PI;
 
     // sin(0) = 0
-    let sin_0 = Expression::Function(
-        thales::ast::Function::Sin,
-        vec![Expression::Float(0.0)],
-    );
+    let sin_0 = Expression::Function(thales::ast::Function::Sin, vec![Expression::Float(0.0)]);
     assert!((sin_0.evaluate(&HashMap::new()).unwrap() - 0.0).abs() < 1e-10);
 
     // cos(0) = 1
-    let cos_0 = Expression::Function(
-        thales::ast::Function::Cos,
-        vec![Expression::Float(0.0)],
-    );
+    let cos_0 = Expression::Function(thales::ast::Function::Cos, vec![Expression::Float(0.0)]);
     assert!((cos_0.evaluate(&HashMap::new()).unwrap() - 1.0).abs() < 1e-10);
 
     // sin(π/2) = 1
@@ -441,45 +435,29 @@ fn known_exponential_values() {
     use std::f64::consts::E;
 
     // e^0 = 1
-    let exp_0 = Expression::Function(
-        thales::ast::Function::Exp,
-        vec![Expression::Float(0.0)],
-    );
+    let exp_0 = Expression::Function(thales::ast::Function::Exp, vec![Expression::Float(0.0)]);
     assert!((exp_0.evaluate(&HashMap::new()).unwrap() - 1.0).abs() < 1e-10);
 
     // e^1 = e
-    let exp_1 = Expression::Function(
-        thales::ast::Function::Exp,
-        vec![Expression::Float(1.0)],
-    );
+    let exp_1 = Expression::Function(thales::ast::Function::Exp, vec![Expression::Float(1.0)]);
     assert!((exp_1.evaluate(&HashMap::new()).unwrap() - E).abs() < 1e-10);
 
     // ln(1) = 0
-    let ln_1 = Expression::Function(
-        thales::ast::Function::Ln,
-        vec![Expression::Float(1.0)],
-    );
+    let ln_1 = Expression::Function(thales::ast::Function::Ln, vec![Expression::Float(1.0)]);
     assert!((ln_1.evaluate(&HashMap::new()).unwrap() - 0.0).abs() < 1e-10);
 
     // ln(e) = 1
-    let ln_e = Expression::Function(
-        thales::ast::Function::Ln,
-        vec![Expression::Float(E)],
-    );
+    let ln_e = Expression::Function(thales::ast::Function::Ln, vec![Expression::Float(E)]);
     assert!((ln_e.evaluate(&HashMap::new()).unwrap() - 1.0).abs() < 1e-10);
 
     // log10(10) = 1
-    let log10_10 = Expression::Function(
-        thales::ast::Function::Log10,
-        vec![Expression::Float(10.0)],
-    );
+    let log10_10 =
+        Expression::Function(thales::ast::Function::Log10, vec![Expression::Float(10.0)]);
     assert!((log10_10.evaluate(&HashMap::new()).unwrap() - 1.0).abs() < 1e-10);
 
     // log10(100) = 2
-    let log10_100 = Expression::Function(
-        thales::ast::Function::Log10,
-        vec![Expression::Float(100.0)],
-    );
+    let log10_100 =
+        Expression::Function(thales::ast::Function::Log10, vec![Expression::Float(100.0)]);
     assert!((log10_100.evaluate(&HashMap::new()).unwrap() - 2.0).abs() < 1e-10);
 }
 
@@ -554,10 +532,7 @@ fn edge_case_zero_power_zero() {
 #[test]
 fn edge_case_negative_square_root() {
     // sqrt(-1) should return NaN or None
-    let expr = Expression::Function(
-        thales::ast::Function::Sqrt,
-        vec![Expression::Integer(-1)],
-    );
+    let expr = Expression::Function(thales::ast::Function::Sqrt, vec![Expression::Integer(-1)]);
 
     let result = expr.evaluate(&HashMap::new());
     // Should either be None or NaN

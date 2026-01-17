@@ -26,7 +26,10 @@
 //! // Result should be 1
 //! ```
 
-use crate::ast::{BinaryOp, Expression, Function, UnaryOp};
+use crate::ast::{Expression, Function, UnaryOp};
+
+#[cfg(test)]
+use crate::ast::BinaryOp;
 use crate::pattern::{apply_rule_recursive, apply_rules_to_fixpoint, Pattern, Rule};
 
 // =============================================================================

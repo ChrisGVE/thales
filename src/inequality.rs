@@ -471,7 +471,10 @@ fn solve_linear_inequality(
 }
 
 /// Extract linear coefficients (a, b) from expression ax + b.
-fn extract_linear_coefficients(expr: &Expression, var: &str) -> Result<(f64, f64), InequalityError> {
+fn extract_linear_coefficients(
+    expr: &Expression,
+    var: &str,
+) -> Result<(f64, f64), InequalityError> {
     // Simplified implementation - evaluate at x=0 to get b, at x=1 to get a+b
     let mut vars = HashMap::new();
 
@@ -556,7 +559,10 @@ fn solve_quadratic_inequality(
                     Ok(IntervalSolution::AllReals)
                 } else {
                     // Only at the single point x = root
-                    Ok(IntervalSolution::closed_interval(root_expr.clone(), root_expr))
+                    Ok(IntervalSolution::closed_interval(
+                        root_expr.clone(),
+                        root_expr,
+                    ))
                 }
             }
         } else {
@@ -573,7 +579,10 @@ fn solve_quadratic_inequality(
             } else {
                 // <= 0
                 if parabola_positive {
-                    Ok(IntervalSolution::closed_interval(root_expr.clone(), root_expr))
+                    Ok(IntervalSolution::closed_interval(
+                        root_expr.clone(),
+                        root_expr,
+                    ))
                 } else {
                     Ok(IntervalSolution::AllReals)
                 }
@@ -820,20 +829,18 @@ fn min_bound(b1: &Bound, inc1: bool, b2: &Bound, inc2: bool) -> (Bound, bool) {
         (Bound::NegativeInfinity, _) | (_, Bound::NegativeInfinity) => {
             (Bound::NegativeInfinity, false)
         }
-        (Bound::Value(e1), Bound::Value(e2)) => {
-            match (eval_constant(e1), eval_constant(e2)) {
-                (Some(v1), Some(v2)) => {
-                    if v1 < v2 {
-                        (b1.clone(), inc1)
-                    } else if v2 < v1 {
-                        (b2.clone(), inc2)
-                    } else {
-                        (b1.clone(), inc1 && inc2)
-                    }
+        (Bound::Value(e1), Bound::Value(e2)) => match (eval_constant(e1), eval_constant(e2)) {
+            (Some(v1), Some(v2)) => {
+                if v1 < v2 {
+                    (b1.clone(), inc1)
+                } else if v2 < v1 {
+                    (b2.clone(), inc2)
+                } else {
+                    (b1.clone(), inc1 && inc2)
                 }
-                _ => (b1.clone(), inc1),
             }
-        }
+            _ => (b1.clone(), inc1),
+        },
     }
 }
 
@@ -956,10 +963,7 @@ mod tests {
     #[test]
     fn test_linear_flip_sign() {
         // -x + 3 > 0  =>  x < 3
-        let lhs = add(
-            Expression::Unary(UnaryOp::Neg, Box::new(var("x"))),
-            int(3),
-        );
+        let lhs = add(Expression::Unary(UnaryOp::Neg, Box::new(var("x"))), int(3));
         let ineq = Inequality::GreaterThan(lhs, int(0));
 
         let solution = solve_inequality(&ineq, "x").unwrap();

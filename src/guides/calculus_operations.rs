@@ -489,4 +489,3 @@
 //!
 //! [`Expression`]: crate::ast::Expression
 //! [`Expression::differentiate`]: crate::ast::Expression::differentiate
-

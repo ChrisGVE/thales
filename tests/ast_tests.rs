@@ -1,5 +1,5 @@
-use thales::ast::*;
 use std::collections::HashMap;
+use thales::ast::*;
 
 #[test]
 fn test_ast_construction_integer() {

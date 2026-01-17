@@ -127,9 +127,10 @@ pub fn gamma(x: &Expression) -> Result<SpecialFunctionResult, SpecialFunctionErr
     // Handle positive integers: Γ(n) = (n-1)!
     if let Expression::Integer(n) = x {
         if *n <= 0 {
-            return Err(SpecialFunctionError::InvalidArgument(
-                format!("Gamma function has a pole at non-positive integer {}", n),
-            ));
+            return Err(SpecialFunctionError::InvalidArgument(format!(
+                "Gamma function has a pole at non-positive integer {}",
+                n
+            )));
         }
 
         steps.push(format!("For positive integer n={}, use Γ(n) = (n-1)!", n));
@@ -238,9 +239,10 @@ pub fn gamma(x: &Expression) -> Result<SpecialFunctionResult, SpecialFunctionErr
     // Handle Float values using Stirling's approximation or numerical methods
     if let Expression::Float(f) = x {
         if *f <= 0.0 && f.fract() == 0.0 {
-            return Err(SpecialFunctionError::InvalidArgument(
-                format!("Gamma function has a pole at non-positive integer {}", f),
-            ));
+            return Err(SpecialFunctionError::InvalidArgument(format!(
+                "Gamma function has a pole at non-positive integer {}",
+                f
+            )));
         }
 
         steps.push(format!(
@@ -273,9 +275,10 @@ pub fn gamma(x: &Expression) -> Result<SpecialFunctionResult, SpecialFunctionErr
         ));
     }
 
-    Err(SpecialFunctionError::NotImplemented(
-        format!("Gamma function not implemented for expression type: {}", format_expr(x)),
-    ))
+    Err(SpecialFunctionError::NotImplemented(format!(
+        "Gamma function not implemented for expression type: {}",
+        format_expr(x)
+    )))
 }
 
 /// Compute the Beta function with derivation steps.
@@ -294,10 +297,7 @@ pub fn gamma(x: &Expression) -> Result<SpecialFunctionResult, SpecialFunctionErr
 /// assert_eq!(result.numeric_value, Some(1.0));
 /// ```
 #[must_use = "computing special functions returns a result that should be used"]
-pub fn beta(
-    a: &Expression,
-    b: &Expression,
-) -> Result<SpecialFunctionResult, SpecialFunctionError> {
+pub fn beta(a: &Expression, b: &Expression) -> Result<SpecialFunctionResult, SpecialFunctionError> {
     let mut steps = Vec::new();
     steps.push(format!(
         "Computing Beta function: B({}, {})",
@@ -325,8 +325,12 @@ pub fn beta(
     let a_plus_b_simplified = a_plus_b.simplify();
 
     // Compute Γ(a + b)
-    steps.push(format!("Step 3: Compute Γ({} + {}) = Γ({})",
-        format_expr(a), format_expr(b), format_expr(&a_plus_b_simplified)));
+    steps.push(format!(
+        "Step 3: Compute Γ({} + {}) = Γ({})",
+        format_expr(a),
+        format_expr(b),
+        format_expr(&a_plus_b_simplified)
+    ));
     let gamma_a_plus_b = gamma(&a_plus_b_simplified)?;
     for step in &gamma_a_plus_b.derivation_steps {
         steps.push(format!("  {}", step));
@@ -403,7 +407,9 @@ pub fn erf(x: &Expression) -> Result<SpecialFunctionResult, SpecialFunctionError
     let mut steps = Vec::new();
     steps.push(format!("Computing error function: erf({})", format_expr(x)));
     steps.push("Definition: erf(x) = (2/√π) ∫₀ˣ e^(-t²) dt".to_string());
-    steps.push("Using series expansion: erf(x) = (2/√π) Σ [(-1)ⁿ x^(2n+1)] / [n!(2n+1)]".to_string());
+    steps.push(
+        "Using series expansion: erf(x) = (2/√π) Σ [(-1)ⁿ x^(2n+1)] / [n!(2n+1)]".to_string(),
+    );
 
     // Try to extract numeric value
     let x_val = match x {
@@ -468,9 +474,10 @@ pub fn erf(x: &Expression) -> Result<SpecialFunctionResult, SpecialFunctionError
         ));
     }
 
-    Err(SpecialFunctionError::NotImplemented(
-        format!("Error function not implemented for expression type: {}", format_expr(x)),
-    ))
+    Err(SpecialFunctionError::NotImplemented(format!(
+        "Error function not implemented for expression type: {}",
+        format_expr(x)
+    )))
 }
 
 /// Compute the complementary error function with derivation steps.
@@ -519,7 +526,12 @@ pub fn erfc(x: &Expression) -> Result<SpecialFunctionResult, SpecialFunctionErro
 
     let numeric_value = erf_result.numeric_value.map(|erf_val| {
         let result = 1.0 - erf_val;
-        steps.push(format!("erfc({}) = 1 - {} = {}", format_expr(x), erf_val, result));
+        steps.push(format!(
+            "erfc({}) = 1 - {} = {}",
+            format_expr(x),
+            erf_val,
+            result
+        ));
         result
     });
 
@@ -584,10 +596,7 @@ mod tests {
         let result = gamma(&Expression::Integer(5)).unwrap();
         assert_eq!(result.numeric_value, Some(24.0));
         assert!(!result.derivation_steps.is_empty());
-        assert!(result
-            .derivation_steps
-            .iter()
-            .any(|s| s.contains("4!")));
+        assert!(result.derivation_steps.iter().any(|s| s.contains("4!")));
     }
 
     #[test]

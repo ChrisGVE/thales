@@ -703,10 +703,6 @@ pub fn parse_expression(input: &str) -> Result<Expression, Vec<ParseError>> {
                             pos,
                             message: msg.to_string(),
                         },
-                        _ => ParseError::InvalidExpression {
-                            pos,
-                            message: "Parse error".to_string(),
-                        },
                     }
                 })
                 .collect()
@@ -833,10 +829,6 @@ pub fn parse_equation(input: &str) -> Result<Equation, Vec<ParseError>> {
                         chumsky::error::RichReason::Custom(msg) => ParseError::InvalidExpression {
                             pos,
                             message: msg.to_string(),
-                        },
-                        _ => ParseError::InvalidExpression {
-                            pos,
-                            message: "Parse error".to_string(),
                         },
                     }
                 })

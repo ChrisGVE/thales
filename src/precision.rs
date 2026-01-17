@@ -316,12 +316,11 @@ impl EvalContext {
                 SymbolicConstant::I => Ok(Value::Complex(0.0, 1.0)),
             },
 
-            Expression::Variable(v) => {
-                self.variables
-                    .get(&v.name)
-                    .cloned()
-                    .ok_or_else(|| EvalError::UndefinedVariable(v.name.clone()))
-            }
+            Expression::Variable(v) => self
+                .variables
+                .get(&v.name)
+                .cloned()
+                .ok_or_else(|| EvalError::UndefinedVariable(v.name.clone())),
 
             Expression::Unary(op, inner) => {
                 let val = self.eval_recursive(inner)?;
@@ -341,8 +340,7 @@ impl EvalContext {
             }
 
             Expression::Function(func, args) => {
-                let vals: Result<Vec<_>, _> =
-                    args.iter().map(|a| self.eval_recursive(a)).collect();
+                let vals: Result<Vec<_>, _> = args.iter().map(|a| self.eval_recursive(a)).collect();
                 self.eval_function(func, vals?)
             }
         }
@@ -393,9 +391,10 @@ impl EvalContext {
 
     fn eval_add(&self, left: Value, right: Value) -> EvalResult<Value> {
         match (left, right) {
-            (Value::Integer(a), Value::Integer(b)) => {
-                a.checked_add(b).map(Value::Integer).ok_or(EvalError::Overflow)
-            }
+            (Value::Integer(a), Value::Integer(b)) => a
+                .checked_add(b)
+                .map(Value::Integer)
+                .ok_or(EvalError::Overflow),
             (Value::Rational(a), Value::Rational(b)) => Ok(Value::Rational(a + b)),
             (Value::Complex(re1, im1), Value::Complex(re2, im2)) => {
                 Ok(Value::Complex(re1 + re2, im1 + im2))
@@ -410,9 +409,10 @@ impl EvalContext {
 
     fn eval_sub(&self, left: Value, right: Value) -> EvalResult<Value> {
         match (left, right) {
-            (Value::Integer(a), Value::Integer(b)) => {
-                a.checked_sub(b).map(Value::Integer).ok_or(EvalError::Overflow)
-            }
+            (Value::Integer(a), Value::Integer(b)) => a
+                .checked_sub(b)
+                .map(Value::Integer)
+                .ok_or(EvalError::Overflow),
             (Value::Rational(a), Value::Rational(b)) => Ok(Value::Rational(a - b)),
             (Value::Complex(re1, im1), Value::Complex(re2, im2)) => {
                 Ok(Value::Complex(re1 - re2, im1 - im2))
@@ -431,9 +431,10 @@ impl EvalContext {
 
     fn eval_mul(&self, left: Value, right: Value) -> EvalResult<Value> {
         match (left, right) {
-            (Value::Integer(a), Value::Integer(b)) => {
-                a.checked_mul(b).map(Value::Integer).ok_or(EvalError::Overflow)
-            }
+            (Value::Integer(a), Value::Integer(b)) => a
+                .checked_mul(b)
+                .map(Value::Integer)
+                .ok_or(EvalError::Overflow),
             (Value::Rational(a), Value::Rational(b)) => Ok(Value::Rational(a * b)),
             (Value::Complex(re1, im1), Value::Complex(re2, im2)) => {
                 // (a+bi)(c+di) = (ac-bd) + (ad+bc)i
@@ -553,7 +554,9 @@ impl EvalContext {
     /// Evaluate a function call.
     fn eval_function(&self, func: &Function, args: Vec<Value>) -> EvalResult<Value> {
         if args.is_empty() {
-            return Err(EvalError::InvalidOperation("Function requires arguments".to_string()));
+            return Err(EvalError::InvalidOperation(
+                "Function requires arguments".to_string(),
+            ));
         }
 
         let x = args[0].as_f64();
@@ -568,17 +571,25 @@ impl EvalContext {
                         // asin(x) for |x|>1 has complex result
                         let im = ((x * x - 1.0).sqrt() + x.abs()).ln();
                         return Ok(Value::Complex(
-                            if x >= 0.0 { std::f64::consts::FRAC_PI_2 } else { -std::f64::consts::FRAC_PI_2 },
-                            if x >= 0.0 { im } else { -im }
+                            if x >= 0.0 {
+                                std::f64::consts::FRAC_PI_2
+                            } else {
+                                -std::f64::consts::FRAC_PI_2
+                            },
+                            if x >= 0.0 { im } else { -im },
                         ));
                     }
-                    return Err(EvalError::DomainError("asin requires -1 <= x <= 1".to_string()));
+                    return Err(EvalError::DomainError(
+                        "asin requires -1 <= x <= 1".to_string(),
+                    ));
                 }
                 x.asin()
             }
             Function::Acos => {
                 if x.abs() > 1.0 {
-                    return Err(EvalError::DomainError("acos requires -1 <= x <= 1".to_string()));
+                    return Err(EvalError::DomainError(
+                        "acos requires -1 <= x <= 1".to_string(),
+                    ));
                 }
                 x.acos()
             }
@@ -615,11 +626,15 @@ impl EvalContext {
             Function::Log => {
                 // log(x, base)
                 if args.len() < 2 {
-                    return Err(EvalError::InvalidOperation("log requires two arguments".to_string()));
+                    return Err(EvalError::InvalidOperation(
+                        "log requires two arguments".to_string(),
+                    ));
                 }
                 let base = args[1].as_f64();
                 if x <= 0.0 || base <= 0.0 || base == 1.0 {
-                    return Err(EvalError::DomainError("log requires x > 0 and base > 0, base != 1".to_string()));
+                    return Err(EvalError::DomainError(
+                        "log requires x > 0 and base > 0, base != 1".to_string(),
+                    ));
                 }
                 x.log(base)
             }
@@ -649,7 +664,9 @@ impl EvalContext {
             }
             Function::Atan2 => {
                 if args.len() < 2 {
-                    return Err(EvalError::InvalidOperation("atan2 requires two arguments".to_string()));
+                    return Err(EvalError::InvalidOperation(
+                        "atan2 requires two arguments".to_string(),
+                    ));
                 }
                 let y = x;
                 let x_arg = args[1].as_f64();
@@ -667,7 +684,9 @@ impl EvalContext {
             Function::Pow => {
                 // pow(base, exp) - handled via Power expression typically
                 if args.len() < 2 {
-                    return Err(EvalError::InvalidOperation("pow requires two arguments".to_string()));
+                    return Err(EvalError::InvalidOperation(
+                        "pow requires two arguments".to_string(),
+                    ));
                 }
                 let exp = args[1].as_f64();
                 x.powf(exp)
@@ -682,7 +701,10 @@ impl EvalContext {
                 }
             }
             Function::Custom(name) => {
-                return Err(EvalError::CannotEvaluate(format!("Unknown function: {}", name)));
+                return Err(EvalError::CannotEvaluate(format!(
+                    "Unknown function: {}",
+                    name
+                )));
             }
         };
 
@@ -874,10 +896,7 @@ mod tests {
     fn test_overflow_handling() {
         // Very large computation should not panic
         let ctx = EvalContext::full_precision();
-        let expr = Expression::Power(
-            Box::new(int(10)),
-            Box::new(int(1000)),
-        );
+        let expr = Expression::Power(Box::new(int(10)), Box::new(int(1000)));
         let result = ctx.evaluate(&expr).unwrap();
         // Should be infinity
         match result {
@@ -933,11 +952,7 @@ mod tests {
 
         // i * i = -1
         let i = Expression::Constant(SymbolicConstant::I);
-        let i_squared = Expression::Binary(
-            BinaryOp::Mul,
-            Box::new(i.clone()),
-            Box::new(i),
-        );
+        let i_squared = Expression::Binary(BinaryOp::Mul, Box::new(i.clone()), Box::new(i));
         let result = ctx.evaluate(&i_squared).unwrap();
         match result {
             Value::Complex(re, im) => {
@@ -957,10 +972,7 @@ mod tests {
         assert!(ctx.evaluate(&expr).is_err());
 
         // But very large numbers should produce infinity
-        let expr = Expression::Power(
-            Box::new(int(10)),
-            Box::new(int(500)),
-        );
+        let expr = Expression::Power(Box::new(int(10)), Box::new(int(500)));
         let result = ctx.evaluate(&expr).unwrap();
         let is_positive_inf = matches!(result, Value::PositiveInfinity)
             || matches!(result, Value::Float(f) if f.is_infinite() && f > 0.0);

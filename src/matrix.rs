@@ -58,13 +58,32 @@ pub enum MatrixError {
 impl fmt::Display for MatrixError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            MatrixError::DimensionMismatch { operation, expected, got } => {
-                write!(f, "{}: expected {}x{}, got {}x{}", operation, expected.0, expected.1, got.0, got.1)
+            MatrixError::DimensionMismatch {
+                operation,
+                expected,
+                got,
+            } => {
+                write!(
+                    f,
+                    "{}: expected {}x{}, got {}x{}",
+                    operation, expected.0, expected.1, got.0, got.1
+                )
             }
             MatrixError::EmptyMatrix => write!(f, "Empty matrix not allowed"),
-            MatrixError::NonRectangular => write!(f, "Matrix must be rectangular (all rows same length)"),
-            MatrixError::IndexOutOfBounds { row, col, rows, cols } => {
-                write!(f, "Index ({}, {}) out of bounds for {}x{} matrix", row, col, rows, cols)
+            MatrixError::NonRectangular => {
+                write!(f, "Matrix must be rectangular (all rows same length)")
+            }
+            MatrixError::IndexOutOfBounds {
+                row,
+                col,
+                rows,
+                cols,
+            } => {
+                write!(
+                    f,
+                    "Index ({}, {}) out of bounds for {}x{} matrix",
+                    row, col, rows, cols
+                )
             }
             MatrixError::InvalidOperation(msg) => write!(f, "Invalid operation: {}", msg),
         }
@@ -166,7 +185,11 @@ impl MatrixExpr {
         }
 
         let rows = elements.len();
-        Ok(Self { rows, cols, elements })
+        Ok(Self {
+            rows,
+            cols,
+            elements,
+        })
     }
 
     /// Create an identity matrix of size n x n.
@@ -194,7 +217,11 @@ impl MatrixExpr {
                     .collect()
             })
             .collect();
-        Self { rows: n, cols: n, elements }
+        Self {
+            rows: n,
+            cols: n,
+            elements,
+        }
     }
 
     /// Create a zero matrix of size rows x cols.
@@ -212,7 +239,11 @@ impl MatrixExpr {
         let elements: Vec<Vec<Expression>> = (0..rows)
             .map(|_| (0..cols).map(|_| Expression::Integer(0)).collect())
             .collect();
-        Self { rows, cols, elements }
+        Self {
+            rows,
+            cols,
+            elements,
+        }
     }
 
     /// Create a diagonal matrix from a vector of expressions.
@@ -246,7 +277,11 @@ impl MatrixExpr {
                     .collect()
             })
             .collect();
-        Self { rows: n, cols: n, elements }
+        Self {
+            rows: n,
+            cols: n,
+            elements,
+        }
     }
 
     /// Get the number of rows.
@@ -349,7 +384,11 @@ impl MatrixExpr {
     /// ```
     pub fn transpose(&self) -> Self {
         let elements: Vec<Vec<Expression>> = (0..self.cols)
-            .map(|j| (0..self.rows).map(|i| self.elements[i][j].clone()).collect())
+            .map(|j| {
+                (0..self.rows)
+                    .map(|i| self.elements[i][j].clone())
+                    .collect()
+            })
             .collect();
         Self {
             rows: self.cols,
@@ -675,11 +714,7 @@ impl MatrixExpr {
         if (row + col) % 2 == 0 {
             Ok(minor)
         } else {
-            Ok(Expression::Unary(
-                crate::ast::UnaryOp::Neg,
-                Box::new(minor),
-            )
-            .simplify())
+            Ok(Expression::Unary(crate::ast::UnaryOp::Neg, Box::new(minor)).simplify())
         }
     }
 
@@ -737,12 +772,10 @@ impl MatrixExpr {
                     Box::new(b.clone()),
                     Box::new(c.clone()),
                 );
-                Ok(Expression::Binary(
-                    crate::ast::BinaryOp::Sub,
-                    Box::new(ad),
-                    Box::new(bc),
+                Ok(
+                    Expression::Binary(crate::ast::BinaryOp::Sub, Box::new(ad), Box::new(bc))
+                        .simplify(),
                 )
-                .simplify())
             }
             _ => {
                 // Cofactor expansion along first row
@@ -1054,8 +1087,7 @@ impl MatrixExpr {
         let q = minor12 + minor13 + minor23;
 
         // Determinant
-        let det = a11 * (a22 * a33 - a23 * a32)
-            - a12 * (a21 * a33 - a23 * a31)
+        let det = a11 * (a22 * a33 - a23 * a32) - a12 * (a21 * a33 - a23 * a31)
             + a13 * (a21 * a32 - a22 * a31);
         let r = -det;
 
@@ -1212,15 +1244,12 @@ impl MatrixExpr {
         let empty = std::collections::HashMap::new();
 
         if let (Some(a), Some(at)) = (self.evaluate(&empty), transpose.evaluate(&empty)) {
-            let is_symmetric = a
-                .iter()
-                .zip(at.iter())
-                .all(|(row_a, row_at)| {
-                    row_a
-                        .iter()
-                        .zip(row_at.iter())
-                        .all(|(x, y)| (x - y).abs() < 1e-10)
-                });
+            let is_symmetric = a.iter().zip(at.iter()).all(|(row_a, row_at)| {
+                row_a
+                    .iter()
+                    .zip(row_at.iter())
+                    .all(|(x, y)| (x - y).abs() < 1e-10)
+            });
 
             if is_symmetric {
                 return Ok(true);
@@ -1362,7 +1391,11 @@ fn solve_cubic(p: f64, q: f64, r: f64) -> MatrixResult<Vec<f64>> {
             // Double root
             let double_root = 3.0 * b / a;
             let simple_root = -3.0 * b / (2.0 * a);
-            Ok(vec![double_root + offset, simple_root + offset, simple_root + offset])
+            Ok(vec![
+                double_root + offset,
+                simple_root + offset,
+                simple_root + offset,
+            ])
         }
     } else {
         // One real root, two complex (return real root 3 times for now)
@@ -1498,11 +1531,8 @@ mod tests {
 
     #[test]
     fn test_matrix_creation() {
-        let m = MatrixExpr::from_elements(vec![
-            vec![int(1), int(2)],
-            vec![int(3), int(4)],
-        ])
-        .unwrap();
+        let m =
+            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(3), int(4)]]).unwrap();
 
         assert_eq!(m.rows(), 2);
         assert_eq!(m.cols(), 2);
@@ -1570,11 +1600,8 @@ mod tests {
 
     #[test]
     fn test_double_transpose() {
-        let m = MatrixExpr::from_elements(vec![
-            vec![int(1), int(2)],
-            vec![int(3), int(4)],
-        ])
-        .unwrap();
+        let m =
+            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(3), int(4)]]).unwrap();
 
         let mtt = m.transpose().transpose();
         assert_eq!(mtt.elements, m.elements);
@@ -1582,11 +1609,8 @@ mod tests {
 
     #[test]
     fn test_trace() {
-        let m = MatrixExpr::from_elements(vec![
-            vec![int(1), int(2)],
-            vec![int(3), int(4)],
-        ])
-        .unwrap();
+        let m =
+            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(3), int(4)]]).unwrap();
 
         let trace = m.trace().unwrap();
         let vars = HashMap::new();
@@ -1595,17 +1619,11 @@ mod tests {
 
     #[test]
     fn test_addition() {
-        let a = MatrixExpr::from_elements(vec![
-            vec![int(1), int(2)],
-            vec![int(3), int(4)],
-        ])
-        .unwrap();
+        let a =
+            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(3), int(4)]]).unwrap();
 
-        let b = MatrixExpr::from_elements(vec![
-            vec![int(5), int(6)],
-            vec![int(7), int(8)],
-        ])
-        .unwrap();
+        let b =
+            MatrixExpr::from_elements(vec![vec![int(5), int(6)], vec![int(7), int(8)]]).unwrap();
 
         let sum = a.add(&b).unwrap();
         let vars = HashMap::new();
@@ -1618,16 +1636,9 @@ mod tests {
 
     #[test]
     fn test_addition_dimension_check() {
-        let a = MatrixExpr::from_elements(vec![
-            vec![int(1), int(2)],
-        ])
-        .unwrap();
+        let a = MatrixExpr::from_elements(vec![vec![int(1), int(2)]]).unwrap();
 
-        let b = MatrixExpr::from_elements(vec![
-            vec![int(1)],
-            vec![int(2)],
-        ])
-        .unwrap();
+        let b = MatrixExpr::from_elements(vec![vec![int(1)], vec![int(2)]]).unwrap();
 
         let result = a.add(&b);
         assert!(result.is_err());
@@ -1677,11 +1688,8 @@ mod tests {
 
     #[test]
     fn test_symbolic_matrix() {
-        let m = MatrixExpr::from_elements(vec![
-            vec![var("a"), var("b")],
-            vec![var("c"), var("d")],
-        ])
-        .unwrap();
+        let m = MatrixExpr::from_elements(vec![vec![var("a"), var("b")], vec![var("c"), var("d")]])
+            .unwrap();
 
         let mut vars = HashMap::new();
         vars.insert("a".to_string(), 1.0);
@@ -1698,11 +1706,8 @@ mod tests {
 
     #[test]
     fn test_latex_output() {
-        let m = MatrixExpr::from_elements(vec![
-            vec![int(1), int(2)],
-            vec![int(3), int(4)],
-        ])
-        .unwrap();
+        let m =
+            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(3), int(4)]]).unwrap();
 
         let latex = m.to_latex(BracketStyle::Parentheses);
         assert!(latex.contains("\\begin{pmatrix}"));
@@ -1714,17 +1719,11 @@ mod tests {
     #[test]
     fn test_transpose_multiplication_property() {
         // (AB)^T = B^T A^T
-        let a = MatrixExpr::from_elements(vec![
-            vec![int(1), int(2)],
-            vec![int(3), int(4)],
-        ])
-        .unwrap();
+        let a =
+            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(3), int(4)]]).unwrap();
 
-        let b = MatrixExpr::from_elements(vec![
-            vec![int(5), int(6)],
-            vec![int(7), int(8)],
-        ])
-        .unwrap();
+        let b =
+            MatrixExpr::from_elements(vec![vec![int(5), int(6)], vec![int(7), int(8)]]).unwrap();
 
         let ab = a.mul(&b).unwrap();
         let ab_t = ab.transpose();
@@ -1745,11 +1744,8 @@ mod tests {
     #[test]
     fn test_determinant_2x2() {
         // det([[1, 2], [3, 4]]) = 1*4 - 2*3 = -2
-        let m = MatrixExpr::from_elements(vec![
-            vec![int(1), int(2)],
-            vec![int(3), int(4)],
-        ])
-        .unwrap();
+        let m =
+            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(3), int(4)]]).unwrap();
 
         let det = m.determinant().unwrap();
         let vars = HashMap::new();
@@ -1811,11 +1807,8 @@ mod tests {
     fn test_inverse_2x2() {
         // A = [[4, 7], [2, 6]], det(A) = 24 - 14 = 10
         // A^(-1) = (1/10) * [[6, -7], [-2, 4]] = [[0.6, -0.7], [-0.2, 0.4]]
-        let m = MatrixExpr::from_elements(vec![
-            vec![int(4), int(7)],
-            vec![int(2), int(6)],
-        ])
-        .unwrap();
+        let m =
+            MatrixExpr::from_elements(vec![vec![int(4), int(7)], vec![int(2), int(6)]]).unwrap();
 
         let inv = m.inverse().unwrap();
         let vars = HashMap::new();
@@ -1865,11 +1858,8 @@ mod tests {
     #[test]
     fn test_inverse_singular_matrix() {
         // Singular matrix (det = 0)
-        let m = MatrixExpr::from_elements(vec![
-            vec![int(1), int(2)],
-            vec![int(2), int(4)],
-        ])
-        .unwrap();
+        let m =
+            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(2), int(4)]]).unwrap();
 
         let result = m.inverse();
         assert!(result.is_err());
@@ -1878,11 +1868,8 @@ mod tests {
     #[test]
     fn test_determinant_symbolic() {
         // det([[a, b], [c, d]]) = ad - bc
-        let m = MatrixExpr::from_elements(vec![
-            vec![var("a"), var("b")],
-            vec![var("c"), var("d")],
-        ])
-        .unwrap();
+        let m = MatrixExpr::from_elements(vec![vec![var("a"), var("b")], vec![var("c"), var("d")]])
+            .unwrap();
 
         let det = m.determinant().unwrap();
 
@@ -1920,11 +1907,8 @@ mod tests {
     #[test]
     fn test_adjugate_2x2() {
         // adj([[a, b], [c, d]]) = [[d, -b], [-c, a]]
-        let m = MatrixExpr::from_elements(vec![
-            vec![int(1), int(2)],
-            vec![int(3), int(4)],
-        ])
-        .unwrap();
+        let m =
+            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(3), int(4)]]).unwrap();
 
         let adj = m.adjugate().unwrap();
         let vars = HashMap::new();
@@ -1937,17 +1921,11 @@ mod tests {
 
     #[test]
     fn test_is_singular() {
-        let singular = MatrixExpr::from_elements(vec![
-            vec![int(1), int(2)],
-            vec![int(2), int(4)],
-        ])
-        .unwrap();
+        let singular =
+            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(2), int(4)]]).unwrap();
 
-        let non_singular = MatrixExpr::from_elements(vec![
-            vec![int(1), int(2)],
-            vec![int(3), int(4)],
-        ])
-        .unwrap();
+        let non_singular =
+            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(3), int(4)]]).unwrap();
 
         let vars = HashMap::new();
         assert_eq!(singular.is_singular(&vars), Some(true));
@@ -1977,11 +1955,8 @@ mod tests {
     fn test_characteristic_polynomial_2x2() {
         // A = [[2, 1], [1, 2]], eigenvalues are 1 and 3
         // char poly = (λ - 1)(λ - 3) = λ² - 4λ + 3
-        let m = MatrixExpr::from_elements(vec![
-            vec![int(2), int(1)],
-            vec![int(1), int(2)],
-        ])
-        .unwrap();
+        let m =
+            MatrixExpr::from_elements(vec![vec![int(2), int(1)], vec![int(1), int(2)]]).unwrap();
 
         let char_poly = m.characteristic_polynomial("lambda").unwrap();
 
@@ -1989,22 +1964,27 @@ mod tests {
         let mut vars = HashMap::new();
         vars.insert("lambda".to_string(), 1.0);
         let at_1 = char_poly.evaluate(&vars).unwrap();
-        assert!(at_1.abs() < 1e-10, "char poly at λ=1 should be 0, got {}", at_1);
+        assert!(
+            at_1.abs() < 1e-10,
+            "char poly at λ=1 should be 0, got {}",
+            at_1
+        );
 
         // Evaluate at λ = 3 (should be 0)
         vars.insert("lambda".to_string(), 3.0);
         let at_3 = char_poly.evaluate(&vars).unwrap();
-        assert!(at_3.abs() < 1e-10, "char poly at λ=3 should be 0, got {}", at_3);
+        assert!(
+            at_3.abs() < 1e-10,
+            "char poly at λ=3 should be 0, got {}",
+            at_3
+        );
     }
 
     #[test]
     fn test_eigenvalues_2x2_symmetric() {
         // A = [[2, 1], [1, 2]], eigenvalues are 1 and 3
-        let m = MatrixExpr::from_elements(vec![
-            vec![int(2), int(1)],
-            vec![int(1), int(2)],
-        ])
-        .unwrap();
+        let m =
+            MatrixExpr::from_elements(vec![vec![int(2), int(1)], vec![int(1), int(2)]]).unwrap();
 
         let eigenvalues = m.eigenvalues_numeric().unwrap();
         assert_eq!(eigenvalues.len(), 2);
@@ -2013,18 +1993,23 @@ mod tests {
         let mut sorted = eigenvalues.clone();
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-        assert!((sorted[0] - 1.0).abs() < 1e-10, "Expected 1, got {}", sorted[0]);
-        assert!((sorted[1] - 3.0).abs() < 1e-10, "Expected 3, got {}", sorted[1]);
+        assert!(
+            (sorted[0] - 1.0).abs() < 1e-10,
+            "Expected 1, got {}",
+            sorted[0]
+        );
+        assert!(
+            (sorted[1] - 3.0).abs() < 1e-10,
+            "Expected 3, got {}",
+            sorted[1]
+        );
     }
 
     #[test]
     fn test_eigenvalues_diagonal() {
         // Diagonal matrix: eigenvalues are the diagonal elements
-        let m = MatrixExpr::from_elements(vec![
-            vec![int(5), int(0)],
-            vec![int(0), int(3)],
-        ])
-        .unwrap();
+        let m =
+            MatrixExpr::from_elements(vec![vec![int(5), int(0)], vec![int(0), int(3)]]).unwrap();
 
         let eigenvalues = m.eigenvalues_numeric().unwrap();
         let mut sorted = eigenvalues.clone();
@@ -2050,11 +2035,8 @@ mod tests {
     #[test]
     fn test_eigenvector_2x2() {
         // A = [[2, 1], [1, 2]], eigenvalue 3 has eigenvector [1, 1]
-        let m = MatrixExpr::from_elements(vec![
-            vec![int(2), int(1)],
-            vec![int(1), int(2)],
-        ])
-        .unwrap();
+        let m =
+            MatrixExpr::from_elements(vec![vec![int(2), int(1)], vec![int(1), int(2)]]).unwrap();
 
         let eigenvector = m.eigenvector_numeric(3.0).unwrap();
         assert_eq!(eigenvector.len(), 2);
@@ -2062,16 +2044,17 @@ mod tests {
         // Check Av = λv (up to normalization)
         // v should be proportional to [1, 1]
         let ratio = eigenvector[0] / eigenvector[1];
-        assert!((ratio - 1.0).abs() < 1e-5, "Expected ratio 1, got {}", ratio);
+        assert!(
+            (ratio - 1.0).abs() < 1e-5,
+            "Expected ratio 1, got {}",
+            ratio
+        );
     }
 
     #[test]
     fn test_eigenpairs() {
-        let m = MatrixExpr::from_elements(vec![
-            vec![int(2), int(1)],
-            vec![int(1), int(2)],
-        ])
-        .unwrap();
+        let m =
+            MatrixExpr::from_elements(vec![vec![int(2), int(1)], vec![int(1), int(2)]]).unwrap();
 
         let pairs = m.eigenpairs_numeric().unwrap();
         assert_eq!(pairs.len(), 2);
@@ -2083,7 +2066,12 @@ mod tests {
 
             // Compute Av
             let av: Vec<f64> = (0..2)
-                .map(|i| a[i].iter().zip(eigenvector.iter()).map(|(a, v)| a * v).sum())
+                .map(|i| {
+                    a[i].iter()
+                        .zip(eigenvector.iter())
+                        .map(|(a, v)| a * v)
+                        .sum()
+                })
                 .collect();
 
             // Compute λv
@@ -2094,7 +2082,11 @@ mod tests {
                 assert!(
                     (av[i] - lambda_v[i]).abs() < 1e-5,
                     "Av[{}] = {}, λv[{}] = {}, eigenvalue = {}",
-                    i, av[i], i, lambda_v[i], eigenvalue
+                    i,
+                    av[i],
+                    i,
+                    lambda_v[i],
+                    eigenvalue
                 );
             }
         }
@@ -2123,11 +2115,8 @@ mod tests {
     #[test]
     fn test_is_diagonalizable_symmetric() {
         // Symmetric matrices are always diagonalizable
-        let m = MatrixExpr::from_elements(vec![
-            vec![int(2), int(1)],
-            vec![int(1), int(2)],
-        ])
-        .unwrap();
+        let m =
+            MatrixExpr::from_elements(vec![vec![int(2), int(1)], vec![int(1), int(2)]]).unwrap();
 
         assert!(m.is_diagonalizable().unwrap());
     }

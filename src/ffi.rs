@@ -194,8 +194,15 @@ mod ffi {
     }
 
     extern "Rust" {
-        fn differentiate_ffi(expression: &str, variable: &str) -> Result<DifferentiationResultFFI, String>;
-        fn differentiate_n_ffi(expression: &str, variable: &str, n: u32) -> Result<DifferentiationResultFFI, String>;
+        fn differentiate_ffi(
+            expression: &str,
+            variable: &str,
+        ) -> Result<DifferentiationResultFFI, String>;
+        fn differentiate_n_ffi(
+            expression: &str,
+            variable: &str,
+            n: u32,
+        ) -> Result<DifferentiationResultFFI, String>;
         fn gradient_ffi(expression: &str, variables_json: &str) -> Result<String, String>;
         fn integrate_ffi(expression: &str, variable: &str) -> Result<IntegrationResultFFI, String>;
         fn definite_integral_ffi(
@@ -204,12 +211,17 @@ mod ffi {
             lower: f64,
             upper: f64,
         ) -> Result<DefiniteIntegralResultFFI, String>;
-        fn limit_ffi(expression: &str, variable: &str, approaches: f64) -> Result<LimitResultFFI, String>;
+        fn limit_ffi(
+            expression: &str,
+            variable: &str,
+            approaches: f64,
+        ) -> Result<LimitResultFFI, String>;
         fn limit_infinity_ffi(expression: &str, variable: &str) -> Result<LimitResultFFI, String>;
     }
 
     extern "Rust" {
-        fn evaluate_ffi(expression: &str, values_json: &str) -> Result<EvaluationResultFFI, String>;
+        fn evaluate_ffi(expression: &str, values_json: &str)
+            -> Result<EvaluationResultFFI, String>;
         fn simplify_ffi(expression: &str) -> Result<SimplificationResultFFI, String>;
         fn simplify_trig_ffi(expression: &str) -> Result<SimplificationResultFFI, String>;
         fn simplify_trig_with_steps_ffi(expression: &str) -> Result<String, String>;
@@ -218,7 +230,11 @@ mod ffi {
     extern "Rust" {
         fn solve_system_ffi(equations_json: &str) -> Result<String, String>;
         fn solve_inequality_ffi(inequality: &str, variable: &str) -> Result<String, String>;
-        fn partial_fractions_ffi(numerator: &str, denominator: &str, variable: &str) -> Result<String, String>;
+        fn partial_fractions_ffi(
+            numerator: &str,
+            denominator: &str,
+            variable: &str,
+        ) -> Result<String, String>;
         fn solve_equation_system_ffi(
             equations_json: &str,
             known_values_json: &str,
@@ -462,8 +478,7 @@ fn parse_latex_to_latex_ffi(input: &str) -> Result<String, String> {
 
 /// Get the LaTeX representation of an expression.
 fn to_latex_ffi(expression: &str) -> Result<String, String> {
-    let expr = parse_expression(expression)
-        .map_err(|e| format!("Parse error: {:?}", e))?;
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
     Ok(expr.to_latex())
 }
 
@@ -472,9 +487,11 @@ fn to_latex_ffi(expression: &str) -> Result<String, String> {
 // =============================================================================
 
 /// Differentiate an expression with respect to a variable.
-fn differentiate_ffi(expression: &str, variable: &str) -> Result<ffi::DifferentiationResultFFI, String> {
-    let expr = parse_expression(expression)
-        .map_err(|e| format!("Parse error: {:?}", e))?;
+fn differentiate_ffi(
+    expression: &str,
+    variable: &str,
+) -> Result<ffi::DifferentiationResultFFI, String> {
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
 
     let derivative = expr.differentiate(variable);
     let simplified = derivative.simplify();
@@ -488,9 +505,12 @@ fn differentiate_ffi(expression: &str, variable: &str) -> Result<ffi::Differenti
 }
 
 /// Differentiate an expression n times.
-fn differentiate_n_ffi(expression: &str, variable: &str, n: u32) -> Result<ffi::DifferentiationResultFFI, String> {
-    let expr = parse_expression(expression)
-        .map_err(|e| format!("Parse error: {:?}", e))?;
+fn differentiate_n_ffi(
+    expression: &str,
+    variable: &str,
+    n: u32,
+) -> Result<ffi::DifferentiationResultFFI, String> {
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
 
     let mut result = expr;
     for _ in 0..n {
@@ -507,8 +527,7 @@ fn differentiate_n_ffi(expression: &str, variable: &str, n: u32) -> Result<ffi::
 
 /// Compute the gradient of an expression with respect to multiple variables.
 fn gradient_ffi(expression: &str, variables_json: &str) -> Result<String, String> {
-    let expr = parse_expression(expression)
-        .map_err(|e| format!("Parse error: {:?}", e))?;
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
 
     let variables: Vec<String> = serde_json::from_str(variables_json)
         .map_err(|e| format!("Failed to parse variables JSON: {}", e))?;
@@ -525,16 +544,14 @@ fn gradient_ffi(expression: &str, variables_json: &str) -> Result<String, String
         })
         .collect();
 
-    serde_json::to_string(&gradient)
-        .map_err(|e| format!("Failed to serialize gradient: {}", e))
+    serde_json::to_string(&gradient).map_err(|e| format!("Failed to serialize gradient: {}", e))
 }
 
 /// Integrate an expression with respect to a variable (indefinite integral).
 fn integrate_ffi(expression: &str, variable: &str) -> Result<ffi::IntegrationResultFFI, String> {
     use crate::integration::integrate;
 
-    let expr = parse_expression(expression)
-        .map_err(|e| format!("Parse error: {:?}", e))?;
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
 
     let result = integrate(&expr, variable);
 
@@ -571,8 +588,7 @@ fn definite_integral_ffi(
     use crate::ast::Expression;
     use crate::integration::definite_integral;
 
-    let expr = parse_expression(expression)
-        .map_err(|e| format!("Parse error: {:?}", e))?;
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
 
     let lower_expr = Expression::Float(lower);
     let upper_expr = Expression::Float(upper);
@@ -624,8 +640,7 @@ fn limit_ffi(
 ) -> Result<ffi::LimitResultFFI, String> {
     use crate::limits::{limit, LimitPoint};
 
-    let expr = parse_expression(expression)
-        .map_err(|e| format!("Parse error: {:?}", e))?;
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
 
     let result = limit(&expr, variable, LimitPoint::Value(approaches));
 
@@ -660,8 +675,7 @@ fn limit_ffi(
 fn limit_infinity_ffi(expression: &str, variable: &str) -> Result<ffi::LimitResultFFI, String> {
     use crate::limits::{limit, LimitPoint};
 
-    let expr = parse_expression(expression)
-        .map_err(|e| format!("Parse error: {:?}", e))?;
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
 
     let result = limit(&expr, variable, LimitPoint::PositiveInfinity);
 
@@ -698,7 +712,9 @@ fn format_limit_result(result: &crate::limits::LimitResult) -> (String, String, 
     match result {
         LimitResult::Value(v) => (format!("{}", v), format!("{}", v), *v),
         LimitResult::PositiveInfinity => ("∞".to_string(), "\\infty".to_string(), f64::INFINITY),
-        LimitResult::NegativeInfinity => ("-∞".to_string(), "-\\infty".to_string(), f64::NEG_INFINITY),
+        LimitResult::NegativeInfinity => {
+            ("-∞".to_string(), "-\\infty".to_string(), f64::NEG_INFINITY)
+        }
         LimitResult::Expression(expr) => (format!("{}", expr), expr.to_latex(), f64::NAN),
     }
 }
@@ -711,8 +727,7 @@ fn format_limit_result(result: &crate::limits::LimitResult) -> (String, String, 
 fn evaluate_ffi(expression: &str, values_json: &str) -> Result<ffi::EvaluationResultFFI, String> {
     use std::collections::HashMap;
 
-    let expr = parse_expression(expression)
-        .map_err(|e| format!("Parse error: {:?}", e))?;
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
 
     let values: HashMap<String, f64> = serde_json::from_str(values_json)
         .map_err(|e| format!("Failed to parse values JSON: {}", e))?;
@@ -730,13 +745,18 @@ fn evaluate_ffi(expression: &str, values_json: &str) -> Result<ffi::EvaluationRe
             original: expression.to_string(),
             value: f64::NAN,
             success: false,
-            error_message: "Cannot evaluate expression (may contain undefined variables or operations)".to_string(),
+            error_message:
+                "Cannot evaluate expression (may contain undefined variables or operations)"
+                    .to_string(),
         }),
     }
 }
 
 /// Helper to evaluate expression with variable substitution.
-fn evaluate_expression(expr: &crate::ast::Expression, values: &std::collections::HashMap<String, f64>) -> Option<f64> {
+fn evaluate_expression(
+    expr: &crate::ast::Expression,
+    values: &std::collections::HashMap<String, f64>,
+) -> Option<f64> {
     use crate::ast::{BinaryOp, Expression, Function, UnaryOp};
 
     match expr {
@@ -767,8 +787,20 @@ fn evaluate_expression(expr: &crate::ast::Expression, values: &std::collections:
                 BinaryOp::Add => Some(l + r),
                 BinaryOp::Sub => Some(l - r),
                 BinaryOp::Mul => Some(l * r),
-                BinaryOp::Div => if r != 0.0 { Some(l / r) } else { None },
-                BinaryOp::Mod => if r != 0.0 { Some(l % r) } else { None },
+                BinaryOp::Div => {
+                    if r != 0.0 {
+                        Some(l / r)
+                    } else {
+                        None
+                    }
+                }
+                BinaryOp::Mod => {
+                    if r != 0.0 {
+                        Some(l % r)
+                    } else {
+                        None
+                    }
+                }
             }
         }
         Expression::Power(base, exp) => {
@@ -777,7 +809,8 @@ fn evaluate_expression(expr: &crate::ast::Expression, values: &std::collections:
             Some(b.powf(e))
         }
         Expression::Function(func, args) => {
-            let arg_values: Option<Vec<f64>> = args.iter()
+            let arg_values: Option<Vec<f64>> = args
+                .iter()
                 .map(|a| evaluate_expression(a, values))
                 .collect();
             let arg_values = arg_values?;
@@ -793,7 +826,13 @@ fn evaluate_expression(expr: &crate::ast::Expression, values: &std::collections:
                 Function::Cosh => Some(arg_values[0].cosh()),
                 Function::Tanh => Some(arg_values[0].tanh()),
                 Function::Exp => Some(arg_values[0].exp()),
-                Function::Ln => if arg_values[0] > 0.0 { Some(arg_values[0].ln()) } else { None },
+                Function::Ln => {
+                    if arg_values[0] > 0.0 {
+                        Some(arg_values[0].ln())
+                    } else {
+                        None
+                    }
+                }
                 Function::Log => {
                     if arg_values.len() == 2 && arg_values[0] > 0.0 && arg_values[1] > 0.0 {
                         Some(arg_values[1].log(arg_values[0]))
@@ -803,7 +842,13 @@ fn evaluate_expression(expr: &crate::ast::Expression, values: &std::collections:
                         None
                     }
                 }
-                Function::Sqrt => if arg_values[0] >= 0.0 { Some(arg_values[0].sqrt()) } else { None },
+                Function::Sqrt => {
+                    if arg_values[0] >= 0.0 {
+                        Some(arg_values[0].sqrt())
+                    } else {
+                        None
+                    }
+                }
                 Function::Abs => Some(arg_values[0].abs()),
                 Function::Floor => Some(arg_values[0].floor()),
                 Function::Ceil => Some(arg_values[0].ceil()),
@@ -817,8 +862,7 @@ fn evaluate_expression(expr: &crate::ast::Expression, values: &std::collections:
 
 /// Simplify an expression.
 fn simplify_ffi(expression: &str) -> Result<ffi::SimplificationResultFFI, String> {
-    let expr = parse_expression(expression)
-        .map_err(|e| format!("Parse error: {:?}", e))?;
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
 
     let simplified = expr.simplify();
 
@@ -833,8 +877,7 @@ fn simplify_ffi(expression: &str) -> Result<ffi::SimplificationResultFFI, String
 fn simplify_trig_ffi(expression: &str) -> Result<ffi::SimplificationResultFFI, String> {
     use crate::trigonometric::simplify_trig;
 
-    let expr = parse_expression(expression)
-        .map_err(|e| format!("Parse error: {:?}", e))?;
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
 
     let simplified = simplify_trig(&expr);
 
@@ -849,8 +892,7 @@ fn simplify_trig_ffi(expression: &str) -> Result<ffi::SimplificationResultFFI, S
 fn simplify_trig_with_steps_ffi(expression: &str) -> Result<String, String> {
     use crate::trigonometric::simplify_trig_with_steps;
 
-    let expr = parse_expression(expression)
-        .map_err(|e| format!("Parse error: {:?}", e))?;
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
 
     let (simplified, steps) = simplify_trig_with_steps(&expr);
 
@@ -861,8 +903,7 @@ fn simplify_trig_with_steps_ffi(expression: &str) -> Result<String, String> {
         "steps": steps
     });
 
-    serde_json::to_string(&result)
-        .map_err(|e| format!("Failed to serialize result: {}", e))
+    serde_json::to_string(&result).map_err(|e| format!("Failed to serialize result: {}", e))
 }
 
 // =============================================================================
@@ -900,8 +941,7 @@ fn solve_system_ffi(equations_json: &str) -> Result<String, String> {
                 .iter()
                 .map(|(var, sol)| (var.name.clone(), format!("{:?}", sol)))
                 .collect();
-            serde_json::to_string(&result)
-                .map_err(|e| format!("Failed to serialize result: {}", e))
+            serde_json::to_string(&result).map_err(|e| format!("Failed to serialize result: {}", e))
         }
         Err(e) => Err(format!("Failed to solve system: {:?}", e)),
     }
@@ -911,7 +951,9 @@ fn solve_system_ffi(equations_json: &str) -> Result<String, String> {
 fn collect_variables(expr: &crate::ast::Expression, vars: &mut std::collections::HashSet<String>) {
     use crate::ast::Expression;
     match expr {
-        Expression::Variable(v) => { vars.insert(v.name.clone()); }
+        Expression::Variable(v) => {
+            vars.insert(v.name.clone());
+        }
         Expression::Unary(_, inner) => collect_variables(inner, vars),
         Expression::Binary(_, left, right) => {
             collect_variables(left, vars);
@@ -936,13 +978,29 @@ fn solve_inequality_ffi(inequality: &str, variable: &str) -> Result<String, Stri
 
     // Parse inequality (expects format like "expr < value" or "expr > value")
     let parts: Vec<&str> = if inequality.contains("<=") {
-        vec![&inequality[..inequality.find("<=").unwrap()], &inequality[inequality.find("<=").unwrap()+2..], "<="]
+        vec![
+            &inequality[..inequality.find("<=").unwrap()],
+            &inequality[inequality.find("<=").unwrap() + 2..],
+            "<=",
+        ]
     } else if inequality.contains(">=") {
-        vec![&inequality[..inequality.find(">=").unwrap()], &inequality[inequality.find(">=").unwrap()+2..], ">="]
+        vec![
+            &inequality[..inequality.find(">=").unwrap()],
+            &inequality[inequality.find(">=").unwrap() + 2..],
+            ">=",
+        ]
     } else if inequality.contains('<') {
-        vec![&inequality[..inequality.find('<').unwrap()], &inequality[inequality.find('<').unwrap()+1..], "<"]
+        vec![
+            &inequality[..inequality.find('<').unwrap()],
+            &inequality[inequality.find('<').unwrap() + 1..],
+            "<",
+        ]
     } else if inequality.contains('>') {
-        vec![&inequality[..inequality.find('>').unwrap()], &inequality[inequality.find('>').unwrap()+1..], ">"]
+        vec![
+            &inequality[..inequality.find('>').unwrap()],
+            &inequality[inequality.find('>').unwrap() + 1..],
+            ">",
+        ]
     } else {
         return Err("Invalid inequality format. Use <, >, <=, or >=".to_string());
     };
@@ -967,12 +1025,16 @@ fn solve_inequality_ffi(inequality: &str, variable: &str) -> Result<String, Stri
 }
 
 /// Partial fraction decomposition.
-fn partial_fractions_ffi(numerator: &str, denominator: &str, variable: &str) -> Result<String, String> {
+fn partial_fractions_ffi(
+    numerator: &str,
+    denominator: &str,
+    variable: &str,
+) -> Result<String, String> {
     use crate::ast::Variable;
     use crate::partial_fractions::decompose;
 
-    let num = parse_expression(numerator)
-        .map_err(|e| format!("Parse error in numerator: {:?}", e))?;
+    let num =
+        parse_expression(numerator).map_err(|e| format!("Parse error in numerator: {:?}", e))?;
     let denom = parse_expression(denominator)
         .map_err(|e| format!("Parse error in denominator: {:?}", e))?;
 
@@ -987,8 +1049,7 @@ fn partial_fractions_ffi(numerator: &str, denominator: &str, variable: &str) -> 
                 "terms_count": result.terms.len(),
                 "steps": result.steps
             });
-            serde_json::to_string(&output)
-                .map_err(|e| format!("Failed to serialize result: {}", e))
+            serde_json::to_string(&output).map_err(|e| format!("Failed to serialize result: {}", e))
         }
         Err(e) => Err(format!("Decomposition failed: {:?}", e)),
     }
@@ -1034,7 +1095,8 @@ fn solve_equation_system_ffi(
 
     // Solve the system
     let solver = MultiEquationSolver::new();
-    let solution = solver.solve(&system, &context)
+    let solution = solver
+        .solve(&system, &context)
         .map_err(|e| format!("Failed to solve system: {}", e))?;
 
     // Build the result JSON
@@ -1043,19 +1105,27 @@ fn solve_equation_system_ffi(
         if let Some(num) = val.as_numeric() {
             solutions_map.insert(var.clone(), serde_json::json!(num));
         } else {
-            solutions_map.insert(var.clone(), serde_json::json!(format!("{}", val.to_expression())));
+            solutions_map.insert(
+                var.clone(),
+                serde_json::json!(format!("{}", val.to_expression())),
+            );
         }
     }
 
     // Build step descriptions
-    let steps: Vec<serde_json::Value> = solution.resolution_path.steps.iter().map(|step| {
-        serde_json::json!({
-            "step_number": step.step_number,
-            "equation_id": step.equation_id,
-            "operation": format!("{}", step.operation),
-            "explanation": step.explanation
+    let steps: Vec<serde_json::Value> = solution
+        .resolution_path
+        .steps
+        .iter()
+        .map(|step| {
+            serde_json::json!({
+                "step_number": step.step_number,
+                "equation_id": step.equation_id,
+                "operation": format!("{}", step.operation),
+                "explanation": step.explanation
+            })
         })
-    }).collect();
+        .collect();
 
     let output = serde_json::json!({
         "solutions": solutions_map,
@@ -1065,8 +1135,7 @@ fn solve_equation_system_ffi(
         "is_complete": solution.is_complete()
     });
 
-    serde_json::to_string(&output)
-        .map_err(|e| format!("Failed to serialize result: {}", e))
+    serde_json::to_string(&output).map_err(|e| format!("Failed to serialize result: {}", e))
 }
 
 // =============================================================================
@@ -1083,8 +1152,7 @@ fn taylor_series_ffi(
     use crate::ast::Variable;
     use crate::series::taylor;
 
-    let expr = parse_expression(expression)
-        .map_err(|e| format!("Parse error: {:?}", e))?;
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
 
     let var = Variable::new(variable);
     let center_expr = crate::ast::Expression::Float(center);
@@ -1127,8 +1195,7 @@ fn maclaurin_series_ffi(
     use crate::ast::Variable;
     use crate::series::maclaurin;
 
-    let expr = parse_expression(expression)
-        .map_err(|e| format!("Parse error: {:?}", e))?;
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
 
     let var = Variable::new(variable);
 

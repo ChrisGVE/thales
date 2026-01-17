@@ -156,10 +156,8 @@ pub fn apply_small_angle_approx(
                 Function::Cos => {
                     // cos(θ) ≈ 1 - θ²/2 for small θ
                     // Error bound: |θ⁴/24|
-                    let theta_squared = Expression::Power(
-                        Box::new(arg.clone()),
-                        Box::new(Expression::Integer(2)),
-                    );
+                    let theta_squared =
+                        Expression::Power(Box::new(arg.clone()), Box::new(Expression::Integer(2)));
                     let term = Expression::Binary(
                         BinaryOp::Div,
                         Box::new(theta_squared),
@@ -198,10 +196,8 @@ pub fn apply_small_angle_approx(
             {
                 if args.len() == 1 && is_small_angle_candidate(&args[0], var) {
                     let arg = &args[0];
-                    let theta_squared = Expression::Power(
-                        Box::new(arg.clone()),
-                        Box::new(Expression::Integer(2)),
-                    );
+                    let theta_squared =
+                        Expression::Power(Box::new(arg.clone()), Box::new(Expression::Integer(2)));
                     let approximation = Expression::Binary(
                         BinaryOp::Div,
                         Box::new(theta_squared),
@@ -231,8 +227,10 @@ fn is_small_angle_candidate(expr: &Expression, var: &Variable) -> bool {
             // Allow constant * variable
             matches!(left.as_ref(), Expression::Integer(_) | Expression::Float(_))
                 && matches!(right.as_ref(), Expression::Variable(v) if v == var)
-                || matches!(right.as_ref(), Expression::Integer(_) | Expression::Float(_))
-                    && matches!(left.as_ref(), Expression::Variable(v) if v == var)
+                || matches!(
+                    right.as_ref(),
+                    Expression::Integer(_) | Expression::Float(_)
+                ) && matches!(left.as_ref(), Expression::Variable(v) if v == var)
         }
         _ => false,
     }
@@ -467,14 +465,8 @@ pub fn optimize_pythagorean(expr: &Expression) -> Option<Expression> {
 
                         let optimized = Expression::Binary(
                             BinaryOp::Mul,
-                            Box::new(Expression::Function(
-                                Function::Sqrt,
-                                vec![one_minus_x],
-                            )),
-                            Box::new(Expression::Function(
-                                Function::Sqrt,
-                                vec![one_plus_x],
-                            )),
+                            Box::new(Expression::Function(Function::Sqrt, vec![one_minus_x])),
+                            Box::new(Expression::Function(Function::Sqrt, vec![one_plus_x])),
                         );
 
                         return Some(optimized);
@@ -609,27 +601,27 @@ mod tests {
     fn test_pythagorean_optimization() {
         // Create sqrt(1 - x²)
         let x = Expression::Variable(Variable::new("x"));
-        let x_squared = Expression::Power(
-            Box::new(x.clone()),
-            Box::new(Expression::Integer(2)),
-        );
+        let x_squared = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(2)));
         let one_minus_x_squared = Expression::Binary(
             BinaryOp::Sub,
             Box::new(Expression::Integer(1)),
             Box::new(x_squared),
         );
-        let sqrt_expr = Expression::Function(
-            Function::Sqrt,
-            vec![one_minus_x_squared],
-        );
+        let sqrt_expr = Expression::Function(Function::Sqrt, vec![one_minus_x_squared]);
 
         let optimized = optimize_pythagorean(&sqrt_expr);
         assert!(optimized.is_some());
 
         // Should be sqrt(1-x) * sqrt(1+x)
         if let Some(Expression::Binary(BinaryOp::Mul, left, right)) = optimized {
-            assert!(matches!(left.as_ref(), Expression::Function(Function::Sqrt, _)));
-            assert!(matches!(right.as_ref(), Expression::Function(Function::Sqrt, _)));
+            assert!(matches!(
+                left.as_ref(),
+                Expression::Function(Function::Sqrt, _)
+            ));
+            assert!(matches!(
+                right.as_ref(),
+                Expression::Function(Function::Sqrt, _)
+            ));
         } else {
             panic!("Expected multiplication of two square roots");
         }
@@ -646,12 +638,8 @@ mod tests {
 
         // Check multiple points within range
         for value in [0.01, 0.05, 0.09] {
-            let actual_error = compute_approximation_error(
-                &sin_x,
-                &result.approximation,
-                &x,
-                value,
-            );
+            let actual_error =
+                compute_approximation_error(&sin_x, &result.approximation, &x, value);
             assert!(
                 actual_error <= result.error_bound,
                 "Actual error {} exceeds stated bound {} at value {}",
@@ -668,12 +656,7 @@ mod tests {
         let original = Expression::Function(Function::Sin, vec![Expression::Variable(x.clone())]);
         let approx = Expression::Variable(x);
 
-        let step = generate_approximation_step(
-            &original,
-            &approx,
-            1e-5,
-            "sin(θ) ≈ θ".to_string(),
-        );
+        let step = generate_approximation_step(&original, &approx, 1e-5, "sin(θ) ≈ θ".to_string());
 
         assert!(step.explanation.contains("sin(θ) ≈ θ"));
         assert!(step.explanation.contains("Error bound"));

@@ -213,7 +213,11 @@ fn integrate_product(left: &Expression, right: &Expression, var: &str) -> Integr
     if !left_has_var && !right_has_var {
         // Both constant: ∫c1*c2 dx = c1*c2*x
         let x = Expression::Variable(Variable::new(var));
-        let product = Expression::Binary(BinaryOp::Mul, Box::new(left.clone()), Box::new(right.clone()));
+        let product = Expression::Binary(
+            BinaryOp::Mul,
+            Box::new(left.clone()),
+            Box::new(right.clone()),
+        );
         Ok(Expression::Binary(
             BinaryOp::Mul,
             Box::new(product),
@@ -257,11 +261,7 @@ fn try_combine_powers(left: &Expression, right: &Expression, var: &str) -> Optio
     let right_power = extract_power(right, var)?;
 
     // Combine exponents
-    let sum = Expression::Binary(
-        BinaryOp::Add,
-        Box::new(left_power),
-        Box::new(right_power),
-    );
+    let sum = Expression::Binary(BinaryOp::Add, Box::new(left_power), Box::new(right_power));
 
     Some(Expression::Power(
         Box::new(Expression::Variable(Variable::new(var))),
@@ -465,8 +465,7 @@ fn integrate_power(base: &Expression, exponent: &Expression, var: &str) -> Integ
             if v.name == var {
                 // ∫a^x dx = a^x / ln(a)
                 let ln_base = Expression::Function(Function::Ln, vec![base.clone()]);
-                let a_to_x =
-                    Expression::Power(Box::new(base.clone()), Box::new(exponent.clone()));
+                let a_to_x = Expression::Power(Box::new(base.clone()), Box::new(exponent.clone()));
                 return Ok(Expression::Binary(
                     BinaryOp::Div,
                     Box::new(a_to_x),
@@ -815,10 +814,7 @@ pub fn integrate_by_substitution(expr: &Expression, var: &str) -> IntegrationRes
 /// Find a potential u-substitution for the given expression.
 ///
 /// Returns (u, du/dx, F(u)) where the result would be F(u) after back-substitution.
-fn find_substitution(
-    expr: &Expression,
-    var: &str,
-) -> Option<(Expression, Expression, Expression)> {
+fn find_substitution(expr: &Expression, var: &str) -> Option<(Expression, Expression, Expression)> {
     // Pattern 1: f(g(x)) * g'(x) where f and g'(x) are products
     if let Some(result) = try_product_substitution(expr, var) {
         return Some(result);
@@ -872,11 +868,7 @@ fn try_product_substitution(
                     let result = if is_one(&constant) {
                         f_integral
                     } else {
-                        Expression::Binary(
-                            BinaryOp::Div,
-                            Box::new(f_integral),
-                            Box::new(constant),
-                        )
+                        Expression::Binary(BinaryOp::Div, Box::new(f_integral), Box::new(constant))
                     };
 
                     // Include remaining factors if any
@@ -919,10 +911,8 @@ fn try_product_substitution(
                             Box::new(exp.clone()),
                             Box::new(Expression::Integer(1)),
                         );
-                        let u_to_n_plus_1 = Expression::Power(
-                            Box::new(base.clone()),
-                            Box::new(n_plus_1.clone()),
-                        );
+                        let u_to_n_plus_1 =
+                            Expression::Power(Box::new(base.clone()), Box::new(n_plus_1.clone()));
                         let integral = Expression::Binary(
                             BinaryOp::Div,
                             Box::new(u_to_n_plus_1),
@@ -1000,7 +990,10 @@ fn extract_inner_function(expr: &Expression) -> Option<Expression> {
                 }
             }
             // For base itself if it's complex
-            if !matches!(base.as_ref(), Expression::Variable(_) | Expression::Integer(_)) {
+            if !matches!(
+                base.as_ref(),
+                Expression::Variable(_) | Expression::Integer(_)
+            ) {
                 return Some(base.as_ref().clone());
             }
             None
@@ -1051,7 +1044,9 @@ fn match_derivative(
         }
 
         // Check for constant multiple: factor = c * derivative
-        if let Some(constant) = extract_constant_multiple(&simplified_factor, &simplified_deriv, var) {
+        if let Some(constant) =
+            extract_constant_multiple(&simplified_factor, &simplified_deriv, var)
+        {
             let remaining: Vec<_> = factors
                 .iter()
                 .enumerate()
@@ -1074,7 +1069,8 @@ fn match_derivative(
         return Some((Expression::Integer(1), vec![]));
     }
 
-    if let Some(constant) = extract_constant_multiple(&simplified_combined, &simplified_deriv, var) {
+    if let Some(constant) = extract_constant_multiple(&simplified_combined, &simplified_deriv, var)
+    {
         return Some((constant, vec![]));
     }
 
@@ -1158,8 +1154,11 @@ fn substitute_variable(expr: &Expression, var_name: &str, replacement: &Expressi
     match expr {
         Expression::Variable(v) if v.name == var_name => replacement.clone(),
         Expression::Variable(_) => expr.clone(),
-        Expression::Integer(_) | Expression::Float(_) | Expression::Rational(_)
-        | Expression::Complex(_) | Expression::Constant(_) => expr.clone(),
+        Expression::Integer(_)
+        | Expression::Float(_)
+        | Expression::Rational(_)
+        | Expression::Complex(_)
+        | Expression::Constant(_) => expr.clone(),
 
         Expression::Unary(op, inner) => Expression::Unary(
             op.clone(),
@@ -1211,7 +1210,10 @@ pub fn integrate_with_substitution(
 
     // First try regular integration
     if let Ok(result) = integrate_impl(expr, var) {
-        steps.push(format!("Direct integration of {} with respect to {}", expr, var));
+        steps.push(format!(
+            "Direct integration of {} with respect to {}",
+            expr, var
+        ));
         return Ok((result, steps));
     }
 
@@ -1253,12 +1255,15 @@ fn liate_priority(expr: &Expression, var: &str) -> u8 {
 
     match expr {
         // Logarithmic: highest priority
-        Expression::Function(Function::Ln, _) | Expression::Function(Function::Log, _) |
-        Expression::Function(Function::Log2, _) | Expression::Function(Function::Log10, _) => 5,
+        Expression::Function(Function::Ln, _)
+        | Expression::Function(Function::Log, _)
+        | Expression::Function(Function::Log2, _)
+        | Expression::Function(Function::Log10, _) => 5,
 
         // Inverse trigonometric
-        Expression::Function(Function::Asin, _) | Expression::Function(Function::Acos, _) |
-        Expression::Function(Function::Atan, _) => 4,
+        Expression::Function(Function::Asin, _)
+        | Expression::Function(Function::Acos, _)
+        | Expression::Function(Function::Atan, _) => 4,
 
         // Algebraic (polynomials, x^n)
         Expression::Variable(v) if v.name == var => 3,
@@ -1287,8 +1292,9 @@ fn liate_priority(expr: &Expression, var: &str) -> u8 {
         }
 
         // Trigonometric
-        Expression::Function(Function::Sin, _) | Expression::Function(Function::Cos, _) |
-        Expression::Function(Function::Tan, _) => 2,
+        Expression::Function(Function::Sin, _)
+        | Expression::Function(Function::Cos, _)
+        | Expression::Function(Function::Tan, _) => 2,
 
         // Exponential: lowest priority (best for dv)
         Expression::Function(Function::Exp, _) => 1,
@@ -1376,17 +1382,10 @@ fn integrate_by_parts_impl(expr: &Expression, var: &str, depth: usize) -> Integr
     };
 
     // Now compute: uv - ∫v·du dx
-    let uv = Expression::Binary(
-        BinaryOp::Mul,
-        Box::new(u.clone()),
-        Box::new(v.clone()),
-    ).simplify();
+    let uv = Expression::Binary(BinaryOp::Mul, Box::new(u.clone()), Box::new(v.clone())).simplify();
 
-    let v_du = Expression::Binary(
-        BinaryOp::Mul,
-        Box::new(v.clone()),
-        Box::new(du.clone()),
-    ).simplify();
+    let v_du =
+        Expression::Binary(BinaryOp::Mul, Box::new(v.clone()), Box::new(du.clone())).simplify();
 
     // Check for recurring integral (integral of v*du equals original or a multiple)
     if let Some(result) = try_solve_recurring_integral(expr, &v_du, &uv, var, depth) {
@@ -1406,11 +1405,8 @@ fn integrate_by_parts_impl(expr: &Expression, var: &str, depth: usize) -> Integr
     };
 
     // Result: uv - ∫v·du
-    let result = Expression::Binary(
-        BinaryOp::Sub,
-        Box::new(uv),
-        Box::new(integral_v_du),
-    ).simplify();
+    let result =
+        Expression::Binary(BinaryOp::Sub, Box::new(uv), Box::new(integral_v_du)).simplify();
 
     Ok(result)
 }
@@ -1466,7 +1462,9 @@ fn try_solve_recurring_integral(
     let v_du_simplified = v_du.simplify();
 
     // Check if they're the same (up to constant multiple)
-    if let Some(coefficient) = check_same_up_to_constant(&original_simplified, &v_du_simplified, var) {
+    if let Some(coefficient) =
+        check_same_up_to_constant(&original_simplified, &v_du_simplified, var)
+    {
         // ∫f dx = uv - c·∫f dx
         // (1 + c)∫f dx = uv
         // ∫f dx = uv / (1 + c)
@@ -1475,18 +1473,16 @@ fn try_solve_recurring_integral(
             BinaryOp::Add,
             Box::new(Expression::Integer(1)),
             Box::new(coefficient),
-        ).simplify();
+        )
+        .simplify();
 
         // Check for 0 (would mean 0 = uv, which is a contradiction or identity)
         if matches!(one_plus_c, Expression::Integer(0)) {
             return None; // Can't divide by zero
         }
 
-        let result = Expression::Binary(
-            BinaryOp::Div,
-            Box::new(uv.clone()),
-            Box::new(one_plus_c),
-        ).simplify();
+        let result = Expression::Binary(BinaryOp::Div, Box::new(uv.clone()), Box::new(one_plus_c))
+            .simplify();
 
         return Some(result);
     }
@@ -1498,7 +1494,11 @@ fn try_solve_recurring_integral(
 
 /// Check if two expressions are the same up to a constant multiple.
 /// Returns the constant if expr2 = c * expr1.
-fn check_same_up_to_constant(expr1: &Expression, expr2: &Expression, var: &str) -> Option<Expression> {
+fn check_same_up_to_constant(
+    expr1: &Expression,
+    expr2: &Expression,
+    var: &str,
+) -> Option<Expression> {
     // Simple case: same expression means c = 1
     if expressions_equivalent(expr1, expr2) {
         return Some(Expression::Integer(1));
@@ -1565,19 +1565,12 @@ pub fn integrate_by_parts_with_steps(
     steps.push(format!("And v = ∫{} d{} = {}", dv, var, v));
 
     // Compute uv
-    let uv = Expression::Binary(
-        BinaryOp::Mul,
-        Box::new(u.clone()),
-        Box::new(v.clone()),
-    ).simplify();
+    let uv = Expression::Binary(BinaryOp::Mul, Box::new(u.clone()), Box::new(v.clone())).simplify();
     steps.push(format!("uv = {}", uv));
 
     // Compute v·du
-    let v_du = Expression::Binary(
-        BinaryOp::Mul,
-        Box::new(v.clone()),
-        Box::new(du.clone()),
-    ).simplify();
+    let v_du =
+        Expression::Binary(BinaryOp::Mul, Box::new(v.clone()), Box::new(du.clone())).simplify();
     steps.push(format!("v·du = {}", v_du));
 
     // Compute ∫v·du
@@ -1588,11 +1581,8 @@ pub fn integrate_by_parts_with_steps(
     steps.push(format!("∫v du = {}", integral_v_du));
 
     // Final result
-    let result = Expression::Binary(
-        BinaryOp::Sub,
-        Box::new(uv),
-        Box::new(integral_v_du),
-    ).simplify();
+    let result =
+        Expression::Binary(BinaryOp::Sub, Box::new(uv), Box::new(integral_v_du)).simplify();
     steps.push(format!("Result: {}", result));
 
     Ok((result, steps))
@@ -1673,24 +1663,12 @@ pub fn tabular_integration(
             break;
         }
 
-        let term = Expression::Binary(
-            BinaryOp::Mul,
-            Box::new(d.clone()),
-            Box::new(i.clone()),
-        );
+        let term = Expression::Binary(BinaryOp::Mul, Box::new(d.clone()), Box::new(i.clone()));
 
         if positive {
-            result = Expression::Binary(
-                BinaryOp::Add,
-                Box::new(result),
-                Box::new(term),
-            );
+            result = Expression::Binary(BinaryOp::Add, Box::new(result), Box::new(term));
         } else {
-            result = Expression::Binary(
-                BinaryOp::Sub,
-                Box::new(result),
-                Box::new(term),
-            );
+            result = Expression::Binary(BinaryOp::Sub, Box::new(result), Box::new(term));
         }
 
         positive = !positive;
@@ -1754,12 +1732,7 @@ pub fn definite_integral(
     let f_upper = substitute_var(&antiderivative, var, upper);
     let f_lower = substitute_var(&antiderivative, var, lower);
 
-    let result = Expression::Binary(
-        BinaryOp::Sub,
-        Box::new(f_upper),
-        Box::new(f_lower),
-    )
-    .simplify();
+    let result = Expression::Binary(BinaryOp::Sub, Box::new(f_upper), Box::new(f_lower)).simplify();
 
     Ok(result)
 }
@@ -1945,10 +1918,9 @@ fn substitute_var(expr: &Expression, var: &str, replacement: &Expression) -> Exp
             Box::new(substitute_var(left, var, replacement)),
             Box::new(substitute_var(right, var, replacement)),
         ),
-        Expression::Unary(op, operand) => Expression::Unary(
-            *op,
-            Box::new(substitute_var(operand, var, replacement)),
-        ),
+        Expression::Unary(op, operand) => {
+            Expression::Unary(*op, Box::new(substitute_var(operand, var, replacement)))
+        }
         Expression::Function(func, args) => Expression::Function(
             func.clone(),
             args.iter()
@@ -1990,12 +1962,8 @@ pub fn improper_integral_to_infinity(
     // Analyze limit as x → ∞
     // For common cases like 1/x^n where n > 1, the limit is 0
     if let Some(limit_at_inf) = evaluate_limit_at_infinity(&antiderivative, var) {
-        let result = Expression::Binary(
-            BinaryOp::Sub,
-            Box::new(limit_at_inf),
-            Box::new(f_lower),
-        )
-        .simplify();
+        let result =
+            Expression::Binary(BinaryOp::Sub, Box::new(limit_at_inf), Box::new(f_lower)).simplify();
         return Ok(result);
     }
 
@@ -2096,16 +2064,12 @@ fn evaluate_limit_at_infinity(expr: &Expression, var: &str) -> Option<Expression
         Expression::Binary(BinaryOp::Add, left, right) => {
             let l_limit = evaluate_limit_at_infinity(left, var)?;
             let r_limit = evaluate_limit_at_infinity(right, var)?;
-            Some(
-                Expression::Binary(BinaryOp::Add, Box::new(l_limit), Box::new(r_limit)).simplify(),
-            )
+            Some(Expression::Binary(BinaryOp::Add, Box::new(l_limit), Box::new(r_limit)).simplify())
         }
         Expression::Binary(BinaryOp::Sub, left, right) => {
             let l_limit = evaluate_limit_at_infinity(left, var)?;
             let r_limit = evaluate_limit_at_infinity(right, var)?;
-            Some(
-                Expression::Binary(BinaryOp::Sub, Box::new(l_limit), Box::new(r_limit)).simplify(),
-            )
+            Some(Expression::Binary(BinaryOp::Sub, Box::new(l_limit), Box::new(r_limit)).simplify())
         }
 
         // Product with constant
@@ -2167,7 +2131,10 @@ pub fn definite_integral_with_steps(
     upper: &Expression,
 ) -> Result<(Expression, Vec<String>), IntegrationError> {
     let mut steps = Vec::new();
-    steps.push(format!("∫_{{{0}}}^{{{1}}} {2} d{3}", lower, upper, expr, var));
+    steps.push(format!(
+        "∫_{{{0}}}^{{{1}}} {2} d{3}",
+        lower, upper, expr, var
+    ));
 
     // Check for special cases
     if let Some(result) = check_definite_special_cases(expr, var, lower, upper) {
@@ -2217,8 +2184,8 @@ fn is_polynomial_like(expr: &Expression, var: &str) -> bool {
             }
             false
         }
-        Expression::Binary(BinaryOp::Add, left, right) |
-        Expression::Binary(BinaryOp::Sub, left, right) => {
+        Expression::Binary(BinaryOp::Add, left, right)
+        | Expression::Binary(BinaryOp::Sub, left, right) => {
             is_polynomial_like(left, var) && is_polynomial_like(right, var)
         }
         Expression::Binary(BinaryOp::Mul, left, right) => {
@@ -2239,7 +2206,6 @@ fn is_polynomial_like(expr: &Expression, var: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use num_rational::Rational64;
 
     fn var(name: &str) -> Expression {
         Expression::Variable(Variable::new(name))
@@ -2284,7 +2250,7 @@ mod tests {
         let result = integrate(&var("x"), "x").unwrap();
         assert!(matches!(
             result,
-            Expression::Binary(BinaryOp::Div, num, denom)
+            Expression::Binary(BinaryOp::Div, _num, denom)
             if matches!(denom.as_ref(), Expression::Integer(2))
         ));
     }
@@ -2300,7 +2266,10 @@ mod tests {
             // Numerator should be x^(2+1)
             assert!(matches!(num.as_ref(), Expression::Power(_, _)));
             // Denominator should be 2+1
-            assert!(matches!(denom.as_ref(), Expression::Binary(BinaryOp::Add, _, _)));
+            assert!(matches!(
+                denom.as_ref(),
+                Expression::Binary(BinaryOp::Add, _, _)
+            ));
         } else {
             panic!("Expected division expression");
         }
@@ -2332,8 +2301,10 @@ mod tests {
         let result = integrate(&expr, "x").unwrap();
 
         // Should be 1 * ln(|x|)
-        assert!(matches!(result, Expression::Binary(BinaryOp::Mul, _, ln_part)
-            if matches!(ln_part.as_ref(), Expression::Function(Function::Ln, _))));
+        assert!(
+            matches!(result, Expression::Binary(BinaryOp::Mul, _, ln_part)
+            if matches!(ln_part.as_ref(), Expression::Function(Function::Ln, _)))
+        );
     }
 
     #[test]
@@ -2391,10 +2362,7 @@ mod tests {
     #[test]
     fn test_integrate_polynomial() {
         // ∫(x^2 + 2x + 1) dx = x^3/3 + x^2 + x
-        let poly = add(
-            add(pow(var("x"), int(2)), mul(int(2), var("x"))),
-            int(1),
-        );
+        let poly = add(add(pow(var("x"), int(2)), mul(int(2), var("x"))), int(1));
         let result = integrate(&poly, "x");
         assert!(result.is_ok());
     }
@@ -2545,7 +2513,10 @@ mod tests {
         // Basic polynomials
         assert!(is_polynomial_like(&var("x"), "x"));
         assert!(is_polynomial_like(&pow(var("x"), int(2)), "x"));
-        assert!(is_polynomial_like(&add(pow(var("x"), int(2)), var("x")), "x"));
+        assert!(is_polynomial_like(
+            &add(pow(var("x"), int(2)), var("x")),
+            "x"
+        ));
 
         // Constants are polynomial
         assert!(is_polynomial_like(&int(5), "x"));
@@ -2824,10 +2795,7 @@ mod tests {
     fn test_numerical_integrate_complex() {
         // ∫_0^1 exp(-x^2) dx ≈ 0.74682 (error function related)
         let x = var("x");
-        let neg_x_squared = Expression::Unary(
-            UnaryOp::Neg,
-            Box::new(pow(x.clone(), int(2))),
-        );
+        let neg_x_squared = Expression::Unary(UnaryOp::Neg, Box::new(pow(x.clone(), int(2))));
         let exp_neg_x_squared = Expression::Function(Function::Exp, vec![neg_x_squared]);
         let result = numerical_integrate(&exp_neg_x_squared, "x", 0.0, 1.0, 1e-6);
         assert!(result.is_ok());

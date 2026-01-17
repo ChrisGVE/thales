@@ -9,7 +9,7 @@ use thales::transforms::{Cartesian2D, Cartesian3D, Polar};
 fn test_library_version() {
     let version = thales::version();
     assert!(!version.is_empty());
-    assert_eq!(version, "0.2.1");
+    assert_eq!(version, env!("CARGO_PKG_VERSION"));
 }
 
 #[test]

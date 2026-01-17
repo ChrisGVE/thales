@@ -188,9 +188,7 @@ fn contains_variable(expr: &Expression, var: &str) -> bool {
         Expression::Binary(_, left, right) => {
             contains_variable(left, var) || contains_variable(right, var)
         }
-        Expression::Power(base, exp) => {
-            contains_variable(base, var) || contains_variable(exp, var)
-        }
+        Expression::Power(base, exp) => contains_variable(base, var) || contains_variable(exp, var),
         Expression::Function(_, args) => args.iter().any(|arg| contains_variable(arg, var)),
         _ => false,
     }
@@ -598,10 +596,12 @@ pub fn decompose(
     let denom_degree = get_polynomial_degree(denominator, var_name).unwrap_or(0);
 
     // Extract coefficients
-    let num_coeffs = extract_coefficients(numerator, var_name)
-        .ok_or_else(|| DecomposeError::NotRational("Cannot extract numerator coefficients".to_string()))?;
-    let denom_coeffs = extract_coefficients(denominator, var_name)
-        .ok_or_else(|| DecomposeError::NotRational("Cannot extract denominator coefficients".to_string()))?;
+    let num_coeffs = extract_coefficients(numerator, var_name).ok_or_else(|| {
+        DecomposeError::NotRational("Cannot extract numerator coefficients".to_string())
+    })?;
+    let denom_coeffs = extract_coefficients(denominator, var_name).ok_or_else(|| {
+        DecomposeError::NotRational("Cannot extract denominator coefficients".to_string())
+    })?;
 
     steps.push(format!(
         "Numerator degree: {}, Denominator degree: {}",
@@ -867,7 +867,7 @@ fn compute_coefficient_cover_up(
         let h = 1e-6;
         let coeff = (evaluate_polynomial(num_coeffs, root + h)
             / evaluate_polynomial_without_root(denom_coeffs, root + h, root, power))
-            .abs();
+        .abs();
         coeff
     }
 }
@@ -916,7 +916,10 @@ impl PartialFractionTerm {
                 let denom = if *power == 1 {
                     x_minus_a
                 } else {
-                    Expression::Power(Box::new(x_minus_a), Box::new(Expression::Integer(*power as i64)))
+                    Expression::Power(
+                        Box::new(x_minus_a),
+                        Box::new(Expression::Integer(*power as i64)),
+                    )
                 };
 
                 Expression::Binary(
@@ -1233,11 +1236,7 @@ mod tests {
         let x_cubed = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(3)));
         assert_eq!(get_polynomial_degree(&x_cubed, "x"), Some(3));
 
-        let poly = Expression::Binary(
-            BinaryOp::Add,
-            Box::new(x_cubed),
-            Box::new(x.clone()),
-        );
+        let poly = Expression::Binary(BinaryOp::Add, Box::new(x_cubed), Box::new(x.clone()));
         assert_eq!(get_polynomial_degree(&poly, "x"), Some(3));
     }
 
@@ -1301,7 +1300,10 @@ mod tests {
         let num = Expression::Integer(1);
         let denom = Expression::Binary(
             BinaryOp::Sub,
-            Box::new(Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(2)))),
+            Box::new(Expression::Power(
+                Box::new(x.clone()),
+                Box::new(Expression::Integer(2)),
+            )),
             Box::new(Expression::Integer(1)),
         );
 
@@ -1311,7 +1313,11 @@ mod tests {
         // Check that we have linear terms
         for term in &result.terms {
             match term {
-                PartialFractionTerm::Linear { coefficient, root, power } => {
+                PartialFractionTerm::Linear {
+                    coefficient,
+                    root: _,
+                    power,
+                } => {
                     assert_eq!(*power, 1);
                     // Coefficients should be ±1/2
                     assert!((coefficient.abs() - 0.5).abs() < 1e-10);
@@ -1328,11 +1334,7 @@ mod tests {
         let x = Expression::Variable(Variable::new("x"));
         let num = Expression::Integer(1);
         let x_squared = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(2)));
-        let denom = Expression::Binary(
-            BinaryOp::Sub,
-            Box::new(x_squared),
-            Box::new(x.clone()),
-        );
+        let denom = Expression::Binary(BinaryOp::Sub, Box::new(x_squared), Box::new(x.clone()));
 
         let result = decompose(&num, &denom, &Variable::new("x")).unwrap();
         assert_eq!(result.terms.len(), 2);

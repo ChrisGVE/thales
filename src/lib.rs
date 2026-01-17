@@ -372,28 +372,28 @@
 #![allow(clippy::missing_panics_doc)]
 
 // Public module exports
+pub mod approximations;
 pub mod ast;
 pub mod dimensions;
+pub mod equation_system;
+pub mod inequality;
+pub mod integration;
 pub mod latex;
 pub mod limits;
-pub mod numerical;
-pub mod parser;
-pub mod pattern;
-pub mod resolution_path;
-pub mod solver;
-pub mod transforms;
 pub mod matrix;
-pub mod precision;
-pub mod integration;
-pub mod inequality;
-pub mod trigonometric;
+pub mod numerical;
 pub mod ode;
-pub mod partial_fractions;
-pub mod equation_system;
-pub mod series;
 pub mod optimization;
+pub mod parser;
+pub mod partial_fractions;
+pub mod pattern;
+pub mod precision;
+pub mod resolution_path;
+pub mod series;
+pub mod solver;
 pub mod special;
-pub mod approximations;
+pub mod transforms;
+pub mod trigonometric;
 
 // User guides for common workflows
 pub mod guides;
@@ -403,81 +403,132 @@ pub mod guides;
 pub mod ffi;
 
 // Re-export commonly used types at crate root for convenience
+pub use approximations::{
+    apply_small_angle_approx, compute_approximation_error, generate_approximation_step,
+    is_approximation_valid, optimize_pythagorean, select_exp_scaling, ApproxResult, ApproxType,
+    ScaledExpForm,
+};
 pub use ast::{BinaryOp, Equation, Expression, Function, UnaryOp, Variable};
 pub use dimensions::{Dimension, Quantity, Unit, UnitRegistry};
-pub use numerical::{NumericalConfig, NumericalSolution, SmartNumericalSolver};
-pub use latex::{parse_latex, parse_latex_equation};
-pub use parser::{parse_equation, parse_expression};
-pub use resolution_path::{
-    Operation, OperationCounts, PathStatistics, ResolutionPath, ResolutionPathBuilder,
-    ResolutionStep, Verbosity,
+pub use equation_system::{
+    broyden_system,
+    fixed_point_system,
+    newton_raphson_system,
+    residual_norm,
+    solve_linear_system_lu,
+    validate_jacobian,
+    BroydenSolver,
+    Constraint,
+    ConvergenceBehavior,
+    ConvergenceDiagnostics,
+    DependencyGraph,
+    EquationSystem,
+    EquationType,
+    FixedPointSolver,
+    IntegralInfo,
+    MultiEquationSolution,
+    MultiEquationSolver,
+    NamedEquation,
+    NewtonRaphsonSolver,
+    // Nonlinear system solver
+    NonlinearSystem,
+    NonlinearSystemConfig,
+    NonlinearSystemSolver,
+    NonlinearSystemSolverError,
+    NonlinearSystemSolverResult,
+    ODEInfo,
+    SmartNonlinearSystemSolver,
+    SolutionStrategy,
+    SolutionValue,
+    SolveMethod,
+    SolveStep,
+    SolverConfig,
+    StepResult,
+    SystemContext,
+    SystemError,
+    SystemOperation,
+    SystemResolutionPath,
+    SystemStep,
 };
-pub use solver::{
-    LinearSystem, SmartSolver, Solution, Solver, SystemSolution, SystemSolver,
+pub use inequality::{
+    solve_inequality, solve_system, Bound, Inequality, InequalityError, IntervalSolution,
 };
-pub use transforms::{
-    Cartesian2D, Cartesian3D, ComplexOps, Cylindrical, Polar, Spherical, Transform2D,
-};
-pub use matrix::{MatrixExpr, MatrixError, BracketStyle};
-pub use precision::{EvalContext, EvalError, PrecisionMode, RoundingMode, Value};
 pub use integration::{
     definite_integral, definite_integral_with_fallback, definite_integral_with_steps,
     improper_integral_to_infinity, integrate, integrate_by_parts, integrate_by_parts_with_steps,
     integrate_by_substitution, integrate_with_substitution, numerical_integrate,
     tabular_integration, IntegrationError,
 };
-pub use inequality::{
-    solve_inequality, solve_system, Bound, Inequality, InequalityError, IntervalSolution,
+pub use latex::{parse_latex, parse_latex_equation};
+pub use matrix::{BracketStyle, MatrixError, MatrixExpr};
+pub use numerical::{NumericalConfig, NumericalSolution, SmartNumericalSolver};
+pub use ode::{
+    solve_characteristic_equation, solve_ivp, solve_linear, solve_second_order_homogeneous,
+    solve_second_order_ivp, solve_separable, CharacteristicRoots, FirstOrderODE, ODEError,
+    ODESolution, RootType, SecondOrderODE, SecondOrderSolution,
+};
+pub use optimization::{
+    analyze_expression, find_multiplicative_chains, optimize_computation_order, to_manual_steps,
+    track_precision, ComputationStep, ManualStep, MultiplicativeChain, OperationConfig,
+    OperationType, PrecisionReport, StepOperand,
+};
+pub use parser::{parse_equation, parse_expression};
+pub use partial_fractions::{
+    decompose, is_polynomial, is_rational_function, DecomposeError, PartialFractionResult,
+    PartialFractionTerm,
+};
+pub use precision::{EvalContext, EvalError, PrecisionMode, RoundingMode, Value};
+pub use resolution_path::{
+    Operation, OperationCounts, PathStatistics, ResolutionPath, ResolutionPathBuilder,
+    ResolutionStep, Verbosity,
+};
+pub use series::{
+    arctan_series,
+    asymptotic,
+    binomial_series,
+    // Series arithmetic (composition and reversion)
+    compose_series,
+    compute_nth_derivative,
+    cos_series,
+    evaluate_at,
+    exp_series,
+    factorial,
+    factorial_expr,
+    find_singularities,
+    laurent,
+    limit_via_asymptotic,
+    ln_1_plus_x_series,
+    maclaurin,
+    pole_order,
+    residue,
+    reversion,
+    sin_series,
+    taylor,
+    // Asymptotic expansions
+    AsymptoticDirection,
+    AsymptoticSeries,
+    AsymptoticTerm,
+    BigO,
+    // Laurent series support
+    LaurentSeries,
+    RemainderTerm,
+    Series,
+    SeriesError,
+    SeriesResult,
+    SeriesTerm,
+    Singularity,
+    SingularityType,
+};
+pub use solver::{LinearSystem, SmartSolver, Solution, Solver, SystemSolution, SystemSolver};
+pub use special::{beta, erf, erfc, gamma, SpecialFunctionError, SpecialFunctionResult};
+pub use transforms::{
+    Cartesian2D, Cartesian3D, ComplexOps, Cylindrical, Polar, Spherical, Transform2D,
 };
 pub use trigonometric::{
     all_trig_rules, double_angle_rules, inverse_rules, parity_rules, product_to_sum_rules,
     pythagorean_rules, quotient_rules, simplify_double_angle, simplify_pythagorean,
     simplify_quotient, simplify_trig, simplify_trig_step, simplify_trig_with_steps,
     special_value_rules,
-};
-pub use ode::{
-    solve_ivp, solve_linear, solve_separable, solve_second_order_homogeneous,
-    solve_second_order_ivp, solve_characteristic_equation, FirstOrderODE, ODEError,
-    ODESolution, SecondOrderODE, SecondOrderSolution, CharacteristicRoots, RootType,
-};
-pub use partial_fractions::{
-    decompose, is_polynomial, is_rational_function, DecomposeError, PartialFractionResult,
-    PartialFractionTerm,
-};
-pub use equation_system::{
-    Constraint, DependencyGraph, EquationSystem, EquationType, IntegralInfo,
-    MultiEquationSolver, MultiEquationSolution, NamedEquation, ODEInfo, SolutionStrategy,
-    SolutionValue, SolveMethod, SolveStep, SolverConfig, SystemContext, SystemError,
-    SystemOperation, SystemResolutionPath, SystemStep, StepResult,
-    // Nonlinear system solver
-    NonlinearSystem, NonlinearSystemConfig, NonlinearSystemSolverError, NonlinearSystemSolverResult,
-    NonlinearSystemSolver, NewtonRaphsonSolver, BroydenSolver, FixedPointSolver, SmartNonlinearSystemSolver,
-    ConvergenceBehavior, ConvergenceDiagnostics, newton_raphson_system, broyden_system, fixed_point_system,
-    residual_norm, solve_linear_system_lu, validate_jacobian,
-};
-pub use series::{
-    arctan_series, binomial_series, cos_series, exp_series, ln_1_plus_x_series,
-    maclaurin, sin_series, taylor, factorial, factorial_expr, compute_nth_derivative,
-    evaluate_at, RemainderTerm, Series, SeriesError, SeriesResult, SeriesTerm,
-    // Laurent series support
-    LaurentSeries, Singularity, SingularityType, laurent, residue, pole_order, find_singularities,
-    // Series arithmetic (composition and reversion)
-    compose_series, reversion,
-    // Asymptotic expansions
-    AsymptoticDirection, AsymptoticSeries, AsymptoticTerm, BigO, asymptotic, limit_via_asymptotic,
-};
-pub use optimization::{
-    OperationConfig, OperationType, ComputationStep, StepOperand, MultiplicativeChain,
-    PrecisionReport, ManualStep, find_multiplicative_chains, track_precision,
-    optimize_computation_order, to_manual_steps, analyze_expression,
-};
-pub use special::{
-    gamma, beta, erf, erfc, SpecialFunctionError, SpecialFunctionResult,
-};
-pub use approximations::{
-    ApproxResult, ApproxType, ScaledExpForm, apply_small_angle_approx,
-    compute_approximation_error, select_exp_scaling, is_approximation_valid,
-    generate_approximation_step, optimize_pythagorean,
 };
 
 /// Library version information.

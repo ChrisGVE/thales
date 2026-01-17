@@ -658,7 +658,7 @@ fn evaluate_constants(expr: &Expression) -> Expression {
 fn isolate_variable(
     equation: &Equation,
     var: &str,
-    path: &mut ResolutionPathBuilder,
+    _path: &mut ResolutionPathBuilder,
 ) -> Result<Expression, SolverError> {
     let left = &equation.left;
     let right = &equation.right;
@@ -1216,7 +1216,9 @@ fn extract_general_poly_coefficients(
     match expr {
         Expression::Integer(n) => coeffs[0] += (*n as f64) * multiplier,
         Expression::Float(f) => coeffs[0] += f * multiplier,
-        Expression::Rational(r) => coeffs[0] += (*r.numer() as f64 / *r.denom() as f64) * multiplier,
+        Expression::Rational(r) => {
+            coeffs[0] += (*r.numer() as f64 / *r.denom() as f64) * multiplier
+        }
         Expression::Variable(v) if v.name == var => {
             if coeffs.len() > 1 {
                 coeffs[1] += multiplier;
@@ -1383,7 +1385,9 @@ fn solve_cubic(
     mut path: ResolutionPathBuilder,
 ) -> SolverResult<(Solution, ResolutionPath)> {
     if coeffs.len() < 4 {
-        return Err(SolverError::CannotSolve("Not a cubic polynomial".to_string()));
+        return Err(SolverError::CannotSolve(
+            "Not a cubic polynomial".to_string(),
+        ));
     }
 
     let d = coeffs[0];
@@ -1393,7 +1397,9 @@ fn solve_cubic(
 
     if a.abs() < 1e-15 {
         // Not actually cubic, delegate to quadratic
-        return Err(SolverError::CannotSolve("Leading coefficient is zero".to_string()));
+        return Err(SolverError::CannotSolve(
+            "Leading coefficient is zero".to_string(),
+        ));
     }
 
     // Normalize to monic form: x³ + px² + qx + r = 0
@@ -1499,7 +1505,9 @@ fn solve_quartic(
     mut path: ResolutionPathBuilder,
 ) -> SolverResult<(Solution, ResolutionPath)> {
     if coeffs.len() < 5 {
-        return Err(SolverError::CannotSolve("Not a quartic polynomial".to_string()));
+        return Err(SolverError::CannotSolve(
+            "Not a quartic polynomial".to_string(),
+        ));
     }
 
     let e = coeffs[0];
@@ -1509,7 +1517,9 @@ fn solve_quartic(
     let a = coeffs[4];
 
     if a.abs() < 1e-15 {
-        return Err(SolverError::CannotSolve("Leading coefficient is zero".to_string()));
+        return Err(SolverError::CannotSolve(
+            "Leading coefficient is zero".to_string(),
+        ));
     }
 
     // Normalize to monic form: x⁴ + px³ + qx² + rx + s = 0
@@ -1520,7 +1530,10 @@ fn solve_quartic(
 
     path = path.step(
         Operation::Simplify,
-        format!("Normalized quartic: x⁴ + {}x³ + {}x² + {}x + {} = 0", p, q, r, s),
+        format!(
+            "Normalized quartic: x⁴ + {}x³ + {}x² + {}x + {} = 0",
+            p, q, r, s
+        ),
         Expression::Integer(0),
     );
 
@@ -1532,7 +1545,10 @@ fn solve_quartic(
 
     path = path.step(
         Operation::Simplify,
-        format!("Depressed quartic: y⁴ + {}y² + {}y + {} = 0", alpha, beta, gamma),
+        format!(
+            "Depressed quartic: y⁴ + {}y² + {}y + {} = 0",
+            alpha, beta, gamma
+        ),
         Expression::Integer(0),
     );
 
@@ -1557,10 +1573,12 @@ fn solve_quartic(
                 let sqrt_real = ((r + u_real) / 2.0).sqrt();
                 let sqrt_imag = u_imag.signum() * ((r - u_real) / 2.0).sqrt();
                 roots.push(Expression::Complex(num_complex::Complex64::new(
-                    sqrt_real + shift, sqrt_imag
+                    sqrt_real + shift,
+                    sqrt_imag,
                 )));
                 roots.push(Expression::Complex(num_complex::Complex64::new(
-                    -sqrt_real + shift, -sqrt_imag
+                    -sqrt_real + shift,
+                    -sqrt_imag,
                 )));
             }
             let resolution_path = path.finish(roots[0].clone());
@@ -1576,8 +1594,12 @@ fn solve_quartic(
                     roots.push(simplify_numeric_expression(-u.sqrt() + shift));
                 } else {
                     let imag = (-u).sqrt();
-                    roots.push(Expression::Complex(num_complex::Complex64::new(shift, imag)));
-                    roots.push(Expression::Complex(num_complex::Complex64::new(shift, -imag)));
+                    roots.push(Expression::Complex(num_complex::Complex64::new(
+                        shift, imag,
+                    )));
+                    roots.push(Expression::Complex(num_complex::Complex64::new(
+                        shift, -imag,
+                    )));
                 }
             }
             let resolution_path = path.finish(roots[0].clone());
@@ -1608,10 +1630,17 @@ fn solve_quartic(
         m = sqrt_term * theta.cos() - resolvent_coeffs[2] / 3.0;
     } else {
         // Use Cardano's formula
-        let sqrt_term = (dep_q * dep_q / 4.0 + dep_p * dep_p * dep_p / 27.0).abs().sqrt();
+        let sqrt_term = (dep_q * dep_q / 4.0 + dep_p * dep_p * dep_p / 27.0)
+            .abs()
+            .sqrt();
         let sign = if dep_q < 0.0 { 1.0 } else { -1.0 };
-        let u = (sign * sqrt_term - dep_q / 2.0).abs().cbrt() * (sign * sqrt_term - dep_q / 2.0).signum();
-        let v = if u.abs() > 1e-10 { -dep_p / (3.0 * u) } else { 0.0 };
+        let u = (sign * sqrt_term - dep_q / 2.0).abs().cbrt()
+            * (sign * sqrt_term - dep_q / 2.0).signum();
+        let v = if u.abs() > 1e-10 {
+            -dep_p / (3.0 * u)
+        } else {
+            0.0
+        };
         m = u + v - resolvent_coeffs[2] / 3.0;
     }
 
@@ -1642,13 +1671,19 @@ fn solve_quartic(
     let disc1 = b1 * b1 - 4.0 * a1 * c1;
 
     if disc1 >= 0.0 {
-        roots.push(simplify_numeric_expression((-b1 + disc1.sqrt()) / 2.0 + shift));
-        roots.push(simplify_numeric_expression((-b1 - disc1.sqrt()) / 2.0 + shift));
+        roots.push(simplify_numeric_expression(
+            (-b1 + disc1.sqrt()) / 2.0 + shift,
+        ));
+        roots.push(simplify_numeric_expression(
+            (-b1 - disc1.sqrt()) / 2.0 + shift,
+        ));
     } else {
         let real = -b1 / 2.0 + shift;
         let imag = (-disc1).sqrt() / 2.0;
         roots.push(Expression::Complex(num_complex::Complex64::new(real, imag)));
-        roots.push(Expression::Complex(num_complex::Complex64::new(real, -imag)));
+        roots.push(Expression::Complex(num_complex::Complex64::new(
+            real, -imag,
+        )));
     }
 
     // Second quadratic: y² - sqrt(2m+α)y + (m - term) = 0
@@ -1657,13 +1692,19 @@ fn solve_quartic(
     let disc2 = b2 * b2 - 4.0 * a1 * c2;
 
     if disc2 >= 0.0 {
-        roots.push(simplify_numeric_expression((-b2 + disc2.sqrt()) / 2.0 + shift));
-        roots.push(simplify_numeric_expression((-b2 - disc2.sqrt()) / 2.0 + shift));
+        roots.push(simplify_numeric_expression(
+            (-b2 + disc2.sqrt()) / 2.0 + shift,
+        ));
+        roots.push(simplify_numeric_expression(
+            (-b2 - disc2.sqrt()) / 2.0 + shift,
+        ));
     } else {
         let real = -b2 / 2.0 + shift;
         let imag = (-disc2).sqrt() / 2.0;
         roots.push(Expression::Complex(num_complex::Complex64::new(real, imag)));
-        roots.push(Expression::Complex(num_complex::Complex64::new(real, -imag)));
+        roots.push(Expression::Complex(num_complex::Complex64::new(
+            real, -imag,
+        )));
     }
 
     path = path.step(
@@ -1690,17 +1731,27 @@ fn solve_polynomial_numerically(
     // Find leading coefficient
     let leading = coeffs[degree];
     if leading.abs() < 1e-15 {
-        return Err(SolverError::CannotSolve("Leading coefficient is zero".to_string()));
+        return Err(SolverError::CannotSolve(
+            "Leading coefficient is zero".to_string(),
+        ));
     }
 
     path = path.step(
         Operation::Simplify,
-        format!("Solving degree {} polynomial numerically (Durand-Kerner method)", degree),
+        format!(
+            "Solving degree {} polynomial numerically (Durand-Kerner method)",
+            degree
+        ),
         Expression::Integer(0),
     );
 
     // Initial guess: roots evenly spaced on a circle
-    let radius = 1.0 + coeffs.iter().take(degree).map(|c| (c / leading).abs()).fold(0.0, f64::max);
+    let radius = 1.0
+        + coeffs
+            .iter()
+            .take(degree)
+            .map(|c| (c / leading).abs())
+            .fold(0.0, f64::max);
     let mut roots: Vec<num_complex::Complex64> = (0..degree)
         .map(|k| {
             let angle = 2.0 * std::f64::consts::PI * (k as f64) / (degree as f64) + 0.4;
@@ -1780,7 +1831,7 @@ fn is_linear_in_variable(expr: &Expression, var: &str) -> bool {
         | Expression::Complex(_)
         | Expression::Constant(_) => true,
 
-        Expression::Variable(v) => {
+        Expression::Variable(_v) => {
             // The target variable itself is linear
             true
         }
@@ -1996,10 +2047,7 @@ impl Solver for QuadraticSolver {
 
             path = path.step(
                 Operation::Simplify,
-                format!(
-                    "Quadratic formula: x = (-b ± √Δ)/(2a) = {} or {}",
-                    x1, x2
-                ),
+                format!("Quadratic formula: x = (-b ± √Δ)/(2a) = {} or {}", x1, x2),
                 root1.clone(),
             );
 
@@ -2023,19 +2071,12 @@ impl Solver for QuadraticSolver {
             let real_part = -b / (2.0 * a);
             let imag_part = (-discriminant).sqrt() / (2.0 * a);
 
-            let root1 = Expression::Complex(num_complex::Complex64::new(
-                real_part, imag_part,
-            ));
-            let root2 = Expression::Complex(num_complex::Complex64::new(
-                real_part, -imag_part,
-            ));
+            let root1 = Expression::Complex(num_complex::Complex64::new(real_part, imag_part));
+            let root2 = Expression::Complex(num_complex::Complex64::new(real_part, -imag_part));
 
             path = path.step(
                 Operation::Simplify,
-                format!(
-                    "Complex roots: x = {} ± {}i",
-                    real_part, imag_part
-                ),
+                format!("Complex roots: x = {} ± {}i", real_part, imag_part),
                 root1.clone(),
             );
 
@@ -2467,7 +2508,7 @@ impl TranscendentalSolver {
             crate::ast::Function::Asin,
         ) {
             // Validate domain before creating result
-            if let Err(e) = Self::validate_trig_domain(value, &func) {
+            if let Err(_e) = Self::validate_trig_domain(value, &func) {
                 return None; // Return None to allow error propagation at higher level
             }
             path.add_step(ResolutionStep::new(
@@ -2486,7 +2527,7 @@ impl TranscendentalSolver {
             crate::ast::Function::Sin,
             crate::ast::Function::Asin,
         ) {
-            if let Err(e) = Self::validate_trig_domain(value, &func) {
+            if let Err(_e) = Self::validate_trig_domain(value, &func) {
                 return None;
             }
             path.add_step(ResolutionStep::new(
@@ -2505,7 +2546,7 @@ impl TranscendentalSolver {
             crate::ast::Function::Cos,
             crate::ast::Function::Acos,
         ) {
-            if let Err(e) = Self::validate_trig_domain(value, &func) {
+            if let Err(_e) = Self::validate_trig_domain(value, &func) {
                 return None;
             }
             path.add_step(ResolutionStep::new(
@@ -2524,7 +2565,7 @@ impl TranscendentalSolver {
             crate::ast::Function::Cos,
             crate::ast::Function::Acos,
         ) {
-            if let Err(e) = Self::validate_trig_domain(value, &func) {
+            if let Err(_e) = Self::validate_trig_domain(value, &func) {
                 return None;
             }
             path.add_step(ResolutionStep::new(
@@ -3409,10 +3450,7 @@ impl LinearSystem {
     /// # Errors
     ///
     /// Returns an error if any equation is not linear in the given variables.
-    pub fn from_equations(
-        equations: &[Equation],
-        variables: &[Variable],
-    ) -> SolverResult<Self> {
+    pub fn from_equations(equations: &[Equation], variables: &[Variable]) -> SolverResult<Self> {
         let n_eqs = equations.len();
         let n_vars = variables.len();
 
@@ -3429,7 +3467,8 @@ impl LinearSystem {
                 BinaryOp::Sub,
                 Box::new(eq.left.clone()),
                 Box::new(eq.right.clone()),
-            ).simplify();
+            )
+            .simplify();
 
             let (row, constant) = Self::extract_linear_coefficients(&combined, variables)?;
             coefficients.push(row);
@@ -3752,7 +3791,8 @@ impl LinearSystem {
                 } else {
                     let mut result = terms.remove(0);
                     for term in terms {
-                        result = Expression::Binary(BinaryOp::Add, Box::new(result), Box::new(term));
+                        result =
+                            Expression::Binary(BinaryOp::Add, Box::new(result), Box::new(term));
                     }
                     result
                 };
@@ -3975,7 +4015,7 @@ impl SystemSolver {
                 }
                 Ok(out)
             }
-            SystemSolution::NoSolution => Err(SolverError::NoSolution)
+            SystemSolution::NoSolution => Err(SolverError::NoSolution),
         }
     }
 }
@@ -5048,8 +5088,7 @@ mod system_solver_tests {
         let eq1 = Equation::new("eq1", add(var("x"), var("y")), int(5));
         let eq2 = Equation::new("eq2", sub(var("x"), var("y")), int(1));
 
-        let system =
-            LinearSystem::from_equations(&[eq1, eq2], &[x.clone(), y.clone()]).unwrap();
+        let system = LinearSystem::from_equations(&[eq1, eq2], &[x.clone(), y.clone()]).unwrap();
 
         // Verify coefficients: x + y = 5 -> [1, 1 | 5], x - y = 1 -> [1, -1 | 1]
         assert_eq!(system.coefficients.len(), 2);

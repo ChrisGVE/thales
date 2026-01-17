@@ -1640,7 +1640,7 @@ impl Expression {
                     name if name.contains('_') => {
                         let parts: Vec<&str> = name.splitn(2, '_').collect();
                         if parts.len() == 2 {
-                            format!("{}_{{{}}}",  parts[0], parts[1])
+                            format!("{}_{{{}}}", parts[0], parts[1])
                         } else {
                             name.to_string()
                         }
@@ -1659,7 +1659,11 @@ impl Expression {
             }
             Expression::Binary(BinaryOp::Div, num, denom) => {
                 // Use \frac for division
-                format!(r"\frac{{{}}}{{{}}}", num.to_latex_inner(0), denom.to_latex_inner(0))
+                format!(
+                    r"\frac{{{}}}{{{}}}",
+                    num.to_latex_inner(0),
+                    denom.to_latex_inner(0)
+                )
             }
             Expression::Binary(op, left, right) => {
                 let prec = op.precedence();
@@ -1748,9 +1752,8 @@ impl Expression {
                     }
                     Function::Custom(name) => {
                         // Custom functions use \text{name}
-                        let args_str: Vec<String> = args.iter()
-                            .map(|a| a.to_latex_inner(0))
-                            .collect();
+                        let args_str: Vec<String> =
+                            args.iter().map(|a| a.to_latex_inner(0)).collect();
                         return format!(r"\text{{{}}}\left({}\right)", name, args_str.join(", "));
                     }
                 };
@@ -1764,9 +1767,7 @@ impl Expression {
                 }
 
                 // Standard function call
-                let args_str: Vec<String> = args.iter()
-                    .map(|a| a.to_latex_inner(0))
-                    .collect();
+                let args_str: Vec<String> = args.iter().map(|a| a.to_latex_inner(0)).collect();
                 format!(r"{}\left({}\right)", func_name, args_str.join(", "))
             }
             Expression::Power(base, exp) => {
@@ -2306,18 +2307,13 @@ impl Expression {
                             return left_simplified;
                         }
                         // x^a * x^b → x^(a+b) - power law for same base
-                        if let (
-                            Expression::Power(base1, exp1),
-                            Expression::Power(base2, exp2),
-                        ) = (&left_simplified, &right_simplified)
+                        if let (Expression::Power(base1, exp1), Expression::Power(base2, exp2)) =
+                            (&left_simplified, &right_simplified)
                         {
                             if base1 == base2 {
-                                let new_exp = Expression::Binary(
-                                    BinaryOp::Add,
-                                    exp1.clone(),
-                                    exp2.clone(),
-                                )
-                                .simplify();
+                                let new_exp =
+                                    Expression::Binary(BinaryOp::Add, exp1.clone(), exp2.clone())
+                                        .simplify();
                                 return Expression::Power(base1.clone(), Box::new(new_exp));
                             }
                         }
@@ -2656,9 +2652,10 @@ impl Expression {
             // Pure numeric constant: coefficient with base 1
             Expression::Integer(n) => (*n as f64, Expression::Integer(1)),
             Expression::Float(x) => (*x, Expression::Integer(1)),
-            Expression::Rational(r) => {
-                (*r.numer() as f64 / *r.denom() as f64, Expression::Integer(1))
-            }
+            Expression::Rational(r) => (
+                *r.numer() as f64 / *r.denom() as f64,
+                Expression::Integer(1),
+            ),
             // Negation: extract inner and negate coefficient
             Expression::Unary(UnaryOp::Neg, inner) => {
                 let (coef, base) = Self::extract_coefficient_and_base(inner);

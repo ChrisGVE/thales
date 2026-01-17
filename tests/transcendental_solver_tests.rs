@@ -2,9 +2,9 @@
 //!
 //! Tests trigonometric, logarithmic, and exponential equation solving capabilities.
 
+use std::f64::consts::{E, PI};
 use thales::ast::{BinaryOp, Equation, Expression, Function, Variable};
 use thales::solver::{Solver, TranscendentalSolver};
-use std::f64::consts::{E, PI};
 
 // ============================================================================
 // Helper Functions

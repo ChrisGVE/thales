@@ -1280,7 +1280,10 @@ impl Operation {
             Operation::Differentiate { variable, rule } => {
                 format!("Differentiate with respect to {} ({})", variable, rule)
             }
-            Operation::Integrate { variable, technique } => {
+            Operation::Integrate {
+                variable,
+                technique,
+            } => {
                 format!("Integrate with respect to {} ({})", variable, technique)
             }
             Operation::EvaluateLimit {
@@ -1308,8 +1311,15 @@ impl Operation {
             Operation::ComputeDeterminant { method } => {
                 format!("Compute determinant ({})", method)
             }
-            Operation::ApproximationSubstitution { original, approximation, error_bound } => {
-                format!("Approximate {:?} ≈ {:?} (error bound: {:.2e})", original, approximation, error_bound)
+            Operation::ApproximationSubstitution {
+                original,
+                approximation,
+                error_bound,
+            } => {
+                format!(
+                    "Approximate {:?} ≈ {:?} (error bound: {:.2e})",
+                    original, approximation, error_bound
+                )
             }
             Operation::Custom(desc) => desc.clone(),
         }

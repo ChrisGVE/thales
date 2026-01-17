@@ -812,7 +812,11 @@ pub fn factorial_expr(n: u32) -> Expression {
 }
 
 /// Evaluate an expression at a specific value of a variable.
-pub fn evaluate_at(expr: &Expression, var: &Variable, value: &Expression) -> SeriesResult<Expression> {
+pub fn evaluate_at(
+    expr: &Expression,
+    var: &Variable,
+    value: &Expression,
+) -> SeriesResult<Expression> {
     // Create substitution
     let substituted = substitute(expr, var, value);
 
@@ -848,10 +852,9 @@ fn substitute(expr: &Expression, var: &Variable, value: &Expression) -> Expressi
             Box::new(substitute(left, var, value)),
             Box::new(substitute(right, var, value)),
         ),
-        Expression::Unary(op, inner) => Expression::Unary(
-            *op,
-            Box::new(substitute(inner, var, value)),
-        ),
+        Expression::Unary(op, inner) => {
+            Expression::Unary(*op, Box::new(substitute(inner, var, value)))
+        }
         Expression::Function(func, args) => Expression::Function(
             func.clone(),
             args.iter().map(|a| substitute(a, var, value)).collect(),
@@ -865,7 +868,11 @@ fn substitute(expr: &Expression, var: &Variable, value: &Expression) -> Expressi
 }
 
 /// Compute the nth derivative of an expression.
-pub fn compute_nth_derivative(expr: &Expression, var: &Variable, n: u32) -> SeriesResult<Expression> {
+pub fn compute_nth_derivative(
+    expr: &Expression,
+    var: &Variable,
+    n: u32,
+) -> SeriesResult<Expression> {
     let mut result = expr.clone();
     for _ in 0..n {
         result = result.differentiate(&var.name);
@@ -913,7 +920,8 @@ pub fn taylor(
                 BinaryOp::Div,
                 Box::new(deriv_at_center),
                 Box::new(Expression::Integer(n_fact)),
-            ).simplify()
+            )
+            .simplify()
         };
 
         // Add term if non-zero
@@ -928,11 +936,7 @@ pub fn taylor(
 }
 
 /// Compute the Maclaurin series (Taylor series centered at 0).
-pub fn maclaurin(
-    expr: &Expression,
-    var: &Variable,
-    order: u32,
-) -> SeriesResult<Series> {
+pub fn maclaurin(expr: &Expression, var: &Variable, order: u32) -> SeriesResult<Series> {
     taylor(expr, var, &Expression::Integer(0), order)
 }
 
@@ -1029,7 +1033,11 @@ pub fn cos_series(var: &Variable, order: u32) -> Series {
     while 2 * n <= order {
         let power = 2 * n;
         let sign = if n % 2 == 0 { 1i64 } else { -1i64 };
-        let fact = if power == 0 { 1 } else { factorial(power) as i64 };
+        let fact = if power == 0 {
+            1
+        } else {
+            factorial(power) as i64
+        };
         let coeff = Expression::Rational(num_rational::Ratio::new(sign, fact));
         series.add_term(SeriesTerm::new(coeff, power));
         n += 1;
@@ -1078,9 +1086,11 @@ pub fn binomial_series(exponent: &Expression, var: &Variable, order: u32) -> Ser
     // For now, only handle numeric exponents
     let a = match exponent.evaluate(&HashMap::new()) {
         Some(val) => val,
-        None => return Err(SeriesError::CannotExpand(
-            "Binomial series requires numeric exponent".to_string()
-        )),
+        None => {
+            return Err(SeriesError::CannotExpand(
+                "Binomial series requires numeric exponent".to_string(),
+            ))
+        }
     };
 
     // Compute binomial coefficients C(a, n) = a*(a-1)*...*(a-n+1) / n!
@@ -1542,11 +1552,7 @@ pub fn laurent(
 /// );
 /// let res = residue(&expr, &x, &Expression::Integer(1)).unwrap();
 /// ```
-pub fn residue(
-    expr: &Expression,
-    var: &Variable,
-    pole: &Expression,
-) -> SeriesResult<Expression> {
+pub fn residue(expr: &Expression, var: &Variable, pole: &Expression) -> SeriesResult<Expression> {
     // Compute Laurent series around the pole with enough negative terms
     let laurent_series = laurent(expr, var, pole, 5, 0)?;
     Ok(laurent_series.residue())
@@ -1555,11 +1561,7 @@ pub fn residue(
 /// Find the order of a pole at a given point.
 ///
 /// Returns 0 if the point is not a pole (regular point or removable singularity).
-pub fn pole_order(
-    expr: &Expression,
-    var: &Variable,
-    point: &Expression,
-) -> SeriesResult<u32> {
+pub fn pole_order(expr: &Expression, var: &Variable, point: &Expression) -> SeriesResult<u32> {
     let laurent_series = laurent(expr, var, point, 10, 0)?;
 
     // Find the highest negative power with non-zero coefficient
@@ -1723,21 +1725,19 @@ fn divide_series(
         if result_power >= -(neg_order as i32) && result_power <= pos_order as i32 {
             // Divide coefficient by leading denominator coefficient
             let coeff = match denom_lead_coeff {
-                Some(Expression::Integer(d)) if *d != 0 => {
-                    match &num_term.coefficient {
-                        Expression::Integer(n) => Expression::Rational(
-                            num_rational::Rational64::new(*n, *d),
-                        ),
-                        Expression::Rational(r) => Expression::Rational(
-                            *r / num_rational::Rational64::from(*d),
-                        ),
-                        other => Expression::Binary(
-                            BinaryOp::Div,
-                            Box::new(other.clone()),
-                            Box::new(Expression::Integer(*d)),
-                        ),
+                Some(Expression::Integer(d)) if *d != 0 => match &num_term.coefficient {
+                    Expression::Integer(n) => {
+                        Expression::Rational(num_rational::Rational64::new(*n, *d))
                     }
-                }
+                    Expression::Rational(r) => {
+                        Expression::Rational(*r / num_rational::Rational64::from(*d))
+                    }
+                    other => Expression::Binary(
+                        BinaryOp::Div,
+                        Box::new(other.clone()),
+                        Box::new(Expression::Integer(*d)),
+                    ),
+                },
                 _ => num_term.coefficient.clone(),
             };
 
@@ -1832,7 +1832,10 @@ pub struct AsymptoticTerm {
 impl AsymptoticTerm {
     /// Create a new asymptotic term.
     pub fn new(coefficient: Expression, exponent: Expression) -> Self {
-        AsymptoticTerm { coefficient, exponent }
+        AsymptoticTerm {
+            coefficient,
+            exponent,
+        }
     }
 
     /// Check if this term has a zero coefficient.
@@ -1980,13 +1983,11 @@ impl AsymptoticSeries {
                         Box::new(Expression::Integer(1)),
                     )
                 }
-                AsymptoticDirection::Zero => {
-                    Expression::Binary(
-                        BinaryOp::Add,
-                        Box::new(last_term.exponent.clone()),
-                        Box::new(Expression::Integer(1)),
-                    )
-                }
+                AsymptoticDirection::Zero => Expression::Binary(
+                    BinaryOp::Add,
+                    Box::new(last_term.exponent.clone()),
+                    Box::new(Expression::Integer(1)),
+                ),
             }
         } else {
             Expression::Integer(0)
@@ -2119,28 +2120,24 @@ fn substitute_for_infinity(expr: &Expression, var: &Variable) -> Expression {
                 Box::new(Expression::Variable(t)),
             )
         }
-        Expression::Binary(op, left, right) => {
-            Expression::Binary(
-                *op,
-                Box::new(substitute_for_infinity(left, var)),
-                Box::new(substitute_for_infinity(right, var)),
-            )
-        }
+        Expression::Binary(op, left, right) => Expression::Binary(
+            *op,
+            Box::new(substitute_for_infinity(left, var)),
+            Box::new(substitute_for_infinity(right, var)),
+        ),
         Expression::Unary(op, inner) => {
             Expression::Unary(*op, Box::new(substitute_for_infinity(inner, var)))
         }
-        Expression::Power(base, exp) => {
-            Expression::Power(
-                Box::new(substitute_for_infinity(base, var)),
-                Box::new(substitute_for_infinity(exp, var)),
-            )
-        }
-        Expression::Function(f, args) => {
-            Expression::Function(
-                f.clone(),
-                args.iter().map(|a| substitute_for_infinity(a, var)).collect(),
-            )
-        }
+        Expression::Power(base, exp) => Expression::Power(
+            Box::new(substitute_for_infinity(base, var)),
+            Box::new(substitute_for_infinity(exp, var)),
+        ),
+        Expression::Function(f, args) => Expression::Function(
+            f.clone(),
+            args.iter()
+                .map(|a| substitute_for_infinity(a, var))
+                .collect(),
+        ),
         _ => expr.clone(),
     }
 }
@@ -2180,7 +2177,8 @@ fn extract_asymptotic_terms(
                             let neg_exp = Expression::Unary(
                                 crate::ast::UnaryOp::Neg,
                                 Box::new(exp.as_ref().clone()),
-                            ).simplify();
+                            )
+                            .simplify();
                             series.add_term(AsymptoticTerm::new(Expression::Integer(1), neg_exp));
                         }
                     }
@@ -2200,7 +2198,8 @@ fn extract_asymptotic_terms(
                             let neg_exp = Expression::Unary(
                                 crate::ast::UnaryOp::Neg,
                                 Box::new(exp.as_ref().clone()),
-                            ).simplify();
+                            )
+                            .simplify();
                             series.add_term(AsymptoticTerm::new(num.as_ref().clone(), neg_exp));
                         }
                     }
@@ -2210,18 +2209,30 @@ fn extract_asymptotic_terms(
         Expression::Power(base, exp) => {
             if let Expression::Variable(v) = base.as_ref() {
                 if v == var {
-                    series.add_term(AsymptoticTerm::new(Expression::Integer(1), exp.as_ref().clone()));
+                    series.add_term(AsymptoticTerm::new(
+                        Expression::Integer(1),
+                        exp.as_ref().clone(),
+                    ));
                 }
             }
         }
         Expression::Variable(v) if v == var => {
-            series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(1)));
+            series.add_term(AsymptoticTerm::new(
+                Expression::Integer(1),
+                Expression::Integer(1),
+            ));
         }
         Expression::Integer(n) => {
-            series.add_term(AsymptoticTerm::new(Expression::Integer(*n), Expression::Integer(0)));
+            series.add_term(AsymptoticTerm::new(
+                Expression::Integer(*n),
+                Expression::Integer(0),
+            ));
         }
         Expression::Float(f) => {
-            series.add_term(AsymptoticTerm::new(Expression::Float(*f), Expression::Integer(0)));
+            series.add_term(AsymptoticTerm::new(
+                Expression::Float(*f),
+                Expression::Integer(0),
+            ));
         }
         _ => {
             return Err(SeriesError::CannotExpand(format!(
@@ -2445,7 +2456,7 @@ mod tests {
         let mut vars = HashMap::new();
         vars.insert("x".to_string(), 0.1);
         let result = expr.evaluate(&vars).unwrap();
-        let expected = 1.0 + 0.1 + 0.01/2.0 + 0.001/6.0;
+        let expected = 1.0 + 0.1 + 0.01 / 2.0 + 0.001 / 6.0;
         assert!((result - expected).abs() < 1e-10);
     }
 
@@ -2505,7 +2516,7 @@ mod tests {
 
         // (1+x)^0.5 should give sqrt(1+x) approximation
         let series = binomial_series(&Expression::Float(0.5), &x, 5).unwrap();
-        let result = series.evaluate(0.21).unwrap();  // sqrt(1.21) = 1.1
+        let result = series.evaluate(0.21).unwrap(); // sqrt(1.21) = 1.1
         assert!((result - 1.1).abs() < 0.01);
     }
 
@@ -2705,7 +2716,10 @@ mod tests {
             singularity_type: SingularityType::Pole(2),
         };
 
-        assert!(matches!(singularity.singularity_type, SingularityType::Pole(2)));
+        assert!(matches!(
+            singularity.singularity_type,
+            SingularityType::Pole(2)
+        ));
     }
 
     #[test]
@@ -3131,8 +3145,14 @@ mod tests {
         let x = Variable::new("x");
         let mut series = AsymptoticSeries::new(x.clone(), AsymptoticDirection::PosInfinity);
 
-        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-1)));
-        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-2)));
+        series.add_term(AsymptoticTerm::new(
+            Expression::Integer(1),
+            Expression::Integer(-1),
+        ));
+        series.add_term(AsymptoticTerm::new(
+            Expression::Integer(1),
+            Expression::Integer(-2),
+        ));
 
         assert_eq!(series.terms.len(), 2);
     }
@@ -3142,8 +3162,14 @@ mod tests {
         let x = Variable::new("x");
         let mut series = AsymptoticSeries::new(x.clone(), AsymptoticDirection::PosInfinity);
 
-        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-1)));
-        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-2)));
+        series.add_term(AsymptoticTerm::new(
+            Expression::Integer(1),
+            Expression::Integer(-1),
+        ));
+        series.add_term(AsymptoticTerm::new(
+            Expression::Integer(1),
+            Expression::Integer(-2),
+        ));
 
         let dominant = series.dominant_term().unwrap();
         assert_eq!(dominant.exponent, Expression::Integer(-1));
@@ -3154,7 +3180,10 @@ mod tests {
         let x = Variable::new("x");
         let mut series = AsymptoticSeries::new(x.clone(), AsymptoticDirection::PosInfinity);
 
-        series.add_term(AsymptoticTerm::new(Expression::Integer(2), Expression::Integer(-1)));
+        series.add_term(AsymptoticTerm::new(
+            Expression::Integer(2),
+            Expression::Integer(-1),
+        ));
 
         let order = series.order_of_magnitude().unwrap();
         assert_eq!(order, Expression::Integer(-1));
@@ -3165,8 +3194,14 @@ mod tests {
         let x = Variable::new("x");
         let mut series = AsymptoticSeries::new(x.clone(), AsymptoticDirection::PosInfinity);
 
-        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-1)));
-        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-2)));
+        series.add_term(AsymptoticTerm::new(
+            Expression::Integer(1),
+            Expression::Integer(-1),
+        ));
+        series.add_term(AsymptoticTerm::new(
+            Expression::Integer(1),
+            Expression::Integer(-2),
+        ));
 
         let (_, big_o) = series.with_error_term();
         // Error term should be O(x^(-3)) for x→∞ when last term is x^(-2)
@@ -3179,8 +3214,14 @@ mod tests {
         let mut series = AsymptoticSeries::new(x.clone(), AsymptoticDirection::PosInfinity);
 
         // 1/x + 1/x^2 at x=2 should be 0.5 + 0.25 = 0.75
-        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-1)));
-        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-2)));
+        series.add_term(AsymptoticTerm::new(
+            Expression::Integer(1),
+            Expression::Integer(-1),
+        ));
+        series.add_term(AsymptoticTerm::new(
+            Expression::Integer(1),
+            Expression::Integer(-2),
+        ));
 
         let result = series.evaluate(2.0).unwrap();
         assert!((result - 0.75).abs() < 1e-10);
@@ -3246,7 +3287,7 @@ mod tests {
 
     #[test]
     fn test_sort_by_dominance_pos_infinity() {
-        let x = Variable::new("x");
+        let _x = Variable::new("x");
         let mut terms = vec![
             AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-2)),
             AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-1)),
@@ -3263,7 +3304,7 @@ mod tests {
 
     #[test]
     fn test_sort_by_dominance_zero() {
-        let x = Variable::new("x");
+        let _x = Variable::new("x");
         let mut terms = vec![
             AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(2)),
             AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(1)),
@@ -3280,8 +3321,8 @@ mod tests {
 
     #[test]
     fn test_limit_via_asymptotic_to_zero() {
-        use crate::parser::parse_expression;
         use crate::limits::LimitResult;
+        use crate::parser::parse_expression;
 
         // lim_{x→∞} 1/x = 0
         let expr = parse_expression("1/x").unwrap();
@@ -3292,8 +3333,8 @@ mod tests {
 
     #[test]
     fn test_limit_via_asymptotic_to_infinity() {
-        use crate::parser::parse_expression;
         use crate::limits::LimitResult;
+        use crate::parser::parse_expression;
 
         // lim_{x→∞} x^2 = ∞
         let expr = parse_expression("x^2").unwrap();
@@ -3318,8 +3359,14 @@ mod tests {
         let x = Variable::new("x");
         let mut series = AsymptoticSeries::new(x.clone(), AsymptoticDirection::PosInfinity);
 
-        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-1)));
-        series.add_term(AsymptoticTerm::new(Expression::Integer(2), Expression::Integer(-2)));
+        series.add_term(AsymptoticTerm::new(
+            Expression::Integer(1),
+            Expression::Integer(-1),
+        ));
+        series.add_term(AsymptoticTerm::new(
+            Expression::Integer(2),
+            Expression::Integer(-2),
+        ));
 
         let expr = series.to_expression();
         // Should be simplifiable to some form
@@ -3331,7 +3378,10 @@ mod tests {
         let x = Variable::new("x");
         let mut series = AsymptoticSeries::new(x.clone(), AsymptoticDirection::PosInfinity);
 
-        series.add_term(AsymptoticTerm::new(Expression::Integer(1), Expression::Integer(-1)));
+        series.add_term(AsymptoticTerm::new(
+            Expression::Integer(1),
+            Expression::Integer(-1),
+        ));
 
         let display_str = format!("{}", series);
         assert!(display_str.contains("x→+∞"));

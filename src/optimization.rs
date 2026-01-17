@@ -162,11 +162,7 @@ pub enum StepOperand {
 
 impl ComputationStep {
     /// Create a new computation step.
-    pub fn new(
-        operation: OperationType,
-        operands: Vec<StepOperand>,
-        result: Expression,
-    ) -> Self {
+    pub fn new(operation: OperationType, operands: Vec<StepOperand>, result: Expression) -> Self {
         let (precision_loss, manual_effort) = estimate_operation_cost(&operation);
         let description = format_step_description(&operation, &operands);
 
@@ -189,19 +185,19 @@ fn estimate_operation_cost(op: &OperationType) -> (f64, u32) {
         OperationType::Multiplication => (0.01, 1), // Easy on slide rule
         OperationType::Division => (0.01, 1), // Easy on slide rule
         OperationType::Reciprocal => (0.01, 1), // Just flip the slide
-        OperationType::Square => (0.02, 1), // A scale on slide rule
-        OperationType::Cube => (0.03, 2), // K scale or two multiplications
+        OperationType::Square => (0.02, 1),  // A scale on slide rule
+        OperationType::Cube => (0.03, 2),    // K scale or two multiplications
         OperationType::SquareRoot => (0.02, 1), // A scale on slide rule
         OperationType::CubeRoot => (0.03, 2), // K scale or iterative
-        OperationType::Sin => (0.05, 2), // S scale
-        OperationType::Cos => (0.05, 2), // S scale (using sin(90-x))
-        OperationType::Tan => (0.05, 2), // T scale
-        OperationType::Log => (0.03, 1), // L scale
-        OperationType::Ln => (0.04, 2), // L scale + conversion factor
-        OperationType::Exp => (0.04, 2), // Inverse of ln
+        OperationType::Sin => (0.05, 2),     // S scale
+        OperationType::Cos => (0.05, 2),     // S scale (using sin(90-x))
+        OperationType::Tan => (0.05, 2),     // T scale
+        OperationType::Log => (0.03, 1),     // L scale
+        OperationType::Ln => (0.04, 2),      // L scale + conversion factor
+        OperationType::Exp => (0.04, 2),     // Inverse of ln
         OperationType::SmallAngleApprox => (0.0, 0), // No computation needed
         OperationType::ScaledExp(_) => (0.03, 2), // Better precision than raw exp
-        OperationType::Power => (0.05, 3), // log + multiply + antilog
+        OperationType::Power => (0.05, 3),   // log + multiply + antilog
         OperationType::Constant => (0.0, 0), // No computation
         OperationType::Variable => (0.0, 0), // No computation
     }
@@ -220,10 +216,26 @@ fn format_step_description(op: &OperationType, operands: &[StepOperand]) -> Stri
         .collect();
 
     match op {
-        OperationType::Addition => format!("{} + {}", operand_strs.get(0).unwrap_or(&"?".into()), operand_strs.get(1).unwrap_or(&"?".into())),
-        OperationType::Subtraction => format!("{} - {}", operand_strs.get(0).unwrap_or(&"?".into()), operand_strs.get(1).unwrap_or(&"?".into())),
-        OperationType::Multiplication => format!("{} × {}", operand_strs.get(0).unwrap_or(&"?".into()), operand_strs.get(1).unwrap_or(&"?".into())),
-        OperationType::Division => format!("{} ÷ {}", operand_strs.get(0).unwrap_or(&"?".into()), operand_strs.get(1).unwrap_or(&"?".into())),
+        OperationType::Addition => format!(
+            "{} + {}",
+            operand_strs.get(0).unwrap_or(&"?".into()),
+            operand_strs.get(1).unwrap_or(&"?".into())
+        ),
+        OperationType::Subtraction => format!(
+            "{} - {}",
+            operand_strs.get(0).unwrap_or(&"?".into()),
+            operand_strs.get(1).unwrap_or(&"?".into())
+        ),
+        OperationType::Multiplication => format!(
+            "{} × {}",
+            operand_strs.get(0).unwrap_or(&"?".into()),
+            operand_strs.get(1).unwrap_or(&"?".into())
+        ),
+        OperationType::Division => format!(
+            "{} ÷ {}",
+            operand_strs.get(0).unwrap_or(&"?".into()),
+            operand_strs.get(1).unwrap_or(&"?".into())
+        ),
         OperationType::Reciprocal => format!("1 ÷ {}", operand_strs.get(0).unwrap_or(&"?".into())),
         OperationType::Square => format!("({})²", operand_strs.get(0).unwrap_or(&"?".into())),
         OperationType::Cube => format!("({})³", operand_strs.get(0).unwrap_or(&"?".into())),
@@ -235,9 +247,20 @@ fn format_step_description(op: &OperationType, operands: &[StepOperand]) -> Stri
         OperationType::Log => format!("log₁₀({})", operand_strs.get(0).unwrap_or(&"?".into())),
         OperationType::Ln => format!("ln({})", operand_strs.get(0).unwrap_or(&"?".into())),
         OperationType::Exp => format!("e^{}", operand_strs.get(0).unwrap_or(&"?".into())),
-        OperationType::SmallAngleApprox => format!("{} (small angle)", operand_strs.get(0).unwrap_or(&"?".into())),
-        OperationType::ScaledExp(k) => format!("e^(-{} × {})", k, operand_strs.get(0).unwrap_or(&"?".into())),
-        OperationType::Power => format!("{}^{}", operand_strs.get(0).unwrap_or(&"?".into()), operand_strs.get(1).unwrap_or(&"?".into())),
+        OperationType::SmallAngleApprox => format!(
+            "{} (small angle)",
+            operand_strs.get(0).unwrap_or(&"?".into())
+        ),
+        OperationType::ScaledExp(k) => format!(
+            "e^(-{} × {})",
+            k,
+            operand_strs.get(0).unwrap_or(&"?".into())
+        ),
+        OperationType::Power => format!(
+            "{}^{}",
+            operand_strs.get(0).unwrap_or(&"?".into()),
+            operand_strs.get(1).unwrap_or(&"?".into())
+        ),
         OperationType::Constant => operand_strs.get(0).cloned().unwrap_or("?".into()),
         OperationType::Variable => operand_strs.get(0).cloned().unwrap_or("?".into()),
     }
@@ -280,19 +303,24 @@ impl MultiplicativeChain {
         let numerator = if self.numerator_factors.is_empty() {
             Expression::Integer(1)
         } else {
-            self.numerator_factors.iter().skip(1).fold(
-                self.numerator_factors[0].clone(),
-                |acc, f| Expression::Binary(BinaryOp::Mul, Box::new(acc), Box::new(f.clone())),
-            )
+            self.numerator_factors
+                .iter()
+                .skip(1)
+                .fold(self.numerator_factors[0].clone(), |acc, f| {
+                    Expression::Binary(BinaryOp::Mul, Box::new(acc), Box::new(f.clone()))
+                })
         };
 
         if self.denominator_factors.is_empty() {
             numerator
         } else {
-            let denominator = self.denominator_factors.iter().skip(1).fold(
-                self.denominator_factors[0].clone(),
-                |acc, f| Expression::Binary(BinaryOp::Mul, Box::new(acc), Box::new(f.clone())),
-            );
+            let denominator = self
+                .denominator_factors
+                .iter()
+                .skip(1)
+                .fold(self.denominator_factors[0].clone(), |acc, f| {
+                    Expression::Binary(BinaryOp::Mul, Box::new(acc), Box::new(f.clone()))
+                });
             Expression::Binary(BinaryOp::Div, Box::new(numerator), Box::new(denominator))
         }
     }
@@ -312,12 +340,21 @@ pub fn find_multiplicative_chains(expr: &Expression) -> Vec<MultiplicativeChain>
     chains
 }
 
-fn find_chains_recursive(expr: &Expression, chains: &mut Vec<MultiplicativeChain>, _is_numerator: bool) {
+fn find_chains_recursive(
+    expr: &Expression,
+    chains: &mut Vec<MultiplicativeChain>,
+    _is_numerator: bool,
+) {
     match expr {
         Expression::Binary(BinaryOp::Mul, _left, _right) => {
             // Start or continue a chain
             let mut chain = MultiplicativeChain::new();
-            collect_multiplicative_factors(expr, &mut chain.numerator_factors, &mut chain.denominator_factors, true);
+            collect_multiplicative_factors(
+                expr,
+                &mut chain.numerator_factors,
+                &mut chain.denominator_factors,
+                true,
+            );
             if chain.len() >= 2 {
                 chains.push(chain);
             }
@@ -325,13 +362,18 @@ fn find_chains_recursive(expr: &Expression, chains: &mut Vec<MultiplicativeChain
         Expression::Binary(BinaryOp::Div, _left, _right) => {
             // Start or continue a chain
             let mut chain = MultiplicativeChain::new();
-            collect_multiplicative_factors(expr, &mut chain.numerator_factors, &mut chain.denominator_factors, true);
+            collect_multiplicative_factors(
+                expr,
+                &mut chain.numerator_factors,
+                &mut chain.denominator_factors,
+                true,
+            );
             if chain.len() >= 2 {
                 chains.push(chain);
             }
         }
-        Expression::Binary(BinaryOp::Add, left, right) |
-        Expression::Binary(BinaryOp::Sub, left, right) => {
+        Expression::Binary(BinaryOp::Add, left, right)
+        | Expression::Binary(BinaryOp::Sub, left, right) => {
             // Recurse into sub-expressions
             find_chains_recursive(left, chains, true);
             find_chains_recursive(right, chains, true);
@@ -477,7 +519,10 @@ pub fn optimize_computation_order(
 
     // First: constants and variables (no computation)
     for step in &other {
-        if matches!(step.operation, OperationType::Constant | OperationType::Variable) {
+        if matches!(
+            step.operation,
+            OperationType::Constant | OperationType::Variable
+        ) {
             result.push(step.clone());
         }
     }
@@ -487,7 +532,10 @@ pub fn optimize_computation_order(
 
     // Then: transcendental functions and powers
     for step in &other {
-        if !matches!(step.operation, OperationType::Constant | OperationType::Variable) {
+        if !matches!(
+            step.operation,
+            OperationType::Constant | OperationType::Variable
+        ) {
             result.push(step.clone());
         }
     }
@@ -512,7 +560,11 @@ pub struct ManualStep {
 impl fmt::Display for ManualStep {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(result) = self.intermediate_result {
-            write!(f, "{} → {:.4} ({}dp)", self.instruction, result, self.precision)
+            write!(
+                f,
+                "{} → {:.4} ({}dp)",
+                self.instruction, result, self.precision
+            )
         } else {
             write!(f, "{} ({}dp)", self.instruction, self.precision)
         }
@@ -620,7 +672,10 @@ fn analyze_recursive(expr: &Expression, steps: &mut Vec<ComputationStep>) {
 
             steps.push(ComputationStep::new(
                 op_type,
-                vec![StepOperand::StepRef(left_ref), StepOperand::StepRef(right_ref)],
+                vec![
+                    StepOperand::StepRef(left_ref),
+                    StepOperand::StepRef(right_ref),
+                ],
                 expr.clone(),
             ));
         }
@@ -650,7 +705,10 @@ fn analyze_recursive(expr: &Expression, steps: &mut Vec<ComputationStep>) {
                     let exp_ref = steps.len() - 1;
                     steps.push(ComputationStep::new(
                         OperationType::Power,
-                        vec![StepOperand::StepRef(base_ref), StepOperand::StepRef(exp_ref)],
+                        vec![
+                            StepOperand::StepRef(base_ref),
+                            StepOperand::StepRef(exp_ref),
+                        ],
                         expr.clone(),
                     ));
                 }
@@ -661,7 +719,10 @@ fn analyze_recursive(expr: &Expression, steps: &mut Vec<ComputationStep>) {
                 let exp_ref = steps.len() - 1;
                 steps.push(ComputationStep::new(
                     OperationType::Power,
-                    vec![StepOperand::StepRef(base_ref), StepOperand::StepRef(exp_ref)],
+                    vec![
+                        StepOperand::StepRef(base_ref),
+                        StepOperand::StepRef(exp_ref),
+                    ],
                     expr.clone(),
                 ));
             }
@@ -685,7 +746,8 @@ fn analyze_recursive(expr: &Expression, steps: &mut Vec<ComputationStep>) {
                 _ => OperationType::Constant, // fallback for unsupported functions
             };
 
-            let operands: Vec<StepOperand> = arg_refs.iter().map(|&r| StepOperand::StepRef(r)).collect();
+            let operands: Vec<StepOperand> =
+                arg_refs.iter().map(|&r| StepOperand::StepRef(r)).collect();
             steps.push(ComputationStep::new(op_type, operands, expr.clone()));
         }
         _ => {
@@ -767,7 +829,10 @@ mod tests {
 
         let steps = analyze_expression(&expr);
         assert!(steps.len() >= 3); // x, 2, x*2
-        assert!(matches!(steps.last().unwrap().operation, OperationType::Multiplication));
+        assert!(matches!(
+            steps.last().unwrap().operation,
+            OperationType::Multiplication
+        ));
     }
 
     #[test]
@@ -780,16 +845,8 @@ mod tests {
                 vec![],
                 Expression::Integer(1),
             ),
-            ComputationStep::new(
-                OperationType::Addition,
-                vec![],
-                Expression::Integer(1),
-            ),
-            ComputationStep::new(
-                OperationType::Subtraction,
-                vec![],
-                Expression::Integer(1),
-            ),
+            ComputationStep::new(OperationType::Addition, vec![], Expression::Integer(1)),
+            ComputationStep::new(OperationType::Subtraction, vec![], Expression::Integer(1)),
         ];
 
         let report = track_precision(&steps, &config);
@@ -803,7 +860,11 @@ mod tests {
 
         let steps = vec![
             ComputationStep::new(OperationType::Addition, vec![], Expression::Integer(1)),
-            ComputationStep::new(OperationType::Multiplication, vec![], Expression::Integer(1)),
+            ComputationStep::new(
+                OperationType::Multiplication,
+                vec![],
+                Expression::Integer(1),
+            ),
             ComputationStep::new(OperationType::Division, vec![], Expression::Integer(1)),
             ComputationStep::new(OperationType::Subtraction, vec![], Expression::Integer(1)),
         ];
@@ -811,8 +872,14 @@ mod tests {
         let optimized = optimize_computation_order(&steps, &config);
 
         // Multiplicative operations should come before additive
-        let mul_pos = optimized.iter().position(|s| matches!(s.operation, OperationType::Multiplication)).unwrap();
-        let add_pos = optimized.iter().position(|s| matches!(s.operation, OperationType::Addition)).unwrap();
+        let mul_pos = optimized
+            .iter()
+            .position(|s| matches!(s.operation, OperationType::Multiplication))
+            .unwrap();
+        let add_pos = optimized
+            .iter()
+            .position(|s| matches!(s.operation, OperationType::Addition))
+            .unwrap();
         assert!(mul_pos < add_pos);
     }
 
@@ -821,7 +888,11 @@ mod tests {
         let config = OperationConfig::default();
 
         let steps = vec![
-            ComputationStep::new(OperationType::Multiplication, vec![], Expression::Integer(1)),
+            ComputationStep::new(
+                OperationType::Multiplication,
+                vec![],
+                Expression::Integer(1),
+            ),
             ComputationStep::new(OperationType::Sin, vec![], Expression::Integer(1)),
         ];
 
