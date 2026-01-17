@@ -1,0 +1,93 @@
+name: Swift XCFramework Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-xcframework:
+    name: Build XCFramework
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Build for iOS device (arm64)
+        run: cargo build --release --features ffi --target aarch64-apple-ios
+
+      - name: Build for iOS simulator (arm64)
+        run: cargo build --release --features ffi --target aarch64-apple-ios-sim
+
+      - name: Build for iOS simulator (x86_64)
+        run: cargo build --release --features ffi --target x86_64-apple-ios
+
+      - name: Build for macOS (arm64)
+        run: cargo build --release --features ffi --target aarch64-apple-darwin
+
+      - name: Build for macOS (x86_64)
+        run: cargo build --release --features ffi --target x86_64-apple-darwin
+
+      - name: Create universal iOS simulator library
+        run: |
+          mkdir -p target/universal-ios-sim/release
+          lipo -create \
+            target/aarch64-apple-ios-sim/release/libthales.a \
+            target/x86_64-apple-ios/release/libthales.a \
+            -output target/universal-ios-sim/release/libthales.a
+
+      - name: Create universal macOS library
+        run: |
+          mkdir -p target/universal-macos/release
+          lipo -create \
+            target/aarch64-apple-darwin/release/libthales.a \
+            target/x86_64-apple-darwin/release/libthales.a \
+            -output target/universal-macos/release/libthales.a
+
+      - name: Create XCFramework
+        run: |
+          xcodebuild -create-xcframework \
+            -library target/aarch64-apple-ios/release/libthales.a \
+            -headers swift/Sources/Thales/include \
+            -library target/universal-ios-sim/release/libthales.a \
+            -headers swift/Sources/Thales/include \
+            -library target/universal-macos/release/libthales.a \
+            -headers swift/Sources/Thales/include \
+            -output Thales.xcframework
+
+      - name: Create ZIP archive
+        run: |
+          zip -r -X Thales.xcframework.zip Thales.xcframework
+
+      - name: Compute checksum
+        id: checksum
+        run: |
+          CHECKSUM=$(swift package compute-checksum Thales.xcframework.zip)
+          echo "checksum=$CHECKSUM" >> $GITHUB_OUTPUT
+          echo "Checksum: $CHECKSUM"
+
+      - name: Upload XCFramework to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Thales.xcframework.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create checksum file
+        run: |
+          echo "${{ steps.checksum.outputs.checksum }}" > Thales.xcframework.zip.sha256
+
+      - name: Upload checksum to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Thales.xcframework.zip.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

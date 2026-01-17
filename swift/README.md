@@ -6,11 +6,11 @@ Swift bindings for the [thales](https://crates.io/crates/thales) Computer Algebr
 
 - iOS 14+ / macOS 11+
 - Xcode 14+
-- Pre-built `libthales.a` static library (see Building the Rust Library below)
+- Pre-built `libthales.a` static library or XCFramework
 
 ## Installation
 
-### Swift Package Manager
+### Option 1: Swift Package Manager with Pre-built Library (Recommended)
 
 Add to your `Package.swift`:
 
@@ -22,13 +22,22 @@ dependencies: [
 
 Or in Xcode: File > Add Package Dependencies > Enter the repository URL.
 
-**Important**: You must also link against the pre-built Rust library. See Configuration below.
+**Important**: You must also configure your project to link against the pre-built Rust library. See [Configuration](#configuration) below.
 
-### Manual Installation
+### Option 2: Using XCFramework from Releases
 
-1. Copy the Swift files from `Sources/Thales/` to your project
-2. Copy the headers from `Sources/Thales/include/` to your project
-3. Configure your bridging header (see Configuration)
+Starting with version 0.4.0, pre-built XCFrameworks are available as GitHub release assets:
+
+1. Download `Thales.xcframework.zip` from the [latest release](https://github.com/ChrisGVE/thales/releases)
+2. Extract and add the XCFramework to your Xcode project
+3. The Package.swift will automatically use the binary target
+
+### Option 3: Manual Installation
+
+1. Copy the Swift files from `swift/Sources/Thales/` to your project
+2. Copy the headers from `swift/Sources/Thales/include/` to your project
+3. Build the Rust library (see below)
+4. Configure your bridging header
 
 ## Building the Rust Library
 
@@ -102,16 +111,16 @@ print(integral.integral) // "x^3 + C"
 // Coordinate transformations
 let point = Point2D(x: 3.0, y: 4.0)
 let polar = point.toPolar()
-print("r = \(polar.r), θ = \(polar.theta)")
-// r = 5.0, θ = 0.927...
+print("r = \(polar.r), theta = \(polar.theta)")
+// r = 5.0, theta = 0.927...
 
 // Complex numbers
 let z = Complex(real: 1.0, imaginary: 1.0)
 let squared = z.power(2)
-print("z² = \(squared.real) + \(squared.imaginary)i")
+print("z^2 = \(squared.real) + \(squared.imaginary)i")
 ```
 
-## Available Functions
+## API Reference
 
 See the [thales documentation](https://docs.rs/thales) for complete API reference.
 
@@ -160,6 +169,10 @@ See the [thales documentation](https://docs.rs/thales) for complete API referenc
 ### Parsing
 - `Thales.parseEquation(_:)` - Parse equation string
 - `Thales.parseExpression(_:)` - Parse expression string
+
+## Documentation
+
+Documentation is automatically generated and hosted on [Swift Package Index](https://swiftpackageindex.com/ChrisGVE/thales/documentation/thales).
 
 ## License
 
