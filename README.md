@@ -1,5 +1,6 @@
 # thales
 
+[![CI](https://github.com/ChrisGVE/thales/actions/workflows/ci.yml/badge.svg)](https://github.com/ChrisGVE/thales/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/thales.svg)](https://crates.io/crates/thales)
 [![Documentation](https://docs.rs/thales/badge.svg)](https://docs.rs/thales)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
