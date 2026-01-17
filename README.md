@@ -1,10 +1,11 @@
 # thales
 
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/ChrisGVE/thales)](https://github.com/ChrisGVE/thales/releases)
 [![CI](https://github.com/ChrisGVE/thales/actions/workflows/ci.yml/badge.svg)](https://github.com/ChrisGVE/thales/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/thales.svg)](https://crates.io/crates/thales)
-[![Documentation](https://docs.rs/thales/badge.svg)](https://docs.rs/thales)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](https://www.rust-lang.org)
+[![Documentation](https://docs.rs/thales/badge.svg)](https://docs.rs/thales)
 
 A comprehensive Computer Algebra System (CAS) library for symbolic mathematics, equation solving, calculus, and numerical methods. Named after [Thales of Miletus](https://en.wikipedia.org/wiki/Thales_of_Miletus), the first mathematician in the Greek tradition.
 
