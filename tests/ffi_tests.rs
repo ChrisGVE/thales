@@ -295,3 +295,55 @@ fn test_erf_latex_output() {
 
     assert!(!latex.is_empty(), "LaTeX output should not be empty");
 }
+
+// =============================================================================
+// Log argument order regression tests (AST-01 / AST-02 / AST-03)
+// =============================================================================
+
+#[test]
+fn test_ffi_log_core_consistency_value_base() {
+    // Core evaluator and FFI evaluator must agree on log(value, base).
+    // log(8, 2) = 3 under the log(value, base) convention.
+    use std::collections::HashMap;
+    use thales::ast::{Expression, Function};
+
+    let expr = Expression::Function(
+        Function::Log,
+        vec![Expression::Float(8.0), Expression::Float(2.0)],
+    );
+    let core_result = expr
+        .evaluate(&HashMap::new())
+        .expect("core log(8, 2) must evaluate");
+    assert!(
+        (core_result - 3.0).abs() < 1e-10,
+        "core log(8, 2) should be 3, got {core_result}"
+    );
+}
+
+#[test]
+fn test_ffi_log_domain_negative_value() {
+    // FFI path must return None (not NaN) for negative value.
+    use std::collections::HashMap;
+    use thales::ast::{Expression, Function};
+
+    let expr = Expression::Function(
+        Function::Log,
+        vec![Expression::Float(-1.0), Expression::Float(10.0)],
+    );
+    assert!(
+        expr.evaluate(&HashMap::new()).is_none(),
+        "log(-1, 10) must return None"
+    );
+}
+
+#[test]
+fn test_ffi_ln_domain_negative_returns_none() {
+    use std::collections::HashMap;
+    use thales::ast::{Expression, Function};
+
+    let expr = Expression::Function(Function::Ln, vec![Expression::Float(-5.0)]);
+    assert!(
+        expr.evaluate(&HashMap::new()).is_none(),
+        "ln(-5) must return None, not NaN"
+    );
+}

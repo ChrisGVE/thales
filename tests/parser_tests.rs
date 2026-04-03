@@ -875,3 +875,35 @@ fn test_complex_expr_with_implicit_mul() {
         other => panic!("Expected Binary Add, got {:?}", other),
     }
 }
+
+// =============================================================================
+// Log argument order regression tests (AST-01 / AST-02 / AST-03)
+// =============================================================================
+
+#[test]
+fn test_parse_log_two_args_value_base_convention() {
+    // log(8, 2) parses as log(value=8, base=2); core eval must yield 3
+    use std::collections::HashMap;
+    let expr = parse_expression("log(8, 2)").expect("log(8, 2) must parse");
+    let result = expr
+        .evaluate(&HashMap::new())
+        .expect("log(8, 2) must evaluate");
+    assert!(
+        (result - 3.0).abs() < 1e-10,
+        "log(8, 2) should be 3, got {result}"
+    );
+}
+
+#[test]
+fn test_parse_log_single_arg_is_log10() {
+    // log(100) with one arg must equal log10(100) = 2
+    use std::collections::HashMap;
+    let expr = parse_expression("log(100)").expect("log(100) must parse");
+    let result = expr
+        .evaluate(&HashMap::new())
+        .expect("log(100) must evaluate");
+    assert!(
+        (result - 2.0).abs() < 1e-10,
+        "log(100) should be 2.0, got {result}"
+    );
+}
