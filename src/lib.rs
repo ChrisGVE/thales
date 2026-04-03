@@ -479,7 +479,10 @@ pub use integration::{
 };
 pub use latex::{parse_latex, parse_latex_equation};
 pub use matrix::{BracketStyle, MatrixError, MatrixExpr};
-pub use numerical::{NumericalConfig, NumericalSolution, SmartNumericalSolver};
+pub use numerical::{
+    BisectionMethod, BrentsMethod, NewtonRaphson, NumericalConfig, NumericalError, NumericalResult,
+    NumericalSolution, SmartNumericalSolver,
+};
 pub use ode::{
     solve_characteristic_equation, solve_ivp, solve_linear, solve_second_order_homogeneous,
     solve_second_order_ivp, solve_separable, CharacteristicRoots, FirstOrderODE, ODEError,

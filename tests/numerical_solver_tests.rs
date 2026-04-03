@@ -1,5 +1,8 @@
 use thales::ast::{BinaryOp, Equation, Expression, Function, Variable};
-use thales::numerical::{BisectionMethod, NewtonRaphson, NumericalConfig, SmartNumericalSolver};
+use thales::numerical::{
+    BisectionMethod, BrentsMethod, NewtonRaphson, NumericalConfig, NumericalError,
+    SmartNumericalSolver,
+};
 
 #[test]
 fn test_newton_raphson_quadratic() {
@@ -510,4 +513,129 @@ fn test_complex_transcendental_with_symbolic_diff() {
     let x = solution.value;
     let residual = x.tan() + x - 2.0;
     assert!(residual.abs() < 1e-9);
+}
+
+// ============================================================================
+// Brent's method tests
+// ============================================================================
+
+fn sqrt2_equation() -> Equation {
+    Equation::new(
+        "sqrt2",
+        Expression::Power(
+            Box::new(Expression::Variable(Variable::new("x"))),
+            Box::new(Expression::Integer(2)),
+        ),
+        Expression::Integer(2),
+    )
+}
+
+#[test]
+fn test_brents_method_sqrt2() {
+    // Solve x² = 2  →  x = √2 ≈ 1.41421356237
+    let equation = sqrt2_equation();
+    let solver = BrentsMethod::with_default_config();
+    let result = solver.solve(&equation, &Variable::new("x"), (1.0, 2.0));
+
+    assert!(result.is_ok(), "Brent's method should converge for x²=2");
+    let (solution, _path) = result.unwrap();
+    assert!(solution.converged);
+    assert!(
+        (solution.value - std::f64::consts::SQRT_2).abs() < 1e-10,
+        "Expected √2 but got {}",
+        solution.value
+    );
+    assert!(solution.residual < 1e-10);
+}
+
+#[test]
+fn test_brents_method_sin_transcendental() {
+    // Solve sin(x) = 0.5  →  x = π/6 ≈ 0.5235987756
+    let equation = Equation::new(
+        "sin_half",
+        Expression::Function(
+            Function::Sin,
+            vec![Expression::Variable(Variable::new("x"))],
+        ),
+        Expression::Float(0.5),
+    );
+
+    let solver = BrentsMethod::with_default_config();
+    // π/6 is between 0 and π/2
+    let result = solver.solve(&equation, &Variable::new("x"), (0.0, 1.0));
+
+    assert!(
+        result.is_ok(),
+        "Brent's method should converge for sin(x)=0.5"
+    );
+    let (solution, _path) = result.unwrap();
+    assert!(solution.converged);
+    assert!(
+        (solution.value.sin() - 0.5).abs() < 1e-10,
+        "Expected sin(x)=0.5 but residual was {}",
+        (solution.value.sin() - 0.5).abs()
+    );
+}
+
+#[test]
+fn test_brents_method_converges_faster_than_bisection() {
+    // Brent's method should require fewer iterations than plain bisection
+    // on a smooth function.  Use x² - 7 = 0 on [2, 3].
+    let equation = Equation::new(
+        "sqrt7",
+        Expression::Power(
+            Box::new(Expression::Variable(Variable::new("x"))),
+            Box::new(Expression::Integer(2)),
+        ),
+        Expression::Integer(7),
+    );
+    let var = Variable::new("x");
+    let config = NumericalConfig {
+        tolerance: 1e-10,
+        ..Default::default()
+    };
+
+    let brent = BrentsMethod::new(config.clone());
+    let (brent_sol, _) = brent
+        .solve(&equation, &var, (2.0, 3.0))
+        .expect("Brent should converge");
+
+    let bisect = BisectionMethod::new(config);
+    let (bisect_sol, _) = bisect
+        .solve(&equation, &var, (2.0, 3.0))
+        .expect("Bisection should converge");
+
+    // Both should agree on the answer
+    assert!(
+        (brent_sol.value - bisect_sol.value).abs() < 1e-9,
+        "Brent ({}) and bisection ({}) disagree",
+        brent_sol.value,
+        bisect_sol.value
+    );
+
+    // Brent's method should use fewer or equal iterations
+    assert!(
+        brent_sol.iterations <= bisect_sol.iterations,
+        "Brent ({} iters) should not be slower than bisection ({} iters)",
+        brent_sol.iterations,
+        bisect_sol.iterations
+    );
+}
+
+#[test]
+fn test_brents_method_non_bracketed_interval_errors() {
+    // f(1) = 1 - 2 = -1 and f(3) = 9 - 2 = 7, opposite signs → this is valid.
+    // Use [3, 5]: f(3) = 7 > 0 and f(5) = 23 > 0 → no bracket → error.
+    let equation = sqrt2_equation();
+    let solver = BrentsMethod::with_default_config();
+    let result = solver.solve(&equation, &Variable::new("x"), (3.0, 5.0));
+
+    assert!(
+        result.is_err(),
+        "Brent's method should error when interval does not bracket a root"
+    );
+    match result.unwrap_err() {
+        NumericalError::Other(_) => {}
+        e => panic!("Expected NumericalError::Other, got {:?}", e),
+    }
 }
