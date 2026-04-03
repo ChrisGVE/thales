@@ -724,6 +724,10 @@ fn format_limit_result(result: &crate::limits::LimitResult) -> (String, String, 
 // =============================================================================
 
 /// Evaluate an expression with given variable values.
+///
+/// Delegates directly to [`Expression::evaluate`] from the core AST, ensuring
+/// full parity with the core evaluator (Log2, Log10, Cbrt, Atan2, Sign, Min,
+/// Max, Pow, and correct domain handling for Ln/Log).
 fn evaluate_ffi(expression: &str, values_json: &str) -> Result<ffi::EvaluationResultFFI, String> {
     use std::collections::HashMap;
 
@@ -732,9 +736,7 @@ fn evaluate_ffi(expression: &str, values_json: &str) -> Result<ffi::EvaluationRe
     let values: HashMap<String, f64> = serde_json::from_str(values_json)
         .map_err(|e| format!("Failed to parse values JSON: {}", e))?;
 
-    let result = evaluate_expression(&expr, &values);
-
-    match result {
+    match expr.evaluate(&values) {
         Some(value) => Ok(ffi::EvaluationResultFFI {
             original: expression.to_string(),
             value,
@@ -749,115 +751,6 @@ fn evaluate_ffi(expression: &str, values_json: &str) -> Result<ffi::EvaluationRe
                 "Cannot evaluate expression (may contain undefined variables or operations)"
                     .to_string(),
         }),
-    }
-}
-
-/// Helper to evaluate expression with variable substitution.
-fn evaluate_expression(
-    expr: &crate::ast::Expression,
-    values: &std::collections::HashMap<String, f64>,
-) -> Option<f64> {
-    use crate::ast::{BinaryOp, Expression, Function, UnaryOp};
-
-    match expr {
-        Expression::Integer(n) => Some(*n as f64),
-        Expression::Float(f) => Some(*f),
-        Expression::Rational(r) => Some(*r.numer() as f64 / *r.denom() as f64),
-        Expression::Variable(v) => values.get(&v.name).copied(),
-        Expression::Constant(c) => {
-            use crate::ast::SymbolicConstant;
-            match c {
-                SymbolicConstant::Pi => Some(std::f64::consts::PI),
-                SymbolicConstant::E => Some(std::f64::consts::E),
-                SymbolicConstant::I => None, // Complex not supported in f64
-            }
-        }
-        Expression::Unary(op, inner) => {
-            let v = evaluate_expression(inner, values)?;
-            match op {
-                UnaryOp::Neg => Some(-v),
-                UnaryOp::Not => Some(if v == 0.0 { 1.0 } else { 0.0 }),
-                UnaryOp::Abs => Some(v.abs()),
-            }
-        }
-        Expression::Binary(op, left, right) => {
-            let l = evaluate_expression(left, values)?;
-            let r = evaluate_expression(right, values)?;
-            match op {
-                BinaryOp::Add => Some(l + r),
-                BinaryOp::Sub => Some(l - r),
-                BinaryOp::Mul => Some(l * r),
-                BinaryOp::Div => {
-                    if r != 0.0 {
-                        Some(l / r)
-                    } else {
-                        None
-                    }
-                }
-                BinaryOp::Mod => {
-                    if r != 0.0 {
-                        Some(l % r)
-                    } else {
-                        None
-                    }
-                }
-            }
-        }
-        Expression::Power(base, exp) => {
-            let b = evaluate_expression(base, values)?;
-            let e = evaluate_expression(exp, values)?;
-            Some(b.powf(e))
-        }
-        Expression::Function(func, args) => {
-            let arg_values: Option<Vec<f64>> = args
-                .iter()
-                .map(|a| evaluate_expression(a, values))
-                .collect();
-            let arg_values = arg_values?;
-
-            match func {
-                Function::Sin => Some(arg_values[0].sin()),
-                Function::Cos => Some(arg_values[0].cos()),
-                Function::Tan => Some(arg_values[0].tan()),
-                Function::Asin => Some(arg_values[0].asin()),
-                Function::Acos => Some(arg_values[0].acos()),
-                Function::Atan => Some(arg_values[0].atan()),
-                Function::Sinh => Some(arg_values[0].sinh()),
-                Function::Cosh => Some(arg_values[0].cosh()),
-                Function::Tanh => Some(arg_values[0].tanh()),
-                Function::Exp => Some(arg_values[0].exp()),
-                Function::Ln => {
-                    if arg_values[0] > 0.0 {
-                        Some(arg_values[0].ln())
-                    } else {
-                        None
-                    }
-                }
-                Function::Log => {
-                    if arg_values.len() == 2 && arg_values[0] > 0.0 && arg_values[1] > 0.0 {
-                        // log(value, base): arg0 = value, arg1 = base
-                        Some(arg_values[0].log(arg_values[1]))
-                    } else if arg_values.len() == 1 && arg_values[0] > 0.0 {
-                        Some(arg_values[0].log10())
-                    } else {
-                        None
-                    }
-                }
-                Function::Sqrt => {
-                    if arg_values[0] >= 0.0 {
-                        Some(arg_values[0].sqrt())
-                    } else {
-                        None
-                    }
-                }
-                Function::Abs => Some(arg_values[0].abs()),
-                Function::Floor => Some(arg_values[0].floor()),
-                Function::Ceil => Some(arg_values[0].ceil()),
-                Function::Round => Some(arg_values[0].round()),
-                _ => None,
-            }
-        }
-        _ => None,
     }
 }
 
