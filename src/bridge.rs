@@ -110,6 +110,17 @@ mod ffi {
         pub simplified_latex: String,
     }
 
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct ODEResultFFI {
+        pub equation: String,
+        pub solution: String,
+        pub solution_latex: String,
+        pub ode_type: String,
+        pub method_used: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
     // =========================================================================
     // Parsing functions
     // =========================================================================
@@ -117,6 +128,24 @@ mod ffi {
     extern "Rust" {
         fn parse_equation_ffi(input: &str) -> Result<String, String>;
         fn parse_expression_ffi(input: &str) -> Result<String, String>;
+    }
+
+    // =========================================================================
+    // ODE solving functions
+    // =========================================================================
+
+    extern "Rust" {
+        fn solve_ode_ffi(
+            equation: &str,
+            dependent_var: &str,
+            independent_var: &str,
+        ) -> ODEResultFFI;
+        fn solve_ode_ivp_ffi(
+            equation: &str,
+            dependent_var: &str,
+            independent_var: &str,
+            initial_conditions_json: &str,
+        ) -> ODEResultFFI;
     }
 
     // =========================================================================
@@ -174,8 +203,15 @@ mod ffi {
     // =========================================================================
 
     extern "Rust" {
-        fn differentiate_ffi(expression: &str, variable: &str) -> Result<DifferentiationResultFFI, String>;
-        fn differentiate_n_ffi(expression: &str, variable: &str, n: u32) -> Result<DifferentiationResultFFI, String>;
+        fn differentiate_ffi(
+            expression: &str,
+            variable: &str,
+        ) -> Result<DifferentiationResultFFI, String>;
+        fn differentiate_n_ffi(
+            expression: &str,
+            variable: &str,
+            n: u32,
+        ) -> Result<DifferentiationResultFFI, String>;
         fn gradient_ffi(expression: &str, variables_json: &str) -> Result<String, String>;
         fn integrate_ffi(expression: &str, variable: &str) -> Result<IntegrationResultFFI, String>;
         fn definite_integral_ffi(
@@ -184,7 +220,11 @@ mod ffi {
             lower: f64,
             upper: f64,
         ) -> Result<DefiniteIntegralResultFFI, String>;
-        fn limit_ffi(expression: &str, variable: &str, approaches: f64) -> Result<LimitResultFFI, String>;
+        fn limit_ffi(
+            expression: &str,
+            variable: &str,
+            approaches: f64,
+        ) -> Result<LimitResultFFI, String>;
         fn limit_infinity_ffi(expression: &str, variable: &str) -> Result<LimitResultFFI, String>;
     }
 
@@ -193,7 +233,8 @@ mod ffi {
     // =========================================================================
 
     extern "Rust" {
-        fn evaluate_ffi(expression: &str, values_json: &str) -> Result<EvaluationResultFFI, String>;
+        fn evaluate_ffi(expression: &str, values_json: &str)
+            -> Result<EvaluationResultFFI, String>;
         fn simplify_ffi(expression: &str) -> Result<SimplificationResultFFI, String>;
         fn simplify_trig_ffi(expression: &str) -> Result<SimplificationResultFFI, String>;
         fn simplify_trig_with_steps_ffi(expression: &str) -> Result<String, String>;
@@ -206,7 +247,11 @@ mod ffi {
     extern "Rust" {
         fn solve_system_ffi(equations_json: &str) -> Result<String, String>;
         fn solve_inequality_ffi(inequality: &str, variable: &str) -> Result<String, String>;
-        fn partial_fractions_ffi(numerator: &str, denominator: &str, variable: &str) -> Result<String, String>;
+        fn partial_fractions_ffi(
+            numerator: &str,
+            denominator: &str,
+            variable: &str,
+        ) -> Result<String, String>;
         fn solve_equation_system_ffi(
             equations_json: &str,
             known_values_json: &str,
