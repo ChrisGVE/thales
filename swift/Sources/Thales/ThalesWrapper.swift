@@ -1474,3 +1474,281 @@ extension Thales {
     }
   }
 }
+
+// MARK: - Series Expansions
+
+extension Thales {
+
+  /// Computes the Taylor series expansion of an expression around a center point.
+  ///
+  /// - Parameters:
+  ///   - expression: The expression to expand (e.g., "sin(x)")
+  ///   - variable: The expansion variable
+  ///   - center: The point around which to expand
+  ///   - order: The number of terms to compute
+  ///
+  /// - Returns: A ``TaylorSeriesResult`` containing the series and LaTeX form
+  ///
+  /// - Throws: ``ThalesError`` if the expansion fails
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let result = try Thales.taylorSeries("sin(x)", variable: "x", center: 0.0, order: 5)
+  /// print(result.series)
+  /// ```
+  public static func taylorSeries(
+    _ expression: String,
+    variable: String,
+    center: Double,
+    order: UInt32
+  ) throws -> TaylorSeriesResult {
+    do {
+      let result = try taylor_series_ffi(expression, variable, center, order)
+      return TaylorSeriesResult(ffiResult: result)
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+
+  /// Computes the Maclaurin series expansion of an expression (Taylor series at 0).
+  ///
+  /// - Parameters:
+  ///   - expression: The expression to expand
+  ///   - variable: The expansion variable
+  ///   - order: The number of terms to compute
+  ///
+  /// - Returns: A ``TaylorSeriesResult`` with center fixed at 0
+  ///
+  /// - Throws: ``ThalesError`` if the expansion fails
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let result = try Thales.maclaurinSeries("cos(x)", variable: "x", order: 4)
+  /// print(result.series)
+  /// ```
+  public static func maclaurinSeries(
+    _ expression: String,
+    variable: String,
+    order: UInt32
+  ) throws -> TaylorSeriesResult {
+    do {
+      let result = try maclaurin_series_ffi(expression, variable, order)
+      return TaylorSeriesResult(ffiResult: result)
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+
+  /// Computes the Laurent series expansion of an expression around a center point.
+  ///
+  /// Laurent series generalize Taylor series by allowing negative-power terms,
+  /// making them suitable for expressions with poles (singularities).
+  ///
+  /// - Parameters:
+  ///   - expression: The expression to expand
+  ///   - variable: The expansion variable
+  ///   - center: The point around which to expand
+  ///   - negOrder: Number of negative-power (principal part) terms
+  ///   - posOrder: Number of non-negative-power (analytic part) terms
+  ///
+  /// - Returns: A ``LaurentSeriesResult`` with both principal and analytic parts
+  ///
+  /// - Throws: ``ThalesError`` if the expansion fails
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let result = try Thales.laurentSeries(
+  ///     "1/x + x", variable: "x", center: 0.0, negOrder: 1, posOrder: 2)
+  /// print(result.series)
+  /// ```
+  public static func laurentSeries(
+    _ expression: String,
+    variable: String,
+    center: Double,
+    negOrder: UInt32,
+    posOrder: UInt32
+  ) throws -> LaurentSeriesResult {
+    do {
+      let result = try laurent_series_ffi(expression, variable, center, negOrder, posOrder)
+      return LaurentSeriesResult(ffiResult: result)
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+
+  /// Computes the asymptotic series expansion of an expression.
+  ///
+  /// Asymptotic expansions describe the dominant behaviour as the variable
+  /// tends toward zero or infinity.
+  ///
+  /// - Parameters:
+  ///   - expression: The expression to expand
+  ///   - variable: The expansion variable
+  ///   - direction: The direction of approach
+  ///   - numTerms: The maximum number of dominant terms to return
+  ///
+  /// - Returns: An ``AsymptoticSeriesResult`` describing the dominant terms
+  ///
+  /// - Throws: ``ThalesError`` if the expansion fails
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let result = try Thales.asymptoticSeries(
+  ///     "1/x + 1/x^2", variable: "x",
+  ///     direction: .posInfinity, numTerms: 3)
+  /// print(result.series)
+  /// ```
+  public static func asymptoticSeries(
+    _ expression: String,
+    variable: String,
+    direction: AsymptoticDirection,
+    numTerms: UInt32
+  ) throws -> AsymptoticSeriesResult {
+    do {
+      let result = try asymptotic_series_ffi(
+        expression, variable, direction.rawValue, numTerms)
+      return AsymptoticSeriesResult(ffiResult: result)
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+}
+
+// MARK: - Series Result Types
+
+/// The direction in which the variable approaches its limit for asymptotic expansions.
+public enum AsymptoticDirection: String {
+  /// The variable approaches positive infinity.
+  case posInfinity = "pos_infinity"
+
+  /// The variable approaches negative infinity.
+  case negInfinity = "neg_infinity"
+
+  /// The variable approaches zero.
+  case zero = "zero"
+}
+
+/// The result of a Taylor or Maclaurin series expansion.
+public struct TaylorSeriesResult {
+  /// The original expression
+  public let original: String
+
+  /// The expansion variable
+  public let variable: String
+
+  /// The center of expansion (0.0 for Maclaurin series)
+  public let center: Double
+
+  /// The number of terms computed
+  public let order: UInt32
+
+  /// The series as a plain-text expression string
+  public let series: String
+
+  /// The series in LaTeX notation
+  public let seriesLatex: String
+
+  /// Whether the expansion succeeded
+  public let success: Bool
+
+  /// Error message if the expansion failed
+  public let errorMessage: String?
+
+  init(ffiResult: TaylorSeriesResultFFI) {
+    self.original = ffiResult.original.toString()
+    self.variable = ffiResult.variable.toString()
+    self.center = ffiResult.center
+    self.order = ffiResult.order
+    self.series = ffiResult.series.toString()
+    self.seriesLatex = ffiResult.series_latex.toString()
+    self.success = ffiResult.success
+    let msg = ffiResult.error_message.toString()
+    self.errorMessage = msg.isEmpty ? nil : msg
+  }
+}
+
+/// The result of a Laurent series expansion.
+public struct LaurentSeriesResult {
+  /// The original expression
+  public let original: String
+
+  /// The expansion variable
+  public let variable: String
+
+  /// The center of expansion
+  public let center: Double
+
+  /// Number of negative-power (principal part) terms requested
+  public let negOrder: UInt32
+
+  /// Number of non-negative-power (analytic part) terms requested
+  public let posOrder: UInt32
+
+  /// The series as a plain-text expression string
+  public let series: String
+
+  /// The series in LaTeX notation
+  public let seriesLatex: String
+
+  /// Whether the expansion succeeded
+  public let success: Bool
+
+  /// Error message if the expansion failed
+  public let errorMessage: String?
+
+  init(ffiResult: LaurentSeriesResultFFI) {
+    self.original = ffiResult.original.toString()
+    self.variable = ffiResult.variable.toString()
+    self.center = ffiResult.center
+    self.negOrder = ffiResult.neg_order
+    self.posOrder = ffiResult.pos_order
+    self.series = ffiResult.series.toString()
+    self.seriesLatex = ffiResult.series_latex.toString()
+    self.success = ffiResult.success
+    let msg = ffiResult.error_message.toString()
+    self.errorMessage = msg.isEmpty ? nil : msg
+  }
+}
+
+/// The result of an asymptotic series expansion.
+public struct AsymptoticSeriesResult {
+  /// The original expression
+  public let original: String
+
+  /// The expansion variable
+  public let variable: String
+
+  /// The direction of expansion ("pos_infinity", "neg_infinity", or "zero")
+  public let direction: String
+
+  /// The number of dominant terms requested
+  public let numTerms: UInt32
+
+  /// The series as a plain-text expression string
+  public let series: String
+
+  /// The series in LaTeX notation
+  public let seriesLatex: String
+
+  /// Whether the expansion succeeded
+  public let success: Bool
+
+  /// Error message if the expansion failed
+  public let errorMessage: String?
+
+  init(ffiResult: AsymptoticSeriesResultFFI) {
+    self.original = ffiResult.original.toString()
+    self.variable = ffiResult.variable.toString()
+    self.direction = ffiResult.direction.toString()
+    self.numTerms = ffiResult.num_terms
+    self.series = ffiResult.series.toString()
+    self.seriesLatex = ffiResult.series_latex.toString()
+    self.success = ffiResult.success
+    let msg = ffiResult.error_message.toString()
+    self.errorMessage = msg.isEmpty ? nil : msg
+  }
+}
