@@ -1197,11 +1197,8 @@ impl ComplexOps {
         Complex64::from_polar(r_n, theta_n)
     }
 
-    /// Compute all nth roots of a complex number.
+    /// Compute all nth roots of a complex number using De Moivre's theorem.
     ///
-    /// **TODO**: Not yet implemented. Returns empty vector as placeholder.
-    ///
-    /// When implemented, will find all n distinct nth roots of a complex number.
     /// For any complex number z and positive integer n, there are exactly n
     /// distinct nth roots equally spaced around a circle in the complex plane.
     ///
@@ -1213,39 +1210,46 @@ impl ComplexOps {
     /// ```
     ///
     /// These roots are evenly distributed at angles 2π/n radians apart on a circle
-    /// of radius r^(1/n) centered at the origin.
+    /// of radius r^(1/n) centred at the origin.
     ///
-    /// # Examples (when implemented)
+    /// # Examples
     ///
-    /// ```ignore
+    /// ```
     /// use thales::transforms::ComplexOps;
     /// use num_complex::Complex64;
     ///
-    /// // Find all cube roots of 8 (real number)
+    /// // Find all cube roots of 8 (real number): 2, -1+√3i, -1-√3i
     /// let z = Complex64::new(8.0, 0.0);
     /// let roots = ComplexOps::nth_root(z, 3);
     /// assert_eq!(roots.len(), 3);
-    /// // Roots: 2, -1+√3i, -1-√3i
     ///
-    /// // Find all square roots of i
-    /// let z = Complex64::new(0.0, 1.0);
+    /// // Find all square roots of -1: i and -i
+    /// let z = Complex64::new(-1.0, 0.0);
     /// let roots = ComplexOps::nth_root(z, 2);
     /// assert_eq!(roots.len(), 2);
-    /// // Roots: (1+i)/√2, -(1+i)/√2
     /// ```
     ///
     /// # Arguments
     ///
-    /// * `_c` - Complex number to find roots of
-    /// * `_n` - Root degree (positive integer)
+    /// * `c` - Complex number to find roots of
+    /// * `n` - Root degree (must be a positive integer; returns empty vec for n ≤ 0)
     ///
     /// # Returns
     ///
-    /// Vector of all n distinct nth roots (empty until implemented)
-    pub fn nth_root(_c: Complex64, _n: i32) -> Vec<Complex64> {
-        // TODO: Implement all n roots
-        // Returns n equally spaced roots around the circle
-        vec![]
+    /// Vector of all n distinct nth roots ordered by increasing angle.
+    pub fn nth_root(c: Complex64, n: i32) -> Vec<Complex64> {
+        if n <= 0 {
+            return vec![];
+        }
+        let polar = Self::to_polar(c);
+        let r_n = polar.r.powf(1.0 / f64::from(n));
+        let n_usize = n as usize;
+        (0..n_usize)
+            .map(|k| {
+                let theta_k = (polar.theta + 2.0 * std::f64::consts::PI * k as f64) / f64::from(n);
+                Complex64::from_polar(r_n, theta_k)
+            })
+            .collect()
     }
 }
 
@@ -1899,5 +1903,114 @@ mod tests {
         let result = composed.apply(Cartesian2D::new(0.0, 0.0));
         assert!(approx_eq(result.x, 4.0));
         assert!(approx_eq(result.y, 6.0));
+    }
+
+    // --- nth_root ---
+
+    const COMPLEX_EPS: f64 = 1e-10;
+
+    fn complex_approx_eq(a: num_complex::Complex64, b: num_complex::Complex64) -> bool {
+        (a.re - b.re).abs() < COMPLEX_EPS && (a.im - b.im).abs() < COMPLEX_EPS
+    }
+
+    #[test]
+    fn nth_root_square_roots_of_one_are_one_and_minus_one() {
+        let z = num_complex::Complex64::new(1.0, 0.0);
+        let roots = ComplexOps::nth_root(z, 2);
+        assert_eq!(roots.len(), 2);
+        // roots must be 1 and -1 (in some order)
+        let has_pos_one = roots
+            .iter()
+            .any(|r| complex_approx_eq(*r, num_complex::Complex64::new(1.0, 0.0)));
+        let has_neg_one = roots
+            .iter()
+            .any(|r| complex_approx_eq(*r, num_complex::Complex64::new(-1.0, 0.0)));
+        assert!(has_pos_one, "missing root +1");
+        assert!(has_neg_one, "missing root -1");
+    }
+
+    #[test]
+    fn nth_root_cube_roots_of_one_lie_on_unit_circle_spaced_120_degrees_apart() {
+        use std::f64::consts::PI;
+        let z = num_complex::Complex64::new(1.0, 0.0);
+        let roots = ComplexOps::nth_root(z, 3);
+        assert_eq!(roots.len(), 3);
+        // All roots must have magnitude 1
+        for r in &roots {
+            assert!(
+                (r.norm() - 1.0).abs() < COMPLEX_EPS,
+                "root magnitude != 1: {r}"
+            );
+        }
+        // Angles must be 0, 2π/3, 4π/3
+        let expected_angles = [0.0_f64, 2.0 * PI / 3.0, 4.0 * PI / 3.0];
+        for expected in expected_angles {
+            let found = roots.iter().any(|r| {
+                let angle = r.arg().rem_euclid(2.0 * PI);
+                (angle - expected).abs() < COMPLEX_EPS
+            });
+            assert!(found, "missing root at angle {expected}");
+        }
+    }
+
+    #[test]
+    fn nth_root_sqrt_of_minus_one_gives_i_and_minus_i() {
+        let z = num_complex::Complex64::new(-1.0, 0.0);
+        let roots = ComplexOps::nth_root(z, 2);
+        assert_eq!(roots.len(), 2);
+        let has_i = roots
+            .iter()
+            .any(|r| complex_approx_eq(*r, num_complex::Complex64::new(0.0, 1.0)));
+        let has_neg_i = roots
+            .iter()
+            .any(|r| complex_approx_eq(*r, num_complex::Complex64::new(0.0, -1.0)));
+        assert!(has_i, "missing root +i");
+        assert!(has_neg_i, "missing root -i");
+    }
+
+    #[test]
+    fn nth_root_fourth_roots_of_16_include_two_and_minus_two_and_two_i() {
+        let z = num_complex::Complex64::new(16.0, 0.0);
+        let roots = ComplexOps::nth_root(z, 4);
+        assert_eq!(roots.len(), 4);
+        let expected: &[num_complex::Complex64] = &[
+            num_complex::Complex64::new(2.0, 0.0),
+            num_complex::Complex64::new(-2.0, 0.0),
+            num_complex::Complex64::new(0.0, 2.0),
+            num_complex::Complex64::new(0.0, -2.0),
+        ];
+        for exp in expected {
+            let found = roots.iter().any(|r| complex_approx_eq(*r, *exp));
+            assert!(found, "missing expected root {exp}");
+        }
+    }
+
+    #[test]
+    fn nth_root_all_roots_raised_to_n_recover_original() {
+        let cases: &[(num_complex::Complex64, i32)] = &[
+            (num_complex::Complex64::new(1.0, 0.0), 2),
+            (num_complex::Complex64::new(1.0, 0.0), 3),
+            (num_complex::Complex64::new(-1.0, 0.0), 2),
+            (num_complex::Complex64::new(16.0, 0.0), 4),
+            (num_complex::Complex64::new(3.0, 4.0), 3),
+        ];
+        for &(z, n) in cases {
+            let roots = ComplexOps::nth_root(z, n);
+            assert_eq!(roots.len(), n as usize);
+            for root in roots {
+                let recovered = root.powi(n);
+                assert!(
+                    complex_approx_eq(recovered, z),
+                    "root^{n} = {recovered} != {z} (root = {root})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn nth_root_non_positive_n_returns_empty() {
+        let z = num_complex::Complex64::new(1.0, 0.0);
+        assert!(ComplexOps::nth_root(z, 0).is_empty());
+        assert!(ComplexOps::nth_root(z, -1).is_empty());
     }
 }
