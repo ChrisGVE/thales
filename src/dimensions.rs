@@ -324,13 +324,16 @@ impl Dimension {
     /// // Result: Length¹ × Time⁻¹ × Time¹ = Length¹
     /// ```
     ///
-    /// # TODO
-    ///
-    /// Currently returns a clone of self. Full implementation pending.
-    pub fn multiply(&self, _other: &Dimension) -> Dimension {
-        // TODO: Implement dimension multiplication
-        // Add exponents for matching base dimensions
-        self.clone()
+    pub fn multiply(&self, other: &Dimension) -> Dimension {
+        let mut exponents = self.exponents.clone();
+        for (&base, &exp) in &other.exponents {
+            let entry = exponents.entry(base).or_insert(0);
+            *entry += exp;
+            if *entry == 0 {
+                exponents.remove(&base);
+            }
+        }
+        Self { exponents }
     }
 
     /// Divide two dimensions by subtracting their exponents.
@@ -351,13 +354,16 @@ impl Dimension {
     /// // Result: Length¹T⁻¹
     /// ```
     ///
-    /// # TODO
-    ///
-    /// Currently returns a clone of self. Full implementation pending.
-    pub fn divide(&self, _other: &Dimension) -> Dimension {
-        // TODO: Implement dimension division
-        // Subtract exponents for matching base dimensions
-        self.clone()
+    pub fn divide(&self, other: &Dimension) -> Dimension {
+        let mut exponents = self.exponents.clone();
+        for (&base, &exp) in &other.exponents {
+            let entry = exponents.entry(base).or_insert(0);
+            *entry -= exp;
+            if *entry == 0 {
+                exponents.remove(&base);
+            }
+        }
+        Self { exponents }
     }
 
     /// Raise a dimension to a power by multiplying all exponents.
@@ -378,13 +384,16 @@ impl Dimension {
     /// // Result: Length²T⁻²
     /// ```
     ///
-    /// # TODO
-    ///
-    /// Currently returns a clone of self. Full implementation pending.
-    pub fn power(&self, _exponent: i32) -> Dimension {
-        // TODO: Implement dimension exponentiation
-        // Multiply all exponents by the power
-        self.clone()
+    pub fn power(&self, exponent: i32) -> Dimension {
+        if exponent == 0 {
+            return Self::dimensionless();
+        }
+        let exponents = self
+            .exponents
+            .iter()
+            .map(|(&base, &exp)| (base, exp * exponent))
+            .collect();
+        Self { exponents }
     }
 
     /// Check if two dimensions are compatible (can be converted between).
@@ -410,10 +419,77 @@ impl Dimension {
     }
 }
 
+/// Return the SI symbol string for a base dimension.
+fn base_dimension_symbol(base: BaseDimension) -> &'static str {
+    match base {
+        BaseDimension::Length => "m",
+        BaseDimension::Mass => "kg",
+        BaseDimension::Time => "s",
+        BaseDimension::Current => "A",
+        BaseDimension::Temperature => "K",
+        BaseDimension::Amount => "mol",
+        BaseDimension::Luminosity => "cd",
+    }
+}
+
+/// Format an integer exponent as Unicode superscript characters.
+///
+/// Returns an empty string for exponent 1 (conventional omission).
+fn format_superscript(exp: i32) -> String {
+    if exp == 1 {
+        return String::new();
+    }
+    let digits: &[char] = &['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
+    let minus = '⁻';
+    let (sign, abs_exp) = if exp < 0 {
+        (true, (-exp) as u32)
+    } else {
+        (false, exp as u32)
+    };
+    let mut result = String::new();
+    if sign {
+        result.push(minus);
+    }
+    for ch in abs_exp.to_string().chars() {
+        let digit = ch.to_digit(10).expect("digit") as usize;
+        result.push(digits[digit]);
+    }
+    result
+}
+
+/// Canonical ordering for display: Length, Mass, Time, Current, Temperature, Amount, Luminosity.
+fn base_dimension_order(base: &BaseDimension) -> u8 {
+    match base {
+        BaseDimension::Length => 0,
+        BaseDimension::Mass => 1,
+        BaseDimension::Time => 2,
+        BaseDimension::Current => 3,
+        BaseDimension::Temperature => 4,
+        BaseDimension::Amount => 5,
+        BaseDimension::Luminosity => 6,
+    }
+}
+
 impl fmt::Display for Dimension {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // TODO: Format dimension nicely (e.g., "m/s^2")
-        write!(f, "[dimension]")
+        if self.exponents.is_empty() {
+            return write!(f, "1");
+        }
+        let mut pairs: Vec<(BaseDimension, i32)> =
+            self.exponents.iter().map(|(&b, &e)| (b, e)).collect();
+        pairs.sort_by_key(|(b, _)| base_dimension_order(b));
+        let mut parts = pairs.iter().map(|(base, exp)| {
+            format!(
+                "{}{}",
+                base_dimension_symbol(*base),
+                format_superscript(*exp)
+            )
+        });
+        write!(f, "{}", parts.next().unwrap_or_default())?;
+        for part in parts {
+            write!(f, "·{}", part)?;
+        }
+        Ok(())
     }
 }
 
@@ -1006,3 +1082,114 @@ impl fmt::Display for Quantity {
 // TODO: Add automatic unit inference
 // TODO: Add support for currency units with exchange rates
 // TODO: Add temperature conversion with proper handling of absolute vs relative
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn length() -> Dimension {
+        Dimension::from_base(BaseDimension::Length, 1)
+    }
+
+    fn time() -> Dimension {
+        Dimension::from_base(BaseDimension::Time, 1)
+    }
+
+    fn mass() -> Dimension {
+        Dimension::from_base(BaseDimension::Mass, 1)
+    }
+
+    #[test]
+    fn multiply_adds_exponents() {
+        // Length × Length = Length²
+        let area = length().multiply(&length());
+        assert_eq!(area.exponents[&BaseDimension::Length], 2);
+        assert_eq!(area.exponents.len(), 1);
+    }
+
+    #[test]
+    fn multiply_velocity_is_length_per_time() {
+        // velocity = Length / Time = Length × Time⁻¹
+        let inv_time = Dimension::from_base(BaseDimension::Time, -1);
+        let velocity = length().multiply(&inv_time);
+        assert_eq!(velocity.exponents[&BaseDimension::Length], 1);
+        assert_eq!(velocity.exponents[&BaseDimension::Time], -1);
+    }
+
+    #[test]
+    fn divide_velocity() {
+        // velocity = length / time
+        let velocity = length().divide(&time());
+        assert_eq!(velocity.exponents[&BaseDimension::Length], 1);
+        assert_eq!(velocity.exponents[&BaseDimension::Time], -1);
+    }
+
+    #[test]
+    fn divide_acceleration() {
+        // acceleration = velocity / time = length / time²
+        let velocity = length().divide(&time());
+        let acceleration = velocity.divide(&time());
+        assert_eq!(acceleration.exponents[&BaseDimension::Length], 1);
+        assert_eq!(acceleration.exponents[&BaseDimension::Time], -2);
+    }
+
+    #[test]
+    fn divide_dimensionless_cancellation() {
+        // length / length = dimensionless
+        let result = length().divide(&length());
+        assert!(result.is_dimensionless());
+    }
+
+    #[test]
+    fn power_velocity_squared() {
+        // velocity² = Length²·Time⁻²
+        let velocity = length().divide(&time());
+        let v2 = velocity.power(2);
+        assert_eq!(v2.exponents[&BaseDimension::Length], 2);
+        assert_eq!(v2.exponents[&BaseDimension::Time], -2);
+    }
+
+    #[test]
+    fn power_zero_is_dimensionless() {
+        assert!(length().power(0).is_dimensionless());
+    }
+
+    #[test]
+    fn energy_is_mass_times_velocity_squared() {
+        // E = m·v² = Mass × Length²·Time⁻²
+        let velocity = length().divide(&time());
+        let energy = mass().multiply(&velocity.power(2));
+        assert_eq!(energy.exponents[&BaseDimension::Mass], 1);
+        assert_eq!(energy.exponents[&BaseDimension::Length], 2);
+        assert_eq!(energy.exponents[&BaseDimension::Time], -2);
+    }
+
+    #[test]
+    fn display_dimensionless() {
+        assert_eq!(Dimension::dimensionless().to_string(), "1");
+    }
+
+    #[test]
+    fn display_length() {
+        assert_eq!(length().to_string(), "m");
+    }
+
+    #[test]
+    fn display_velocity() {
+        let velocity = length().divide(&time());
+        assert_eq!(velocity.to_string(), "m·s⁻¹");
+    }
+
+    #[test]
+    fn display_acceleration() {
+        let accel = length().divide(&time().multiply(&time()));
+        assert_eq!(accel.to_string(), "m·s⁻²");
+    }
+
+    #[test]
+    fn display_energy() {
+        let velocity = length().divide(&time());
+        let energy = mass().multiply(&velocity.power(2));
+        assert_eq!(energy.to_string(), "m²·kg·s⁻²");
+    }
+}
