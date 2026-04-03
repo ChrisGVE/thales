@@ -321,7 +321,24 @@
 //!
 //! ## Version History
 //!
-//! **Current: v0.3.0** - Advanced Calculus & API Stabilization
+//! **Current: v0.3.3** - CI/CD Infrastructure & Release Fixes
+//!
+//! - Release workflow: `--allow-dirty` flag for cargo publish
+//! - Swift XCFramework workflow: permissions for release uploads
+//!
+//! **v0.3.2** - CI/CD Infrastructure & Code Quality
+//!
+//! - GitHub Actions CI workflow with build status badge
+//! - Automated release workflow for crates.io publishing
+//! - Swift XCFramework build workflow for iOS/macOS distribution
+//! - Swift Package Index configuration for DocC documentation hosting
+//! - Compiler warning fixes and cargo fmt formatting cleanup
+//!
+//! **v0.3.1** - Documentation Fix
+//!
+//! - Corrected "LaTeX rendering" terminology to "LaTeX generation/output"
+//!
+//! **v0.3.0** - Advanced Calculus & API Stabilization
 //!
 //! - Second-order ODEs with characteristic equation method
 //! - Nonlinear system solver (Newton-Raphson for systems)
@@ -390,6 +407,7 @@ pub mod pattern;
 pub mod precision;
 pub mod resolution_path;
 pub mod series;
+pub mod simplification_rules;
 pub mod solver;
 pub mod special;
 pub mod transforms;

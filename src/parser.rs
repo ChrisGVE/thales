@@ -136,7 +136,6 @@
 //!
 //! - **No equation systems**: Only single equations supported
 //! - **No LaTeX input**: Plain ASCII notation only
-//! - **No MathML**: Plain text input only
 //!
 //! See TODO comments at end of file for planned enhancements.
 
@@ -839,4 +838,3 @@ pub fn parse_equation(input: &str) -> Result<Equation, Vec<ParseError>> {
 // TODO: Add support for implicit multiplication (2x, xy)
 // TODO: Add support for equation systems (multiple equations)
 // TODO: Add LaTeX-style input parsing
-// TODO: Add MathML input parsing
