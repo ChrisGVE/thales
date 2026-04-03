@@ -94,6 +94,13 @@ print("z^2 = \(squared.real) + \(squared.imaginary)i")
 ### Complex Numbers
 - ``Complex``
 
+### Special Functions
+- ``Thales/gamma(_:)``
+- ``Thales/beta(_:_:)``
+- ``Thales/erf(_:)``
+- ``Thales/erfc(_:)``
+- ``SpecialFunctionResult``
+
 ### Simplification
 - ``Thales/simplify(_:)``
 - ``Thales/simplifyTrig(_:)``

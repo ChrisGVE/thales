@@ -7,7 +7,7 @@
 use thales::ast::{Expression, Variable};
 use thales::parser::parse_expression;
 use thales::series::{maclaurin, taylor};
-use thales::special::{erf, gamma};
+use thales::special::{beta, erf, erfc, gamma};
 
 // =============================================================================
 // Series Expansion Tests
@@ -258,6 +258,114 @@ fn test_erf_has_derivation_steps() {
     assert!(
         !erf_result.derivation_steps.is_empty(),
         "Derivation steps should be present"
+    );
+}
+
+// =============================================================================
+// Beta Function Tests
+// =============================================================================
+
+#[test]
+fn test_beta_two_three() {
+    // B(2, 3) = Γ(2)·Γ(3) / Γ(5) = 1·2 / 24 = 1/12
+    let a = Expression::Integer(2);
+    let b = Expression::Integer(3);
+    let result = beta(&a, &b);
+
+    assert!(result.is_ok(), "beta(2, 3) should succeed");
+    let val = result.unwrap().numeric_value.unwrap();
+    assert!(
+        (val - 1.0 / 12.0).abs() < 1e-10,
+        "B(2, 3) should equal 1/12, got {}",
+        val
+    );
+}
+
+#[test]
+fn test_beta_one_one() {
+    // B(1, 1) = Γ(1)·Γ(1) / Γ(2) = 1·1 / 1 = 1
+    let a = Expression::Integer(1);
+    let b = Expression::Integer(1);
+    let result = beta(&a, &b);
+
+    assert!(result.is_ok(), "beta(1, 1) should succeed");
+    assert_eq!(
+        result.unwrap().numeric_value,
+        Some(1.0),
+        "B(1, 1) should equal 1"
+    );
+}
+
+#[test]
+fn test_beta_symmetry() {
+    // B(a, b) = B(b, a) — symmetry property
+    let a = Expression::Float(2.5);
+    let b = Expression::Float(3.5);
+    let result_ab = beta(&a, &b).unwrap().numeric_value.unwrap();
+    let result_ba = beta(&b, &a).unwrap().numeric_value.unwrap();
+
+    assert!(
+        (result_ab - result_ba).abs() < 1e-10,
+        "Beta function must be symmetric: B(a,b) == B(b,a), got {} vs {}",
+        result_ab,
+        result_ba
+    );
+}
+
+#[test]
+fn test_beta_has_derivation_steps() {
+    let a = Expression::Integer(2);
+    let b = Expression::Integer(3);
+    let result = beta(&a, &b).unwrap();
+
+    assert!(
+        !result.derivation_steps.is_empty(),
+        "Beta derivation steps should be present"
+    );
+}
+
+// =============================================================================
+// Erfc Function Tests
+// =============================================================================
+
+#[test]
+fn test_erfc_zero() {
+    // erfc(0) = 1 - erf(0) = 1
+    let x = Expression::Integer(0);
+    let result = erfc(&x);
+
+    assert!(result.is_ok(), "erfc(0) should succeed");
+    assert_eq!(
+        result.unwrap().numeric_value,
+        Some(1.0),
+        "erfc(0) should equal 1"
+    );
+}
+
+#[test]
+fn test_erfc_complements_erf() {
+    // erfc(x) = 1 - erf(x) for all x
+    let x = Expression::Float(1.0);
+    let erf_val = erf(&x).unwrap().numeric_value.unwrap();
+    let erfc_val = erfc(&x).unwrap().numeric_value.unwrap();
+
+    assert!(
+        (erf_val + erfc_val - 1.0).abs() < 1e-10,
+        "erf(x) + erfc(x) must equal 1, got {} + {} = {}",
+        erf_val,
+        erfc_val,
+        erf_val + erfc_val
+    );
+}
+
+#[test]
+fn test_erfc_has_derivation_steps() {
+    let x = Expression::Float(1.0);
+    let result = erfc(&x).unwrap();
+
+    assert!(
+        !result.derivation_steps.is_empty(),
+        "Erfc derivation steps should be present"
     );
 }
 

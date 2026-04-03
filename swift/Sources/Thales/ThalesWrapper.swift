@@ -21,6 +21,7 @@ import Foundation
 /// - **Coordinates**: 2D/3D coordinate system transformations
 /// - **Complex Numbers**: Complex arithmetic and polar form
 /// - **Simplification**: Algebraic and trigonometric simplification
+/// - **Special Functions**: Gamma, Beta, Erf, and Erfc with derivation steps
 ///
 /// ## Example
 ///
@@ -53,6 +54,12 @@ import Foundation
 /// - ``Point3D``
 /// - ``PolarPoint``
 /// - ``SphericalPoint``
+///
+/// ### Special Functions
+/// - ``gamma(_:)``
+/// - ``beta(_:_:)``
+/// - ``erf(_:)``
+/// - ``erfc(_:)``
 public enum Thales {
 
   /// The current version of Thales
@@ -1141,6 +1148,278 @@ extension Thales {
     } catch {
       throw ThalesError.operationFailed(String(describing: error))
     }
+  }
+}
+
+// MARK: - ODE Result
+
+/// The result of solving an ordinary differential equation.
+public struct ODEResult {
+  /// The original RHS expression supplied to the solver
+  public let equation: String
+
+  /// The general or particular solution as a string
+  public let solution: String
+
+  /// The solution in LaTeX notation
+  public let solutionLatex: String
+
+  /// Classification of the ODE (e.g. "separable", "linear", "ivp")
+  public let odeType: String
+
+  /// The solving method used (e.g. "Separation of variables")
+  public let methodUsed: String
+
+  /// Whether solving succeeded
+  public let success: Bool
+
+  /// Error message when `success` is `false`, otherwise empty
+  public let errorMessage: String
+
+  init(ffiResult: ODEResultFFI) {
+    self.equation = ffiResult.equation.toString()
+    self.solution = ffiResult.solution.toString()
+    self.solutionLatex = ffiResult.solution_latex.toString()
+    self.odeType = ffiResult.ode_type.toString()
+    self.methodUsed = ffiResult.method_used.toString()
+    self.success = ffiResult.success
+    self.errorMessage = ffiResult.error_message.toString()
+  }
+}
+
+// MARK: - ODE Solving
+
+extension Thales {
+
+  /// Solves a first-order ODE given as its right-hand side expression.
+  ///
+  /// Provide the expression `f` such that `d(dependentVar)/d(independentVar) = f`.
+  /// The solver attempts separable and first-order linear strategies in order.
+  ///
+  /// - Parameters:
+  ///   - equation: RHS expression (e.g. `"y"` for dy/dx = y, or `"-y + x"` for dy/dx = -y + x)
+  ///   - dependentVar: The dependent variable name (e.g. `"y"`)
+  ///   - independentVar: The independent variable name (e.g. `"x"`)
+  ///
+  /// - Returns: An ``ODEResult`` containing the general solution
+  ///
+  /// - Throws: ``ThalesError`` if the expression cannot be parsed or the ODE cannot be solved
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // dy/dx = y  →  y = C*exp(x)
+  /// let result = try Thales.solveODE("y", dependent: "y", independent: "x")
+  /// print(result.solution)      // e.g. "C*exp(x)"
+  /// print(result.solutionLatex) // LaTeX form
+  ///
+  /// // dy/dx + y = x  →  supply rhs = "-y + x"
+  /// let linear = try Thales.solveODE("-y + x", dependent: "y", independent: "x")
+  /// ```
+  public static func solveODE(
+    _ equation: String,
+    dependent dependentVar: String,
+    independent independentVar: String
+  ) throws -> ODEResult {
+    let result = solve_ode_ffi(equation, dependentVar, independentVar)
+    guard result.success else {
+      throw ThalesError.operationFailed(result.error_message.toString())
+    }
+    return ODEResult(ffiResult: result)
+  }
+
+  /// Solves a first-order ODE initial value problem.
+  ///
+  /// Provide the RHS expression and an initial condition `(x0, y0)` to obtain a
+  /// particular solution.
+  ///
+  /// - Parameters:
+  ///   - equation: RHS expression (e.g. `"y"` for dy/dx = y)
+  ///   - dependentVar: The dependent variable name (e.g. `"y"`)
+  ///   - independentVar: The independent variable name (e.g. `"x"`)
+  ///   - x0: The initial value of the independent variable
+  ///   - y0: The initial value of the dependent variable
+  ///
+  /// - Returns: An ``ODEResult`` containing the particular solution
+  ///
+  /// - Throws: ``ThalesError`` if solving fails or initial conditions cannot be applied
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // dy/dx = y,  y(0) = 1  →  y = exp(x)
+  /// let result = try Thales.solveODEIVP("y", dependent: "y", independent: "x", x0: 0, y0: 1)
+  /// print(result.solution) // "exp(x)"
+  /// ```
+  public static func solveODEIVP(
+    _ equation: String,
+    dependent dependentVar: String,
+    independent independentVar: String,
+    x0: Double,
+    y0: Double
+  ) throws -> ODEResult {
+    let json = "{\"x0\":\(x0),\"y0\":\(y0)}"
+    let result = solve_ode_ivp_ffi(equation, dependentVar, independentVar, json)
+    guard result.success else {
+      throw ThalesError.operationFailed(result.error_message.toString())
+    }
+    return ODEResult(ffiResult: result)
+  }
+}
+
+// MARK: - Special Functions
+
+extension Thales {
+
+  /// Computes the Gamma function Γ(x) with step-by-step derivation.
+  ///
+  /// For positive integers, Γ(n) = (n-1)!. The general definition is the
+  /// integral Γ(z) = ∫₀^∞ t^(z-1) e^(-t) dt.
+  ///
+  /// - Parameter x: The argument (must not be zero or a negative integer)
+  ///
+  /// - Returns: A ``SpecialFunctionResult`` containing the numeric value and derivation steps
+  ///
+  /// - Throws: ``ThalesError`` if the argument is invalid (e.g., pole at non-positive integers)
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // Γ(5) = 4! = 24
+  /// let result = try Thales.gamma(5.0)
+  /// print(result.numericValue) // 24.0
+  /// ```
+  public static func gamma(_ x: Double) throws -> SpecialFunctionResult {
+    do {
+      let result = try gamma_ffi(x)
+      return SpecialFunctionResult(ffiResult: result)
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+
+  /// Computes the Beta function B(a, b) = Γ(a)·Γ(b) / Γ(a+b) with derivation steps.
+  ///
+  /// The Beta function is related to the Gamma function and is used in probability
+  /// theory, statistics, and combinatorics.
+  ///
+  /// - Parameters:
+  ///   - a: First argument (must be a positive real number)
+  ///   - b: Second argument (must be a positive real number)
+  ///
+  /// - Returns: A ``SpecialFunctionResult`` containing the numeric value and derivation steps
+  ///
+  /// - Throws: ``ThalesError`` if either argument is invalid
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // B(2, 3) = 1/12
+  /// let result = try Thales.beta(2.0, 3.0)
+  /// print(result.numericValue) // 0.08333...
+  /// ```
+  public static func beta(_ a: Double, _ b: Double) throws -> SpecialFunctionResult {
+    do {
+      let result = try beta_ffi(a, b)
+      return SpecialFunctionResult(ffiResult: result)
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+
+  /// Computes the error function erf(x) = (2/√π) ∫₀ˣ e^(-t²) dt with derivation steps.
+  ///
+  /// The error function arises in probability, statistics, and partial differential
+  /// equations. It satisfies erf(0) = 0 and erf(∞) = 1.
+  ///
+  /// - Parameter x: The argument
+  ///
+  /// - Returns: A ``SpecialFunctionResult`` containing the numeric value and derivation steps
+  ///
+  /// - Throws: ``ThalesError`` if the computation fails
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // erf(0) = 0
+  /// let result = try Thales.erf(0.0)
+  /// print(result.numericValue) // 0.0
+  ///
+  /// // erf(1) ≈ 0.8427
+  /// let result = try Thales.erf(1.0)
+  /// print(result.numericValue) // ~0.8427
+  /// ```
+  public static func erf(_ x: Double) throws -> SpecialFunctionResult {
+    do {
+      let result = try erf_ffi(x)
+      return SpecialFunctionResult(ffiResult: result)
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+
+  /// Computes the complementary error function erfc(x) = 1 - erf(x) with derivation steps.
+  ///
+  /// The complementary error function is useful when erf(x) is close to 1 and
+  /// precision in the tail is needed.
+  ///
+  /// - Parameter x: The argument
+  ///
+  /// - Returns: A ``SpecialFunctionResult`` containing the numeric value and derivation steps
+  ///
+  /// - Throws: ``ThalesError`` if the computation fails
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // erfc(0) = 1
+  /// let result = try Thales.erfc(0.0)
+  /// print(result.numericValue) // 1.0
+  ///
+  /// // erf(x) + erfc(x) == 1 for all x
+  /// let erfVal = try Thales.erf(1.0).numericValue
+  /// let erfcVal = try Thales.erfc(1.0).numericValue
+  /// // erfVal + erfcVal == 1.0
+  /// ```
+  public static func erfc(_ x: Double) throws -> SpecialFunctionResult {
+    do {
+      let result = try erfc_ffi(x)
+      return SpecialFunctionResult(ffiResult: result)
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+}
+
+// MARK: - Special Function Result
+
+/// The result of a special function computation, including the numeric value and derivation steps.
+public struct SpecialFunctionResult {
+  /// String representation of the symbolic result expression
+  public let value: String
+
+  /// LaTeX representation of the result expression
+  public let valueLatex: String
+
+  /// Numeric approximation of the result (`nan` if not computable)
+  public let numericValue: Double
+
+  /// Derivation steps as a JSON-encoded array of strings
+  public let derivationStepsJson: String
+
+  /// Whether the computation succeeded
+  public let success: Bool
+
+  /// Error message if the computation failed; empty string on success
+  public let errorMessage: String
+
+  init(ffiResult: SpecialFunctionResultFFI) {
+    self.value = ffiResult.value.toString()
+    self.valueLatex = ffiResult.value_latex.toString()
+    self.numericValue = ffiResult.numeric_value
+    self.derivationStepsJson = ffiResult.derivation_steps.toString()
+    self.success = ffiResult.success
+    self.errorMessage = ffiResult.error_message.toString()
   }
 }
 
