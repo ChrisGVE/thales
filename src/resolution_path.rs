@@ -1575,6 +1575,7 @@ impl Operation {
 ///
 /// assert_eq!(path.step_count(), 2);
 /// ```
+#[derive(Clone)]
 pub struct ResolutionPathBuilder {
     /// The resolution path being constructed
     path: ResolutionPath,

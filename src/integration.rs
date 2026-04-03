@@ -1835,11 +1835,21 @@ pub fn numerical_integrate(
     upper: f64,
     tolerance: f64,
 ) -> Result<f64, IntegrationError> {
-    // Use Simpson's rule with adaptive refinement
-    let result = simpsons_rule_adaptive(expr, var, lower, upper, tolerance, 0);
-    result.ok_or_else(|| {
-        IntegrationError::CannotIntegrate("Numerical integration failed".to_string())
-    })
+    // Split the interval into initial sub-intervals to avoid aliasing when
+    // oscillatory integrands happen to be constant at evenly-spaced points.
+    const INITIAL_SUBDIVISIONS: usize = 8;
+    let h = (upper - lower) / INITIAL_SUBDIVISIONS as f64;
+    let tol_per = tolerance / INITIAL_SUBDIVISIONS as f64;
+    let mut total = 0.0;
+    for i in 0..INITIAL_SUBDIVISIONS {
+        let a = lower + i as f64 * h;
+        let b = a + h;
+        let part = simpsons_rule_adaptive(expr, var, a, b, tol_per, 0).ok_or_else(|| {
+            IntegrationError::CannotIntegrate("Numerical integration failed".to_string())
+        })?;
+        total += part;
+    }
+    Ok(total)
 }
 
 /// Adaptive Simpson's rule for numerical integration.
