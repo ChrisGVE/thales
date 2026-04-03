@@ -1176,13 +1176,14 @@ pub enum Function {
     /// ln(x) or logₑ(x)
     Ln,
 
-    /// Logarithm with arbitrary base: log(x, base)
+    /// Logarithm with arbitrary base: log(value, base)
     ///
-    /// Returns the logarithm of x to the given base.
+    /// Returns the logarithm of `value` in the given `base`.
+    /// With a single argument, log(value) is equivalent to log10(value).
     ///
     /// # Mathematical notation
     ///
-    /// log_base(x)
+    /// log_base(value)
     Log,
 
     /// Binary logarithm: log2(x)

@@ -25,7 +25,7 @@
 //! | | Inverse trig | `asin(x)`, `acos(x)`, `atan(x)`, `atan2(y, x)` |
 //! | | Hyperbolic | `sinh(x)`, `cosh(x)`, `tanh(x)` |
 //! | | Exponential | `exp(x)`, `pow(base, exp)` |
-//! | | Logarithmic | `ln(x)`, `log(x)`, `log2(x)`, `log10(x)` |
+//! | | Logarithmic | `ln(x)`, `log(value, base)`, `log2(x)`, `log10(x)` |
 //! | | Root | `sqrt(x)`, `cbrt(x)` |
 //! | | Rounding | `floor(x)`, `ceil(x)`, `round(x)` |
 //! | | Other | `abs(x)`, `sign(x)`, `min(a, b)`, `max(a, b)` |
@@ -283,7 +283,7 @@ impl std::error::Error for ParseError {}
 /// ## Exponential and Logarithmic Functions
 /// - `exp` - Natural exponential (e^x)
 /// - `ln` - Natural logarithm (base e)
-/// - `log` - Common logarithm (base 10)
+/// - `log(value, base)` - Logarithm base `base` of `value`; with a single argument, equivalent to `log10`
 /// - `log2` - Binary logarithm (base 2)
 /// - `log10` - Common logarithm (base 10)
 ///
