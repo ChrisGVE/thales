@@ -347,3 +347,161 @@ fn test_ffi_ln_domain_negative_returns_none() {
         "ln(-5) must return None, not NaN"
     );
 }
+
+// =============================================================================
+// Core / FFI evaluator parity tests (AST-02 / AST-03 / AST-04)
+//
+// The FFI evaluate_ffi now delegates to Expression::evaluate.  These tests
+// confirm that every function previously absent from the FFI evaluator is
+// handled correctly by the unified core path.
+// =============================================================================
+
+/// Parse `src` as an expression, substitute `vars`, and return the f64 result.
+fn eval_str(src: &str, vars: &std::collections::HashMap<String, f64>) -> Option<f64> {
+    parse_expression(src).ok()?.evaluate(vars)
+}
+
+#[test]
+fn test_parity_log2() {
+    // log2(8) = 3
+    let vars = std::collections::HashMap::new();
+    let result = eval_str("log2(8)", &vars).expect("log2(8) must evaluate");
+    assert!(
+        (result - 3.0).abs() < 1e-10,
+        "log2(8) should be 3, got {result}"
+    );
+}
+
+#[test]
+fn test_parity_log10() {
+    // log10(1000) = 3
+    let vars = std::collections::HashMap::new();
+    let result = eval_str("log10(1000)", &vars).expect("log10(1000) must evaluate");
+    assert!(
+        (result - 3.0).abs() < 1e-10,
+        "log10(1000) should be 3, got {result}"
+    );
+}
+
+#[test]
+fn test_parity_cbrt() {
+    // cbrt(27) = 3
+    let vars = std::collections::HashMap::new();
+    let result = eval_str("cbrt(27)", &vars).expect("cbrt(27) must evaluate");
+    assert!(
+        (result - 3.0).abs() < 1e-10,
+        "cbrt(27) should be 3, got {result}"
+    );
+}
+
+#[test]
+fn test_parity_atan2() {
+    // atan2(1, 1) = π/4
+    let vars = std::collections::HashMap::new();
+    let result = eval_str("atan2(1, 1)", &vars).expect("atan2(1, 1) must evaluate");
+    assert!(
+        (result - std::f64::consts::FRAC_PI_4).abs() < 1e-10,
+        "atan2(1, 1) should be π/4, got {result}"
+    );
+}
+
+#[test]
+fn test_parity_sign_positive() {
+    let vars = std::collections::HashMap::new();
+    let result = eval_str("sign(5)", &vars).expect("sign(5) must evaluate");
+    assert!(
+        (result - 1.0).abs() < 1e-10,
+        "sign(5) should be 1, got {result}"
+    );
+}
+
+#[test]
+fn test_parity_sign_negative() {
+    let vars = std::collections::HashMap::new();
+    let result = eval_str("sign(-3)", &vars).expect("sign(-3) must evaluate");
+    assert!(
+        (result - (-1.0)).abs() < 1e-10,
+        "sign(-3) should be -1, got {result}"
+    );
+}
+
+#[test]
+fn test_parity_min() {
+    let vars = std::collections::HashMap::new();
+    let result = eval_str("min(4, 2)", &vars).expect("min(4, 2) must evaluate");
+    assert!(
+        (result - 2.0).abs() < 1e-10,
+        "min(4, 2) should be 2, got {result}"
+    );
+}
+
+#[test]
+fn test_parity_max() {
+    let vars = std::collections::HashMap::new();
+    let result = eval_str("max(4, 2)", &vars).expect("max(4, 2) must evaluate");
+    assert!(
+        (result - 4.0).abs() < 1e-10,
+        "max(4, 2) should be 4, got {result}"
+    );
+}
+
+#[test]
+fn test_parity_pow() {
+    // pow(2, 10) = 1024
+    let vars = std::collections::HashMap::new();
+    let result = eval_str("pow(2, 10)", &vars).expect("pow(2, 10) must evaluate");
+    assert!(
+        (result - 1024.0).abs() < 1e-10,
+        "pow(2, 10) should be 1024, got {result}"
+    );
+}
+
+#[test]
+fn test_parity_ln_positive() {
+    // ln(e) = 1
+    let vars = std::collections::HashMap::new();
+    let result = eval_str("ln(e)", &vars).expect("ln(e) must evaluate");
+    assert!(
+        (result - 1.0).abs() < 1e-10,
+        "ln(e) should be 1, got {result}"
+    );
+}
+
+#[test]
+fn test_parity_ln_domain_zero_returns_none() {
+    // ln(0) is undefined — must return None, not NaN
+    let vars = std::collections::HashMap::new();
+    assert!(eval_str("ln(0)", &vars).is_none(), "ln(0) must return None");
+}
+
+#[test]
+fn test_parity_log_single_arg() {
+    // log(100) = log10(100) = 2  (single-arg log convention)
+    let vars = std::collections::HashMap::new();
+    let result = eval_str("log(100)", &vars).expect("log(100) must evaluate");
+    assert!(
+        (result - 2.0).abs() < 1e-10,
+        "log(100) should be 2, got {result}"
+    );
+}
+
+#[test]
+fn test_parity_log_two_arg() {
+    // log(8, 2) = 3  (value, base convention)
+    let vars = std::collections::HashMap::new();
+    let result = eval_str("log(8, 2)", &vars).expect("log(8, 2) must evaluate");
+    assert!(
+        (result - 3.0).abs() < 1e-10,
+        "log(8, 2) should be 3, got {result}"
+    );
+}
+
+#[test]
+fn test_parity_log_domain_nonpositive_returns_none() {
+    // log(0, 10) is undefined — must return None
+    let vars = std::collections::HashMap::new();
+    assert!(
+        eval_str("log(0, 10)", &vars).is_none(),
+        "log(0, 10) must return None"
+    );
+}
