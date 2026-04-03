@@ -100,6 +100,31 @@ print("z^2 = \(squared.real) + \(squared.imaginary)i")
 - ``Thales/partialFractions(numerator:denominator:variable:)``
 
 ### LaTeX Support
+
+Thales can parse a subset of LaTeX mathematical notation into its expression tree.
+
+**Supported constructs:**
+
+| Category | LaTeX syntax | Examples |
+|----------|-------------|---------|
+| Fractions | `\frac{num}{denom}` | `\frac{1}{2}`, `\frac{x+1}{y}` |
+| Square root | `\sqrt{x}` | `\sqrt{2}`, `\sqrt{x+1}` |
+| nth root | `\sqrt[n]{x}` | `\sqrt[3]{8}`, `\sqrt[n]{x}` |
+| Superscripts | `x^{n}` or `x^n` | `x^{2}`, `e^{-x}` |
+| Subscripts | `x_{n}` or `x_n` | `x_{1}`, `x_{12}` |
+| Greek letters | `\alpha`, `\beta`, `\pi`, etc. | `\alpha`, `\theta`, `\pi` |
+| Trig functions | `\sin`, `\cos`, `\tan`, etc. | `\sin{x}`, `\cos(\theta)` |
+| Logarithms / exp | `\ln`, `\log`, `\exp` | `\ln{x}`, `\log_{10}{x}` |
+| Operators | `\cdot`, `\times`, `\div`, `\pm` | `a \cdot b`, `2 \times 3` |
+
+**Not yet supported** — these constructs will produce a parse error:
+
+- Integrals: `\int`, `\iint`, `\oint`
+- Limits: `\lim`
+- Sums and products: `\sum`, `\prod`
+- Partial derivatives: `\partial`
+- Matrix environments: `\begin{matrix}`, `\begin{pmatrix}`, `\begin{bmatrix}`, etc.
+
 - ``Thales/parseLatex(_:)``
 - ``Thales/toLatex(_:)``
 
