@@ -413,14 +413,10 @@ fn test_error_invalid_token() {
 }
 
 #[test]
-fn test_error_unknown_function() {
+fn test_unknown_name_with_parens_is_implicit_mul() {
+    // With implicit multiplication, `unknown_func(x)` parses as variable * (x)
     let result = parse_expression("unknown_func(x)");
-    assert!(result.is_err());
-    let errors = result.unwrap_err();
-    assert!(!errors.is_empty());
-    // Check that error message mentions unknown function
-    let error_str = format!("{:?}", errors[0]);
-    assert!(error_str.contains("Unknown function") || error_str.contains("unknown_func"));
+    assert!(result.is_ok(), "Should parse as implicit multiplication");
 }
 
 #[test]

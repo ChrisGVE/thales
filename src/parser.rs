@@ -172,13 +172,11 @@ use chumsky::prelude::*;
 ///     Ok(_) => panic!("Expected parse error"),
 /// }
 ///
-/// // Unknown function
-/// match parse_expression("foo(x)") {
+/// // With implicit multiplication, `foo(x)` parses as `foo * x`.
+/// // To trigger an actual parse error, use truly invalid syntax:
+/// match parse_expression("2 +* 3") {
 ///     Err(errors) => {
-///         assert!(errors.iter().any(|e| matches!(
-///             e,
-///             ParseError::InvalidExpression { message, .. } if message.contains("Unknown function")
-///         )));
+///         assert!(!errors.is_empty());
 ///     }
 ///     Ok(_) => panic!("Expected parse error"),
 /// }
@@ -320,8 +318,9 @@ impl std::error::Error for ParseError {}
 ///     _ => panic!("Expected sin function"),
 /// }
 ///
-/// // Unrecognized function results in parse error
-/// assert!(parse_expression("unknown_func(x)").is_err());
+/// // With implicit multiplication, unknown_func(x) parses as variable * (x).
+/// // The function lookup itself returns None for unknown names:
+/// assert!(parse_expression("unknown_func(x)").is_ok());
 /// ```
 fn string_to_function(name: &str) -> Option<Function> {
     match name {
@@ -398,41 +397,35 @@ fn expression_parser<'src>(
             .to_slice()
             .padded();
 
-        // Parse function calls, symbolic constants, or variables
-        // Priority: function calls > symbolic constants > variables
-        let identifier_expr = identifier
+        // Parse function calls: only consume the argument list when the identifier
+        // is a known function name.  Filtering on the identifier before parsing
+        // the parenthesised args prevents `x(y+z)` from being mis-identified as
+        // an unknown-function error; instead `x` parses as a variable and the
+        // `(y+z)` group becomes available as the right-hand operand of an
+        // implicit multiplication.
+        let func_call = identifier
+            .filter(|name: &&str| string_to_function(name).is_some())
             .then(
                 expr.clone()
                     .separated_by(just(',').padded())
                     .collect::<Vec<_>>()
-                    .delimited_by(just('('), just(')'))
-                    .or_not(),
+                    .delimited_by(just('('), just(')')),
             )
-            .try_map(|(name, args_opt), span| {
-                match args_opt {
-                    Some(args) => {
-                        // It's a function call
-                        string_to_function(name)
-                            .map(|func| Expression::Function(func, args))
-                            .ok_or_else(|| {
-                                Rich::custom(span, format!("Unknown function: {}", name))
-                            })
-                    }
-                    None => {
-                        // Check for symbolic constants first
-                        match name {
-                            "pi" => Ok(Expression::Constant(SymbolicConstant::Pi)),
-                            "e" => Ok(Expression::Constant(SymbolicConstant::E)),
-                            "i" => Ok(Expression::Constant(SymbolicConstant::I)),
-                            _ => {
-                                // It's a variable
-                                Ok(Expression::Variable(Variable::new(name)))
-                            }
-                        }
-                    }
-                }
-            })
-            .padded();
+            .map(|(name, args)| {
+                // Safety: filter above guarantees name maps to Some
+                Expression::Function(string_to_function(name).unwrap(), args)
+            });
+
+        // Parse symbolic constants and plain variables (no argument list).
+        let const_or_var = identifier.map(|name: &str| match name {
+            "pi" => Expression::Constant(SymbolicConstant::Pi),
+            "e" => Expression::Constant(SymbolicConstant::E),
+            "i" => Expression::Constant(SymbolicConstant::I),
+            _ => Expression::Variable(Variable::new(name)),
+        });
+
+        // Function calls take priority over plain identifiers.
+        let identifier_expr = choice((func_call, const_or_var)).padded();
 
         // Clone parsers for later use in implicit multiplication
         let number_for_implicit = number.clone();
@@ -658,16 +651,9 @@ fn expression_parser<'src>(
 ///     }
 /// }
 ///
-/// // Unknown function
-/// match parse_expression("foo(x)") {
-///     Ok(_) => panic!("Should fail"),
-///     Err(errors) => {
-///         assert!(errors.iter().any(|e| {
-///             matches!(e, ParseError::InvalidExpression { message, .. }
-///                 if message.contains("Unknown function"))
-///         }));
-///     }
-/// }
+/// // With implicit multiplication, foo(x) parses as variable `foo` * (x).
+/// // This is expected behavior — unknown names become variables.
+/// assert!(parse_expression("foo(x)").is_ok());
 ///
 /// // Incomplete expression
 /// match parse_expression("2 * ") {
