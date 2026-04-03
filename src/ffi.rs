@@ -835,7 +835,8 @@ fn evaluate_expression(
                 }
                 Function::Log => {
                     if arg_values.len() == 2 && arg_values[0] > 0.0 && arg_values[1] > 0.0 {
-                        Some(arg_values[1].log(arg_values[0]))
+                        // log(value, base): arg0 = value, arg1 = base
+                        Some(arg_values[0].log(arg_values[1]))
                     } else if arg_values.len() == 1 && arg_values[0] > 0.0 {
                         Some(arg_values[0].log10())
                     } else {

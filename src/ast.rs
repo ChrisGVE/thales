@@ -42,6 +42,8 @@
 //! - [`BinaryOp`] - Binary operators
 //! - [`Function`] - Mathematical functions
 
+use crate::pattern::apply_rules_to_fixpoint;
+use crate::simplification_rules::all_simplification_rules;
 use num_complex::Complex64;
 use num_rational::Rational64;
 use serde::{Deserialize, Serialize};
@@ -1740,12 +1742,12 @@ impl Expression {
                         r"\text{pow}"
                     }
                     Function::Log => {
-                        // log(base, x) -> \log_{base}(x)
+                        // log(value, base) -> \log_{base}(value)
                         if args.len() == 2 {
                             return format!(
                                 r"\log_{{{}}}{{{}}}",
-                                args[0].to_latex_inner(0),
-                                args[1].to_latex_inner(0)
+                                args[1].to_latex_inner(0),
+                                args[0].to_latex_inner(0)
                             );
                         }
                         r"\log"
@@ -3557,8 +3559,30 @@ impl Expression {
                     Function::Cosh => Some(arg_vals.get(0)?.cosh()),
                     Function::Tanh => Some(arg_vals.get(0)?.tanh()),
                     Function::Exp => Some(arg_vals.get(0)?.exp()),
-                    Function::Ln => Some(arg_vals.get(0)?.ln()),
-                    Function::Log => Some(arg_vals.get(0)?.log(*arg_vals.get(1)?)),
+                    Function::Ln => {
+                        let x = *arg_vals.get(0)?;
+                        if x > 0.0 {
+                            Some(x.ln())
+                        } else {
+                            None
+                        }
+                    }
+                    Function::Log => {
+                        let value = *arg_vals.get(0)?;
+                        if arg_vals.len() >= 2 {
+                            let base = *arg_vals.get(1)?;
+                            if value > 0.0 && base > 0.0 {
+                                Some(value.log(base))
+                            } else {
+                                None
+                            }
+                        } else if value > 0.0 {
+                            // Single-arg log(x) = log10(x)
+                            Some(value.log10())
+                        } else {
+                            None
+                        }
+                    }
                     Function::Log2 => Some(arg_vals.get(0)?.log2()),
                     Function::Log10 => Some(arg_vals.get(0)?.log10()),
                     Function::Sqrt => Some(arg_vals.get(0)?.sqrt()),
