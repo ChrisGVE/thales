@@ -1077,11 +1077,51 @@ fn match_derivative(
     None
 }
 
-/// Check if two expressions are equivalent (after simplification).
+/// Compute a canonical string key for an expression, normalising the order
+/// of operands in commutative operations (Add, Mul) so that, e.g.,
+/// `x * 2` and `2 * x` produce the same key.
+///
+/// The key is used only for equivalence testing; it is not a human-readable
+/// display form.
+fn canonical_key(expr: &Expression) -> String {
+    match expr {
+        Expression::Binary(op @ (BinaryOp::Add | BinaryOp::Mul), left, right) => {
+            let mut parts = vec![canonical_key(left), canonical_key(right)];
+            parts.sort();
+            let op_sym = match op {
+                BinaryOp::Add => "+",
+                BinaryOp::Mul => "*",
+                _ => unreachable!(),
+            };
+            format!("({}{}{})", parts[0], op_sym, parts[1])
+        }
+        Expression::Binary(op, left, right) => {
+            format!("({}{:?}{})", canonical_key(left), op, canonical_key(right))
+        }
+        Expression::Unary(op, inner) => {
+            format!("({:?}{})", op, canonical_key(inner))
+        }
+        Expression::Power(base, exp) => {
+            format!("({}^{})", canonical_key(base), canonical_key(exp))
+        }
+        Expression::Function(f, args) => {
+            let arg_keys: Vec<_> = args.iter().map(canonical_key).collect();
+            format!("{:?}({})", f, arg_keys.join(","))
+        }
+        // Leaf nodes: delegate to Display which is already canonical.
+        other => format!("{}", other),
+    }
+}
+
+/// Check if two expressions are structurally equivalent under commutativity
+/// of addition and multiplication.
+///
+/// Both expressions are first simplified, then compared using a canonical
+/// key that normalises the operand order of commutative binary operations.
+/// This avoids the brittleness of raw [`format!`] string comparison where,
+/// for example, `x * 2` and `2 * x` would compare unequal.
 fn expressions_equivalent(a: &Expression, b: &Expression) -> bool {
-    // Simple structural equality check
-    // A more robust implementation would use canonical forms
-    format!("{}", a) == format!("{}", b)
+    canonical_key(a) == canonical_key(b)
 }
 
 /// Check if expr1 = constant * expr2 and return the constant.
@@ -2480,6 +2520,38 @@ mod tests {
 
         let c = var("y");
         assert!(!expressions_equivalent(&a, &c));
+    }
+
+    #[test]
+    fn test_expressions_equivalent_add_commutativity() {
+        // x + y  ≡  y + x
+        let xy = add(var("x"), var("y"));
+        let yx = add(var("y"), var("x"));
+        assert!(expressions_equivalent(&xy, &yx));
+
+        // x + y  ≢  x + z
+        let xz = add(var("x"), var("z"));
+        assert!(!expressions_equivalent(&xy, &xz));
+    }
+
+    #[test]
+    fn test_expressions_equivalent_mul_commutativity() {
+        // 2 * x  ≡  x * 2
+        let two_x = mul(int(2), var("x"));
+        let x_two = mul(var("x"), int(2));
+        assert!(expressions_equivalent(&two_x, &x_two));
+
+        // 2 * x  ≢  3 * x
+        let three_x = mul(int(3), var("x"));
+        assert!(!expressions_equivalent(&two_x, &three_x));
+    }
+
+    #[test]
+    fn test_expressions_equivalent_nested_commutativity() {
+        // (x + x).simplify() = 2*x, and 2*x ≡ x*2 after canonical form
+        let x_plus_x = add(var("x"), var("x")).simplify();
+        let x_times_2 = mul(var("x"), int(2));
+        assert!(expressions_equivalent(&x_plus_x, &x_times_2));
     }
 
     #[test]
