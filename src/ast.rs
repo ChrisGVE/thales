@@ -2455,7 +2455,9 @@ impl Expression {
             _ => self.clone(),
         };
 
-        simplified
+        // Apply pattern-matching simplification rules as a final pass
+        let rules = all_simplification_rules();
+        apply_rules_to_fixpoint(&simplified, &rules, 20)
     }
 
     /// Check if expression is zero.
