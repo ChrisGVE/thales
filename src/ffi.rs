@@ -145,6 +145,31 @@ mod ffi {
     }
 
     #[swift_bridge(swift_repr = "struct")]
+    pub struct LaurentSeriesResultFFI {
+        pub original: String,
+        pub variable: String,
+        pub center: f64,
+        pub neg_order: u32,
+        pub pos_order: u32,
+        pub series: String,
+        pub series_latex: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct AsymptoticSeriesResultFFI {
+        pub original: String,
+        pub variable: String,
+        pub direction: String,
+        pub num_terms: u32,
+        pub series: String,
+        pub series_latex: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    #[swift_bridge(swift_repr = "struct")]
     pub struct SpecialFunctionResultFFI {
         pub value: String,
         pub value_latex: String,
@@ -154,9 +179,34 @@ mod ffi {
         pub error_message: String,
     }
 
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct ODEResultFFI {
+        pub equation: String,
+        pub solution: String,
+        pub solution_latex: String,
+        pub ode_type: String,
+        pub method_used: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
     extern "Rust" {
         fn parse_equation_ffi(input: &str) -> Result<String, String>;
         fn parse_expression_ffi(input: &str) -> Result<String, String>;
+    }
+
+    extern "Rust" {
+        fn solve_ode_ffi(
+            equation: &str,
+            dependent_var: &str,
+            independent_var: &str,
+        ) -> ODEResultFFI;
+        fn solve_ode_ivp_ffi(
+            equation: &str,
+            dependent_var: &str,
+            independent_var: &str,
+            initial_conditions_json: &str,
+        ) -> ODEResultFFI;
     }
 
     extern "Rust" {
@@ -254,8 +304,23 @@ mod ffi {
             variable: &str,
             order: u32,
         ) -> Result<TaylorSeriesResultFFI, String>;
+        fn laurent_series_ffi(
+            expression: &str,
+            variable: &str,
+            center: f64,
+            neg_order: u32,
+            pos_order: u32,
+        ) -> Result<LaurentSeriesResultFFI, String>;
+        fn asymptotic_series_ffi(
+            expression: &str,
+            variable: &str,
+            direction: &str,
+            num_terms: u32,
+        ) -> Result<AsymptoticSeriesResultFFI, String>;
         fn gamma_ffi(x: f64) -> Result<SpecialFunctionResultFFI, String>;
         fn erf_ffi(x: f64) -> Result<SpecialFunctionResultFFI, String>;
+        fn beta_ffi(a: f64, b: f64) -> Result<SpecialFunctionResultFFI, String>;
+        fn erfc_ffi(x: f64) -> Result<SpecialFunctionResultFFI, String>;
     }
 }
 
@@ -1122,6 +1187,102 @@ fn maclaurin_series_ffi(
     }
 }
 
+/// Compute Laurent series expansion around a given center point.
+fn laurent_series_ffi(
+    expression: &str,
+    variable: &str,
+    center: f64,
+    neg_order: u32,
+    pos_order: u32,
+) -> Result<ffi::LaurentSeriesResultFFI, String> {
+    use crate::ast::Variable;
+    use crate::series::laurent;
+
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
+    let var = Variable::new(variable);
+    let center_expr = crate::ast::Expression::Float(center);
+
+    let result = laurent(&expr, &var, &center_expr, neg_order, pos_order);
+
+    match result {
+        Ok(series) => Ok(ffi::LaurentSeriesResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            center,
+            neg_order,
+            pos_order,
+            series: format!("{}", series),
+            series_latex: series.to_latex(),
+            success: true,
+            error_message: String::new(),
+        }),
+        Err(e) => Ok(ffi::LaurentSeriesResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            center,
+            neg_order,
+            pos_order,
+            series: String::new(),
+            series_latex: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
+/// Compute asymptotic series expansion of an expression.
+///
+/// The `direction` parameter must be one of: `"pos_infinity"`, `"neg_infinity"`, `"zero"`.
+fn asymptotic_series_ffi(
+    expression: &str,
+    variable: &str,
+    direction: &str,
+    num_terms: u32,
+) -> Result<ffi::AsymptoticSeriesResultFFI, String> {
+    use crate::series::{asymptotic, AsymptoticDirection};
+
+    let dir = match direction {
+        "pos_infinity" => AsymptoticDirection::PosInfinity,
+        "neg_infinity" => AsymptoticDirection::NegInfinity,
+        "zero" => AsymptoticDirection::Zero,
+        other => {
+            return Err(format!(
+                "Unknown direction '{other}': expected pos_infinity, neg_infinity, or zero"
+            ))
+        }
+    };
+
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let result = asymptotic(&expr, variable, dir, num_terms);
+
+    match result {
+        Ok(series) => {
+            let series_expr = series.to_expression();
+            Ok(ffi::AsymptoticSeriesResultFFI {
+                original: expression.to_string(),
+                variable: variable.to_string(),
+                direction: direction.to_string(),
+                num_terms,
+                series: format!("{}", series_expr),
+                series_latex: series_expr.to_latex(),
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::AsymptoticSeriesResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            direction: direction.to_string(),
+            num_terms,
+            series: String::new(),
+            series_latex: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
 // =============================================================================
 // Special functions
 // =============================================================================
@@ -1189,5 +1350,171 @@ fn erf_ffi(x: f64) -> Result<ffi::SpecialFunctionResultFFI, String> {
             success: false,
             error_message: format!("{}", e),
         }),
+    }
+}
+
+/// Compute the Beta function B(a, b) = Γ(a)·Γ(b) / Γ(a+b) with derivation steps.
+fn beta_ffi(a: f64, b: f64) -> Result<ffi::SpecialFunctionResultFFI, String> {
+    use crate::special::beta;
+
+    let a_expr = crate::ast::Expression::Float(a);
+    let b_expr = crate::ast::Expression::Float(b);
+
+    match beta(&a_expr, &b_expr) {
+        Ok(beta_result) => {
+            let steps_json = serde_json::to_string(&beta_result.derivation_steps)
+                .map_err(|e| format!("Failed to serialize derivation steps: {}", e))?;
+
+            Ok(ffi::SpecialFunctionResultFFI {
+                value: format!("{}", beta_result.value),
+                value_latex: beta_result.value.to_latex(),
+                numeric_value: beta_result.numeric_value.unwrap_or(f64::NAN),
+                derivation_steps: steps_json,
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::SpecialFunctionResultFFI {
+            value: String::new(),
+            value_latex: String::new(),
+            numeric_value: f64::NAN,
+            derivation_steps: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
+/// Compute the complementary error function erfc(x) = 1 - erf(x) with derivation steps.
+fn erfc_ffi(x: f64) -> Result<ffi::SpecialFunctionResultFFI, String> {
+    use crate::special::erfc;
+
+    let x_expr = crate::ast::Expression::Float(x);
+
+    match erfc(&x_expr) {
+        Ok(erfc_result) => {
+            let steps_json = serde_json::to_string(&erfc_result.derivation_steps)
+                .map_err(|e| format!("Failed to serialize derivation steps: {}", e))?;
+
+            Ok(ffi::SpecialFunctionResultFFI {
+                value: format!("{}", erfc_result.value),
+                value_latex: erfc_result.value.to_latex(),
+                numeric_value: erfc_result.numeric_value.unwrap_or(f64::NAN),
+                derivation_steps: steps_json,
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::SpecialFunctionResultFFI {
+            value: String::new(),
+            value_latex: String::new(),
+            numeric_value: f64::NAN,
+            derivation_steps: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
+// =============================================================================
+// ODE solving functions
+// =============================================================================
+
+/// Build an `ODEResultFFI` success value from an `ODESolution`.
+fn ode_success(
+    equation: &str,
+    solution: &crate::ode::ODESolution,
+    ode_type: &str,
+) -> ffi::ODEResultFFI {
+    let simplified = solution.general_solution.clone().simplify();
+    ffi::ODEResultFFI {
+        equation: equation.to_string(),
+        solution: format!("{}", simplified),
+        solution_latex: simplified.to_latex(),
+        ode_type: ode_type.to_string(),
+        method_used: solution.method.clone(),
+        success: true,
+        error_message: String::new(),
+    }
+}
+
+/// Build an `ODEResultFFI` error value.
+fn ode_error(equation: &str, error: &str) -> ffi::ODEResultFFI {
+    ffi::ODEResultFFI {
+        equation: equation.to_string(),
+        solution: String::new(),
+        solution_latex: String::new(),
+        ode_type: String::new(),
+        method_used: String::new(),
+        success: false,
+        error_message: error.to_string(),
+    }
+}
+
+/// Classify and solve a first-order ODE given its RHS expression string.
+///
+/// The `equation` parameter is the right-hand side expression of
+/// `d(dependent_var)/d(independent_var) = equation`.
+fn solve_ode_ffi(equation: &str, dependent_var: &str, independent_var: &str) -> ffi::ODEResultFFI {
+    use crate::ode::{solve_linear, solve_separable, FirstOrderODE};
+
+    let rhs = match parse_expression(equation) {
+        Ok(expr) => expr,
+        Err(e) => return ode_error(equation, &format!("Parse error: {:?}", e)),
+    };
+
+    let ode = FirstOrderODE::new(dependent_var, independent_var, rhs);
+
+    if ode.is_separable() {
+        match solve_separable(&ode) {
+            Ok(sol) => ode_success(equation, &sol, "separable"),
+            Err(e) => ode_error(equation, &format!("Separable solve failed: {}", e)),
+        }
+    } else if ode.is_linear() {
+        match solve_linear(&ode) {
+            Ok(sol) => ode_success(equation, &sol, "linear"),
+            Err(e) => ode_error(equation, &format!("Linear solve failed: {}", e)),
+        }
+    } else {
+        ode_error(equation, "ODE is neither separable nor first-order linear")
+    }
+}
+
+/// Solve a first-order ODE initial value problem.
+///
+/// `initial_conditions_json` must be a JSON object with numeric keys `"x0"` and `"y0"`,
+/// e.g. `{"x0": 0.0, "y0": 1.0}`.
+fn solve_ode_ivp_ffi(
+    equation: &str,
+    dependent_var: &str,
+    independent_var: &str,
+    initial_conditions_json: &str,
+) -> ffi::ODEResultFFI {
+    use crate::ast::Expression;
+    use crate::ode::{solve_ivp, FirstOrderODE};
+
+    let rhs = match parse_expression(equation) {
+        Ok(expr) => expr,
+        Err(e) => return ode_error(equation, &format!("Parse error: {:?}", e)),
+    };
+
+    #[derive(serde::Deserialize)]
+    struct Ivp {
+        x0: f64,
+        y0: f64,
+    }
+
+    let ivp: Ivp = match serde_json::from_str(initial_conditions_json) {
+        Ok(v) => v,
+        Err(e) => return ode_error(equation, &format!("Invalid initial conditions JSON: {}", e)),
+    };
+
+    let ode = FirstOrderODE::new(dependent_var, independent_var, rhs);
+    let x0 = Expression::Float(ivp.x0);
+    let y0 = Expression::Float(ivp.y0);
+
+    match solve_ivp(&ode, &x0, &y0) {
+        Ok(sol) => ode_success(equation, &sol, "ivp"),
+        Err(e) => ode_error(equation, &format!("IVP solve failed: {}", e)),
     }
 }
