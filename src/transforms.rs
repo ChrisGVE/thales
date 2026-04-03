@@ -1350,9 +1350,7 @@ impl Transform2D {
 
     /// Translation transformation.
     ///
-    /// **TODO**: Not yet implemented. Returns identity transformation as placeholder.
-    ///
-    /// When implemented, will create a transformation that translates points by (dx, dy):
+    /// Creates a transformation that translates points by (dx, dy):
     /// ```text
     /// (x, y) → (x + dx, y + dy)
     /// ```
@@ -1368,19 +1366,18 @@ impl Transform2D {
     ///
     /// # Arguments
     ///
-    /// * `_dx` - Translation in x direction
-    /// * `_dy` - Translation in y direction
-    pub fn translation(_dx: f64, _dy: f64) -> Self {
-        // TODO: Implement 2D translation matrix
-        Self::identity()
+    /// * `dx` - Translation in x direction
+    /// * `dy` - Translation in y direction
+    pub fn translation(dx: f64, dy: f64) -> Self {
+        Self {
+            matrix: Matrix3::new(1.0, 0.0, dx, 0.0, 1.0, dy, 0.0, 0.0, 1.0),
+        }
     }
 
     /// Rotation transformation (angle in radians).
     ///
-    /// **TODO**: Not yet implemented. Returns identity transformation as placeholder.
-    ///
-    /// When implemented, will create a transformation that rotates points
-    /// counterclockwise by θ radians around the origin:
+    /// Creates a transformation that rotates points counterclockwise by θ radians
+    /// around the origin:
     /// ```text
     /// x' = x cos(θ) - y sin(θ)
     /// y' = x sin(θ) + y cos(θ)
@@ -1397,18 +1394,17 @@ impl Transform2D {
     ///
     /// # Arguments
     ///
-    /// * `_theta` - Rotation angle in radians (counterclockwise)
-    pub fn rotation(_theta: f64) -> Self {
-        // TODO: Implement 2D rotation matrix
-        Self::identity()
+    /// * `theta` - Rotation angle in radians (counterclockwise)
+    pub fn rotation(theta: f64) -> Self {
+        let (s, c) = theta.sin_cos();
+        Self {
+            matrix: Matrix3::new(c, -s, 0.0, s, c, 0.0, 0.0, 0.0, 1.0),
+        }
     }
 
     /// Scaling transformation.
     ///
-    /// **TODO**: Not yet implemented. Returns identity transformation as placeholder.
-    ///
-    /// When implemented, will create a transformation that scales points
-    /// by (sx, sy) in the x and y directions:
+    /// Creates a transformation that scales points by (sx, sy) in the x and y directions:
     /// ```text
     /// (x, y) → (sx·x, sy·y)
     /// ```
@@ -1424,18 +1420,17 @@ impl Transform2D {
     ///
     /// # Arguments
     ///
-    /// * `_sx` - Scale factor in x direction
-    /// * `_sy` - Scale factor in y direction
-    pub fn scaling(_sx: f64, _sy: f64) -> Self {
-        // TODO: Implement 2D scaling matrix
-        Self::identity()
+    /// * `sx` - Scale factor in x direction
+    /// * `sy` - Scale factor in y direction
+    pub fn scaling(sx: f64, sy: f64) -> Self {
+        Self {
+            matrix: Matrix3::new(sx, 0.0, 0.0, 0.0, sy, 0.0, 0.0, 0.0, 1.0),
+        }
     }
 
     /// Apply transformation to point.
     ///
-    /// **TODO**: Not yet implemented. Returns point unchanged as placeholder.
-    ///
-    /// When implemented, will transform a point using homogeneous coordinates:
+    /// Transforms a point using homogeneous coordinates:
     /// ```text
     /// ┌         ┐   ┌   ┐   ┌    ┐
     /// │ a  b  tx│   │ x │   │ x' │
@@ -1454,16 +1449,16 @@ impl Transform2D {
     ///
     /// The transformed point
     pub fn apply(&self, point: Cartesian2D) -> Cartesian2D {
-        // TODO: Implement homogeneous coordinate transformation
-        point
+        use nalgebra::Vector3;
+        let h = Vector3::new(point.x, point.y, 1.0);
+        let result = self.matrix * h;
+        Cartesian2D::new(result[0] / result[2], result[1] / result[2])
     }
 
     /// Compose with another transformation.
     ///
-    /// **TODO**: Not yet implemented. Returns self unchanged as placeholder.
-    ///
-    /// When implemented, will compose two transformations through matrix multiplication.
-    /// The result transformation T = self × other applies other first, then self:
+    /// Composes two transformations through matrix multiplication.
+    /// The result transformation T = self × other applies `other` first, then `self`:
     /// ```text
     /// T(p) = self(other(p))
     /// ```
@@ -1472,14 +1467,15 @@ impl Transform2D {
     ///
     /// # Arguments
     ///
-    /// * `_other` - The transformation to compose with
+    /// * `other` - The transformation to compose with
     ///
     /// # Returns
     ///
     /// The composed transformation
-    pub fn compose(&self, _other: &Transform2D) -> Transform2D {
-        // TODO: Implement matrix multiplication
-        *self
+    pub fn compose(&self, other: &Transform2D) -> Transform2D {
+        Transform2D {
+            matrix: self.matrix * other.matrix,
+        }
     }
 }
 
@@ -1787,3 +1783,121 @@ impl Rotation3D {
 // TODO: Add support for reference frame transformations
 // TODO: Add geodetic coordinate systems (lat/lon/alt)
 // TODO: Add support for non-Euclidean geometries
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::f64::consts::FRAC_PI_2;
+
+    const EPS: f64 = 1e-10;
+
+    fn approx_eq(a: f64, b: f64) -> bool {
+        (a - b).abs() < EPS
+    }
+
+    // --- identity ---
+
+    #[test]
+    fn identity_leaves_point_unchanged() {
+        let p = Cartesian2D::new(3.0, 7.0);
+        let result = Transform2D::identity().apply(p);
+        assert!(approx_eq(result.x, 3.0));
+        assert!(approx_eq(result.y, 7.0));
+    }
+
+    // --- translation ---
+
+    #[test]
+    fn translation_moves_origin_to_offset() {
+        let t = Transform2D::translation(3.0, 4.0);
+        let result = t.apply(Cartesian2D::new(0.0, 0.0));
+        assert!(approx_eq(result.x, 3.0));
+        assert!(approx_eq(result.y, 4.0));
+    }
+
+    #[test]
+    fn translation_adds_offset_to_point() {
+        let t = Transform2D::translation(1.0, -2.0);
+        let result = t.apply(Cartesian2D::new(5.0, 6.0));
+        assert!(approx_eq(result.x, 6.0));
+        assert!(approx_eq(result.y, 4.0));
+    }
+
+    // --- rotation ---
+
+    #[test]
+    fn rotation_90_maps_unit_x_to_unit_y() {
+        let t = Transform2D::rotation(FRAC_PI_2);
+        let result = t.apply(Cartesian2D::new(1.0, 0.0));
+        assert!(approx_eq(result.x, 0.0));
+        assert!(approx_eq(result.y, 1.0));
+    }
+
+    #[test]
+    fn rotation_zero_is_identity() {
+        let t = Transform2D::rotation(0.0);
+        let p = Cartesian2D::new(3.0, 4.0);
+        let result = t.apply(p);
+        assert!(approx_eq(result.x, 3.0));
+        assert!(approx_eq(result.y, 4.0));
+    }
+
+    // --- scaling ---
+
+    #[test]
+    fn scaling_multiplies_coordinates() {
+        let t = Transform2D::scaling(2.0, 2.0);
+        let result = t.apply(Cartesian2D::new(2.0, 3.0));
+        assert!(approx_eq(result.x, 4.0));
+        assert!(approx_eq(result.y, 6.0));
+    }
+
+    #[test]
+    fn scaling_non_uniform() {
+        let t = Transform2D::scaling(3.0, 0.5);
+        let result = t.apply(Cartesian2D::new(2.0, 4.0));
+        assert!(approx_eq(result.x, 6.0));
+        assert!(approx_eq(result.y, 2.0));
+    }
+
+    // --- compose ---
+
+    #[test]
+    fn compose_identity_is_neutral() {
+        let t = Transform2D::translation(5.0, -3.0);
+        let composed = t.compose(&Transform2D::identity());
+        let p = Cartesian2D::new(1.0, 2.0);
+        let direct = t.apply(p);
+        let via_compose = composed.apply(p);
+        assert!(approx_eq(direct.x, via_compose.x));
+        assert!(approx_eq(direct.y, via_compose.y));
+    }
+
+    #[test]
+    fn compose_translate_then_rotate_differs_from_rotate_then_translate() {
+        let tr = Transform2D::translation(1.0, 0.0);
+        let rot = Transform2D::rotation(FRAC_PI_2);
+
+        // rotate first, then translate: rot.compose(tr) applies tr then rot
+        let rot_then_tr = rot.compose(&tr);
+        // translate first, then rotate: tr.compose(rot) applies rot then tr
+        let tr_then_rot = tr.compose(&rot);
+
+        let p = Cartesian2D::new(0.0, 0.0);
+        let r1 = rot_then_tr.apply(p);
+        let r2 = tr_then_rot.apply(p);
+
+        // Results must differ, confirming non-commutativity
+        assert!(!approx_eq(r1.x, r2.x) || !approx_eq(r1.y, r2.y));
+    }
+
+    #[test]
+    fn compose_two_translations_adds_offsets() {
+        let t1 = Transform2D::translation(1.0, 2.0);
+        let t2 = Transform2D::translation(3.0, 4.0);
+        let composed = t1.compose(&t2);
+        let result = composed.apply(Cartesian2D::new(0.0, 0.0));
+        assert!(approx_eq(result.x, 4.0));
+        assert!(approx_eq(result.y, 6.0));
+    }
+}
