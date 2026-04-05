@@ -290,6 +290,116 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
                 }
             });
 
+        // Parse \log_{b}(x) or \log_{b}{x} — subscript-based log base
+        let paren_or_braced = expr
+            .clone()
+            .delimited_by(just('('), just(')'))
+            .padded()
+            .or(braced_expr.clone());
+        let log_with_base = just('\\')
+            .ignore_then(just("log"))
+            .ignore_then(just('_').ignore_then(braced_expr.clone()))
+            .then(paren_or_braced.clone().padded())
+            .map(|(base, value)| Expression::Function(Function::Log, vec![value, base]));
+
+        // Parse \int_{a}^{b} expr \, dx or \int expr \, dx
+        let int_bound = braced_expr
+            .clone()
+            .or(text::int(10).map(|s: &str| Expression::Integer(s.parse().unwrap_or(0))));
+        let int_lower = just('_').ignore_then(int_bound.clone()).or_not().padded();
+        let int_upper = just('^').ignore_then(int_bound).or_not().padded();
+        let diff_var = just('\\')
+            .ignore_then(just(','))
+            .or_not()
+            .padded()
+            .ignore_then(just('d'))
+            .ignore_then(text::ident())
+            .map(|v: &str| Expression::Variable(Variable::new(v)))
+            .or_not();
+        let integral = just('\\')
+            .ignore_then(just("int"))
+            .ignore_then(int_lower)
+            .then(int_upper)
+            .then(expr.clone().padded())
+            .then(diff_var)
+            .map(|(((lower, upper), integrand), dvar)| {
+                let var = dvar.unwrap_or_else(|| Expression::Variable(Variable::new("x")));
+                let mut args = vec![integrand, var];
+                if let Some(lo) = lower {
+                    args.push(lo);
+                }
+                if let Some(hi) = upper {
+                    args.push(hi);
+                }
+                Expression::Function(Function::Custom("integral".to_string()), args)
+            });
+
+        // Parse \lim_{x \to a} expr
+        let lim_clause = just('{')
+            .ignore_then(
+                text::ident()
+                    .map(|s: &str| Expression::Variable(Variable::new(s)))
+                    .padded(),
+            )
+            .then_ignore(just('\\').then(just("to")).padded())
+            .then(
+                just('\\')
+                    .ignore_then(just("infty"))
+                    .to(Expression::Variable(Variable::new("infinity")))
+                    .or(braced_expr.clone())
+                    .or(text::int(10).map(|s: &str| Expression::Integer(s.parse().unwrap_or(0))))
+                    .padded(),
+            )
+            .then_ignore(just('}').padded());
+        let limit = just('\\')
+            .ignore_then(just("lim"))
+            .ignore_then(just('_').ignore_then(lim_clause).or_not().padded())
+            .then(expr.clone().padded())
+            .map(|(opt_clause, body)| {
+                let (var, point) = opt_clause.unwrap_or_else(|| {
+                    (
+                        Expression::Variable(Variable::new("x")),
+                        Expression::Variable(Variable::new("a")),
+                    )
+                });
+                Expression::Function(
+                    Function::Custom("limit".to_string()),
+                    vec![body, var, point],
+                )
+            });
+
+        // Parse \sum_{i=a}^{b} expr
+        let sum_eq_clause = just('{')
+            .ignore_then(text::ident().padded())
+            .then_ignore(just('=').padded())
+            .then(
+                braced_expr
+                    .clone()
+                    .or(text::int(10).map(|s: &str| Expression::Integer(s.parse().unwrap_or(0))))
+                    .padded(),
+            )
+            .then_ignore(just('}').padded());
+        let sum_bound = braced_expr
+            .clone()
+            .or(text::int(10).map(|s: &str| Expression::Integer(s.parse().unwrap_or(0))));
+        let sum = just('\\')
+            .ignore_then(just("sum"))
+            .ignore_then(just('_').ignore_then(sum_eq_clause).or_not().padded())
+            .then(just('^').ignore_then(sum_bound).or_not().padded())
+            .then(expr.clone().padded())
+            .map(|((lower_clause, upper), body)| {
+                let (var, lo) = lower_clause
+                    .map(|(v, lo)| (Expression::Variable(Variable::new(v)), lo))
+                    .unwrap_or_else(|| {
+                        (
+                            Expression::Variable(Variable::new("i")),
+                            Expression::Integer(0),
+                        )
+                    });
+                let hi = upper.unwrap_or(Expression::Variable(Variable::new("n")));
+                Expression::Function(Function::Custom("sum".to_string()), vec![body, var, lo, hi])
+            });
+
         // Parse LaTeX functions: \sin{x}, \cos{x}, \tan{x}, \ln{x}, \log{x}, \exp{x}
         let latex_func = just('\\')
             .ignore_then(text::ident())
@@ -304,10 +414,6 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
                     "sin" => Some(Function::Sin),
                     "cos" => Some(Function::Cos),
                     "tan" => Some(Function::Tan),
-                    // Note: cot, sec, csc not in Function enum yet
-                    // "cot" => Some(Function::Cot),
-                    // "sec" => Some(Function::Sec),
-                    // "csc" => Some(Function::Csc),
                     "arcsin" | "asin" => Some(Function::Asin),
                     "arccos" | "acos" => Some(Function::Acos),
                     "arctan" | "atan" => Some(Function::Atan),
@@ -326,10 +432,14 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
                 }
             });
 
-        // Primary expressions (atoms)
+        // Primary expressions (atoms) — most specific parsers first
         let primary = choice((
             frac,
             sqrt,
+            log_with_base,
+            integral,
+            limit,
+            sum,
             latex_func,
             greek,
             number.padded(),
@@ -784,5 +894,110 @@ mod tests {
         let (left, right) = parse_latex_equation("x^2 = 4").unwrap();
         assert!(matches!(left, Expression::Power(_, _)));
         assert!(matches!(right, Expression::Integer(4)));
+    }
+
+    // =========================================================================
+    // New construct tests: \int, \lim, \sum, \log_{b}
+    // =========================================================================
+
+    #[test]
+    fn test_parse_log_with_base() {
+        let expr = parse_latex(r"\log_{2}{8}").unwrap();
+        if let Expression::Function(Function::Log, args) = &expr {
+            assert_eq!(args.len(), 2);
+            // args[0] = value (8), args[1] = base (2)
+            assert!(matches!(args[0], Expression::Integer(8)));
+            assert!(matches!(args[1], Expression::Integer(2)));
+        } else {
+            panic!("Expected log with base, got: {:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_parse_log_with_base_parens() {
+        let expr = parse_latex(r"\log_{10}(x)").unwrap();
+        if let Expression::Function(Function::Log, args) = &expr {
+            assert_eq!(args.len(), 2);
+            if let Expression::Variable(v) = &args[0] {
+                assert_eq!(v.name, "x");
+            } else {
+                panic!("Expected variable x");
+            }
+            assert!(matches!(args[1], Expression::Integer(10)));
+        } else {
+            panic!("Expected log with base, got: {:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_parse_definite_integral() {
+        let expr = parse_latex(r"\int_{0}^{1} x \, dx").unwrap();
+        if let Expression::Function(Function::Custom(name), args) = &expr {
+            assert_eq!(name, "integral");
+            assert!(
+                args.len() >= 3,
+                "Expected at least 3 args for definite integral"
+            );
+        } else {
+            panic!("Expected integral, got: {:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_parse_indefinite_integral() {
+        let expr = parse_latex(r"\int x dx").unwrap();
+        if let Expression::Function(Function::Custom(name), _args) = &expr {
+            assert_eq!(name, "integral");
+        } else {
+            panic!("Expected integral, got: {:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_parse_limit() {
+        let expr = parse_latex(r"\lim_{x \to 0} x").unwrap();
+        if let Expression::Function(Function::Custom(name), args) = &expr {
+            assert_eq!(name, "limit");
+            assert_eq!(args.len(), 3);
+            // args = [body, var, point]
+            if let Expression::Variable(v) = &args[1] {
+                assert_eq!(v.name, "x");
+            }
+            assert!(matches!(args[2], Expression::Integer(0)));
+        } else {
+            panic!("Expected limit, got: {:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_parse_limit_infinity() {
+        let expr = parse_latex(r"\lim_{x \to \infty} x").unwrap();
+        if let Expression::Function(Function::Custom(name), args) = &expr {
+            assert_eq!(name, "limit");
+            if let Expression::Variable(v) = &args[2] {
+                assert_eq!(v.name, "infinity");
+            } else {
+                panic!("Expected infinity variable");
+            }
+        } else {
+            panic!("Expected limit, got: {:?}", expr);
+        }
+    }
+
+    #[test]
+    fn test_parse_sum() {
+        let expr = parse_latex(r"\sum_{i=1}^{10} i").unwrap();
+        if let Expression::Function(Function::Custom(name), args) = &expr {
+            assert_eq!(name, "sum");
+            assert_eq!(args.len(), 4);
+            // args = [body, var, lower, upper]
+            if let Expression::Variable(v) = &args[1] {
+                assert_eq!(v.name, "i");
+            }
+            assert!(matches!(args[2], Expression::Integer(1)));
+            assert!(matches!(args[3], Expression::Integer(10)));
+        } else {
+            panic!("Expected sum, got: {:?}", expr);
+        }
     }
 }
