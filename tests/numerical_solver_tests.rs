@@ -1,6 +1,6 @@
 use thales::ast::{BinaryOp, Equation, Expression, Function, Variable};
 use thales::numerical::{
-    BisectionMethod, BrentsMethod, NewtonRaphson, NumericalConfig, NumericalError,
+    BisectionMethod, BrentsMethod, NewtonRaphson, NumericalConfig, NumericalError, SecantMethod,
     SmartNumericalSolver,
 };
 
@@ -638,4 +638,152 @@ fn test_brents_method_non_bracketed_interval_errors() {
         NumericalError::Other(_) => {}
         e => panic!("Expected NumericalError::Other, got {:?}", e),
     }
+}
+
+// =============================================================================
+// Secant Method Tests
+// =============================================================================
+
+#[test]
+fn test_secant_quadratic_sqrt2() {
+    // Solve x^2 = 2 (solution: √2 ≈ 1.41421356)
+    let equation = Equation::new(
+        "sqrt2",
+        Expression::Power(
+            Box::new(Expression::Variable(Variable::new("x"))),
+            Box::new(Expression::Integer(2)),
+        ),
+        Expression::Integer(2),
+    );
+
+    let solver = SecantMethod::with_default_config();
+    let (solution, _path) = solver
+        .solve(&equation, &Variable::new("x"), (1.0, 2.0))
+        .unwrap();
+
+    assert!(solution.converged);
+    assert!((solution.value - std::f64::consts::SQRT_2).abs() < 1e-10);
+}
+
+#[test]
+fn test_secant_quadratic_negative_root() {
+    // Solve x^2 = 4 starting near x = -2
+    let equation = Equation::new(
+        "quad",
+        Expression::Power(
+            Box::new(Expression::Variable(Variable::new("x"))),
+            Box::new(Expression::Integer(2)),
+        ),
+        Expression::Integer(4),
+    );
+
+    let solver = SecantMethod::with_default_config();
+    let (solution, _path) = solver
+        .solve(&equation, &Variable::new("x"), (-3.0, -1.5))
+        .unwrap();
+
+    assert!(solution.converged);
+    assert!((solution.value - (-2.0)).abs() < 1e-10);
+}
+
+#[test]
+fn test_secant_transcendental_sin() {
+    // Solve sin(x) = 0 near x = 3 (solution: π)
+    let equation = Equation::new(
+        "sin_root",
+        Expression::Function(
+            Function::Sin,
+            vec![Expression::Variable(Variable::new("x"))],
+        ),
+        Expression::Integer(0),
+    );
+
+    let solver = SecantMethod::with_default_config();
+    let (solution, _path) = solver
+        .solve(&equation, &Variable::new("x"), (2.5, 3.5))
+        .unwrap();
+
+    assert!(solution.converged);
+    assert!((solution.value - std::f64::consts::PI).abs() < 1e-10);
+}
+
+#[test]
+fn test_secant_cubic() {
+    // Solve x^3 - x - 2 = 0 (has real root near x ≈ 1.5214)
+    let equation = Equation::new(
+        "cubic",
+        Expression::Binary(
+            BinaryOp::Sub,
+            Box::new(Expression::Power(
+                Box::new(Expression::Variable(Variable::new("x"))),
+                Box::new(Expression::Integer(3)),
+            )),
+            Box::new(Expression::Variable(Variable::new("x"))),
+        ),
+        Expression::Integer(2),
+    );
+
+    let solver = SecantMethod::with_default_config();
+    let (solution, _path) = solver
+        .solve(&equation, &Variable::new("x"), (1.0, 2.0))
+        .unwrap();
+
+    assert!(solution.converged);
+    // Verify by plugging back: x^3 - x - 2 should be ≈ 0
+    let x = solution.value;
+    assert!((x.powi(3) - x - 2.0).abs() < 1e-9);
+}
+
+#[test]
+fn test_secant_exponential() {
+    // Solve e^x = 3x (has root near x ≈ 1.512)
+    let equation = Equation::new(
+        "exp_eq",
+        Expression::Function(
+            Function::Exp,
+            vec![Expression::Variable(Variable::new("x"))],
+        ),
+        Expression::Binary(
+            BinaryOp::Mul,
+            Box::new(Expression::Integer(3)),
+            Box::new(Expression::Variable(Variable::new("x"))),
+        ),
+    );
+
+    let solver = SecantMethod::with_default_config();
+    let (solution, _path) = solver
+        .solve(&equation, &Variable::new("x"), (1.0, 2.0))
+        .unwrap();
+
+    assert!(solution.converged);
+    let x = solution.value;
+    assert!((x.exp() - 3.0 * x).abs() < 1e-9);
+}
+
+#[test]
+fn test_secant_convergence_comparison_with_newton() {
+    // Both should converge to the same root for x^2 - 5 = 0
+    let equation = Equation::new(
+        "sqrt5",
+        Expression::Power(
+            Box::new(Expression::Variable(Variable::new("x"))),
+            Box::new(Expression::Integer(2)),
+        ),
+        Expression::Integer(5),
+    );
+    let var = Variable::new("x");
+
+    let secant = SecantMethod::with_default_config();
+    let (sec_sol, _) = secant.solve(&equation, &var, (2.0, 3.0)).unwrap();
+
+    let config = NumericalConfig {
+        initial_guess: Some(2.5),
+        ..NumericalConfig::default()
+    };
+    let newton = NewtonRaphson::new(config);
+    let (new_sol, _) = newton.solve(&equation, &var).unwrap();
+
+    assert!(sec_sol.converged);
+    assert!(new_sol.converged);
+    assert!((sec_sol.value - new_sol.value).abs() < 1e-10);
 }
