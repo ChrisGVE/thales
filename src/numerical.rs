@@ -1095,7 +1095,11 @@ impl BrentsMethod {
 /// Gradient descent optimizer for minimization problems.
 #[derive(Debug)]
 pub struct GradientDescent {
+    // Used once minimize() is fully implemented (task 24).
+    #[allow(dead_code)]
     config: NumericalConfig,
+    // Used once minimize() is fully implemented (task 24).
+    #[allow(dead_code)]
     learning_rate: f64,
 }
 
@@ -1129,6 +1133,8 @@ impl GradientDescent {
 /// Levenberg-Marquardt algorithm for nonlinear least squares.
 #[derive(Debug)]
 pub struct LevenbergMarquardt {
+    // Used once solve_least_squares() is fully implemented (task 25).
+    #[allow(dead_code)]
     config: NumericalConfig,
 }
 
@@ -1429,6 +1435,9 @@ impl Default for Evaluator {
 /// Compute derivative using finite differences (central difference method).
 ///
 /// f'(x) ≈ [f(x + h) - f(x - h)] / (2h)
+///
+/// Used by [`GradientDescent::minimize`] once that method is implemented (task 24).
+#[allow(dead_code)]
 fn compute_derivative_fd(
     expr: &Expression,
     variable: &Variable,
