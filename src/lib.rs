@@ -20,7 +20,7 @@
 //!
 //! - Zero-cost abstractions with compile-time guarantees
 //! - Memory-safe implementation (no unsafe code except FFI boundary)
-//! - 970+ tests including property-based tests with proptest
+//! - 1100+ tests including property-based tests with proptest
 //! - Optimized for mobile targets (iOS)
 //! - Clear separation between symbolic and numerical methods
 //!
@@ -347,7 +347,7 @@
 //! - Special functions (gamma, beta, erf, erfc)
 //! - Small angle approximations with error bounds
 //! - Unified [`ThalesError`] type
-//! - 970+ tests including property-based tests
+//! - 1100+ tests including property-based tests
 //!
 //! See [CHANGELOG.md](https://github.com/ChrisGVE/thales/blob/main/CHANGELOG.md)
 //! for complete version history.
@@ -393,6 +393,7 @@ pub mod approximations;
 pub mod ast;
 pub mod dimensions;
 pub mod equation_system;
+pub mod fourier;
 pub mod inequality;
 pub mod integration;
 pub mod latex;
