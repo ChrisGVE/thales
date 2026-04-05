@@ -1,7 +1,7 @@
 use thales::ast::{BinaryOp, Equation, Expression, Function, Variable};
 use thales::numerical::{
-    BisectionMethod, BrentsMethod, NewtonRaphson, NumericalConfig, NumericalError, SecantMethod,
-    SmartNumericalSolver,
+    BisectionMethod, BrentsMethod, GradientDescent, NewtonRaphson, NumericalConfig, NumericalError,
+    SecantMethod, SmartNumericalSolver,
 };
 
 #[test]
@@ -786,4 +786,110 @@ fn test_secant_convergence_comparison_with_newton() {
     assert!(sec_sol.converged);
     assert!(new_sol.converged);
     assert!((sec_sol.value - new_sol.value).abs() < 1e-10);
+}
+
+// =============================================================================
+// Gradient Descent Tests
+// =============================================================================
+
+#[test]
+fn test_gradient_descent_minimize_x_squared() {
+    // Minimize x^2, should converge to x = 0
+    let expr = Expression::Power(
+        Box::new(Expression::Variable(Variable::new("x"))),
+        Box::new(Expression::Integer(2)),
+    );
+    let vars = vec![Variable::new("x")];
+
+    let config = NumericalConfig {
+        max_iterations: 10000,
+        tolerance: 1e-10,
+        initial_guess: Some(5.0),
+        step_size: 1e-6,
+    };
+    let gd = GradientDescent::new(config, 0.1);
+    let result = gd.minimize(&expr, &vars).unwrap();
+
+    let x = result[&Variable::new("x")];
+    assert!(x.abs() < 1e-4, "Expected x near 0, got {x}");
+}
+
+#[test]
+fn test_gradient_descent_minimize_shifted_quadratic() {
+    // Minimize (x - 3)^2 = x^2 - 6x + 9, should converge to x = 3
+    let x = Expression::Variable(Variable::new("x"));
+    let expr = Expression::Power(
+        Box::new(Expression::Binary(
+            BinaryOp::Sub,
+            Box::new(x),
+            Box::new(Expression::Integer(3)),
+        )),
+        Box::new(Expression::Integer(2)),
+    );
+    let vars = vec![Variable::new("x")];
+
+    let config = NumericalConfig {
+        max_iterations: 10000,
+        tolerance: 1e-10,
+        initial_guess: Some(0.0),
+        step_size: 1e-6,
+    };
+    let gd = GradientDescent::new(config, 0.1);
+    let result = gd.minimize(&expr, &vars).unwrap();
+
+    let xv = result[&Variable::new("x")];
+    assert!((xv - 3.0).abs() < 1e-3, "Expected x near 3, got {xv}");
+}
+
+#[test]
+fn test_gradient_descent_two_variables() {
+    // Minimize (x-1)^2 + (y-2)^2, should converge to (1, 2)
+    let x = Expression::Variable(Variable::new("x"));
+    let y = Expression::Variable(Variable::new("y"));
+    let expr = Expression::Binary(
+        BinaryOp::Add,
+        Box::new(Expression::Power(
+            Box::new(Expression::Binary(
+                BinaryOp::Sub,
+                Box::new(x),
+                Box::new(Expression::Integer(1)),
+            )),
+            Box::new(Expression::Integer(2)),
+        )),
+        Box::new(Expression::Power(
+            Box::new(Expression::Binary(
+                BinaryOp::Sub,
+                Box::new(y),
+                Box::new(Expression::Integer(2)),
+            )),
+            Box::new(Expression::Integer(2)),
+        )),
+    );
+    let vars = vec![Variable::new("x"), Variable::new("y")];
+
+    let config = NumericalConfig {
+        max_iterations: 10000,
+        tolerance: 1e-10,
+        initial_guess: Some(0.0),
+        step_size: 1e-6,
+    };
+    let gd = GradientDescent::new(config, 0.1);
+    let result = gd.minimize(&expr, &vars).unwrap();
+
+    let xv = result[&Variable::new("x")];
+    let yv = result[&Variable::new("y")];
+    assert!((xv - 1.0).abs() < 1e-3, "Expected x near 1, got {xv}");
+    assert!((yv - 2.0).abs() < 1e-3, "Expected y near 2, got {yv}");
+}
+
+#[test]
+fn test_gradient_descent_empty_variables() {
+    let expr = Expression::Integer(42);
+    let vars: Vec<Variable> = vec![];
+
+    let config = NumericalConfig::default();
+    let gd = GradientDescent::new(config, 0.01);
+    let result = gd.minimize(&expr, &vars);
+
+    assert!(result.is_err());
 }

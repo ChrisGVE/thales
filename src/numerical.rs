@@ -1095,11 +1095,7 @@ impl BrentsMethod {
 /// Gradient descent optimizer for minimization problems.
 #[derive(Debug)]
 pub struct GradientDescent {
-    // Used once minimize() is fully implemented (task 24).
-    #[allow(dead_code)]
     config: NumericalConfig,
-    // Used once minimize() is fully implemented (task 24).
-    #[allow(dead_code)]
     learning_rate: f64,
 }
 
@@ -1117,16 +1113,79 @@ impl GradientDescent {
         }
     }
 
-    /// Minimize an expression with respect to variables.
+    /// Minimize an expression with respect to the given variables.
+    ///
+    /// Uses symbolic differentiation to compute gradients and iteratively
+    /// updates variable values in the direction of steepest descent.
+    ///
+    /// # Arguments
+    ///
+    /// * `expression` - The objective function to minimize
+    /// * `variables` - Variables to optimize over
+    ///
+    /// # Returns
+    ///
+    /// A mapping from each variable to its optimized value, or an error
+    /// if the method fails to converge.
     pub fn minimize(
         &self,
-        _expression: &Expression,
-        _variables: &[Variable],
+        expression: &Expression,
+        variables: &[Variable],
     ) -> NumericalResult<HashMap<Variable, f64>> {
-        // TODO: Implement gradient descent
-        // TODO: Compute gradient using symbolic differentiation or finite differences
-        // TODO: Support momentum and adaptive learning rates
-        Err(NumericalError::Other("Not yet implemented".to_string()))
+        if variables.is_empty() {
+            return Err(NumericalError::Other(
+                "No variables to optimize".to_string(),
+            ));
+        }
+
+        // Compute symbolic derivatives for each variable
+        let derivatives: Vec<Expression> = variables
+            .iter()
+            .map(|v| expression.differentiate(&v.name))
+            .collect();
+
+        // Initialize values from initial_guess or default to 1.0
+        let mut values: HashMap<String, f64> = variables
+            .iter()
+            .map(|v| (v.name.clone(), self.config.initial_guess.unwrap_or(1.0)))
+            .collect();
+
+        let mut prev_value = f64::INFINITY;
+
+        for _iteration in 0..self.config.max_iterations {
+            // Evaluate objective function
+            let current_value = expression.evaluate(&values).ok_or_else(|| {
+                NumericalError::EvaluationFailed("Failed to evaluate objective".to_string())
+            })?;
+
+            // Check convergence
+            if (prev_value - current_value).abs() < self.config.tolerance {
+                return Ok(variables
+                    .iter()
+                    .map(|v| (v.clone(), values[&v.name]))
+                    .collect());
+            }
+            prev_value = current_value;
+
+            // Compute and apply gradient updates
+            for (i, var) in variables.iter().enumerate() {
+                let grad = derivatives[i].evaluate(&values).ok_or_else(|| {
+                    NumericalError::EvaluationFailed(format!(
+                        "Failed to evaluate gradient for {}",
+                        var.name
+                    ))
+                })?;
+
+                if !grad.is_finite() {
+                    return Err(NumericalError::Unstable);
+                }
+
+                let current = values[&var.name];
+                values.insert(var.name.clone(), current - self.learning_rate * grad);
+            }
+        }
+
+        Err(NumericalError::NoConvergence)
     }
 }
 
