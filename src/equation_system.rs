@@ -713,7 +713,10 @@ pub enum SolveMethod {
     /// Simple substitution.
     Substitution,
     /// ODE solver with specified method.
-    ODE { method: String },
+    ODE {
+        /// Name of the ODE integration method (e.g., "runge-kutta4", "euler").
+        method: String,
+    },
     /// Integration.
     Integration,
     /// Differentiation.
@@ -862,19 +865,29 @@ impl SolutionValue {
 #[derive(Debug, Clone)]
 pub enum SystemOperation {
     /// Select an equation to work with.
-    SelectEquation { reason: String },
+    SelectEquation {
+        /// Human-readable explanation of why this equation was selected.
+        reason: String,
+    },
     /// Solve for a variable using a specific method.
     SolveFor {
+        /// Name of the variable being solved for.
         variable: String,
+        /// The solving method to apply.
         method: SolveMethod,
     },
     /// Substitute a result into equations.
     SubstituteResult {
+        /// Name of the variable whose value is being substituted.
         variable: String,
+        /// IDs of equations into which the result is substituted.
         into_equations: Vec<String>,
     },
     /// Verify a solution.
-    VerifySolution { variable: String },
+    VerifySolution {
+        /// Name of the variable whose solution is being verified.
+        variable: String,
+    },
     /// Delegate to an equation-level operation.
     EquationOperation(Operation),
 }
@@ -912,6 +925,7 @@ pub enum StepResult {
     Value(f64),
     /// Intermediate state showing what's known so far.
     Intermediate {
+        /// Map of variable names to their currently known expressions.
         known_so_far: HashMap<String, Expression>,
     },
 }

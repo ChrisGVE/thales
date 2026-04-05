@@ -389,6 +389,12 @@ impl Equation {
     }
 }
 
+impl fmt::Display for Equation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} = {}", self.left, self.right)
+    }
+}
+
 /// Represents a mathematical expression in tree form.
 ///
 /// An `Expression` is a recursive data structure that can represent any mathematical
@@ -553,6 +559,11 @@ impl fmt::Display for SymbolicConstant {
     }
 }
 
+/// A mathematical expression in the AST.
+///
+/// Represents any mathematical value or operation, from simple numeric literals
+/// to complex nested expressions involving variables, operators, and functions.
+/// This is the core type for building and manipulating symbolic mathematics.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     /// Integer literal.

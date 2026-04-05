@@ -36,8 +36,11 @@ use std::fmt;
 pub enum MatrixError {
     /// Dimension mismatch for operation.
     DimensionMismatch {
+        /// Name of the operation that encountered the mismatch.
         operation: String,
+        /// The (rows, cols) dimensions that were expected.
         expected: (usize, usize),
+        /// The (rows, cols) dimensions that were actually provided.
         got: (usize, usize),
     },
     /// Empty matrix or row not allowed.
@@ -46,9 +49,13 @@ pub enum MatrixError {
     NonRectangular,
     /// Index out of bounds.
     IndexOutOfBounds {
+        /// Row index that was accessed.
         row: usize,
+        /// Column index that was accessed.
         col: usize,
+        /// Total number of rows in the matrix.
         rows: usize,
+        /// Total number of columns in the matrix.
         cols: usize,
     },
     /// Cannot compute operation (e.g., determinant of non-square matrix).
