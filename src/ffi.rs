@@ -190,6 +190,17 @@ mod ffi {
         pub error_message: String,
     }
 
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct PrecisionEvaluationResultFFI {
+        pub original: String,
+        pub value: f64,
+        pub value_string: String,
+        pub precision_mode: String,
+        pub rounding_mode: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
     extern "Rust" {
         fn parse_equation_ffi(input: &str) -> Result<String, String>;
         fn parse_expression_ffi(input: &str) -> Result<String, String>;
@@ -335,15 +346,15 @@ use num_complex::Complex64;
 /// Parse equation and return string representation.
 fn parse_equation_ffi(input: &str) -> Result<String, String> {
     parse_equation(input)
-        .map(|eq| format!("{:?}", eq))
-        .map_err(|e| format!("Parse error: {:?}", e))
+        .map(|eq| format!("{}", eq))
+        .map_err(|e| format!("Parse error: {}", e))
 }
 
 /// Parse expression and return string representation.
 fn parse_expression_ffi(input: &str) -> Result<String, String> {
     parse_expression(input)
-        .map(|expr| format!("{:?}", expr))
-        .map_err(|e| format!("Parse error: {:?}", e))
+        .map(|expr| format!("{}", expr))
+        .map_err(|e| format!("Parse error: {}", e))
 }
 
 /// Solve equation symbolically.
@@ -525,11 +536,11 @@ fn solve_with_values_ffi(
 // LaTeX functions
 // =============================================================================
 
-/// Parse LaTeX expression and return string representation.
+/// Parse LaTeX expression and return human-readable string representation.
 fn parse_latex_ffi(input: &str) -> Result<String, String> {
     use crate::latex::parse_latex;
     parse_latex(input)
-        .map(|expr| format!("{:?}", expr))
+        .map(|expr| format!("{}", expr))
         .map_err(|e| format!("LaTeX parse error: {:?}", e))
 }
 
