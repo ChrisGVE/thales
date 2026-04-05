@@ -1,7 +1,7 @@
 use thales::ast::{BinaryOp, Equation, Expression, Function, Variable};
 use thales::numerical::{
-    BisectionMethod, BrentsMethod, GradientDescent, NewtonRaphson, NumericalConfig, NumericalError,
-    SecantMethod, SmartNumericalSolver,
+    BisectionMethod, BrentsMethod, GradientDescent, LevenbergMarquardt, NewtonRaphson,
+    NumericalConfig, NumericalError, SecantMethod, SmartNumericalSolver,
 };
 
 #[test]
@@ -891,5 +891,75 @@ fn test_gradient_descent_empty_variables() {
     let gd = GradientDescent::new(config, 0.01);
     let result = gd.minimize(&expr, &vars);
 
+    assert!(result.is_err());
+}
+
+// =============================================================================
+// Levenberg-Marquardt Tests
+// =============================================================================
+
+#[test]
+fn test_lm_linear_system() {
+    // Solve x + y = 3; x - y = 1 => x = 2, y = 1
+    let eq1 = Equation::new(
+        "eq1",
+        Expression::Binary(
+            BinaryOp::Add,
+            Box::new(Expression::Variable(Variable::new("x"))),
+            Box::new(Expression::Variable(Variable::new("y"))),
+        ),
+        Expression::Integer(3),
+    );
+    let eq2 = Equation::new(
+        "eq2",
+        Expression::Binary(
+            BinaryOp::Sub,
+            Box::new(Expression::Variable(Variable::new("x"))),
+            Box::new(Expression::Variable(Variable::new("y"))),
+        ),
+        Expression::Integer(1),
+    );
+
+    let vars = vec![Variable::new("x"), Variable::new("y")];
+    let lm = LevenbergMarquardt::with_default_config();
+    let result = lm.solve_least_squares(&[eq1, eq2], &vars).unwrap();
+
+    let x = result[&Variable::new("x")];
+    let y = result[&Variable::new("y")];
+    assert!((x - 2.0).abs() < 1e-6, "Expected x=2, got {x}");
+    assert!((y - 1.0).abs() < 1e-6, "Expected y=1, got {y}");
+}
+
+#[test]
+fn test_lm_overdetermined() {
+    // Overdetermined: x = 1; x = 2; x = 3 => least squares x ≈ 2
+    let eq1 = Equation::new(
+        "e1",
+        Expression::Variable(Variable::new("x")),
+        Expression::Integer(1),
+    );
+    let eq2 = Equation::new(
+        "e2",
+        Expression::Variable(Variable::new("x")),
+        Expression::Integer(2),
+    );
+    let eq3 = Equation::new(
+        "e3",
+        Expression::Variable(Variable::new("x")),
+        Expression::Integer(3),
+    );
+
+    let vars = vec![Variable::new("x")];
+    let lm = LevenbergMarquardt::with_default_config();
+    let result = lm.solve_least_squares(&[eq1, eq2, eq3], &vars).unwrap();
+
+    let x = result[&Variable::new("x")];
+    assert!((x - 2.0).abs() < 1e-4, "Expected x≈2, got {x}");
+}
+
+#[test]
+fn test_lm_empty_input() {
+    let lm = LevenbergMarquardt::with_default_config();
+    let result = lm.solve_least_squares(&[], &[Variable::new("x")]);
     assert!(result.is_err());
 }
