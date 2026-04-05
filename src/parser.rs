@@ -822,5 +822,81 @@ pub fn parse_equation(input: &str) -> Result<Equation, Vec<ParseError>> {
 }
 
 // TODO: Add support for implicit multiplication (2x, xy)
-// TODO: Add support for equation systems (multiple equations)
 // TODO: Add LaTeX-style input parsing
+
+/// Parse a semicolon-separated list of equations into a vector of [`Equation`] values.
+///
+/// Each segment between semicolons is trimmed and parsed as a single equation using
+/// [`parse_equation`]. Empty segments (e.g. trailing semicolons) are silently skipped.
+/// If any segment fails to parse, the errors from **all** failing segments are
+/// collected and returned together.
+///
+/// # Arguments
+///
+/// * `input` - A string containing one or more equations separated by `';'`.
+///
+/// # Returns
+///
+/// - `Ok(Vec<Equation>)` — all segments parsed successfully (empty input returns an
+///   empty vector).
+/// - `Err(Vec<ParseError>)` — one or more segments failed; every error from every
+///   failing segment is included.
+///
+/// # Examples
+///
+/// ## Two-equation linear system
+///
+/// ```
+/// use thales::parser::parse_equation_system;
+///
+/// let eqs = parse_equation_system("x + y = 5; 2*x - y = 1").unwrap();
+/// assert_eq!(eqs.len(), 2);
+/// ```
+///
+/// ## Trailing semicolon is ignored
+///
+/// ```
+/// use thales::parser::parse_equation_system;
+///
+/// let eqs = parse_equation_system("x = 1;").unwrap();
+/// assert_eq!(eqs.len(), 1);
+/// ```
+///
+/// ## Empty input returns empty vector
+///
+/// ```
+/// use thales::parser::parse_equation_system;
+///
+/// let eqs = parse_equation_system("").unwrap();
+/// assert!(eqs.is_empty());
+/// ```
+///
+/// ## Parse error propagation
+///
+/// ```
+/// use thales::parser::parse_equation_system;
+///
+/// assert!(parse_equation_system("x + y = 5; not_an_equation").is_err());
+/// ```
+#[must_use = "parsing returns a result that should be used"]
+pub fn parse_equation_system(input: &str) -> Result<Vec<Equation>, Vec<ParseError>> {
+    let mut equations = Vec::new();
+    let mut all_errors: Vec<ParseError> = Vec::new();
+
+    for segment in input.split(';') {
+        let trimmed = segment.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        match parse_equation(trimmed) {
+            Ok(eq) => equations.push(eq),
+            Err(errs) => all_errors.extend(errs),
+        }
+    }
+
+    if all_errors.is_empty() {
+        Ok(equations)
+    } else {
+        Err(all_errors)
+    }
+}

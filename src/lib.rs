@@ -401,12 +401,14 @@ pub mod limits;
 pub mod matrix;
 pub mod numerical;
 pub mod ode;
+pub mod ode_higher;
 pub mod optimization;
 pub mod parser;
 pub mod partial_fractions;
 pub mod pattern;
 pub mod precision;
 pub mod resolution_path;
+pub mod runge_kutta;
 pub mod series;
 pub mod simplification_rules;
 pub mod solver;
@@ -469,6 +471,7 @@ pub use equation_system::{
     SystemResolutionPath,
     SystemStep,
 };
+pub use fourier::{fourier_series, FourierSeries, FourierSeriesError, FourierSeriesResult};
 pub use inequality::{
     solve_inequality, solve_system, Bound, Inequality, InequalityError, IntervalSolution,
 };
@@ -494,7 +497,7 @@ pub use optimization::{
     track_precision, ComputationStep, ManualStep, MultiplicativeChain, OperationConfig,
     OperationType, PrecisionReport, StepOperand,
 };
-pub use parser::{parse_equation, parse_expression};
+pub use parser::{parse_equation, parse_equation_system, parse_expression};
 pub use partial_fractions::{
     decompose, is_polynomial, is_rational_function, DecomposeError, PartialFractionResult,
     PartialFractionTerm,

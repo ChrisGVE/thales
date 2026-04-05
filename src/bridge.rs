@@ -146,6 +146,19 @@ mod ffi {
             independent_var: &str,
             initial_conditions_json: &str,
         ) -> ODEResultFFI;
+        fn solve_second_order_ode_ffi(
+            coefficients_json: &str,
+            forcing_fn: &str,
+        ) -> Result<ODEResultFFI, String>;
+        fn solve_higher_order_ode_ffi(coefficients_json: &str) -> Result<ODEResultFFI, String>;
+        fn rk4_solve_ffi(
+            equation: &str,
+            variable: &str,
+            x0: f64,
+            y0: f64,
+            x_end: f64,
+            steps: u32,
+        ) -> Result<String, String>;
     }
 
     // =========================================================================
@@ -257,5 +270,67 @@ mod ffi {
             known_values_json: &str,
             targets_json: &str,
         ) -> Result<String, String>;
+    }
+
+    // =========================================================================
+    // Precision evaluation result type
+    // =========================================================================
+
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct PrecisionEvaluationResultFFI {
+        pub original: String,
+        pub value: f64,
+        pub value_string: String,
+        pub precision_mode: String,
+        pub rounding_mode: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    // =========================================================================
+    // Precision, optimization, and approximation functions
+    // =========================================================================
+
+    extern "Rust" {
+        fn evaluate_with_precision_ffi(
+            expression: &str,
+            values_json: &str,
+            mode: &str,
+            precision: u32,
+            rounding: &str,
+        ) -> Result<PrecisionEvaluationResultFFI, String>;
+        fn optimize_for_manual_computation_ffi(expression: &str) -> Result<String, String>;
+        fn small_angle_approximation_ffi(
+            expression: &str,
+            variable: &str,
+            threshold: f64,
+        ) -> Result<String, String>;
+    }
+
+    // =========================================================================
+    // Fourier series result type and functions
+    // =========================================================================
+
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct FourierSeriesResultFFI {
+        pub original: String,
+        pub variable: String,
+        pub num_terms: u32,
+        pub period: f64,
+        pub a_coefficients_json: String,
+        pub b_coefficients_json: String,
+        pub series: String,
+        pub series_latex: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    extern "Rust" {
+        fn fourier_series_ffi(
+            expression: &str,
+            variable: &str,
+            num_terms: u32,
+            period: f64,
+        ) -> Result<FourierSeriesResultFFI, String>;
     }
 }

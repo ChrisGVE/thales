@@ -1,7 +1,7 @@
 //! Unit tests for the mathematical expression parser.
 
 use thales::ast::{BinaryOp, Expression, Function, UnaryOp};
-use thales::parser::{parse_equation, parse_expression};
+use thales::parser::{parse_equation, parse_equation_system, parse_expression};
 
 #[test]
 fn test_simple_integer() {
@@ -902,4 +902,102 @@ fn test_parse_log_single_arg_is_log10() {
         (result - 2.0).abs() < 1e-10,
         "log(100) should be 2.0, got {result}"
     );
+}
+
+// =============================================================================
+// parse_equation_system tests
+// =============================================================================
+
+#[test]
+fn test_equation_system_two_equations() {
+    let result = parse_equation_system("x + y = 5; 2*x - y = 1");
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().len(), 2);
+}
+
+#[test]
+fn test_equation_system_single_equation() {
+    let result = parse_equation_system("x = 3");
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().len(), 1);
+}
+
+#[test]
+fn test_equation_system_empty_input() {
+    let result = parse_equation_system("");
+    assert!(result.is_ok());
+    assert!(result.unwrap().is_empty());
+}
+
+#[test]
+fn test_equation_system_trailing_semicolon() {
+    let result = parse_equation_system("x = 1;");
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().len(), 1);
+}
+
+#[test]
+fn test_equation_system_leading_semicolon() {
+    let result = parse_equation_system("; x = 1");
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().len(), 1);
+}
+
+#[test]
+fn test_equation_system_whitespace_around_semicolons() {
+    let result = parse_equation_system("  x + y = 5  ;  2*x - y = 1  ");
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().len(), 2);
+}
+
+#[test]
+fn test_equation_system_three_equations() {
+    let result = parse_equation_system("x + y + z = 6; x - y = 0; y - z = 1");
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().len(), 3);
+}
+
+#[test]
+fn test_equation_system_error_on_invalid_segment() {
+    let result = parse_equation_system("x + y = 5; not_valid_equation");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_equation_system_error_collects_all_failures() {
+    // Both segments are invalid; errors from both should be returned.
+    let result = parse_equation_system("bad_eq_one; bad_eq_two");
+    assert!(result.is_err());
+    assert!(!result.unwrap_err().is_empty());
+}
+
+#[test]
+fn test_equation_system_only_semicolons() {
+    // Only separators, no actual equations.
+    let result = parse_equation_system(";;;");
+    assert!(result.is_ok());
+    assert!(result.unwrap().is_empty());
+}
+
+#[test]
+fn test_equation_system_preserves_equation_structure() {
+    let eqs = parse_equation_system("x + y = 5; 2*x - y = 1").unwrap();
+    // First equation left side should be a binary add.
+    assert!(matches!(
+        eqs[0].left,
+        Expression::Binary(BinaryOp::Add, _, _)
+    ));
+    // Second equation left side should be a binary sub (2*x - y).
+    assert!(matches!(
+        eqs[1].left,
+        Expression::Binary(BinaryOp::Sub, _, _)
+    ));
+}
+
+#[test]
+fn test_equation_system_crate_reexport() {
+    // Verify the function is accessible through the crate root re-export.
+    let result = thales::parse_equation_system("a = 1; b = 2");
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().len(), 2);
 }
