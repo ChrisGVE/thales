@@ -511,85 +511,6 @@ fn extract_coefficient(expr: &Expression, var: &str) -> Option<Expression> {
     }
 }
 
-/// Collect terms with and without the variable from an expression.
-///
-/// Recursively traverses an expression and separates additive terms into two groups:
-/// - Terms containing the target variable
-/// - Terms not containing the target variable
-///
-/// This is useful for rearranging equations into the form `terms_with_var = -terms_without_var`.
-///
-/// # Arguments
-///
-/// * `expr` - The expression to analyze
-/// * `var` - The variable name to search for
-///
-/// # Returns
-///
-/// A tuple `(terms_with_var, terms_without_var)` where each is a vector of expressions.
-///
-/// # Examples
-///
-/// ```ignore
-/// // 2x + 3 + 5x - 7
-/// // Returns: ([2x, 5x], [3, -7])
-/// let x = Expression::Variable(Variable::new("x"));
-/// let expr = /* ... */;
-/// let (with_x, without_x) = collect_terms(&expr, "x");
-/// ```
-///
-/// # Note
-///
-/// Subtraction is handled by negating the right operand before collecting.
-fn collect_terms(expr: &Expression, var: &str) -> (Vec<Expression>, Vec<Expression>) {
-    let mut with_var = Vec::new();
-    let mut without_var = Vec::new();
-
-    collect_terms_recursive(expr, var, &mut with_var, &mut without_var);
-
-    (with_var, without_var)
-}
-
-fn collect_terms_recursive(
-    expr: &Expression,
-    var: &str,
-    with_var: &mut Vec<Expression>,
-    without_var: &mut Vec<Expression>,
-) {
-    match expr {
-        Expression::Binary(BinaryOp::Add, left, right) => {
-            collect_terms_recursive(left, var, with_var, without_var);
-            collect_terms_recursive(right, var, with_var, without_var);
-        }
-        Expression::Binary(BinaryOp::Sub, left, right) => {
-            collect_terms_recursive(left, var, with_var, without_var);
-            // Negate the right side when collecting
-            let negated =
-                Expression::Unary(crate::ast::UnaryOp::Neg, Box::new(right.as_ref().clone()));
-            collect_terms_recursive(&negated, var, with_var, without_var);
-        }
-        _ => {
-            if contains_variable(expr, var) {
-                with_var.push(expr.clone());
-            } else {
-                without_var.push(expr.clone());
-            }
-        }
-    }
-}
-
-/// Combine a list of expressions into a single expression with addition.
-fn combine_with_add(terms: Vec<Expression>) -> Expression {
-    if terms.is_empty() {
-        return Expression::Integer(0);
-    }
-
-    terms
-        .into_iter()
-        .reduce(|acc, term| Expression::Binary(BinaryOp::Add, Box::new(acc), Box::new(term)))
-        .unwrap()
-}
-
 /// Evaluate constant expressions to their numeric values.
 /// If the expression contains only constants, evaluate it completely.
 fn evaluate_constants(expr: &Expression) -> Expression {
@@ -1035,46 +956,6 @@ fn has_obvious_nonlinearity(expr: &Expression) -> bool {
         }
         Expression::Function(_, args) => args.iter().any(|arg| has_obvious_nonlinearity(arg)),
         _ => false,
-    }
-}
-
-/// Check if an expression is linear (no variable powers, products, or functions).
-fn is_linear_equation(expr: &Expression) -> bool {
-    match expr {
-        Expression::Integer(_)
-        | Expression::Rational(_)
-        | Expression::Float(_)
-        | Expression::Complex(_)
-        | Expression::Constant(_)
-        | Expression::Variable(_) => true,
-
-        Expression::Unary(_, inner) => is_linear_equation(inner),
-
-        Expression::Binary(op, left, right) => {
-            let left_linear = is_linear_equation(left);
-            let right_linear = is_linear_equation(right);
-
-            match op {
-                BinaryOp::Add | BinaryOp::Sub => left_linear && right_linear,
-                BinaryOp::Mul | BinaryOp::Div => {
-                    // For multiplication/division to be linear, at most one side can have variables
-                    let left_has_var = has_any_variable(left);
-                    let right_has_var = has_any_variable(right);
-                    left_linear && right_linear && !(left_has_var && right_has_var)
-                }
-                _ => false,
-            }
-        }
-
-        Expression::Power(base, exp) => {
-            // Only allow constant powers, and base must not have variables
-            !has_any_variable(base) && is_linear_equation(exp)
-        }
-
-        Expression::Function(_, _) => {
-            // For Phase 1, we don't support functions in linear equations
-            false
-        }
     }
 }
 
