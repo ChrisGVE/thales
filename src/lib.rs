@@ -152,7 +152,7 @@
 //!           ▼                ▼                ▼
 //!    ┌──────────┐     ┌──────────┐    ┌──────────┐
 //!    │  Parser  │     │  Solver  │    │Transform │
-//!    │ (chumsky)│     │ (symbolic)│    │(nalgebra)│
+//!    │ (mathlex)│     │ (symbolic)│    │(nalgebra)│
 //!    └──────────┘     └──────────┘    └──────────┘
 //!           │                │                │
 //!           └────────────────┼────────────────┘
@@ -183,7 +183,7 @@
 //! - [`ast`]: Core data structures for mathematical expressions, equations, variables,
 //!   operators, and functions. All other modules build upon these types.
 //!
-//! - [`parser`]: String → AST conversion using the chumsky parser combinator library.
+//! - [`parser`]: String → AST conversion using the mathlex parsing library.
 //!   Handles operator precedence, function calls, and complex number literals.
 //!
 //! - [`solver`]: Symbolic equation solving using algebraic manipulation. Includes
@@ -357,7 +357,7 @@
 //! | Module | Description |
 //! |--------|-------------|
 //! | [`ast`] | Abstract syntax tree types for expressions and equations |
-//! | [`parser`] | String → AST conversion with chumsky |
+//! | [`parser`] | String → AST conversion with mathlex |
 //! | [`solver`] | Symbolic equation solving |
 //! | [`equation_system`] | Multi-equation system solver |
 //! | [`numerical`] | Numerical root-finding methods |
@@ -398,6 +398,7 @@ pub mod inequality;
 pub mod integration;
 pub mod latex;
 pub mod limits;
+pub mod mathlex_bridge;
 pub mod matrix;
 pub mod numerical;
 pub mod ode;

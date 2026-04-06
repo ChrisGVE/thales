@@ -132,15 +132,13 @@
 //! | e (Euler's number) | `e` | 2.71828... |
 //! | i (imaginary unit) | `i` | √(-1) |
 //!
-//! # Limitations
+//! # Note
 //!
-//! - **No equation systems**: Only single equations supported
-//! - **No LaTeX input**: Plain ASCII notation only
-//!
-//! See TODO comments at end of file for planned enhancements.
+//! Parsing is delegated to the [mathlex](https://crates.io/crates/mathlex) library.
+//! For LaTeX input, see the [`latex`](crate::latex) module.
 
-use crate::ast::{BinaryOp, Equation, Expression, Function, SymbolicConstant, UnaryOp, Variable};
-use chumsky::prelude::*;
+use crate::ast::{Equation, Expression};
+use crate::mathlex_bridge;
 
 /// Parse error type with detailed position information.
 ///
@@ -262,289 +260,40 @@ impl std::fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-/// Maps function name strings to the corresponding Function enum variant.
-///
-/// This helper function converts textual function names (as they appear in expressions)
-/// to their corresponding `Function` enum values. Used internally by the parser to
-/// recognize valid function calls.
-///
-/// # Supported Functions
-///
-/// ## Trigonometric Functions
-/// - `sin`, `cos`, `tan` - Standard trigonometric functions
-/// - `asin`, `acos`, `atan` - Inverse trigonometric functions
-/// - `atan2` - Two-argument arctangent
-///
-/// ## Hyperbolic Functions
-/// - `sinh`, `cosh`, `tanh` - Hyperbolic trigonometric functions
-///
-/// ## Exponential and Logarithmic Functions
-/// - `exp` - Natural exponential (e^x)
-/// - `ln` - Natural logarithm (base e)
-/// - `log(value, base)` - Logarithm base `base` of `value`; with a single argument, equivalent to `log10`
-/// - `log2` - Binary logarithm (base 2)
-/// - `log10` - Common logarithm (base 10)
-///
-/// ## Power and Root Functions
-/// - `sqrt` - Square root
-/// - `cbrt` - Cube root
-/// - `pow` - Power (base, exponent)
-///
-/// ## Rounding Functions
-/// - `floor` - Round down to nearest integer
-/// - `ceil` - Round up to nearest integer
-/// - `round` - Round to nearest integer
-///
-/// ## Other Functions
-/// - `abs` - Absolute value
-/// - `sign` - Sign function (-1, 0, or 1)
-/// - `min` - Minimum of two values
-/// - `max` - Maximum of two values
-///
-/// # Returns
-///
-/// - `Some(Function)` if the name matches a known function
-/// - `None` if the name is not recognized
-///
-/// # Examples
-///
-/// ```
-/// # use thales::parser::parse_expression;
-/// # use thales::ast::{Expression, Function};
-/// // Recognized function
-/// let expr = parse_expression("sin(0.5)").unwrap();
-/// match expr {
-///     Expression::Function(Function::Sin, _) => println!("Parsed sin function"),
-///     _ => panic!("Expected sin function"),
-/// }
-///
-/// // With implicit multiplication, unknown_func(x) parses as variable * (x).
-/// // The function lookup itself returns None for unknown names:
-/// assert!(parse_expression("unknown_func(x)").is_ok());
-/// ```
-fn string_to_function(name: &str) -> Option<Function> {
-    match name {
-        // Trigonometric
-        "sin" => Some(Function::Sin),
-        "cos" => Some(Function::Cos),
-        "tan" => Some(Function::Tan),
-        "asin" => Some(Function::Asin),
-        "acos" => Some(Function::Acos),
-        "atan" => Some(Function::Atan),
-        "atan2" => Some(Function::Atan2),
+/// Convert a mathlex ParseError into a thales ParseError.
+fn convert_mathlex_error(err: &mathlex::ParseError) -> ParseError {
+    let pos = err.span.as_ref().map(|s| s.start.offset).unwrap_or(0);
 
-        // Hyperbolic
-        "sinh" => Some(Function::Sinh),
-        "cosh" => Some(Function::Cosh),
-        "tanh" => Some(Function::Tanh),
-
-        // Exponential and logarithmic
-        "exp" => Some(Function::Exp),
-        "ln" => Some(Function::Ln),
-        "log" => Some(Function::Log),
-        "log2" => Some(Function::Log2),
-        "log10" => Some(Function::Log10),
-
-        // Power and root
-        "sqrt" => Some(Function::Sqrt),
-        "cbrt" => Some(Function::Cbrt),
-        "pow" => Some(Function::Pow),
-
-        // Rounding
-        "floor" => Some(Function::Floor),
-        "ceil" => Some(Function::Ceil),
-        "round" => Some(Function::Round),
-
-        // Other
-        "abs" => Some(Function::Abs),
-        "sign" => Some(Function::Sign),
-        "min" => Some(Function::Min),
-        "max" => Some(Function::Max),
-
-        _ => None,
-    }
-}
-
-/// Build the expression parser.
-fn expression_parser<'src>(
-) -> impl Parser<'src, &'src str, Expression, extra::Err<Rich<'src, char>>> {
-    recursive(|expr| {
-        // Parse numbers (integer, float, scientific notation)
-        let number = text::int(10)
-            .then(just('.').then(text::digits(10)).or_not())
-            .then(
-                one_of("eE")
-                    .then(one_of("+-").or_not())
-                    .then(text::digits(10))
-                    .or_not(),
-            )
-            .to_slice()
-            .try_map(|s: &str, span| {
-                s.parse::<f64>()
-                    .map(Expression::Float)
-                    .map_err(|_| Rich::custom(span, format!("Invalid number: {}", s)))
-            })
-            .padded();
-
-        // Parse identifiers (variables or function names)
-        // Identifiers start with a letter or underscore, followed by any number of
-        // letters, digits, or underscores
-        let identifier = one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
-            .then(
-                one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
-                    .repeated(),
-            )
-            .to_slice()
-            .padded();
-
-        // Parse function calls: only consume the argument list when the identifier
-        // is a known function name.  Filtering on the identifier before parsing
-        // the parenthesised args prevents `x(y+z)` from being mis-identified as
-        // an unknown-function error; instead `x` parses as a variable and the
-        // `(y+z)` group becomes available as the right-hand operand of an
-        // implicit multiplication.
-        let func_call = identifier
-            .filter(|name: &&str| string_to_function(name).is_some())
-            .then(
-                expr.clone()
-                    .separated_by(just(',').padded())
-                    .collect::<Vec<_>>()
-                    .delimited_by(just('('), just(')')),
-            )
-            .map(|(name, args)| {
-                // Safety: filter above guarantees name maps to Some
-                Expression::Function(string_to_function(name).unwrap(), args)
-            });
-
-        // Parse symbolic constants and plain variables (no argument list).
-        let const_or_var = identifier.map(|name: &str| match name {
-            "pi" => Expression::Constant(SymbolicConstant::Pi),
-            "e" => Expression::Constant(SymbolicConstant::E),
-            "i" => Expression::Constant(SymbolicConstant::I),
-            _ => Expression::Variable(Variable::new(name)),
-        });
-
-        // Function calls take priority over plain identifiers.
-        let identifier_expr = choice((func_call, const_or_var)).padded();
-
-        // Clone parsers for later use in implicit multiplication
-        let number_for_implicit = number.clone();
-        let identifier_for_implicit = identifier_expr.clone();
-
-        // Primary expressions: numbers, identifier expressions, or parenthesized expressions
-        let primary = choice((
-            number,
-            identifier_expr,
-            expr.clone().delimited_by(just('('), just(')')),
-        ))
-        .padded();
-
-        // Unary operators: negation
-        let unary = just('-').padded().repeated().foldr(primary, |_op, rhs| {
-            Expression::Unary(UnaryOp::Neg, Box::new(rhs))
-        });
-
-        // Power operator (right-associative)
-        let power = unary
-            .clone()
-            .then(
-                just('^')
-                    .padded()
-                    .ignore_then(unary.clone())
-                    .repeated()
-                    .collect::<Vec<_>>(),
-            )
-            .map(|(first, rest)| {
-                if rest.is_empty() {
-                    first
-                } else {
-                    // Build right-associative power chain
-                    let result = rest.into_iter().rev().fold(None, |acc, curr| match acc {
-                        None => Some(curr),
-                        Some(right) => Some(Expression::Power(Box::new(curr), Box::new(right))),
-                    });
-                    match result {
-                        Some(right) => Expression::Power(Box::new(first), Box::new(right)),
-                        None => first,
-                    }
-                }
-            });
-
-        // Implicit multiplication: handles 2x, xy, 2(x+1), (x)(y)
-        // This parses one or more power expressions without operators between them
-        // and treats juxtaposition as multiplication.
-        // IMPORTANT: We only allow implicit multiplication for expressions that
-        // start with a number, identifier, or opening paren - NOT unary minus.
-        // This prevents "a - b" from being parsed as "a * (-b)".
-        let implicit_mul_operand = choice((
-            number_for_implicit,
-            identifier_for_implicit,
-            expr.clone().delimited_by(just('('), just(')')),
-        ))
-        .padded()
-        .then(
-            just('^')
-                .padded()
-                .ignore_then(unary.clone())
-                .repeated()
-                .collect::<Vec<_>>(),
-        )
-        .map(|(first, rest)| {
-            if rest.is_empty() {
-                first
+    use mathlex::ParseErrorKind;
+    match &err.kind {
+        ParseErrorKind::UnexpectedToken { found, .. } => {
+            if let Some(ch) = found.chars().next() {
+                ParseError::UnexpectedCharacter { pos, found: ch }
             } else {
-                // Build right-associative power chain
-                let result = rest.into_iter().rev().fold(None, |acc, curr| match acc {
-                    None => Some(curr),
-                    Some(right) => Some(Expression::Power(Box::new(curr), Box::new(right))),
-                });
-                match result {
-                    Some(right) => Expression::Power(Box::new(first), Box::new(right)),
-                    None => first,
+                ParseError::InvalidExpression {
+                    pos,
+                    message: format!("unexpected token: {}", found),
                 }
             }
-        });
-
-        let implicit_product = power
-            .clone()
-            .then(implicit_mul_operand.repeated().collect::<Vec<_>>())
-            .map(|(first, rest)| {
-                if rest.is_empty() {
-                    first
-                } else {
-                    // Fold multiple juxtaposed expressions into multiplications
-                    rest.into_iter().fold(first, |acc, curr| {
-                        Expression::Binary(BinaryOp::Mul, Box::new(acc), Box::new(curr))
-                    })
-                }
-            });
-
-        // Multiplication and division (left-associative)
-        // Uses implicit_product as the base to include implicit multiplication
-        let product = implicit_product.clone().foldl(
-            choice((
-                just('*').padded().to(BinaryOp::Mul),
-                just('/').padded().to(BinaryOp::Div),
-                just('%').padded().to(BinaryOp::Mod),
-            ))
-            .then(implicit_product.clone())
-            .repeated(),
-            |lhs, (op, rhs)| Expression::Binary(op, Box::new(lhs), Box::new(rhs)),
-        );
-
-        // Addition and subtraction (left-associative)
-        let sum = product.clone().foldl(
-            choice((
-                just('+').padded().to(BinaryOp::Add),
-                just('-').padded().to(BinaryOp::Sub),
-            ))
-            .then(product)
-            .repeated(),
-            |lhs, (op, rhs)| Expression::Binary(op, Box::new(lhs), Box::new(rhs)),
-        );
-
-        sum
-    })
+        }
+        ParseErrorKind::UnexpectedEof { expected } => ParseError::UnexpectedEndOfInput {
+            pos,
+            expected: expected.join(", "),
+        },
+        ParseErrorKind::InvalidNumber { value, reason } => ParseError::InvalidNumber {
+            pos,
+            text: format!("{}: {}", value, reason),
+        },
+        ParseErrorKind::UnknownFunction { name } => ParseError::UnknownFunction {
+            pos,
+            name: name.clone(),
+        },
+        ParseErrorKind::UnmatchedDelimiter { .. } => ParseError::MismatchedParentheses { pos },
+        _ => ParseError::InvalidExpression {
+            pos,
+            message: format!("{}", err),
+        },
+    }
 }
 
 /// Parses a mathematical expression from string input into an AST.
@@ -641,20 +390,6 @@ fn expression_parser<'src>(
 /// ```
 /// use thales::parser::{parse_expression, ParseError};
 ///
-/// // Invalid syntax
-/// match parse_expression("2 + + 3") {
-///     Ok(_) => panic!("Should fail"),
-///     Err(errors) => {
-///         for error in errors {
-///             eprintln!("Error: {}", error);
-///         }
-///     }
-/// }
-///
-/// // With implicit multiplication, foo(x) parses as variable `foo` * (x).
-/// // This is expected behavior — unknown names become variables.
-/// assert!(parse_expression("foo(x)").is_ok());
-///
 /// // Incomplete expression
 /// match parse_expression("2 * ") {
 ///     Ok(_) => panic!("Should fail"),
@@ -662,36 +397,22 @@ fn expression_parser<'src>(
 ///         assert!(!errors.is_empty());
 ///     }
 /// }
+///
+/// // Unary plus is valid: "2 + + 3" parses as 2 + (+3)
+/// assert!(parse_expression("2 + + 3").is_ok());
+///
+/// // Unknown function names are parsed as generic function calls
+/// assert!(parse_expression("foo(x)").is_ok());
 /// ```
 #[must_use = "parsing returns a result that should be used"]
 pub fn parse_expression(input: &str) -> Result<Expression, Vec<ParseError>> {
-    expression_parser()
-        .then_ignore(end())
-        .parse(input)
-        .into_result()
-        .map_err(|errors| {
-            errors
-                .into_iter()
-                .map(|e| {
-                    let span = e.span();
-                    let pos = span.start;
-
-                    match e.reason() {
-                        chumsky::error::RichReason::ExpectedFound { found, .. } => match found {
-                            Some(ch) => ParseError::UnexpectedCharacter { pos, found: **ch },
-                            None => ParseError::UnexpectedEndOfInput {
-                                pos,
-                                expected: "expression".to_string(),
-                            },
-                        },
-                        chumsky::error::RichReason::Custom(msg) => ParseError::InvalidExpression {
-                            pos,
-                            message: msg.to_string(),
-                        },
-                    }
-                })
-                .collect()
-        })
+    let ml_expr = mathlex::parse(input).map_err(|e| vec![convert_mathlex_error(&e)])?;
+    mathlex_bridge::convert_expression(&ml_expr).map_err(|msg| {
+        vec![ParseError::InvalidExpression {
+            pos: 0,
+            message: msg,
+        }]
+    })
 }
 
 /// Parses a complete equation from string input into an AST.
@@ -775,8 +496,10 @@ pub fn parse_expression(input: &str) -> Result<Expression, Vec<ParseError>> {
 /// // Multiple equals signs (not supported)
 /// assert!(parse_equation("x = y = 5").is_err());
 ///
+/// // Unary plus is valid, so "2 + + 3 = 5" parses successfully
+/// assert!(parse_equation("2 + + 3 = 5").is_ok());
+///
 /// // Invalid expression on either side
-/// assert!(parse_equation("2 + + 3 = 5").is_err());
 /// assert!(parse_equation("x = 2 * * 3").is_err());
 /// ```
 ///
@@ -787,42 +510,15 @@ pub fn parse_expression(input: &str) -> Result<Expression, Vec<ParseError>> {
 /// - Both sides must be valid expressions
 #[must_use = "parsing returns a result that should be used"]
 pub fn parse_equation(input: &str) -> Result<Equation, Vec<ParseError>> {
-    let equation_parser = expression_parser()
-        .then_ignore(just('=').padded())
-        .then(expression_parser())
-        .map(|(left, right)| Equation::new("", left, right))
-        .then_ignore(end());
-
-    equation_parser
-        .parse(input)
-        .into_result()
-        .map_err(|errors| {
-            errors
-                .into_iter()
-                .map(|e| {
-                    let span = e.span();
-                    let pos = span.start;
-
-                    match e.reason() {
-                        chumsky::error::RichReason::ExpectedFound { found, .. } => match found {
-                            Some(ch) => ParseError::UnexpectedCharacter { pos, found: **ch },
-                            None => ParseError::UnexpectedEndOfInput {
-                                pos,
-                                expected: "equation".to_string(),
-                            },
-                        },
-                        chumsky::error::RichReason::Custom(msg) => ParseError::InvalidExpression {
-                            pos,
-                            message: msg.to_string(),
-                        },
-                    }
-                })
-                .collect()
-        })
+    // Parse as a single equation via mathlex's equation system parser (one equation)
+    let ml_expr = mathlex::parse(input).map_err(|e| vec![convert_mathlex_error(&e)])?;
+    mathlex_bridge::convert_equation(&ml_expr).map_err(|msg| {
+        vec![ParseError::InvalidExpression {
+            pos: 0,
+            message: msg,
+        }]
+    })
 }
-
-// TODO: Add support for implicit multiplication (2x, xy)
-// TODO: Add LaTeX-style input parsing
 
 /// Parse a semicolon-separated list of equations into a vector of [`Equation`] values.
 ///

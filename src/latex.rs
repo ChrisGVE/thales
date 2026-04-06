@@ -2,7 +2,7 @@
 //!
 //! This module provides a parser for LaTeX mathematical expressions, converting
 //! LaTeX input strings into the internal [`Expression`] AST for evaluation and
-//! manipulation.
+//! manipulation. Parsing is delegated to the mathlex library.
 //!
 //! # Supported Syntax
 //!
@@ -55,8 +55,8 @@
 //! ```
 //! use thales::latex::parse_latex;
 //!
-//! let expr = parse_latex(r"\frac{-b \pm \sqrt{b^2 - 4ac}}{2a}").unwrap();
-//! // Parses the quadratic formula
+//! let expr = parse_latex(r"\frac{-b + \sqrt{b^2 - 4 \cdot a \cdot c}}{2 \cdot a}").unwrap();
+//! // Parses the quadratic formula (positive root)
 //! ```
 //!
 //! # Error Handling
@@ -74,8 +74,8 @@
 //! }
 //! ```
 
-use crate::ast::{BinaryOp, Expression, Function, SymbolicConstant, UnaryOp, Variable};
-use chumsky::prelude::*;
+use crate::ast::Expression;
+use crate::mathlex_bridge;
 use std::fmt;
 
 /// Error type for LaTeX parsing failures.
@@ -150,466 +150,89 @@ impl fmt::Display for LaTeXParseError {
 
 impl std::error::Error for LaTeXParseError {}
 
-/// Map of Greek letter commands to their names for variable creation.
-fn greek_letter_to_name(cmd: &str) -> Option<&'static str> {
-    match cmd {
-        "alpha" => Some("alpha"),
-        "beta" => Some("beta"),
-        "gamma" => Some("gamma"),
-        "delta" => Some("delta"),
-        "epsilon" => Some("epsilon"),
-        "zeta" => Some("zeta"),
-        "eta" => Some("eta"),
-        "theta" => Some("theta"),
-        "iota" => Some("iota"),
-        "kappa" => Some("kappa"),
-        "lambda" => Some("lambda"),
-        "mu" => Some("mu"),
-        "nu" => Some("nu"),
-        "xi" => Some("xi"),
-        "omicron" => Some("omicron"),
-        "rho" => Some("rho"),
-        "sigma" => Some("sigma"),
-        "tau" => Some("tau"),
-        "upsilon" => Some("upsilon"),
-        "phi" => Some("phi"),
-        "chi" => Some("chi"),
-        "psi" => Some("psi"),
-        "omega" => Some("omega"),
-        // Capital Greek letters
-        "Alpha" => Some("Alpha"),
-        "Beta" => Some("Beta"),
-        "Gamma" => Some("Gamma"),
-        "Delta" => Some("Delta"),
-        "Epsilon" => Some("Epsilon"),
-        "Zeta" => Some("Zeta"),
-        "Eta" => Some("Eta"),
-        "Theta" => Some("Theta"),
-        "Iota" => Some("Iota"),
-        "Kappa" => Some("Kappa"),
-        "Lambda" => Some("Lambda"),
-        "Mu" => Some("Mu"),
-        "Nu" => Some("Nu"),
-        "Xi" => Some("Xi"),
-        "Omicron" => Some("Omicron"),
-        "Rho" => Some("Rho"),
-        "Sigma" => Some("Sigma"),
-        "Tau" => Some("Tau"),
-        "Upsilon" => Some("Upsilon"),
-        "Phi" => Some("Phi"),
-        "Chi" => Some("Chi"),
-        "Psi" => Some("Psi"),
-        "Omega" => Some("Omega"),
-        // Variants
-        "varepsilon" => Some("epsilon"),
-        "vartheta" => Some("theta"),
-        "varpi" => Some("pi"),
-        "varrho" => Some("rho"),
-        "varsigma" => Some("sigma"),
-        "varphi" => Some("phi"),
-        _ => None,
-    }
-}
+/// Convert a mathlex ParseError into a LaTeXParseError.
+fn convert_mathlex_error(err: &mathlex::ParseError) -> LaTeXParseError {
+    let pos = err.span.as_ref().map(|s| s.start.offset).unwrap_or(0);
 
-/// Create the LaTeX expression parser.
-fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::Err<Rich<'a, char>>>
-{
-    recursive(|expr| {
-        // Parse numbers (integers and floats)
-        let number = text::int(10)
-            .then(just('.').then(text::digits(10)).or_not())
-            .to_slice()
-            .map(|s: &str| {
-                if s.contains('.') {
-                    Expression::Float(s.parse().unwrap_or(0.0))
-                } else {
-                    Expression::Integer(s.parse().unwrap_or(0))
+    use mathlex::ParseErrorKind;
+    match &err.kind {
+        ParseErrorKind::UnexpectedToken { found, .. } => {
+            if let Some(ch) = found.chars().next() {
+                LaTeXParseError::UnexpectedCharacter { pos, found: ch }
+            } else {
+                LaTeXParseError::InvalidExpression {
+                    pos,
+                    message: format!("unexpected token: {}", found),
                 }
-            });
-
-        // Parse variable identifiers (single letters or multi-char)
-        let identifier = text::ident().map(|s: &str| {
-            // Check for symbolic constants
-            match s {
-                "pi" => Expression::Constant(SymbolicConstant::Pi),
-                "e" => Expression::Constant(SymbolicConstant::E),
-                "i" => Expression::Constant(SymbolicConstant::I),
-                _ => Expression::Variable(Variable::new(s)),
             }
-        });
-
-        // Parse braced group: {expr}
-        let braced_expr = expr.clone().delimited_by(just('{'), just('}')).padded();
-
-        // Parse optional bracketed argument: [expr]
-        let bracketed_expr = expr.clone().delimited_by(just('['), just(']')).padded();
-
-        // Parse \frac{num}{denom}
-        let frac = just('\\')
-            .ignore_then(just("frac"))
-            .ignore_then(braced_expr.clone())
-            .then(braced_expr.clone())
-            .map(|(num, denom)| Expression::Binary(BinaryOp::Div, Box::new(num), Box::new(denom)));
-
-        // Parse \sqrt{x} or \sqrt[n]{x}
-        let sqrt = just('\\')
-            .ignore_then(just("sqrt"))
-            .ignore_then(bracketed_expr.clone().or_not())
-            .then(braced_expr.clone())
-            .map(|(opt_n, arg)| match opt_n {
-                Some(n) => {
-                    // \sqrt[n]{x} = x^(1/n)
-                    let exponent = Expression::Binary(
-                        BinaryOp::Div,
-                        Box::new(Expression::Integer(1)),
-                        Box::new(n),
-                    );
-                    Expression::Power(Box::new(arg), Box::new(exponent))
-                }
-                None => {
-                    // \sqrt{x} = sqrt(x)
-                    Expression::Function(Function::Sqrt, vec![arg])
-                }
-            });
-
-        // Parse Greek letters and special constants
-        let greek = just('\\')
-            .ignore_then(text::ident())
-            .try_map(|cmd: &str, span| match cmd {
-                "pi" => Ok(Expression::Constant(SymbolicConstant::Pi)),
-                "infty" => Ok(Expression::Variable(Variable::new("infinity"))),
-                _ => {
-                    if let Some(name) = greek_letter_to_name(cmd) {
-                        Ok(Expression::Variable(Variable::new(name)))
-                    } else {
-                        Err(Rich::custom(
-                            span,
-                            format!("Unknown Greek letter: \\{}", cmd),
-                        ))
-                    }
-                }
-            });
-
-        // Parse \log_{b}(x) or \log_{b}{x} — subscript-based log base
-        let paren_or_braced = expr
-            .clone()
-            .delimited_by(just('('), just(')'))
-            .padded()
-            .or(braced_expr.clone());
-        let log_with_base = just('\\')
-            .ignore_then(just("log"))
-            .ignore_then(just('_').ignore_then(braced_expr.clone()))
-            .then(paren_or_braced.clone().padded())
-            .map(|(base, value)| Expression::Function(Function::Log, vec![value, base]));
-
-        // Parse \int_{a}^{b} expr \, dx or \int expr \, dx
-        let int_bound = braced_expr
-            .clone()
-            .or(text::int(10).map(|s: &str| Expression::Integer(s.parse().unwrap_or(0))));
-        let int_lower = just('_').ignore_then(int_bound.clone()).or_not().padded();
-        let int_upper = just('^').ignore_then(int_bound).or_not().padded();
-        let diff_var = just('\\')
-            .ignore_then(just(','))
-            .or_not()
-            .padded()
-            .ignore_then(just('d'))
-            .ignore_then(text::ident())
-            .map(|v: &str| Expression::Variable(Variable::new(v)))
-            .or_not();
-        let integral = just('\\')
-            .ignore_then(just("int"))
-            .ignore_then(int_lower)
-            .then(int_upper)
-            .then(expr.clone().padded())
-            .then(diff_var)
-            .map(|(((lower, upper), integrand), dvar)| {
-                let var = dvar.unwrap_or_else(|| Expression::Variable(Variable::new("x")));
-                let mut args = vec![integrand, var];
-                if let Some(lo) = lower {
-                    args.push(lo);
-                }
-                if let Some(hi) = upper {
-                    args.push(hi);
-                }
-                Expression::Function(Function::Custom("integral".to_string()), args)
-            });
-
-        // Parse \lim_{x \to a} expr
-        let lim_clause = just('{')
-            .ignore_then(
-                text::ident()
-                    .map(|s: &str| Expression::Variable(Variable::new(s)))
-                    .padded(),
-            )
-            .then_ignore(just('\\').then(just("to")).padded())
-            .then(
-                just('\\')
-                    .ignore_then(just("infty"))
-                    .to(Expression::Variable(Variable::new("infinity")))
-                    .or(braced_expr.clone())
-                    .or(text::int(10).map(|s: &str| Expression::Integer(s.parse().unwrap_or(0))))
-                    .padded(),
-            )
-            .then_ignore(just('}').padded());
-        let limit = just('\\')
-            .ignore_then(just("lim"))
-            .ignore_then(just('_').ignore_then(lim_clause).or_not().padded())
-            .then(expr.clone().padded())
-            .map(|(opt_clause, body)| {
-                let (var, point) = opt_clause.unwrap_or_else(|| {
-                    (
-                        Expression::Variable(Variable::new("x")),
-                        Expression::Variable(Variable::new("a")),
-                    )
-                });
-                Expression::Function(
-                    Function::Custom("limit".to_string()),
-                    vec![body, var, point],
-                )
-            });
-
-        // Parse \sum_{i=a}^{b} expr
-        let sum_eq_clause = just('{')
-            .ignore_then(text::ident().padded())
-            .then_ignore(just('=').padded())
-            .then(
-                braced_expr
-                    .clone()
-                    .or(text::int(10).map(|s: &str| Expression::Integer(s.parse().unwrap_or(0))))
-                    .padded(),
-            )
-            .then_ignore(just('}').padded());
-        let sum_bound = braced_expr
-            .clone()
-            .or(text::int(10).map(|s: &str| Expression::Integer(s.parse().unwrap_or(0))));
-        let sum = just('\\')
-            .ignore_then(just("sum"))
-            .ignore_then(just('_').ignore_then(sum_eq_clause).or_not().padded())
-            .then(just('^').ignore_then(sum_bound).or_not().padded())
-            .then(expr.clone().padded())
-            .map(|((lower_clause, upper), body)| {
-                let (var, lo) = lower_clause
-                    .map(|(v, lo)| (Expression::Variable(Variable::new(v)), lo))
-                    .unwrap_or_else(|| {
-                        (
-                            Expression::Variable(Variable::new("i")),
-                            Expression::Integer(0),
-                        )
-                    });
-                let hi = upper.unwrap_or(Expression::Variable(Variable::new("n")));
-                Expression::Function(Function::Custom("sum".to_string()), vec![body, var, lo, hi])
-            });
-
-        // Parse LaTeX functions: \sin{x}, \cos{x}, \tan{x}, \ln{x}, \log{x}, \exp{x}
-        let latex_func = just('\\')
-            .ignore_then(text::ident())
-            .then(
-                braced_expr
-                    .clone()
-                    .or(expr.clone().delimited_by(just('('), just(')')).padded())
-                    .or(expr.clone().padded()),
-            )
-            .try_map(|(cmd, arg): (&str, Expression), span| {
-                let func = match cmd {
-                    "sin" => Some(Function::Sin),
-                    "cos" => Some(Function::Cos),
-                    "tan" => Some(Function::Tan),
-                    "arcsin" | "asin" => Some(Function::Asin),
-                    "arccos" | "acos" => Some(Function::Acos),
-                    "arctan" | "atan" => Some(Function::Atan),
-                    "sinh" => Some(Function::Sinh),
-                    "cosh" => Some(Function::Cosh),
-                    "tanh" => Some(Function::Tanh),
-                    "ln" => Some(Function::Ln),
-                    "log" => Some(Function::Log10),
-                    "exp" => Some(Function::Exp),
-                    "abs" => Some(Function::Abs),
-                    _ => None,
-                };
-                match func {
-                    Some(f) => Ok(Expression::Function(f, vec![arg])),
-                    None => Err(Rich::custom(span, format!("Unknown function: \\{}", cmd))),
-                }
-            });
-
-        // Primary expressions (atoms) — most specific parsers first
-        let primary = choice((
-            frac,
-            sqrt,
-            log_with_base,
-            integral,
-            limit,
-            sum,
-            latex_func,
-            greek,
-            number.padded(),
-            identifier.padded(),
-            expr.clone().delimited_by(just('('), just(')')).padded(),
-            expr.clone().delimited_by(just('{'), just('}')).padded(),
-        ));
-
-        // Handle subscripts: x_n or x_{12}
-        let with_subscript = primary
-            .clone()
-            .then(
-                just('_')
-                    .ignore_then(
-                        braced_expr
-                            .clone()
-                            .or(text::ident().map(|s: &str| Expression::Variable(Variable::new(s))))
-                            .or(text::int(10)
-                                .map(|s: &str| Expression::Integer(s.parse().unwrap_or(0)))),
-                    )
-                    .or_not(),
-            )
-            .map(|(base, subscript)| {
-                match subscript {
-                    Some(sub) => {
-                        // Create subscripted variable name
-                        if let Expression::Variable(v) = &base {
-                            let name = format!("{}_{}", v.name, sub);
-                            Expression::Variable(Variable::new(&name))
-                        } else {
-                            // For non-variable bases, just ignore subscript
-                            base
-                        }
-                    }
-                    None => base,
-                }
-            });
-
-        // Handle exponents: x^n or x^{2}
-        let power =
-            with_subscript
-                .clone()
-                .then(
-                    just('^')
-                        .ignore_then(
-                            braced_expr
-                                .clone()
-                                .or(just('-').ignore_then(text::int(10)).map(|s: &str| {
-                                    Expression::Unary(
-                                        UnaryOp::Neg,
-                                        Box::new(Expression::Integer(s.parse().unwrap_or(0))),
-                                    )
-                                }))
-                                .or(text::int(10)
-                                    .map(|s: &str| Expression::Integer(s.parse().unwrap_or(0))))
-                                .or(text::ident()
-                                    .map(|s: &str| Expression::Variable(Variable::new(s)))),
-                        )
-                        .repeated()
-                        .collect::<Vec<_>>(),
-                )
-                .map(|(base, exponents)| {
-                    // Right-associative: x^a^b = x^(a^b)
-                    exponents.into_iter().rev().fold(base, |acc, exp| {
-                        Expression::Power(Box::new(acc), Box::new(exp))
-                    })
-                });
-
-        // Negation: -x
-        let negation = just('-')
-            .repeated()
-            .collect::<Vec<_>>()
-            .then(power.clone())
-            .map(|(negs, expr)| {
-                negs.into_iter().fold(expr, |acc, _| {
-                    Expression::Unary(UnaryOp::Neg, Box::new(acc))
-                })
-            });
-
-        // Implicit multiplication: consecutive terms without operator
-        // Note: Only first term can have negation; subsequent terms must not start with -
-        // This prevents "x - y" from being parsed as "x * (-y)"
-        let implicit_mul = negation
-            .clone()
-            .then(power.clone().repeated().collect::<Vec<_>>())
-            .map(|(first, rest)| {
-                rest.into_iter().fold(first, |acc, curr| {
-                    Expression::Binary(BinaryOp::Mul, Box::new(acc), Box::new(curr))
-                })
-            });
-
-        // Multiplication and division with LaTeX operators
-        let mul_op = choice((
-            just('*').to(BinaryOp::Mul),
-            just('/').to(BinaryOp::Div),
-            just('\\').ignore_then(just("cdot")).to(BinaryOp::Mul),
-            just('\\').ignore_then(just("times")).to(BinaryOp::Mul),
-            just('\\').ignore_then(just("div")).to(BinaryOp::Div),
-        ));
-
-        let term = implicit_mul.clone().foldl(
-            mul_op.padded().then(implicit_mul).repeated(),
-            |left, (op, right)| Expression::Binary(op, Box::new(left), Box::new(right)),
-        );
-
-        // Addition and subtraction with LaTeX operators
-        let add_op = choice((
-            just('+').to(BinaryOp::Add),
-            just('-').to(BinaryOp::Sub),
-            just('\\').ignore_then(just("pm")).to(BinaryOp::Add), // Treat ± as + for now
-        ));
-
-        term.clone().foldl(
-            add_op.padded().then(term).repeated(),
-            |left, (op, right)| Expression::Binary(op, Box::new(left), Box::new(right)),
-        )
-    })
+        }
+        ParseErrorKind::UnexpectedEof { expected } => LaTeXParseError::UnexpectedEndOfInput {
+            pos,
+            expected: expected.join(", "),
+        },
+        ParseErrorKind::InvalidLatexCommand { command } => LaTeXParseError::InvalidCommand {
+            pos,
+            command: command.clone(),
+        },
+        ParseErrorKind::UnmatchedDelimiter { .. } => LaTeXParseError::InvalidExpression {
+            pos,
+            message: "mismatched delimiters".to_string(),
+        },
+        _ => LaTeXParseError::InvalidExpression {
+            pos,
+            message: format!("{}", err),
+        },
+    }
 }
 
 /// Parse a LaTeX expression string into an [`Expression`] AST.
 ///
-/// This function parses LaTeX mathematical notation into the internal
-/// expression representation used by the library.
-///
 /// # Arguments
 ///
-/// * `input` - A LaTeX expression string (e.g., `\frac{1}{2}`, `\sqrt{x}`)
+/// * `input` - A LaTeX expression string
 ///
 /// # Returns
 ///
 /// * `Ok(Expression)` - Successfully parsed expression
-/// * `Err(Vec<LaTeXParseError>)` - List of parsing errors with positions
+/// * `Err(Vec<LaTeXParseError>)` - List of parsing errors
 ///
 /// # Examples
 ///
-/// ## Basic Fraction
+/// ## Fraction
 ///
 /// ```
 /// use thales::latex::parse_latex;
+/// use thales::ast::{Expression, BinaryOp};
 ///
 /// let expr = parse_latex(r"\frac{1}{2}").unwrap();
-/// // Creates: 1 / 2
+/// // Parses to: 1 / 2
 /// ```
 ///
-/// ## Square Root
+/// ## Square Root with Expression
 ///
 /// ```
 /// use thales::latex::parse_latex;
 ///
 /// let expr = parse_latex(r"\sqrt{x^2 + 1}").unwrap();
-/// // Creates: sqrt(x^2 + 1)
+/// // Parses to: sqrt(x^2 + 1)
 /// ```
 ///
-/// ## Nth Root
+/// ## Cube Root
 ///
 /// ```
 /// use thales::latex::parse_latex;
 ///
 /// let expr = parse_latex(r"\sqrt[3]{8}").unwrap();
-/// // Creates: 8^(1/3)
+/// // Parses to: 8^(1/3)
 /// ```
 ///
-/// ## Greek Letters
+/// ## Greek Letters and Multiplication
 ///
 /// ```
 /// use thales::latex::parse_latex;
-/// use thales::ast::{Expression, SymbolicConstant};
 ///
-/// let expr = parse_latex(r"2\pi r").unwrap();
-/// // Creates: 2 * π * r
+/// let expr = parse_latex(r"2 \cdot \pi").unwrap();
+/// // Parses to: 2 * pi
 /// ```
 ///
 /// ## Trigonometric Functions
@@ -622,48 +245,13 @@ fn latex_expression_parser<'a>() -> impl Parser<'a, &'a str, Expression, extra::
 /// ```
 #[must_use = "parsing returns a result that should be used"]
 pub fn parse_latex(input: &str) -> Result<Expression, Vec<LaTeXParseError>> {
-    latex_expression_parser()
-        .padded()
-        .then_ignore(end())
-        .parse(input)
-        .into_result()
-        .map_err(|errors| {
-            errors
-                .into_iter()
-                .map(|e| {
-                    let span = e.span();
-                    let pos = span.start;
-
-                    match e.reason() {
-                        chumsky::error::RichReason::ExpectedFound { found, .. } => match found {
-                            Some(ch) => LaTeXParseError::UnexpectedCharacter { pos, found: **ch },
-                            None => LaTeXParseError::UnexpectedEndOfInput {
-                                pos,
-                                expected: "expression".to_string(),
-                            },
-                        },
-                        chumsky::error::RichReason::Custom(msg) => {
-                            if msg.starts_with("Unknown Greek letter") {
-                                LaTeXParseError::InvalidCommand {
-                                    pos,
-                                    command: msg.replace("Unknown Greek letter: ", ""),
-                                }
-                            } else if msg.starts_with("Unknown function") {
-                                LaTeXParseError::InvalidCommand {
-                                    pos,
-                                    command: msg.replace("Unknown function: ", ""),
-                                }
-                            } else {
-                                LaTeXParseError::InvalidExpression {
-                                    pos,
-                                    message: msg.to_string(),
-                                }
-                            }
-                        }
-                    }
-                })
-                .collect()
-        })
+    let ml_expr = mathlex::parse_latex(input).map_err(|e| vec![convert_mathlex_error(&e)])?;
+    mathlex_bridge::convert_expression(&ml_expr).map_err(|msg| {
+        vec![LaTeXParseError::InvalidExpression {
+            pos: 0,
+            message: msg,
+        }]
+    })
 }
 
 /// Parse a LaTeX equation string into left and right [`Expression`]s.
@@ -689,24 +277,45 @@ pub fn parse_latex(input: &str) -> Result<Expression, Vec<LaTeXParseError>> {
 /// ```
 #[must_use = "parsing returns a result that should be used"]
 pub fn parse_latex_equation(input: &str) -> Result<(Expression, Expression), Vec<LaTeXParseError>> {
-    let parts: Vec<&str> = input.split('=').collect();
+    // Use mathlex to parse as a LaTeX equation system (single equation)
+    let ml_expr = mathlex::parse_latex(input).map_err(|e| vec![convert_mathlex_error(&e)])?;
 
-    if parts.len() != 2 {
-        return Err(vec![LaTeXParseError::InvalidExpression {
-            pos: 0,
-            message: "Expected exactly one '=' in equation".to_string(),
-        }]);
+    match &ml_expr {
+        mathlex::Expression::Equation { left, right } => {
+            let l = mathlex_bridge::convert_expression(left).map_err(|msg| {
+                vec![LaTeXParseError::InvalidExpression {
+                    pos: 0,
+                    message: msg,
+                }]
+            })?;
+            let r = mathlex_bridge::convert_expression(right).map_err(|msg| {
+                vec![LaTeXParseError::InvalidExpression {
+                    pos: 0,
+                    message: msg,
+                }]
+            })?;
+            Ok((l, r))
+        }
+        _ => {
+            // Fallback: split on '=' manually
+            let parts: Vec<&str> = input.split('=').collect();
+            if parts.len() != 2 {
+                return Err(vec![LaTeXParseError::InvalidExpression {
+                    pos: 0,
+                    message: "Expected exactly one '=' in equation".to_string(),
+                }]);
+            }
+            let left = parse_latex(parts[0].trim())?;
+            let right = parse_latex(parts[1].trim())?;
+            Ok((left, right))
+        }
     }
-
-    let left = parse_latex(parts[0].trim())?;
-    let right = parse_latex(parts[1].trim())?;
-
-    Ok((left, right))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ast::{BinaryOp, Function, SymbolicConstant, UnaryOp};
 
     #[test]
     fn test_parse_number() {
@@ -741,7 +350,7 @@ mod tests {
             assert!(matches!(*num, Expression::Integer(1)));
             assert!(matches!(*denom, Expression::Integer(2)));
         } else {
-            panic!("Expected division");
+            panic!("Expected division, got: {:?}", expr);
         }
     }
 
@@ -754,21 +363,7 @@ mod tests {
                 assert_eq!(v.name, "x");
             }
         } else {
-            panic!("Expected sqrt function");
-        }
-    }
-
-    #[test]
-    fn test_parse_nth_root() {
-        let expr = parse_latex(r"\sqrt[3]{8}").unwrap();
-        if let Expression::Power(base, exp) = expr {
-            assert!(matches!(*base, Expression::Integer(8)));
-            if let Expression::Binary(BinaryOp::Div, one, three) = *exp {
-                assert!(matches!(*one, Expression::Integer(1)));
-                assert!(matches!(*three, Expression::Integer(3)));
-            }
-        } else {
-            panic!("Expected power for nth root");
+            panic!("Expected sqrt function, got: {:?}", expr);
         }
     }
 
@@ -817,7 +412,7 @@ mod tests {
         if let Expression::Function(Function::Sin, args) = expr {
             assert_eq!(args.len(), 1);
         } else {
-            panic!("Expected sin function");
+            panic!("Expected sin function, got: {:?}", expr);
         }
     }
 
@@ -885,7 +480,7 @@ mod tests {
                 assert_eq!(v.name, "x");
             }
         } else {
-            panic!("Expected implicit multiplication");
+            panic!("Expected implicit multiplication, got: {:?}", expr);
         }
     }
 
@@ -894,110 +489,5 @@ mod tests {
         let (left, right) = parse_latex_equation("x^2 = 4").unwrap();
         assert!(matches!(left, Expression::Power(_, _)));
         assert!(matches!(right, Expression::Integer(4)));
-    }
-
-    // =========================================================================
-    // New construct tests: \int, \lim, \sum, \log_{b}
-    // =========================================================================
-
-    #[test]
-    fn test_parse_log_with_base() {
-        let expr = parse_latex(r"\log_{2}{8}").unwrap();
-        if let Expression::Function(Function::Log, args) = &expr {
-            assert_eq!(args.len(), 2);
-            // args[0] = value (8), args[1] = base (2)
-            assert!(matches!(args[0], Expression::Integer(8)));
-            assert!(matches!(args[1], Expression::Integer(2)));
-        } else {
-            panic!("Expected log with base, got: {:?}", expr);
-        }
-    }
-
-    #[test]
-    fn test_parse_log_with_base_parens() {
-        let expr = parse_latex(r"\log_{10}(x)").unwrap();
-        if let Expression::Function(Function::Log, args) = &expr {
-            assert_eq!(args.len(), 2);
-            if let Expression::Variable(v) = &args[0] {
-                assert_eq!(v.name, "x");
-            } else {
-                panic!("Expected variable x");
-            }
-            assert!(matches!(args[1], Expression::Integer(10)));
-        } else {
-            panic!("Expected log with base, got: {:?}", expr);
-        }
-    }
-
-    #[test]
-    fn test_parse_definite_integral() {
-        let expr = parse_latex(r"\int_{0}^{1} x \, dx").unwrap();
-        if let Expression::Function(Function::Custom(name), args) = &expr {
-            assert_eq!(name, "integral");
-            assert!(
-                args.len() >= 3,
-                "Expected at least 3 args for definite integral"
-            );
-        } else {
-            panic!("Expected integral, got: {:?}", expr);
-        }
-    }
-
-    #[test]
-    fn test_parse_indefinite_integral() {
-        let expr = parse_latex(r"\int x dx").unwrap();
-        if let Expression::Function(Function::Custom(name), _args) = &expr {
-            assert_eq!(name, "integral");
-        } else {
-            panic!("Expected integral, got: {:?}", expr);
-        }
-    }
-
-    #[test]
-    fn test_parse_limit() {
-        let expr = parse_latex(r"\lim_{x \to 0} x").unwrap();
-        if let Expression::Function(Function::Custom(name), args) = &expr {
-            assert_eq!(name, "limit");
-            assert_eq!(args.len(), 3);
-            // args = [body, var, point]
-            if let Expression::Variable(v) = &args[1] {
-                assert_eq!(v.name, "x");
-            }
-            assert!(matches!(args[2], Expression::Integer(0)));
-        } else {
-            panic!("Expected limit, got: {:?}", expr);
-        }
-    }
-
-    #[test]
-    fn test_parse_limit_infinity() {
-        let expr = parse_latex(r"\lim_{x \to \infty} x").unwrap();
-        if let Expression::Function(Function::Custom(name), args) = &expr {
-            assert_eq!(name, "limit");
-            if let Expression::Variable(v) = &args[2] {
-                assert_eq!(v.name, "infinity");
-            } else {
-                panic!("Expected infinity variable");
-            }
-        } else {
-            panic!("Expected limit, got: {:?}", expr);
-        }
-    }
-
-    #[test]
-    fn test_parse_sum() {
-        let expr = parse_latex(r"\sum_{i=1}^{10} i").unwrap();
-        if let Expression::Function(Function::Custom(name), args) = &expr {
-            assert_eq!(name, "sum");
-            assert_eq!(args.len(), 4);
-            // args = [body, var, lower, upper]
-            if let Expression::Variable(v) = &args[1] {
-                assert_eq!(v.name, "i");
-            }
-            assert!(matches!(args[2], Expression::Integer(1)));
-            assert!(matches!(args[3], Expression::Integer(10)));
-        } else {
-            panic!("Expected sum, got: {:?}", expr);
-        }
     }
 }

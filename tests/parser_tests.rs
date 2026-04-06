@@ -8,8 +8,8 @@ fn test_simple_integer() {
     let result = parse_expression("42");
     assert!(result.is_ok());
     match result.unwrap() {
-        Expression::Float(n) => assert_eq!(n, 42.0),
-        _ => panic!("Expected Float"),
+        Expression::Integer(n) => assert_eq!(n, 42),
+        _ => panic!("Expected Integer"),
     }
 }
 
@@ -19,11 +19,11 @@ fn test_simple_addition() {
     assert!(result.is_ok());
     match result.unwrap() {
         Expression::Binary(BinaryOp::Add, left, right) => match (*left, *right) {
-            (Expression::Float(l), Expression::Float(r)) => {
-                assert_eq!(l, 2.0);
-                assert_eq!(r, 3.0);
+            (Expression::Integer(l), Expression::Integer(r)) => {
+                assert_eq!(l, 2);
+                assert_eq!(r, 3);
             }
-            _ => panic!("Expected Float operands"),
+            _ => panic!("Expected Integer operands"),
         },
         _ => panic!("Expected Binary Add"),
     }
@@ -51,11 +51,11 @@ fn test_power_operation() {
     assert!(result.is_ok());
     match result.unwrap() {
         Expression::Power(base, exp) => match (*base, *exp) {
-            (Expression::Variable(v), Expression::Float(n)) => {
+            (Expression::Variable(v), Expression::Integer(n)) => {
                 assert_eq!(v.name, "a");
-                assert_eq!(n, 2.0);
+                assert_eq!(n, 2);
             }
-            _ => panic!("Expected Variable base and Float exponent"),
+            _ => panic!("Expected Variable base and Integer exponent"),
         },
         _ => panic!("Expected Power"),
     }
@@ -82,16 +82,16 @@ fn test_operator_precedence_mul_add() {
     match result.unwrap() {
         Expression::Binary(BinaryOp::Add, left, right) => {
             match *left {
-                Expression::Float(n) => assert_eq!(n, 2.0),
-                _ => panic!("Expected Float on left"),
+                Expression::Integer(n) => assert_eq!(n, 2),
+                _ => panic!("Expected Integer on left"),
             }
             match *right {
                 Expression::Binary(BinaryOp::Mul, l, r) => match (*l, *r) {
-                    (Expression::Float(n1), Expression::Float(n2)) => {
-                        assert_eq!(n1, 3.0);
-                        assert_eq!(n2, 4.0);
+                    (Expression::Integer(n1), Expression::Integer(n2)) => {
+                        assert_eq!(n1, 3);
+                        assert_eq!(n2, 4);
                     }
-                    _ => panic!("Expected Float operands in multiplication"),
+                    _ => panic!("Expected Integer operands in multiplication"),
                 },
                 _ => panic!("Expected Binary Mul on right"),
             }
@@ -108,16 +108,16 @@ fn test_operator_precedence_power_mul() {
     match result.unwrap() {
         Expression::Binary(BinaryOp::Mul, left, right) => {
             match *left {
-                Expression::Float(n) => assert_eq!(n, 2.0),
-                _ => panic!("Expected Float on left"),
+                Expression::Integer(n) => assert_eq!(n, 2),
+                _ => panic!("Expected Integer on left"),
             }
             match *right {
                 Expression::Power(base, exp) => match (*base, *exp) {
-                    (Expression::Float(b), Expression::Float(e)) => {
-                        assert_eq!(b, 3.0);
-                        assert_eq!(e, 4.0);
+                    (Expression::Integer(b), Expression::Integer(e)) => {
+                        assert_eq!(b, 3);
+                        assert_eq!(e, 4);
                     }
-                    _ => panic!("Expected Float operands in power"),
+                    _ => panic!("Expected Integer operands in power"),
                 },
                 _ => panic!("Expected Power on right"),
             }
@@ -134,16 +134,16 @@ fn test_right_associative_power() {
     match result.unwrap() {
         Expression::Power(base, exp) => {
             match *base {
-                Expression::Float(n) => assert_eq!(n, 2.0),
-                _ => panic!("Expected Float base"),
+                Expression::Integer(n) => assert_eq!(n, 2),
+                _ => panic!("Expected Integer base"),
             }
             match *exp {
                 Expression::Power(inner_base, inner_exp) => match (*inner_base, *inner_exp) {
-                    (Expression::Float(b), Expression::Float(e)) => {
-                        assert_eq!(b, 3.0);
-                        assert_eq!(e, 4.0);
+                    (Expression::Integer(b), Expression::Integer(e)) => {
+                        assert_eq!(b, 3);
+                        assert_eq!(e, 4);
                     }
-                    _ => panic!("Expected Float operands in inner power"),
+                    _ => panic!("Expected Integer operands in inner power"),
                 },
                 _ => panic!("Expected Power as exponent"),
             }
@@ -178,11 +178,11 @@ fn test_function_log_two_args() {
             assert_eq!(func, Function::Log);
             assert_eq!(args.len(), 2);
             match (&args[0], &args[1]) {
-                (Expression::Float(n), Expression::Variable(v)) => {
-                    assert_eq!(*n, 10.0);
+                (Expression::Integer(n), Expression::Variable(v)) => {
+                    assert_eq!(*n, 10);
                     assert_eq!(v.name, "x");
                 }
-                _ => panic!("Expected Float and Variable arguments"),
+                _ => panic!("Expected Integer and Variable arguments"),
             }
         }
         _ => panic!("Expected Function"),
@@ -216,8 +216,8 @@ fn test_equation_simple() {
         _ => panic!("Expected Binary Add on left"),
     }
     match eq.right {
-        Expression::Float(n) => assert_eq!(n, 5.0),
-        _ => panic!("Expected Float on right"),
+        Expression::Integer(n) => assert_eq!(n, 5),
+        _ => panic!("Expected Integer on right"),
     }
 }
 
@@ -654,7 +654,7 @@ fn test_parse_two_pi() {
     assert!(result.is_ok());
     match result.unwrap() {
         Expression::Binary(BinaryOp::Mul, left, right) => {
-            assert!(matches!(*left, Expression::Float(n) if n == 2.0));
+            assert!(matches!(*left, Expression::Integer(n) if n == 2));
             assert!(matches!(*right, Expression::Constant(SymbolicConstant::Pi)));
         }
         other => panic!("Expected Binary Mul, got {:?}", other),
@@ -681,10 +681,10 @@ fn test_parse_complex_number_form() {
     assert!(result.is_ok());
     match result.unwrap() {
         Expression::Binary(BinaryOp::Add, left, right) => {
-            assert!(matches!(*left, Expression::Float(n) if n == 3.0));
+            assert!(matches!(*left, Expression::Integer(n) if n == 3));
             match *right {
                 Expression::Binary(BinaryOp::Mul, l, r) => {
-                    assert!(matches!(*l, Expression::Float(n) if n == 2.0));
+                    assert!(matches!(*l, Expression::Integer(n) if n == 2));
                     assert!(matches!(*r, Expression::Constant(SymbolicConstant::I)));
                 }
                 other => panic!("Expected Binary Mul, got {:?}", other),
@@ -705,7 +705,7 @@ fn test_implicit_mul_number_variable() {
     assert!(result.is_ok());
     match result.unwrap() {
         Expression::Binary(BinaryOp::Mul, left, right) => {
-            assert!(matches!(*left, Expression::Float(n) if n == 2.0));
+            assert!(matches!(*left, Expression::Integer(n) if n == 2));
             assert!(matches!(*right, Expression::Variable(ref v) if v.name == "x"));
         }
         other => panic!("Expected Binary Mul, got {:?}", other),
@@ -746,7 +746,7 @@ fn test_implicit_mul_number_paren() {
     assert!(result.is_ok());
     match result.unwrap() {
         Expression::Binary(BinaryOp::Mul, left, right) => {
-            assert!(matches!(*left, Expression::Float(n) if n == 2.0));
+            assert!(matches!(*left, Expression::Integer(n) if n == 2));
             match *right {
                 Expression::Binary(BinaryOp::Add, _, _) => {}
                 other => panic!("Expected Binary Add in parens, got {:?}", other),
@@ -777,7 +777,7 @@ fn test_implicit_mul_with_spaces() {
     assert!(result.is_ok());
     match result.unwrap() {
         Expression::Binary(BinaryOp::Mul, left, right) => {
-            assert!(matches!(*left, Expression::Float(n) if n == 2.0));
+            assert!(matches!(*left, Expression::Integer(n) if n == 2));
             assert!(matches!(*right, Expression::Variable(ref v) if v.name == "x"));
         }
         other => panic!("Expected Binary Mul, got {:?}", other),
@@ -793,7 +793,7 @@ fn test_implicit_mul_three_terms() {
         Expression::Binary(BinaryOp::Mul, left, right) => {
             match *left {
                 Expression::Binary(BinaryOp::Mul, ll, lr) => {
-                    assert!(matches!(*ll, Expression::Float(n) if n == 2.0));
+                    assert!(matches!(*ll, Expression::Integer(n) if n == 2));
                     assert!(matches!(*lr, Expression::Variable(ref v) if v.name == "x"));
                 }
                 other => panic!("Expected Binary Mul on left, got {:?}", other),
@@ -811,7 +811,7 @@ fn test_implicit_mul_number_multichar_var() {
     assert!(result.is_ok());
     match result.unwrap() {
         Expression::Binary(BinaryOp::Mul, left, right) => {
-            assert!(matches!(*left, Expression::Float(n) if n == 2.0));
+            assert!(matches!(*left, Expression::Integer(n) if n == 2));
             assert!(matches!(*right, Expression::Variable(ref v) if v.name == "xy"));
         }
         other => panic!("Expected Binary Mul, got {:?}", other),
@@ -825,7 +825,7 @@ fn test_implicit_mul_with_pi() {
     assert!(result.is_ok());
     match result.unwrap() {
         Expression::Binary(BinaryOp::Mul, left, right) => {
-            assert!(matches!(*left, Expression::Float(n) if n == 2.0));
+            assert!(matches!(*left, Expression::Integer(n) if n == 2));
             assert!(matches!(*right, Expression::Constant(SymbolicConstant::Pi)));
         }
         other => panic!("Expected Binary Mul, got {:?}", other),
@@ -855,14 +855,14 @@ fn test_complex_expr_with_implicit_mul() {
         Expression::Binary(BinaryOp::Add, left, right) => {
             match *left {
                 Expression::Binary(BinaryOp::Mul, ll, lr) => {
-                    assert!(matches!(*ll, Expression::Float(n) if n == 2.0));
+                    assert!(matches!(*ll, Expression::Integer(n) if n == 2));
                     assert!(matches!(*lr, Expression::Variable(ref v) if v.name == "x"));
                 }
                 other => panic!("Expected Binary Mul on left, got {:?}", other),
             }
             match *right {
                 Expression::Binary(BinaryOp::Mul, rl, rr) => {
-                    assert!(matches!(*rl, Expression::Float(n) if n == 3.0));
+                    assert!(matches!(*rl, Expression::Integer(n) if n == 3));
                     assert!(matches!(*rr, Expression::Variable(ref v) if v.name == "y"));
                 }
                 other => panic!("Expected Binary Mul on right, got {:?}", other),

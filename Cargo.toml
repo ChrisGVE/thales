@@ -16,7 +16,7 @@ readme = "README.md"
 crate-type = ["staticlib", "cdylib", "lib"]
 
 [dependencies]
-chumsky = "1.0.0-alpha.8"
+mathlex = { path = "../mathlex", features = ["serde"] }
 num = "0.4"
 num-bigint = "0.4"
 num-complex = "0.4"
