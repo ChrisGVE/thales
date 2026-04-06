@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-06
+
+### Added
+
+- **Parser migration**: migrate parsing to the mathlex shared library for cross-project consistency
+- **LAPACK support**: optional LAPACK backend for matrix operations (accelerate, netlib, openblas)
+- **Numerical optimizers**: gradient descent and Levenberg-Marquardt nonlinear least squares
+- **Brent's method**: root-finding algorithm for robust numerical solutions
+- **ODE/integration solvers**: wire ODE and numerical integration into the equation system solver
+- **LaTeX parsing**: support for `\int`, `\lim`, `\sum`, and `\log_{b}` expressions
+- **Equation system parsing**: `parse_equation_system` for semicolon-separated equations
+- **FFI expansion**: ODE solver types, Laurent/asymptotic series, beta/erfc special functions
+- **Swift wrappers**: series and special function wrappers for the Swift bridge
+- **Transforms**: complex nth roots via De Moivre's theorem, 2D translation/rotation/scaling
+- **Dimensions**: dimension arithmetic and display formatting
+- **Simplification**: wire pattern matching rules into `Expression::simplify`
+- **DocC documentation**: expanded coverage for ODE, series, parsing, and result types
+
+### Fixed
+
+- Normalize log argument order to `log(value, base)` convention
+- Fix FFI parse error formatting (use Debug for vectors, Display for output)
+- Fix numerical integration aliasing bug
+- Fix Runge-Kutta doc test missing unwrap on Result
+- Replace string-based equality with structural expression comparison in integration
+- Remove dead code (unused functions in solver, series modules)
+- Correct documentation claims to match implemented reality
+- Update test expectations for implicit multiplication changes
+
 ## [0.3.3] - 2026-01-17
 
 ### Fixed

@@ -63,7 +63,7 @@ import Foundation
 public enum Thales {
 
   /// The current version of Thales
-  public static let version = "0.3.3"
+  public static let version = "0.4.0"
 }
 
 // MARK: - Error Types

@@ -16,7 +16,7 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ChrisGVE/thales.git", from: "0.3.3")
+    .package(url: "https://github.com/ChrisGVE/thales.git", from: "0.4.0")
 ]
 ```
 
