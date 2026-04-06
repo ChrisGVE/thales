@@ -399,14 +399,14 @@ use num_complex::Complex64;
 fn parse_equation_ffi(input: &str) -> Result<String, String> {
     parse_equation(input)
         .map(|eq| format!("{}", eq))
-        .map_err(|e| format!("Parse error: {}", e))
+        .map_err(|e| format!("Parse error: {:?}", e))
 }
 
 /// Parse expression and return string representation.
 fn parse_expression_ffi(input: &str) -> Result<String, String> {
     parse_expression(input)
         .map(|expr| format!("{}", expr))
-        .map_err(|e| format!("Parse error: {}", e))
+        .map_err(|e| format!("Parse error: {:?}", e))
 }
 
 /// Solve equation symbolically.
