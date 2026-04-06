@@ -1035,15 +1035,24 @@ impl MatrixExpr {
             MatrixError::InvalidOperation("Cannot evaluate matrix numerically".to_string())
         })?;
 
-        match self.rows {
-            1 => Ok(vec![elements[0][0]]),
-            2 => self.eigenvalues_2x2(&elements),
-            3 => self.eigenvalues_3x3(&elements),
-            _ => self.eigenvalues_qr(&elements),
+        #[cfg(feature = "lapack")]
+        {
+            crate::lapack::eigenvalues(&elements).map_err(MatrixError::InvalidOperation)
+        }
+
+        #[cfg(not(feature = "lapack"))]
+        {
+            match self.rows {
+                1 => Ok(vec![elements[0][0]]),
+                2 => self.eigenvalues_2x2(&elements),
+                3 => self.eigenvalues_3x3(&elements),
+                _ => self.eigenvalues_qr(&elements),
+            }
         }
     }
 
     /// Compute eigenvalues for a 2x2 matrix using the quadratic formula.
+    #[cfg(not(feature = "lapack"))]
     fn eigenvalues_2x2(&self, elements: &[Vec<f64>]) -> MatrixResult<Vec<f64>> {
         let a = elements[0][0];
         let b = elements[0][1];
@@ -1070,6 +1079,7 @@ impl MatrixExpr {
     }
 
     /// Compute eigenvalues for a 3x3 matrix using Cardano's formula.
+    #[cfg(not(feature = "lapack"))]
     fn eigenvalues_3x3(&self, elements: &[Vec<f64>]) -> MatrixResult<Vec<f64>> {
         // For 3x3, we solve the cubic characteristic equation
         // det(A - λI) = -λ³ + tr(A)λ² - (sum of 2x2 principal minors)λ + det(A)
@@ -1103,6 +1113,7 @@ impl MatrixExpr {
     }
 
     /// Compute eigenvalues using QR algorithm for larger matrices.
+    #[cfg(not(feature = "lapack"))]
     fn eigenvalues_qr(&self, elements: &[Vec<f64>]) -> MatrixResult<Vec<f64>> {
         // Simple QR iteration
         let n = elements.len();
@@ -1161,62 +1172,70 @@ impl MatrixExpr {
             MatrixError::InvalidOperation("Cannot evaluate matrix numerically".to_string())
         })?;
 
-        let n = self.rows;
-
-        // Compute A - λI
-        let mut a_minus_lambda: Vec<Vec<f64>> = elements.clone();
-        for i in 0..n {
-            a_minus_lambda[i][i] -= eigenvalue;
+        #[cfg(feature = "lapack")]
+        {
+            crate::lapack::eigenvector(&elements, eigenvalue).map_err(MatrixError::InvalidOperation)
         }
 
-        // Use inverse iteration to find eigenvector
-        // Start with a random vector
-        let mut v: Vec<f64> = (0..n).map(|i| (i + 1) as f64).collect();
+        #[cfg(not(feature = "lapack"))]
+        {
+            let n = self.rows;
 
-        // Normalize
-        let norm: f64 = v.iter().map(|x| x * x).sum::<f64>().sqrt();
-        for x in &mut v {
-            *x /= norm;
-        }
-
-        // Inverse iteration: solve (A - λI)w = v, then v = w/||w||
-        // Since A - λI is singular (or near-singular), we perturb slightly
-        const MAX_ITER: usize = 50;
-        const TOL: f64 = 1e-8;
-
-        for _ in 0..MAX_ITER {
-            // Solve (A - λI + εI)w = v using Gaussian elimination
-            let mut augmented = a_minus_lambda.clone();
+            // Compute A - λI
+            let mut a_minus_lambda: Vec<Vec<f64>> = elements.clone();
             for i in 0..n {
-                augmented[i][i] += 1e-10; // Small perturbation
+                a_minus_lambda[i][i] -= eigenvalue;
             }
 
-            // Solve using Gaussian elimination
-            let w = solve_linear_system(&augmented, &v);
+            // Use inverse iteration to find eigenvector
+            // Start with a random vector
+            let mut v: Vec<f64> = (0..n).map(|i| (i + 1) as f64).collect();
 
             // Normalize
-            let norm: f64 = w.iter().map(|x| x * x).sum::<f64>().sqrt();
-            if norm < 1e-14 {
-                break;
+            let norm: f64 = v.iter().map(|x| x * x).sum::<f64>().sqrt();
+            for x in &mut v {
+                *x /= norm;
             }
 
-            let w_normalized: Vec<f64> = w.iter().map(|x| x / norm).collect();
+            // Inverse iteration: solve (A - λI)w = v, then v = w/||w||
+            // Since A - λI is singular (or near-singular), we perturb slightly
+            const MAX_ITER: usize = 50;
+            const TOL: f64 = 1e-8;
 
-            // Check convergence
-            let diff: f64 = v
-                .iter()
-                .zip(w_normalized.iter())
-                .map(|(a, b)| (a - b).abs())
-                .sum();
+            for _ in 0..MAX_ITER {
+                // Solve (A - λI + εI)w = v using Gaussian elimination
+                let mut augmented = a_minus_lambda.clone();
+                for i in 0..n {
+                    augmented[i][i] += 1e-10; // Small perturbation
+                }
 
-            v = w_normalized;
+                // Solve using Gaussian elimination
+                let w = solve_linear_system(&augmented, &v);
 
-            if diff < TOL {
-                break;
+                // Normalize
+                let norm: f64 = w.iter().map(|x| x * x).sum::<f64>().sqrt();
+                if norm < 1e-14 {
+                    break;
+                }
+
+                let w_normalized: Vec<f64> = w.iter().map(|x| x / norm).collect();
+
+                // Check convergence
+                let diff: f64 = v
+                    .iter()
+                    .zip(w_normalized.iter())
+                    .map(|(a, b)| (a - b).abs())
+                    .sum();
+
+                v = w_normalized;
+
+                if diff < TOL {
+                    break;
+                }
             }
+
+            Ok(v)
         }
-
-        Ok(v)
     }
 
     /// Compute all eigenpairs (eigenvalue, eigenvector) numerically.
@@ -1225,15 +1244,34 @@ impl MatrixExpr {
     ///
     /// Returns an error if the matrix is not square.
     pub fn eigenpairs_numeric(&self) -> MatrixResult<Vec<(f64, Vec<f64>)>> {
-        let eigenvalues = self.eigenvalues_numeric()?;
-        let mut pairs = Vec::with_capacity(eigenvalues.len());
+        #[cfg(feature = "lapack")]
+        {
+            if !self.is_square() {
+                return Err(MatrixError::InvalidOperation(
+                    "Eigenpairs require a square matrix".to_string(),
+                ));
+            }
 
-        for eigenvalue in eigenvalues {
-            let eigenvector = self.eigenvector_numeric(eigenvalue)?;
-            pairs.push((eigenvalue, eigenvector));
+            let empty = std::collections::HashMap::new();
+            let elements = self.evaluate(&empty).ok_or_else(|| {
+                MatrixError::InvalidOperation("Cannot evaluate matrix numerically".to_string())
+            })?;
+
+            crate::lapack::eigenpairs(&elements).map_err(MatrixError::InvalidOperation)
         }
 
-        Ok(pairs)
+        #[cfg(not(feature = "lapack"))]
+        {
+            let eigenvalues = self.eigenvalues_numeric()?;
+            let mut pairs = Vec::with_capacity(eigenvalues.len());
+
+            for eigenvalue in eigenvalues {
+                let eigenvector = self.eigenvector_numeric(eigenvalue)?;
+                pairs.push((eigenvalue, eigenvector));
+            }
+
+            Ok(pairs)
+        }
     }
 
     /// Check if the matrix is diagonalizable.
@@ -1362,10 +1400,11 @@ impl fmt::Display for MatrixExpr {
 }
 
 // =============================================================================
-// Helper functions for eigenvalue computation
+// Helper functions for eigenvalue computation (fallback when LAPACK is not available)
 // =============================================================================
 
 /// Solve cubic equation x³ + p*x² + q*x + r = 0 using Cardano's formula.
+#[cfg(not(feature = "lapack"))]
 fn solve_cubic(p: f64, q: f64, r: f64) -> MatrixResult<Vec<f64>> {
     // Depress the cubic: substitute x = t - p/3
     // t³ + at + b = 0 where:
@@ -1418,6 +1457,7 @@ fn solve_cubic(p: f64, q: f64, r: f64) -> MatrixResult<Vec<f64>> {
 }
 
 /// QR decomposition using Gram-Schmidt process.
+#[cfg(not(feature = "lapack"))]
 fn qr_decomposition(a: &[Vec<f64>]) -> (Vec<Vec<f64>>, Vec<Vec<f64>>) {
     let n = a.len();
     let mut q = vec![vec![0.0; n]; n];
@@ -1449,11 +1489,13 @@ fn qr_decomposition(a: &[Vec<f64>]) -> (Vec<Vec<f64>>, Vec<Vec<f64>>) {
 }
 
 /// Dot product of two vectors.
+#[cfg(not(feature = "lapack"))]
 fn dot_product(a: &[f64], b: &[f64]) -> f64 {
     a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
 }
 
 /// Matrix multiplication for f64 matrices.
+#[cfg(not(feature = "lapack"))]
 fn matrix_multiply(a: &[Vec<f64>], b: &[Vec<f64>]) -> Vec<Vec<f64>> {
     let n = a.len();
     let mut result = vec![vec![0.0; n]; n];
@@ -1470,6 +1512,7 @@ fn matrix_multiply(a: &[Vec<f64>], b: &[Vec<f64>]) -> Vec<Vec<f64>> {
 }
 
 /// Solve linear system Ax = b using Gaussian elimination with partial pivoting.
+#[cfg(not(feature = "lapack"))]
 fn solve_linear_system(a: &[Vec<f64>], b: &[f64]) -> Vec<f64> {
     let n = a.len();
 

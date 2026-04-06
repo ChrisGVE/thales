@@ -419,6 +419,10 @@ pub mod trigonometric;
 // User guides for common workflows
 pub mod guides;
 
+// LAPACK-accelerated linear algebra (conditionally compiled)
+#[cfg(feature = "lapack")]
+pub mod lapack;
+
 // FFI module (conditionally compiled for FFI builds)
 #[cfg(feature = "ffi")]
 pub mod ffi;

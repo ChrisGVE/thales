@@ -119,6 +119,23 @@ The following constructs are not currently parsed and will return an error:
 - Partial derivatives: `\partial`
 - Matrix environments: `\begin{matrix}`, `\begin{pmatrix}`, `\begin{bmatrix}`, etc.
 
+## Optional LAPACK Acceleration
+
+Enable hardware-accelerated matrix operations (eigenvalues, eigenvectors, QR decomposition, linear system solving) by selecting a LAPACK backend:
+
+```toml
+# macOS / iOS — links against Apple Accelerate.framework
+thales = { version = "0.3", features = ["lapack-accelerate"] }
+
+# Linux — uses reference LAPACK (requires liblapack-dev / gfortran)
+thales = { version = "0.3", features = ["lapack-netlib"] }
+
+# Linux — uses OpenBLAS (requires libopenblas-dev)
+thales = { version = "0.3", features = ["lapack-openblas"] }
+```
+
+The `lapack` feature is an alias for `lapack-accelerate`. Without any LAPACK feature, thales uses pure-Rust implementations for all numerical linear algebra.
+
 ## iOS Cross-Compilation
 
 Build for iOS with FFI support:

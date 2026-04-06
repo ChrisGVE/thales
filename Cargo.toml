@@ -27,10 +27,15 @@ fasteval = "0.2"
 swift-bridge = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+nalgebra-lapack = { version = "0.25", optional = true, default-features = false }
 
 [features]
 default = []
 ffi = []
+lapack = ["dep:nalgebra-lapack"]
+lapack-accelerate = ["lapack", "nalgebra-lapack/accelerate"]
+lapack-netlib = ["lapack", "nalgebra-lapack/netlib"]
+lapack-openblas = ["lapack", "nalgebra-lapack/openblas"]
 
 [build-dependencies]
 swift-bridge-build = "0.1"
