@@ -104,16 +104,18 @@ Thales can parse LaTeX mathematical notation into its internal expression tree v
 | Subscripts | `x_{n}` or `x_n` | `x_{1}`, `x_{12}` |
 | Greek letters | `\alpha`, `\beta`, `\pi`, etc. | `\alpha`, `\theta`, `\pi` |
 | Trig functions | `\sin`, `\cos`, `\tan`, etc. | `\sin{x}`, `\cos(\theta)` |
-| Logarithms / exp | `\ln`, `\log`, `\exp` | `\ln{x}`, `\log_{10}{x}` |
+| Logarithms / exp | `\ln`, `\log`, `\exp` | `\ln{x}`, `\log_{10}{x}`, `\log_{2}{8}` |
+| Integrals | `\int_{a}^{b} expr \, dx` | `\int_{0}^{1} x \, dx`, `\int x dx` |
+| Limits | `\lim_{x \to a}` | `\lim_{x \to 0} x`, `\lim_{x \to \infty} x` |
+| Sums | `\sum_{i=a}^{b}` | `\sum_{i=1}^{10} i` |
 | Operators | `\cdot`, `\times`, `\div`, `\pm` | `a \cdot b`, `2 \times 3` |
 
 ### Not yet supported
 
 The following constructs are not currently parsed and will return an error:
 
-- Integrals: `\int`, `\iint`, `\oint`
-- Limits: `\lim`
-- Sums and products: `\sum`, `\prod`
+- Double/contour integrals: `\iint`, `\oint`
+- Products: `\prod`
 - Partial derivatives: `\partial`
 - Matrix environments: `\begin{matrix}`, `\begin{pmatrix}`, `\begin{bmatrix}`, etc.
 

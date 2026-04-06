@@ -18,9 +18,9 @@ This document tracks the implementation status of Thales features against the PR
 | Equation system parsing | Yes | Yes | Yes | Implemented | Via JSON array in FFI |
 | Implicit multiplication | Yes | Yes | Yes | Implemented | `2x`, `3sin(x)` |
 | LaTeX input (basic) | Yes | Yes | Yes | Implemented | Fractions, roots, greek letters, trig |
-| LaTeX input (integrals) | No | No | No | Planned | `\int`, `\iint` |
-| LaTeX input (limits) | No | No | No | Planned | `\lim_{x \to a}` |
-| LaTeX input (summation) | No | No | No | Planned | `\sum_{i=a}^{b}` |
+| LaTeX input (integrals) | Yes | No | No | In Progress | `\int`, `\int_{a}^{b}` — FFI/Swift pending |
+| LaTeX input (limits) | Yes | No | No | In Progress | `\lim_{x \to a}` — FFI/Swift pending |
+| LaTeX input (summation) | Yes | No | No | In Progress | `\sum_{i=a}^{b}` — FFI/Swift pending |
 | LaTeX input (matrices) | No | No | No | Planned | `\begin{pmatrix}` |
 | LaTeX input (partial) | No | No | No | Planned | `\partial` |
 | LaTeX output | Yes | Yes | Yes | Implemented | `to_latex()` |
@@ -65,7 +65,7 @@ This document tracks the implementation status of Thales features against the PR
 | Maclaurin series | Yes | Yes | Yes | Implemented | |
 | Laurent series | Yes | Yes | Yes | Implemented | |
 | Asymptotic series | Yes | Yes | Yes | Implemented | |
-| Fourier series | Yes | No | No | In Progress | FFI/Swift pending |
+| Fourier series | Yes | Yes | No | In Progress | Swift wrapper pending |
 | Series composition | Yes | No | No | Implemented | Rust-only |
 | Series reversion | Yes | No | No | Implemented | Rust-only |
 
@@ -76,10 +76,10 @@ This document tracks the implementation status of Thales features against the PR
 | 1st-order separable | Yes | Yes | Yes | Implemented | |
 | 1st-order linear | Yes | Yes | Yes | Implemented | |
 | 1st-order IVP | Yes | Yes | Yes | Implemented | |
-| 2nd-order homogeneous | Yes | No | No | In Progress | FFI pending |
-| 2nd-order IVP | Yes | No | No | In Progress | FFI pending |
-| Higher-order (constant coeff) | Yes | No | No | In Progress | FFI pending |
-| Runge-Kutta (RK4) | Yes | No | No | In Progress | FFI pending |
+| 2nd-order homogeneous | Yes | Yes | No | In Progress | Swift wrapper pending |
+| 2nd-order IVP | Yes | Yes | No | In Progress | Swift wrapper pending |
+| Higher-order (constant coeff) | Yes | Yes | No | In Progress | Swift wrapper pending |
+| Runge-Kutta (RK4) | Yes | Yes | No | In Progress | Swift wrapper pending |
 | ODE systems (numerical) | Yes | No | No | In Progress | FFI pending |
 | Variation of parameters | No | No | No | Planned | |
 
@@ -92,8 +92,8 @@ This document tracks the implementation status of Thales features against the PR
 | Brent's method | Yes | Yes | Yes | Implemented | |
 | Secant method | Yes | No | No | Implemented | Rust-only, tested |
 | Smart solver (auto-select) | Yes | Yes | Yes | Implemented | |
-| Gradient descent | No | No | No | Planned | Struct exists, method stubbed |
-| Levenberg-Marquardt | No | No | No | Planned | Struct exists, method stubbed |
+| Gradient descent | Yes | No | No | Implemented | Rust-only |
+| Levenberg-Marquardt | Yes | No | No | Implemented | Rust-only |
 
 ## Special Functions
 
@@ -127,8 +127,8 @@ This document tracks the implementation status of Thales features against the PR
 
 | Feature | Rust | FFI | Swift | Status | Notes |
 |---------|------|-----|-------|--------|-------|
-| Precision-controlled evaluation | Yes | No | No | In Progress | FFI pending |
-| Manual computation optimization | Yes | No | No | In Progress | FFI pending |
+| Precision-controlled evaluation | Yes | Yes | No | In Progress | Swift wrapper pending |
+| Manual computation optimization | Yes | Yes | No | In Progress | Swift wrapper pending |
 | Small angle approximations | Yes | Yes | Yes | Implemented | |
 
 ## Expression Simplification
