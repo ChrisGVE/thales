@@ -42,6 +42,8 @@
 //! - [`BinaryOp`] - Binary operators
 //! - [`Function`] - Mathematical functions
 
+use crate::pattern::apply_rules_to_fixpoint;
+use crate::simplification_rules::all_simplification_rules;
 use num_complex::Complex64;
 use num_rational::Rational64;
 use serde::{Deserialize, Serialize};
@@ -387,6 +389,12 @@ impl Equation {
     }
 }
 
+impl fmt::Display for Equation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} = {}", self.left, self.right)
+    }
+}
+
 /// Represents a mathematical expression in tree form.
 ///
 /// An `Expression` is a recursive data structure that can represent any mathematical
@@ -551,6 +559,11 @@ impl fmt::Display for SymbolicConstant {
     }
 }
 
+/// A mathematical expression in the AST.
+///
+/// Represents any mathematical value or operation, from simple numeric literals
+/// to complex nested expressions involving variables, operators, and functions.
+/// This is the core type for building and manipulating symbolic mathematics.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     /// Integer literal.
@@ -1174,13 +1187,14 @@ pub enum Function {
     /// ln(x) or logₑ(x)
     Ln,
 
-    /// Logarithm with arbitrary base: log(x, base)
+    /// Logarithm with arbitrary base: log(value, base)
     ///
-    /// Returns the logarithm of x to the given base.
+    /// Returns the logarithm of `value` in the given `base`.
+    /// With a single argument, log(value) is equivalent to log10(value).
     ///
     /// # Mathematical notation
     ///
-    /// log_base(x)
+    /// log_base(value)
     Log,
 
     /// Binary logarithm: log2(x)
@@ -1740,12 +1754,12 @@ impl Expression {
                         r"\text{pow}"
                     }
                     Function::Log => {
-                        // log(base, x) -> \log_{base}(x)
+                        // log(value, base) -> \log_{base}(value)
                         if args.len() == 2 {
                             return format!(
                                 r"\log_{{{}}}{{{}}}",
-                                args[0].to_latex_inner(0),
-                                args[1].to_latex_inner(0)
+                                args[1].to_latex_inner(0),
+                                args[0].to_latex_inner(0)
                             );
                         }
                         r"\log"
@@ -2452,7 +2466,9 @@ impl Expression {
             _ => self.clone(),
         };
 
-        simplified
+        // Apply pattern-matching simplification rules as a final pass
+        let rules = all_simplification_rules();
+        apply_rules_to_fixpoint(&simplified, &rules, 20)
     }
 
     /// Check if expression is zero.
@@ -3557,8 +3573,30 @@ impl Expression {
                     Function::Cosh => Some(arg_vals.get(0)?.cosh()),
                     Function::Tanh => Some(arg_vals.get(0)?.tanh()),
                     Function::Exp => Some(arg_vals.get(0)?.exp()),
-                    Function::Ln => Some(arg_vals.get(0)?.ln()),
-                    Function::Log => Some(arg_vals.get(0)?.log(*arg_vals.get(1)?)),
+                    Function::Ln => {
+                        let x = *arg_vals.get(0)?;
+                        if x > 0.0 {
+                            Some(x.ln())
+                        } else {
+                            None
+                        }
+                    }
+                    Function::Log => {
+                        let value = *arg_vals.get(0)?;
+                        if arg_vals.len() >= 2 {
+                            let base = *arg_vals.get(1)?;
+                            if value > 0.0 && base > 0.0 {
+                                Some(value.log(base))
+                            } else {
+                                None
+                            }
+                        } else if value > 0.0 {
+                            // Single-arg log(x) = log10(x)
+                            Some(value.log10())
+                        } else {
+                            None
+                        }
+                    }
                     Function::Log2 => Some(arg_vals.get(0)?.log2()),
                     Function::Log10 => Some(arg_vals.get(0)?.log10()),
                     Function::Sqrt => Some(arg_vals.get(0)?.sqrt()),

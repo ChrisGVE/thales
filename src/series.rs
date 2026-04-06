@@ -2108,40 +2108,6 @@ pub fn asymptotic(
     Ok(series)
 }
 
-/// Substitute x = 1/t for infinity analysis.
-fn substitute_for_infinity(expr: &Expression, var: &Variable) -> Expression {
-    match expr {
-        Expression::Variable(v) if v == var => {
-            // x -> 1/t
-            let t = Variable::new("__t");
-            Expression::Binary(
-                BinaryOp::Div,
-                Box::new(Expression::Integer(1)),
-                Box::new(Expression::Variable(t)),
-            )
-        }
-        Expression::Binary(op, left, right) => Expression::Binary(
-            *op,
-            Box::new(substitute_for_infinity(left, var)),
-            Box::new(substitute_for_infinity(right, var)),
-        ),
-        Expression::Unary(op, inner) => {
-            Expression::Unary(*op, Box::new(substitute_for_infinity(inner, var)))
-        }
-        Expression::Power(base, exp) => Expression::Power(
-            Box::new(substitute_for_infinity(base, var)),
-            Box::new(substitute_for_infinity(exp, var)),
-        ),
-        Expression::Function(f, args) => Expression::Function(
-            f.clone(),
-            args.iter()
-                .map(|a| substitute_for_infinity(a, var))
-                .collect(),
-        ),
-        _ => expr.clone(),
-    }
-}
-
 /// Extract asymptotic terms from an expression.
 fn extract_asymptotic_terms(
     expr: &Expression,

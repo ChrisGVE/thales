@@ -42,7 +42,7 @@
 //! println!("x = {}", solution.value); // x ≈ 2.236
 //! ```
 
-use crate::ast::{Equation, Expression, Variable};
+use crate::ast::{BinaryOp, Equation, Expression, Variable};
 use crate::resolution_path::{Operation, ResolutionPath};
 use std::collections::HashMap;
 
@@ -557,6 +557,54 @@ impl NewtonRaphson {
 }
 
 /// Secant method root finder (derivative-free).
+///
+/// Implements the secant method for finding roots of equations.  Instead of
+/// evaluating the analytical (or symbolic) derivative, the secant method
+/// approximates it from two previous function evaluations:
+///
+/// **x_{n+1} = x_n - f(x_n) · (x_n - x_{n-1}) / (f(x_n) - f(x_{n-1}))**
+///
+/// # Convergence
+///
+/// * **Super-linear convergence**: order ≈ 1.618 (golden ratio) when the
+///   starting points are close to the root.
+/// * **No bracketing required**: unlike bisection, the root need not lie
+///   between the two initial points.
+/// * **No derivative needed**: useful when symbolic or numerical
+///   differentiation is expensive or unavailable.
+///
+/// # Failure modes
+///
+/// * The denominator `f(x_n) - f(x_{n-1})` can become very small (near a
+///   local extremum), causing the next iterate to fly far from the root.
+///   The solver returns [`NumericalError::Unstable`] in that case.
+/// * Starting points that are too far from the root may diverge; the solver
+///   returns [`NumericalError::NoConvergence`] after `max_iterations`.
+///
+/// # Example
+///
+/// ```
+/// use thales::numerical::{SecantMethod, NumericalConfig};
+/// use thales::ast::{Equation, Expression, Variable};
+///
+/// // Solve x² = 2  (find √2)
+/// let equation = Equation::new(
+///     "sqrt2",
+///     Expression::Power(
+///         Box::new(Expression::Variable(Variable::new("x"))),
+///         Box::new(Expression::Integer(2)),
+///     ),
+///     Expression::Integer(2),
+/// );
+///
+/// let solver = SecantMethod::with_default_config();
+/// let (solution, _path) = solver
+///     .solve(&equation, &Variable::new("x"), (1.0, 2.0))
+///     .unwrap();
+///
+/// assert!((solution.value - std::f64::consts::SQRT_2).abs() < 1e-10);
+/// assert!(solution.converged);
+/// ```
 #[derive(Debug)]
 pub struct SecantMethod {
     config: NumericalConfig,
@@ -580,15 +628,60 @@ impl SecantMethod {
     }
 
     /// Find a root using the secant method.
+    ///
+    /// # Arguments
+    ///
+    /// * `equation` - The equation to solve (interpreted as `lhs - rhs = 0`)
+    /// * `variable` - The variable to solve for
+    /// * `initial_points` - Two distinct starting points `(x0, x1)`; they do
+    ///   not need to bracket the root
+    ///
+    /// # Errors
+    ///
+    /// * [`NumericalError::Unstable`] – denominator too close to zero
+    /// * [`NumericalError::NoConvergence`] – max iterations reached
+    /// * [`NumericalError::EvaluationFailed`] – function evaluation failed
     pub fn solve(
         &self,
-        _equation: &Equation,
-        _variable: &Variable,
+        equation: &Equation,
+        variable: &Variable,
+        initial_points: (f64, f64),
     ) -> NumericalResult<(NumericalSolution, ResolutionPath)> {
-        // TODO: Implement secant method
-        // Uses two initial points instead of derivative
-        // x_{n+1} = x_n - f(x_n) * (x_n - x_{n-1}) / (f(x_n) - f(x_{n-1}))
-        Err(NumericalError::Other("Not yet implemented".to_string()))
+        use crate::resolution_path::ResolutionPathBuilder;
+
+        let (f, eval) = secant_make_eval(equation, variable);
+        let (mut x_prev, mut x_curr) = initial_points;
+        let mut f_prev = eval(x_prev)?;
+        let mut f_curr = eval(x_curr)?;
+
+        let mut path = ResolutionPathBuilder::new(f);
+        path = path.step(
+            Operation::NumericalApproximation,
+            format!(
+                "Starting secant: x0={x_prev}, x1={x_curr}: \
+                 f(x0)={f_prev:.6e}, f(x1)={f_curr:.6e}"
+            ),
+            Expression::Float(x_curr),
+        );
+
+        let (solution, x_final) = secant_iterate(
+            &eval,
+            &mut path,
+            &mut x_prev,
+            &mut x_curr,
+            &mut f_prev,
+            &mut f_curr,
+            self.config.max_iterations,
+            self.config.tolerance,
+        )?;
+
+        path = path.step(
+            Operation::NumericalApproximation,
+            format!("Converged: x={x_final:.15}, |f(x)|={:.6e}", f_curr.abs()),
+            Expression::Float(x_final),
+        );
+
+        Ok((solution, path.finish(Expression::Float(x_final))))
     }
 }
 
@@ -861,6 +954,38 @@ impl BisectionMethod {
 }
 
 /// Brent's method (hybrid root finder, very robust).
+///
+/// Implements Brent's method, a root-finding algorithm that combines the
+/// reliability of bisection with the speed of the secant method and inverse
+/// quadratic interpolation.
+///
+/// At each step the algorithm picks the fastest method whose step falls within
+/// the current bracket and is smaller than half the previous step; otherwise it
+/// falls back to bisection.  This guarantees convergence whenever the root is
+/// bracketed while achieving super-linear convergence in practice.
+///
+/// # Example
+///
+/// ```
+/// use thales::numerical::{BrentsMethod, NumericalConfig};
+/// use thales::ast::{Equation, Expression, Variable};
+///
+/// // Solve x² = 2  (find √2)
+/// let equation = Equation::new(
+///     "sqrt2",
+///     Expression::Power(
+///         Box::new(Expression::Variable(Variable::new("x"))),
+///         Box::new(Expression::Integer(2)),
+///     ),
+///     Expression::Integer(2),
+/// );
+///
+/// let solver = BrentsMethod::with_default_config();
+/// let (solution, _path) = solver.solve(&equation, &Variable::new("x"), (1.0, 2.0)).unwrap();
+///
+/// assert!((solution.value - std::f64::consts::SQRT_2).abs() < 1e-10);
+/// assert!(solution.converged);
+/// ```
 #[derive(Debug)]
 pub struct BrentsMethod {
     config: NumericalConfig,
@@ -884,16 +1009,86 @@ impl BrentsMethod {
     }
 
     /// Find a root using Brent's method.
+    ///
+    /// Requires a bracketing interval `(a, b)` such that `f(a)` and `f(b)` have
+    /// opposite signs.  Returns an error if the interval does not bracket a root.
+    ///
+    /// # Errors
+    ///
+    /// * `NumericalError::Other` – interval does not bracket a root
+    /// * `NumericalError::NoConvergence` – max iterations reached
+    /// * `NumericalError::EvaluationFailed` – function evaluation failed
     pub fn solve(
         &self,
-        _equation: &Equation,
-        _variable: &Variable,
-        _interval: (f64, f64),
+        equation: &Equation,
+        variable: &Variable,
+        interval: (f64, f64),
     ) -> NumericalResult<(NumericalSolution, ResolutionPath)> {
-        // TODO: Implement Brent's method
-        // Combines bisection, secant, and inverse quadratic interpolation
-        // Very robust and efficient
-        Err(NumericalError::Other("Not yet implemented".to_string()))
+        use crate::resolution_path::ResolutionPathBuilder;
+
+        let (f, eval) = brent_make_eval(equation, variable);
+        let (mut a, mut b, mut fa, mut fb) = brent_init_bracket(interval, &eval)?;
+
+        let mut path = ResolutionPathBuilder::new(f);
+        path = path.step(
+            Operation::NumericalApproximation,
+            format!("Starting Brent on [{a}, {b}]: f(a)={fa:.6e}, f(b)={fb:.6e}"),
+            Expression::Float(b),
+        );
+
+        let mut st = BrentState {
+            c: a,
+            fc: fa,
+            d: b - a,
+            e: b - a,
+            mflag: true,
+        };
+        let mut iterations = 0;
+        let mut converged = false;
+
+        for i in 0..self.config.max_iterations {
+            iterations = i + 1;
+            if fb.abs() < self.config.tolerance {
+                converged = true;
+                break;
+            }
+
+            let (s, bisected) = brent_next_point(a, b, fa, fb, &st, self.config.tolerance);
+            st.mflag = bisected;
+            let fs = eval(s)?;
+
+            if i % 10 == 0 {
+                let method = if bisected { "bisect" } else { "interpolate" };
+                path = path.step(
+                    Operation::NumericalApproximation,
+                    format!("Iter {iterations}: x={s:.10}, f(x)={fs:.6e} [{method}]"),
+                    Expression::Float(s),
+                );
+            }
+
+            brent_update_bracket(&mut a, &mut b, &mut st, &mut fa, &mut fb, s, fs);
+            if (b - a).abs() < self.config.tolerance {
+                converged = true;
+                break;
+            }
+        }
+
+        if !converged {
+            return Err(NumericalError::NoConvergence);
+        }
+
+        path = path.step(
+            Operation::NumericalApproximation,
+            format!("Converged: x={b:.15}, |f(x)|={:.6e}", fb.abs()),
+            Expression::Float(b),
+        );
+        let sol = NumericalSolution {
+            value: b,
+            iterations,
+            residual: fb.abs(),
+            converged,
+        };
+        Ok((sol, path.finish(Expression::Float(b))))
     }
 }
 
@@ -918,20 +1113,88 @@ impl GradientDescent {
         }
     }
 
-    /// Minimize an expression with respect to variables.
+    /// Minimize an expression with respect to the given variables.
+    ///
+    /// Uses symbolic differentiation to compute gradients and iteratively
+    /// updates variable values in the direction of steepest descent.
+    ///
+    /// # Arguments
+    ///
+    /// * `expression` - The objective function to minimize
+    /// * `variables` - Variables to optimize over
+    ///
+    /// # Returns
+    ///
+    /// A mapping from each variable to its optimized value, or an error
+    /// if the method fails to converge.
     pub fn minimize(
         &self,
-        _expression: &Expression,
-        _variables: &[Variable],
+        expression: &Expression,
+        variables: &[Variable],
     ) -> NumericalResult<HashMap<Variable, f64>> {
-        // TODO: Implement gradient descent
-        // TODO: Compute gradient using symbolic differentiation or finite differences
-        // TODO: Support momentum and adaptive learning rates
-        Err(NumericalError::Other("Not yet implemented".to_string()))
+        if variables.is_empty() {
+            return Err(NumericalError::Other(
+                "No variables to optimize".to_string(),
+            ));
+        }
+
+        // Compute symbolic derivatives for each variable
+        let derivatives: Vec<Expression> = variables
+            .iter()
+            .map(|v| expression.differentiate(&v.name))
+            .collect();
+
+        // Initialize values from initial_guess or default to 1.0
+        let mut values: HashMap<String, f64> = variables
+            .iter()
+            .map(|v| (v.name.clone(), self.config.initial_guess.unwrap_or(1.0)))
+            .collect();
+
+        let mut prev_value = f64::INFINITY;
+
+        for _iteration in 0..self.config.max_iterations {
+            // Evaluate objective function
+            let current_value = expression.evaluate(&values).ok_or_else(|| {
+                NumericalError::EvaluationFailed("Failed to evaluate objective".to_string())
+            })?;
+
+            // Check convergence
+            if (prev_value - current_value).abs() < self.config.tolerance {
+                return Ok(variables
+                    .iter()
+                    .map(|v| (v.clone(), values[&v.name]))
+                    .collect());
+            }
+            prev_value = current_value;
+
+            // Compute and apply gradient updates
+            for (i, var) in variables.iter().enumerate() {
+                let grad = derivatives[i].evaluate(&values).ok_or_else(|| {
+                    NumericalError::EvaluationFailed(format!(
+                        "Failed to evaluate gradient for {}",
+                        var.name
+                    ))
+                })?;
+
+                if !grad.is_finite() {
+                    return Err(NumericalError::Unstable);
+                }
+
+                let current = values[&var.name];
+                values.insert(var.name.clone(), current - self.learning_rate * grad);
+            }
+        }
+
+        Err(NumericalError::NoConvergence)
     }
 }
 
 /// Levenberg-Marquardt algorithm for nonlinear least squares.
+///
+/// Minimizes the sum of squared residuals `Σ (lhs_i - rhs_i)²` by
+/// iteratively solving a damped Gauss-Newton system. The damping
+/// parameter λ interpolates between gradient descent (large λ) and
+/// Gauss-Newton (small λ), providing robust convergence.
 #[derive(Debug)]
 pub struct LevenbergMarquardt {
     config: NumericalConfig,
@@ -939,10 +1202,6 @@ pub struct LevenbergMarquardt {
 
 impl LevenbergMarquardt {
     /// Creates a new Levenberg-Marquardt solver with custom configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - Numerical configuration (tolerance, iterations, etc.)
     pub fn new(config: NumericalConfig) -> Self {
         Self { config }
     }
@@ -955,16 +1214,172 @@ impl LevenbergMarquardt {
     }
 
     /// Solve nonlinear least squares problem.
+    ///
+    /// Finds variable values that minimize `Σ (lhs_i - rhs_i)²` over
+    /// the given equations, using a damped Gauss-Newton iteration.
     pub fn solve_least_squares(
         &self,
-        _equations: &[Equation],
-        _variables: &[Variable],
+        equations: &[Equation],
+        variables: &[Variable],
     ) -> NumericalResult<HashMap<Variable, f64>> {
-        // TODO: Implement Levenberg-Marquardt using argmin
-        // TODO: Useful for overdetermined systems
-        // TODO: Minimizes sum of squared residuals
-        Err(NumericalError::Other("Not yet implemented".to_string()))
+        if equations.is_empty() || variables.is_empty() {
+            return Err(NumericalError::Other(
+                "Need at least one equation and one variable".to_string(),
+            ));
+        }
+
+        let n = variables.len();
+
+        // Build residual expressions: lhs - rhs for each equation
+        let residuals: Vec<Expression> = equations
+            .iter()
+            .map(|eq| {
+                Expression::Binary(
+                    BinaryOp::Sub,
+                    Box::new(eq.left.clone()),
+                    Box::new(eq.right.clone()),
+                )
+            })
+            .collect();
+
+        // Build symbolic Jacobian: J[i][j] = d(residual_i) / d(variable_j)
+        let jacobian: Vec<Vec<Expression>> = residuals
+            .iter()
+            .map(|r| variables.iter().map(|v| r.differentiate(&v.name)).collect())
+            .collect();
+
+        // Initialize variable values
+        let mut vals: HashMap<String, f64> = variables
+            .iter()
+            .map(|v| (v.name.clone(), self.config.initial_guess.unwrap_or(0.0)))
+            .collect();
+
+        let mut lambda = 1e-3_f64;
+
+        for _iter in 0..self.config.max_iterations {
+            // Evaluate residuals and cost
+            let r_vals: Vec<f64> = residuals
+                .iter()
+                .map(|r| r.evaluate(&vals).unwrap_or(f64::NAN))
+                .collect();
+
+            if r_vals.iter().any(|v| !v.is_finite()) {
+                return Err(NumericalError::Unstable);
+            }
+
+            let cost: f64 = r_vals.iter().map(|v| v * v).sum();
+            if cost < self.config.tolerance * self.config.tolerance {
+                return Ok(variables
+                    .iter()
+                    .map(|v| (v.clone(), vals[&v.name]))
+                    .collect());
+            }
+
+            // Evaluate Jacobian matrix
+            let j_vals: Vec<Vec<f64>> = jacobian
+                .iter()
+                .map(|row| {
+                    row.iter()
+                        .map(|e| e.evaluate(&vals).unwrap_or(0.0))
+                        .collect()
+                })
+                .collect();
+
+            // Compute J^T * J and J^T * r
+            let mut jtj = vec![vec![0.0; n]; n];
+            let mut jtr = vec![0.0; n];
+
+            for (i, j_row) in j_vals.iter().enumerate() {
+                for j in 0..n {
+                    jtr[j] += j_row[j] * r_vals[i];
+                    for k in 0..n {
+                        jtj[j][k] += j_row[j] * j_row[k];
+                    }
+                }
+            }
+
+            // Add damping: (J^T J + λI) δ = -J^T r
+            for j in 0..n {
+                jtj[j][j] += lambda;
+            }
+
+            // Solve the linear system using simple Gaussian elimination
+            let delta = solve_linear_nxn(&jtj, &jtr.iter().map(|v| -v).collect::<Vec<_>>())
+                .ok_or_else(|| NumericalError::Other("Singular matrix".to_string()))?;
+
+            // Trial step
+            let mut trial = vals.clone();
+            for (j, var) in variables.iter().enumerate() {
+                *trial.get_mut(&var.name).unwrap() += delta[j];
+            }
+
+            let trial_cost: f64 = residuals
+                .iter()
+                .map(|r| r.evaluate(&trial).unwrap_or(f64::NAN).powi(2))
+                .sum();
+
+            if trial_cost < cost {
+                vals = trial;
+                lambda *= 0.5;
+            } else {
+                lambda *= 2.0;
+            }
+
+            if delta.iter().map(|d| d.abs()).fold(0.0_f64, f64::max) < self.config.tolerance {
+                return Ok(variables
+                    .iter()
+                    .map(|v| (v.clone(), vals[&v.name]))
+                    .collect());
+            }
+        }
+
+        Err(NumericalError::NoConvergence)
     }
+}
+
+/// Solve an NxN linear system Ax = b via Gaussian elimination with partial pivoting.
+fn solve_linear_nxn(a: &[Vec<f64>], b: &[f64]) -> Option<Vec<f64>> {
+    let n = b.len();
+    let mut aug: Vec<Vec<f64>> = a
+        .iter()
+        .enumerate()
+        .map(|(i, row)| {
+            let mut r = row.clone();
+            r.push(b[i]);
+            r
+        })
+        .collect();
+
+    for col in 0..n {
+        // Partial pivoting
+        let max_row =
+            (col..n).max_by(|&a, &b| aug[a][col].abs().partial_cmp(&aug[b][col].abs()).unwrap())?;
+        aug.swap(col, max_row);
+
+        let pivot = aug[col][col];
+        if pivot.abs() < 1e-15 {
+            return None;
+        }
+
+        for row in (col + 1)..n {
+            let factor = aug[row][col] / pivot;
+            for j in col..=n {
+                let val = aug[col][j];
+                aug[row][j] -= factor * val;
+            }
+        }
+    }
+
+    // Back substitution
+    let mut x = vec![0.0; n];
+    for i in (0..n).rev() {
+        let mut sum = aug[i][n];
+        for j in (i + 1)..n {
+            sum -= aug[i][j] * x[j];
+        }
+        x[i] = sum / aug[i][i];
+    }
+    Some(x)
 }
 
 /// Smart numerical solver that automatically selects the best method.
@@ -1234,6 +1649,9 @@ impl Default for Evaluator {
 /// Compute derivative using finite differences (central difference method).
 ///
 /// f'(x) ≈ [f(x + h) - f(x - h)] / (2h)
+///
+/// Used by [`GradientDescent::minimize`] once that method is implemented (task 24).
+#[allow(dead_code)]
 fn compute_derivative_fd(
     expr: &Expression,
     variable: &Variable,
@@ -1341,6 +1759,248 @@ fn bracket_root(
     }
 
     None
+}
+
+/// Auxiliary state carried between iterations of Brent's method.
+struct BrentState {
+    /// Previous best estimate (before last swap)
+    c: f64,
+    /// f(c)
+    fc: f64,
+    /// Step from the iteration before last
+    d: f64,
+    /// Step from last iteration
+    e: f64,
+    /// Was the last accepted step a bisection?
+    mflag: bool,
+}
+
+/// Build the residual expression `f(x) = lhs - rhs` and a point-evaluator closure.
+///
+/// The returned closure owns all data it needs (cloned from the inputs).
+fn brent_make_eval(
+    equation: &Equation,
+    variable: &Variable,
+) -> (Expression, impl Fn(f64) -> NumericalResult<f64>) {
+    let f = Expression::Binary(
+        crate::ast::BinaryOp::Sub,
+        Box::new(equation.left.clone()),
+        Box::new(equation.right.clone()),
+    );
+    let f_owned = f.clone();
+    let var_name = variable.name.clone();
+    let eval = move |xv: f64| -> NumericalResult<f64> {
+        let mut vars = HashMap::new();
+        vars.insert(var_name.clone(), xv);
+        f_owned.evaluate(&vars).ok_or_else(|| {
+            NumericalError::EvaluationFailed(format!("Failed to evaluate at x = {xv}"))
+        })
+    };
+    (f, eval)
+}
+
+/// Validate and orient the initial bracket for Brent's method.
+///
+/// Returns `(a, b, fa, fb)` with the guarantee that `|f(b)| <= |f(a)|`.
+/// Errors if `f(a)` and `f(b)` have the same sign (no root bracketed).
+fn brent_init_bracket(
+    interval: (f64, f64),
+    eval: &impl Fn(f64) -> NumericalResult<f64>,
+) -> NumericalResult<(f64, f64, f64, f64)> {
+    let (mut a, mut b) = interval;
+    let mut fa = eval(a)?;
+    let mut fb = eval(b)?;
+    if fa * fb > 0.0 {
+        return Err(NumericalError::Other(format!(
+            "Brent's method requires f(a) and f(b) to have opposite signs. \
+             f({}) = {}, f({}) = {}",
+            a, fa, b, fb
+        )));
+    }
+    if fa.abs() < fb.abs() {
+        std::mem::swap(&mut a, &mut b);
+        std::mem::swap(&mut fa, &mut fb);
+    }
+    Ok((a, b, fa, fb))
+}
+
+/// Compute and validate the next Brent step, falling back to bisection when needed.
+///
+/// Returns `(step_value, used_bisection)`.
+fn brent_next_point(a: f64, b: f64, fa: f64, fb: f64, st: &BrentState, tol: f64) -> (f64, bool) {
+    let s = brent_interpolation_step(a, b, st.c, fa, fb, st.fc, tol);
+    let bisect_mid = (a + b) / 2.0;
+    let lo = (3.0 * a + b) / 4.0;
+    let hi = b;
+    let in_bracket = if lo <= hi {
+        lo <= s && s <= hi
+    } else {
+        hi <= s && s <= lo
+    };
+    let reject = !in_bracket
+        || (st.mflag && (s - b).abs() >= (b - st.c).abs() / 2.0)
+        || (!st.mflag && (s - b).abs() >= st.e.abs() / 2.0)
+        || (st.mflag && (b - st.c).abs() < tol)
+        || (!st.mflag && st.e.abs() < tol);
+    if reject {
+        (bisect_mid, true)
+    } else {
+        (s, false)
+    }
+}
+
+/// Update the bracket and `BrentState` after evaluating the accepted step.
+///
+/// Maintains `f(a) * f(b) <= 0` and `|f(b)| <= |f(a)|`.
+fn brent_update_bracket(
+    a: &mut f64,
+    b: &mut f64,
+    st: &mut BrentState,
+    fa: &mut f64,
+    fb: &mut f64,
+    s_final: f64,
+    fs: f64,
+) {
+    st.d = st.e;
+    st.e = *b - *a;
+    st.c = *b;
+    st.fc = *fb;
+    if *fa * fs < 0.0 {
+        *b = s_final;
+        *fb = fs;
+    } else {
+        *a = s_final;
+        *fa = fs;
+    }
+    if fa.abs() < fb.abs() {
+        std::mem::swap(a, b);
+        std::mem::swap(fa, fb);
+    }
+}
+
+/// Compute the raw interpolation candidate (IQI or secant) for Brent's method.
+///
+/// Returns a value that may lie outside the bracket; the caller (`brent_next_point`)
+/// decides whether to use it or fall back to bisection.
+fn brent_interpolation_step(a: f64, b: f64, c: f64, fa: f64, fb: f64, fc: f64, tol: f64) -> f64 {
+    if (fa - fc).abs() > tol && (fb - fc).abs() > tol {
+        let r = fb / fc;
+        let s = fb / fa;
+        let t = fa / fc;
+        let p = s * (t * (r - t) * (c - b) - (1.0 - r) * (b - a));
+        let q = (t - 1.0) * (r - 1.0) * (s - 1.0);
+        if q.abs() > tol {
+            return b + p / q;
+        }
+    }
+    let denom = fb - fa;
+    if denom.abs() > tol {
+        b - fb * (b - a) / denom
+    } else {
+        b + 2.0 * (b - a) // signal: outside bracket, force bisection
+    }
+}
+
+// ============================================================================
+// Secant method helpers
+// ============================================================================
+
+/// Build the residual expression `f(x) = lhs - rhs` and a point-evaluator
+/// closure for the secant method (identical pattern to `brent_make_eval`).
+fn secant_make_eval(
+    equation: &Equation,
+    variable: &Variable,
+) -> (Expression, impl Fn(f64) -> NumericalResult<f64>) {
+    let f = Expression::Binary(
+        crate::ast::BinaryOp::Sub,
+        Box::new(equation.left.clone()),
+        Box::new(equation.right.clone()),
+    );
+    let f_owned = f.clone();
+    let var_name = variable.name.clone();
+    let eval = move |xv: f64| -> NumericalResult<f64> {
+        let mut vars = HashMap::new();
+        vars.insert(var_name.clone(), xv);
+        f_owned.evaluate(&vars).ok_or_else(|| {
+            NumericalError::EvaluationFailed(format!("Failed to evaluate at x = {xv}"))
+        })
+    };
+    (f, eval)
+}
+
+/// Compute the next secant iterate.
+///
+/// Returns `Ok(x_next)` or `Err(NumericalError::Unstable)` when the
+/// denominator is too small (near-zero slope between the two points).
+fn secant_step(x_prev: f64, x_curr: f64, f_prev: f64, f_curr: f64) -> NumericalResult<f64> {
+    let denom = f_curr - f_prev;
+    if denom.abs() < f64::EPSILON * 10.0 {
+        return Err(NumericalError::Unstable);
+    }
+    Ok(x_curr - f_curr * (x_curr - x_prev) / denom)
+}
+
+/// Run the secant iteration loop, updating path and state in place.
+///
+/// Separated from `SecantMethod::solve` so that `solve` stays under 80 lines.
+#[allow(clippy::too_many_arguments)]
+fn secant_iterate(
+    eval: &impl Fn(f64) -> NumericalResult<f64>,
+    path: &mut crate::resolution_path::ResolutionPathBuilder,
+    x_prev: &mut f64,
+    x_curr: &mut f64,
+    f_prev: &mut f64,
+    f_curr: &mut f64,
+    max_iterations: usize,
+    tolerance: f64,
+) -> NumericalResult<(NumericalSolution, f64)> {
+    let mut iterations = 0_usize;
+    let mut converged = false;
+
+    for i in 0..max_iterations {
+        iterations = i + 1;
+
+        if f_curr.abs() < tolerance {
+            converged = true;
+            break;
+        }
+
+        let x_next = secant_step(*x_prev, *x_curr, *f_prev, *f_curr)?;
+
+        if i % 10 == 0 {
+            *path = (*path).clone().step(
+                Operation::NumericalApproximation,
+                format!(
+                    "Iter {iterations}: x={x_next:.10}, f(x_curr)={:.6e}",
+                    f_curr
+                ),
+                Expression::Float(x_next),
+            );
+        }
+
+        let f_next = eval(x_next)?;
+        *x_prev = *x_curr;
+        *f_prev = *f_curr;
+        *x_curr = x_next;
+        *f_curr = f_next;
+
+        if (*x_curr - *x_prev).abs() < tolerance {
+            converged = true;
+            break;
+        }
+    }
+
+    if !converged {
+        return Err(NumericalError::NoConvergence);
+    }
+
+    let solution = NumericalSolution {
+        value: *x_curr,
+        iterations,
+        residual: f_curr.abs(),
+        converged,
+    };
+    Ok((solution, *x_curr))
 }
 
 // TODO: Add support for interval arithmetic

@@ -46,6 +46,15 @@ jobs:
       - name: Run tests
         run: cargo test --verbose
 
+      - name: Install LAPACK dependencies
+        run: sudo apt-get update && sudo apt-get install -y gfortran liblapack-dev
+
+      - name: Build with LAPACK (netlib)
+        run: cargo build --verbose --features lapack-netlib
+
+      - name: Run tests with LAPACK (netlib)
+        run: cargo test --verbose --features lapack-netlib
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
@@ -66,8 +75,11 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Install LAPACK dependencies
+        run: sudo apt-get update && sudo apt-get install -y gfortran liblapack-dev
+
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -W clippy::all
+        run: cargo clippy --all-targets --features lapack-netlib -- -W clippy::all
 
   docs:
     name: Documentation
@@ -78,5 +90,8 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install LAPACK dependencies
+        run: sudo apt-get update && sudo apt-get install -y gfortran liblapack-dev
+
       - name: Build documentation
-        run: cargo doc --no-deps --all-features
+        run: cargo doc --no-deps --features lapack-netlib

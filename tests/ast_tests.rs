@@ -743,3 +743,97 @@ fn test_expression_constant_clone() {
     let expr_clone = expr.clone();
     assert_eq!(format!("{}", expr), format!("{}", expr_clone));
 }
+
+// =============================================================================
+// Log argument order regression tests (AST-01 / AST-02 / AST-03)
+// =============================================================================
+
+#[test]
+fn test_log_core_eval_two_args_value_base() {
+    // log(value, base): log(8, 2) = 3
+    let vars = HashMap::new();
+    let expr = Expression::Function(
+        Function::Log,
+        vec![Expression::Integer(8), Expression::Integer(2)],
+    );
+    let result = expr.evaluate(&vars).expect("log(8, 2) must evaluate");
+    assert!(
+        (result - 3.0).abs() < 1e-10,
+        "log(8, 2) should be 3, got {result}"
+    );
+}
+
+#[test]
+fn test_log_core_eval_single_arg_is_log10() {
+    // log(100) with one arg should equal log10(100) = 2
+    let vars = HashMap::new();
+    let expr = Expression::Function(Function::Log, vec![Expression::Float(100.0)]);
+    let result = expr.evaluate(&vars).expect("log(100) must evaluate");
+    assert!(
+        (result - 2.0).abs() < 1e-10,
+        "log(100) should be 2, got {result}"
+    );
+}
+
+#[test]
+fn test_ln_domain_negative_returns_none() {
+    // ln of a non-positive value must return None, not NaN
+    let vars = HashMap::new();
+    let expr = Expression::Function(Function::Ln, vec![Expression::Float(-1.0)]);
+    assert!(expr.evaluate(&vars).is_none(), "ln(-1) must return None");
+}
+
+#[test]
+fn test_ln_domain_zero_returns_none() {
+    let vars = HashMap::new();
+    let expr = Expression::Function(Function::Ln, vec![Expression::Float(0.0)]);
+    assert!(expr.evaluate(&vars).is_none(), "ln(0) must return None");
+}
+
+#[test]
+fn test_log_domain_negative_value_returns_none() {
+    let vars = HashMap::new();
+    let expr = Expression::Function(
+        Function::Log,
+        vec![Expression::Float(-1.0), Expression::Float(10.0)],
+    );
+    assert!(
+        expr.evaluate(&vars).is_none(),
+        "log(-1, 10) must return None"
+    );
+}
+
+#[test]
+fn test_log_domain_zero_base_returns_none() {
+    let vars = HashMap::new();
+    let expr = Expression::Function(
+        Function::Log,
+        vec![Expression::Float(8.0), Expression::Float(0.0)],
+    );
+    assert!(expr.evaluate(&vars).is_none(), "log(8, 0) must return None");
+}
+
+#[test]
+fn test_log_latex_output_convention() {
+    // log(value=8, base=2) must render as \log_{2}{8}
+    let expr = Expression::Function(
+        Function::Log,
+        vec![Expression::Integer(8), Expression::Integer(2)],
+    );
+    let latex = expr.to_latex();
+    assert_eq!(latex, r"\log_{2}{8}", "LaTeX output was: {latex}");
+}
+
+#[test]
+fn test_log_latex_single_arg_output() {
+    // log(x) with one arg renders as \log\left(x\right)
+    let expr = Expression::Function(
+        Function::Log,
+        vec![Expression::Variable(Variable::new("x"))],
+    );
+    let latex = expr.to_latex();
+    assert!(
+        latex.contains(r"\log"),
+        "Single-arg log LaTeX must contain \\log, got: {latex}"
+    );
+}

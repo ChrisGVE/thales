@@ -20,7 +20,7 @@
 //!
 //! - Zero-cost abstractions with compile-time guarantees
 //! - Memory-safe implementation (no unsafe code except FFI boundary)
-//! - 970+ tests including property-based tests with proptest
+//! - 1152 tests including property-based tests with proptest
 //! - Optimized for mobile targets (iOS)
 //! - Clear separation between symbolic and numerical methods
 //!
@@ -152,7 +152,7 @@
 //!           ▼                ▼                ▼
 //!    ┌──────────┐     ┌──────────┐    ┌──────────┐
 //!    │  Parser  │     │  Solver  │    │Transform │
-//!    │ (chumsky)│     │ (symbolic)│    │(nalgebra)│
+//!    │ (mathlex)│     │ (symbolic)│    │(nalgebra)│
 //!    └──────────┘     └──────────┘    └──────────┘
 //!           │                │                │
 //!           └────────────────┼────────────────┘
@@ -183,7 +183,7 @@
 //! - [`ast`]: Core data structures for mathematical expressions, equations, variables,
 //!   operators, and functions. All other modules build upon these types.
 //!
-//! - [`parser`]: String → AST conversion using the chumsky parser combinator library.
+//! - [`parser`]: String → AST conversion using the mathlex parsing library.
 //!   Handles operator precedence, function calls, and complex number literals.
 //!
 //! - [`solver`]: Symbolic equation solving using algebraic manipulation. Includes
@@ -321,7 +321,24 @@
 //!
 //! ## Version History
 //!
-//! **Current: v0.3.0** - Advanced Calculus & API Stabilization
+//! **Current: v0.3.3** - CI/CD Infrastructure & Release Fixes
+//!
+//! - Release workflow: `--allow-dirty` flag for cargo publish
+//! - Swift XCFramework workflow: permissions for release uploads
+//!
+//! **v0.3.2** - CI/CD Infrastructure & Code Quality
+//!
+//! - GitHub Actions CI workflow with build status badge
+//! - Automated release workflow for crates.io publishing
+//! - Swift XCFramework build workflow for iOS/macOS distribution
+//! - Swift Package Index configuration for DocC documentation hosting
+//! - Compiler warning fixes and cargo fmt formatting cleanup
+//!
+//! **v0.3.1** - Documentation Fix
+//!
+//! - Corrected "LaTeX rendering" terminology to "LaTeX generation/output"
+//!
+//! **v0.3.0** - Advanced Calculus & API Stabilization
 //!
 //! - Second-order ODEs with characteristic equation method
 //! - Nonlinear system solver (Newton-Raphson for systems)
@@ -330,7 +347,7 @@
 //! - Special functions (gamma, beta, erf, erfc)
 //! - Small angle approximations with error bounds
 //! - Unified [`ThalesError`] type
-//! - 970+ tests including property-based tests
+//! - 1152 tests including property-based tests
 //!
 //! See [CHANGELOG.md](https://github.com/ChrisGVE/thales/blob/main/CHANGELOG.md)
 //! for complete version history.
@@ -340,7 +357,7 @@
 //! | Module | Description |
 //! |--------|-------------|
 //! | [`ast`] | Abstract syntax tree types for expressions and equations |
-//! | [`parser`] | String → AST conversion with chumsky |
+//! | [`parser`] | String → AST conversion with mathlex |
 //! | [`solver`] | Symbolic equation solving |
 //! | [`equation_system`] | Multi-equation system solver |
 //! | [`numerical`] | Numerical root-finding methods |
@@ -376,20 +393,25 @@ pub mod approximations;
 pub mod ast;
 pub mod dimensions;
 pub mod equation_system;
+pub mod fourier;
 pub mod inequality;
 pub mod integration;
 pub mod latex;
 pub mod limits;
+pub mod mathlex_bridge;
 pub mod matrix;
 pub mod numerical;
 pub mod ode;
+pub mod ode_higher;
 pub mod optimization;
 pub mod parser;
 pub mod partial_fractions;
 pub mod pattern;
 pub mod precision;
 pub mod resolution_path;
+pub mod runge_kutta;
 pub mod series;
+pub mod simplification_rules;
 pub mod solver;
 pub mod special;
 pub mod transforms;
@@ -397,6 +419,10 @@ pub mod trigonometric;
 
 // User guides for common workflows
 pub mod guides;
+
+// LAPACK-accelerated linear algebra (conditionally compiled)
+#[cfg(feature = "lapack")]
+pub mod lapack;
 
 // FFI module (conditionally compiled for FFI builds)
 #[cfg(feature = "ffi")]
@@ -450,6 +476,7 @@ pub use equation_system::{
     SystemResolutionPath,
     SystemStep,
 };
+pub use fourier::{fourier_series, FourierSeries, FourierSeriesError, FourierSeriesResult};
 pub use inequality::{
     solve_inequality, solve_system, Bound, Inequality, InequalityError, IntervalSolution,
 };
@@ -461,7 +488,10 @@ pub use integration::{
 };
 pub use latex::{parse_latex, parse_latex_equation};
 pub use matrix::{BracketStyle, MatrixError, MatrixExpr};
-pub use numerical::{NumericalConfig, NumericalSolution, SmartNumericalSolver};
+pub use numerical::{
+    BisectionMethod, BrentsMethod, NewtonRaphson, NumericalConfig, NumericalError, NumericalResult,
+    NumericalSolution, SmartNumericalSolver,
+};
 pub use ode::{
     solve_characteristic_equation, solve_ivp, solve_linear, solve_second_order_homogeneous,
     solve_second_order_ivp, solve_separable, CharacteristicRoots, FirstOrderODE, ODEError,
@@ -472,7 +502,7 @@ pub use optimization::{
     track_precision, ComputationStep, ManualStep, MultiplicativeChain, OperationConfig,
     OperationType, PrecisionReport, StepOperand,
 };
-pub use parser::{parse_equation, parse_expression};
+pub use parser::{parse_equation, parse_equation_system, parse_expression};
 pub use partial_fractions::{
     decompose, is_polynomial, is_rational_function, DecomposeError, PartialFractionResult,
     PartialFractionTerm,

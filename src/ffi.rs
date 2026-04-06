@@ -145,6 +145,31 @@ mod ffi {
     }
 
     #[swift_bridge(swift_repr = "struct")]
+    pub struct LaurentSeriesResultFFI {
+        pub original: String,
+        pub variable: String,
+        pub center: f64,
+        pub neg_order: u32,
+        pub pos_order: u32,
+        pub series: String,
+        pub series_latex: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct AsymptoticSeriesResultFFI {
+        pub original: String,
+        pub variable: String,
+        pub direction: String,
+        pub num_terms: u32,
+        pub series: String,
+        pub series_latex: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    #[swift_bridge(swift_repr = "struct")]
     pub struct SpecialFunctionResultFFI {
         pub value: String,
         pub value_latex: String,
@@ -154,9 +179,72 @@ mod ffi {
         pub error_message: String,
     }
 
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct ODEResultFFI {
+        pub equation: String,
+        pub solution: String,
+        pub solution_latex: String,
+        pub ode_type: String,
+        pub method_used: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct PrecisionEvaluationResultFFI {
+        pub original: String,
+        pub value: f64,
+        pub value_string: String,
+        pub precision_mode: String,
+        pub rounding_mode: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct FourierSeriesResultFFI {
+        pub original: String,
+        pub variable: String,
+        pub num_terms: u32,
+        pub period: f64,
+        pub a_coefficients_json: String,
+        pub b_coefficients_json: String,
+        pub series: String,
+        pub series_latex: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
     extern "Rust" {
         fn parse_equation_ffi(input: &str) -> Result<String, String>;
         fn parse_expression_ffi(input: &str) -> Result<String, String>;
+    }
+
+    extern "Rust" {
+        fn solve_ode_ffi(
+            equation: &str,
+            dependent_var: &str,
+            independent_var: &str,
+        ) -> ODEResultFFI;
+        fn solve_ode_ivp_ffi(
+            equation: &str,
+            dependent_var: &str,
+            independent_var: &str,
+            initial_conditions_json: &str,
+        ) -> ODEResultFFI;
+        fn solve_second_order_ode_ffi(
+            coefficients_json: &str,
+            forcing_fn: &str,
+        ) -> Result<ODEResultFFI, String>;
+        fn solve_higher_order_ode_ffi(coefficients_json: &str) -> Result<ODEResultFFI, String>;
+        fn rk4_solve_ffi(
+            equation: &str,
+            variable: &str,
+            x0: f64,
+            y0: f64,
+            x_end: f64,
+            steps: u32,
+        ) -> Result<String, String>;
     }
 
     extern "Rust" {
@@ -254,8 +342,48 @@ mod ffi {
             variable: &str,
             order: u32,
         ) -> Result<TaylorSeriesResultFFI, String>;
+        fn laurent_series_ffi(
+            expression: &str,
+            variable: &str,
+            center: f64,
+            neg_order: u32,
+            pos_order: u32,
+        ) -> Result<LaurentSeriesResultFFI, String>;
+        fn asymptotic_series_ffi(
+            expression: &str,
+            variable: &str,
+            direction: &str,
+            num_terms: u32,
+        ) -> Result<AsymptoticSeriesResultFFI, String>;
         fn gamma_ffi(x: f64) -> Result<SpecialFunctionResultFFI, String>;
         fn erf_ffi(x: f64) -> Result<SpecialFunctionResultFFI, String>;
+        fn beta_ffi(a: f64, b: f64) -> Result<SpecialFunctionResultFFI, String>;
+        fn erfc_ffi(x: f64) -> Result<SpecialFunctionResultFFI, String>;
+    }
+
+    extern "Rust" {
+        fn fourier_series_ffi(
+            expression: &str,
+            variable: &str,
+            num_terms: u32,
+            period: f64,
+        ) -> Result<FourierSeriesResultFFI, String>;
+    }
+
+    extern "Rust" {
+        fn evaluate_with_precision_ffi(
+            expression: &str,
+            values_json: &str,
+            mode: &str,
+            precision: u32,
+            rounding: &str,
+        ) -> Result<PrecisionEvaluationResultFFI, String>;
+        fn optimize_for_manual_computation_ffi(expression: &str) -> Result<String, String>;
+        fn small_angle_approximation_ffi(
+            expression: &str,
+            variable: &str,
+            threshold: f64,
+        ) -> Result<String, String>;
     }
 }
 
@@ -270,14 +398,14 @@ use num_complex::Complex64;
 /// Parse equation and return string representation.
 fn parse_equation_ffi(input: &str) -> Result<String, String> {
     parse_equation(input)
-        .map(|eq| format!("{:?}", eq))
+        .map(|eq| format!("{}", eq))
         .map_err(|e| format!("Parse error: {:?}", e))
 }
 
 /// Parse expression and return string representation.
 fn parse_expression_ffi(input: &str) -> Result<String, String> {
     parse_expression(input)
-        .map(|expr| format!("{:?}", expr))
+        .map(|expr| format!("{}", expr))
         .map_err(|e| format!("Parse error: {:?}", e))
 }
 
@@ -460,11 +588,11 @@ fn solve_with_values_ffi(
 // LaTeX functions
 // =============================================================================
 
-/// Parse LaTeX expression and return string representation.
+/// Parse LaTeX expression and return human-readable string representation.
 fn parse_latex_ffi(input: &str) -> Result<String, String> {
     use crate::latex::parse_latex;
     parse_latex(input)
-        .map(|expr| format!("{:?}", expr))
+        .map(|expr| format!("{}", expr))
         .map_err(|e| format!("LaTeX parse error: {:?}", e))
 }
 
@@ -724,6 +852,10 @@ fn format_limit_result(result: &crate::limits::LimitResult) -> (String, String, 
 // =============================================================================
 
 /// Evaluate an expression with given variable values.
+///
+/// Delegates directly to [`Expression::evaluate`] from the core AST, ensuring
+/// full parity with the core evaluator (Log2, Log10, Cbrt, Atan2, Sign, Min,
+/// Max, Pow, and correct domain handling for Ln/Log).
 fn evaluate_ffi(expression: &str, values_json: &str) -> Result<ffi::EvaluationResultFFI, String> {
     use std::collections::HashMap;
 
@@ -732,9 +864,7 @@ fn evaluate_ffi(expression: &str, values_json: &str) -> Result<ffi::EvaluationRe
     let values: HashMap<String, f64> = serde_json::from_str(values_json)
         .map_err(|e| format!("Failed to parse values JSON: {}", e))?;
 
-    let result = evaluate_expression(&expr, &values);
-
-    match result {
+    match expr.evaluate(&values) {
         Some(value) => Ok(ffi::EvaluationResultFFI {
             original: expression.to_string(),
             value,
@@ -749,114 +879,6 @@ fn evaluate_ffi(expression: &str, values_json: &str) -> Result<ffi::EvaluationRe
                 "Cannot evaluate expression (may contain undefined variables or operations)"
                     .to_string(),
         }),
-    }
-}
-
-/// Helper to evaluate expression with variable substitution.
-fn evaluate_expression(
-    expr: &crate::ast::Expression,
-    values: &std::collections::HashMap<String, f64>,
-) -> Option<f64> {
-    use crate::ast::{BinaryOp, Expression, Function, UnaryOp};
-
-    match expr {
-        Expression::Integer(n) => Some(*n as f64),
-        Expression::Float(f) => Some(*f),
-        Expression::Rational(r) => Some(*r.numer() as f64 / *r.denom() as f64),
-        Expression::Variable(v) => values.get(&v.name).copied(),
-        Expression::Constant(c) => {
-            use crate::ast::SymbolicConstant;
-            match c {
-                SymbolicConstant::Pi => Some(std::f64::consts::PI),
-                SymbolicConstant::E => Some(std::f64::consts::E),
-                SymbolicConstant::I => None, // Complex not supported in f64
-            }
-        }
-        Expression::Unary(op, inner) => {
-            let v = evaluate_expression(inner, values)?;
-            match op {
-                UnaryOp::Neg => Some(-v),
-                UnaryOp::Not => Some(if v == 0.0 { 1.0 } else { 0.0 }),
-                UnaryOp::Abs => Some(v.abs()),
-            }
-        }
-        Expression::Binary(op, left, right) => {
-            let l = evaluate_expression(left, values)?;
-            let r = evaluate_expression(right, values)?;
-            match op {
-                BinaryOp::Add => Some(l + r),
-                BinaryOp::Sub => Some(l - r),
-                BinaryOp::Mul => Some(l * r),
-                BinaryOp::Div => {
-                    if r != 0.0 {
-                        Some(l / r)
-                    } else {
-                        None
-                    }
-                }
-                BinaryOp::Mod => {
-                    if r != 0.0 {
-                        Some(l % r)
-                    } else {
-                        None
-                    }
-                }
-            }
-        }
-        Expression::Power(base, exp) => {
-            let b = evaluate_expression(base, values)?;
-            let e = evaluate_expression(exp, values)?;
-            Some(b.powf(e))
-        }
-        Expression::Function(func, args) => {
-            let arg_values: Option<Vec<f64>> = args
-                .iter()
-                .map(|a| evaluate_expression(a, values))
-                .collect();
-            let arg_values = arg_values?;
-
-            match func {
-                Function::Sin => Some(arg_values[0].sin()),
-                Function::Cos => Some(arg_values[0].cos()),
-                Function::Tan => Some(arg_values[0].tan()),
-                Function::Asin => Some(arg_values[0].asin()),
-                Function::Acos => Some(arg_values[0].acos()),
-                Function::Atan => Some(arg_values[0].atan()),
-                Function::Sinh => Some(arg_values[0].sinh()),
-                Function::Cosh => Some(arg_values[0].cosh()),
-                Function::Tanh => Some(arg_values[0].tanh()),
-                Function::Exp => Some(arg_values[0].exp()),
-                Function::Ln => {
-                    if arg_values[0] > 0.0 {
-                        Some(arg_values[0].ln())
-                    } else {
-                        None
-                    }
-                }
-                Function::Log => {
-                    if arg_values.len() == 2 && arg_values[0] > 0.0 && arg_values[1] > 0.0 {
-                        Some(arg_values[1].log(arg_values[0]))
-                    } else if arg_values.len() == 1 && arg_values[0] > 0.0 {
-                        Some(arg_values[0].log10())
-                    } else {
-                        None
-                    }
-                }
-                Function::Sqrt => {
-                    if arg_values[0] >= 0.0 {
-                        Some(arg_values[0].sqrt())
-                    } else {
-                        None
-                    }
-                }
-                Function::Abs => Some(arg_values[0].abs()),
-                Function::Floor => Some(arg_values[0].floor()),
-                Function::Ceil => Some(arg_values[0].ceil()),
-                Function::Round => Some(arg_values[0].round()),
-                _ => None,
-            }
-        }
-        _ => None,
     }
 }
 
@@ -1228,6 +1250,102 @@ fn maclaurin_series_ffi(
     }
 }
 
+/// Compute Laurent series expansion around a given center point.
+fn laurent_series_ffi(
+    expression: &str,
+    variable: &str,
+    center: f64,
+    neg_order: u32,
+    pos_order: u32,
+) -> Result<ffi::LaurentSeriesResultFFI, String> {
+    use crate::ast::Variable;
+    use crate::series::laurent;
+
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
+    let var = Variable::new(variable);
+    let center_expr = crate::ast::Expression::Float(center);
+
+    let result = laurent(&expr, &var, &center_expr, neg_order, pos_order);
+
+    match result {
+        Ok(series) => Ok(ffi::LaurentSeriesResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            center,
+            neg_order,
+            pos_order,
+            series: format!("{}", series),
+            series_latex: series.to_latex(),
+            success: true,
+            error_message: String::new(),
+        }),
+        Err(e) => Ok(ffi::LaurentSeriesResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            center,
+            neg_order,
+            pos_order,
+            series: String::new(),
+            series_latex: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
+/// Compute asymptotic series expansion of an expression.
+///
+/// The `direction` parameter must be one of: `"pos_infinity"`, `"neg_infinity"`, `"zero"`.
+fn asymptotic_series_ffi(
+    expression: &str,
+    variable: &str,
+    direction: &str,
+    num_terms: u32,
+) -> Result<ffi::AsymptoticSeriesResultFFI, String> {
+    use crate::series::{asymptotic, AsymptoticDirection};
+
+    let dir = match direction {
+        "pos_infinity" => AsymptoticDirection::PosInfinity,
+        "neg_infinity" => AsymptoticDirection::NegInfinity,
+        "zero" => AsymptoticDirection::Zero,
+        other => {
+            return Err(format!(
+                "Unknown direction '{other}': expected pos_infinity, neg_infinity, or zero"
+            ))
+        }
+    };
+
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let result = asymptotic(&expr, variable, dir, num_terms);
+
+    match result {
+        Ok(series) => {
+            let series_expr = series.to_expression();
+            Ok(ffi::AsymptoticSeriesResultFFI {
+                original: expression.to_string(),
+                variable: variable.to_string(),
+                direction: direction.to_string(),
+                num_terms,
+                series: format!("{}", series_expr),
+                series_latex: series_expr.to_latex(),
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::AsymptoticSeriesResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            direction: direction.to_string(),
+            num_terms,
+            series: String::new(),
+            series_latex: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
 // =============================================================================
 // Special functions
 // =============================================================================
@@ -1295,5 +1413,672 @@ fn erf_ffi(x: f64) -> Result<ffi::SpecialFunctionResultFFI, String> {
             success: false,
             error_message: format!("{}", e),
         }),
+    }
+}
+
+/// Compute the Beta function B(a, b) = Γ(a)·Γ(b) / Γ(a+b) with derivation steps.
+fn beta_ffi(a: f64, b: f64) -> Result<ffi::SpecialFunctionResultFFI, String> {
+    use crate::special::beta;
+
+    let a_expr = crate::ast::Expression::Float(a);
+    let b_expr = crate::ast::Expression::Float(b);
+
+    match beta(&a_expr, &b_expr) {
+        Ok(beta_result) => {
+            let steps_json = serde_json::to_string(&beta_result.derivation_steps)
+                .map_err(|e| format!("Failed to serialize derivation steps: {}", e))?;
+
+            Ok(ffi::SpecialFunctionResultFFI {
+                value: format!("{}", beta_result.value),
+                value_latex: beta_result.value.to_latex(),
+                numeric_value: beta_result.numeric_value.unwrap_or(f64::NAN),
+                derivation_steps: steps_json,
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::SpecialFunctionResultFFI {
+            value: String::new(),
+            value_latex: String::new(),
+            numeric_value: f64::NAN,
+            derivation_steps: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
+/// Compute the complementary error function erfc(x) = 1 - erf(x) with derivation steps.
+fn erfc_ffi(x: f64) -> Result<ffi::SpecialFunctionResultFFI, String> {
+    use crate::special::erfc;
+
+    let x_expr = crate::ast::Expression::Float(x);
+
+    match erfc(&x_expr) {
+        Ok(erfc_result) => {
+            let steps_json = serde_json::to_string(&erfc_result.derivation_steps)
+                .map_err(|e| format!("Failed to serialize derivation steps: {}", e))?;
+
+            Ok(ffi::SpecialFunctionResultFFI {
+                value: format!("{}", erfc_result.value),
+                value_latex: erfc_result.value.to_latex(),
+                numeric_value: erfc_result.numeric_value.unwrap_or(f64::NAN),
+                derivation_steps: steps_json,
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::SpecialFunctionResultFFI {
+            value: String::new(),
+            value_latex: String::new(),
+            numeric_value: f64::NAN,
+            derivation_steps: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
+// =============================================================================
+// ODE solving functions
+// =============================================================================
+
+/// Build an `ODEResultFFI` success value from an `ODESolution`.
+fn ode_success(
+    equation: &str,
+    solution: &crate::ode::ODESolution,
+    ode_type: &str,
+) -> ffi::ODEResultFFI {
+    let simplified = solution.general_solution.clone().simplify();
+    ffi::ODEResultFFI {
+        equation: equation.to_string(),
+        solution: format!("{}", simplified),
+        solution_latex: simplified.to_latex(),
+        ode_type: ode_type.to_string(),
+        method_used: solution.method.clone(),
+        success: true,
+        error_message: String::new(),
+    }
+}
+
+/// Build an `ODEResultFFI` error value.
+fn ode_error(equation: &str, error: &str) -> ffi::ODEResultFFI {
+    ffi::ODEResultFFI {
+        equation: equation.to_string(),
+        solution: String::new(),
+        solution_latex: String::new(),
+        ode_type: String::new(),
+        method_used: String::new(),
+        success: false,
+        error_message: error.to_string(),
+    }
+}
+
+/// Classify and solve a first-order ODE given its RHS expression string.
+///
+/// The `equation` parameter is the right-hand side expression of
+/// `d(dependent_var)/d(independent_var) = equation`.
+fn solve_ode_ffi(equation: &str, dependent_var: &str, independent_var: &str) -> ffi::ODEResultFFI {
+    use crate::ode::{solve_linear, solve_separable, FirstOrderODE};
+
+    let rhs = match parse_expression(equation) {
+        Ok(expr) => expr,
+        Err(e) => return ode_error(equation, &format!("Parse error: {:?}", e)),
+    };
+
+    let ode = FirstOrderODE::new(dependent_var, independent_var, rhs);
+
+    if ode.is_separable() {
+        match solve_separable(&ode) {
+            Ok(sol) => ode_success(equation, &sol, "separable"),
+            Err(e) => ode_error(equation, &format!("Separable solve failed: {}", e)),
+        }
+    } else if ode.is_linear() {
+        match solve_linear(&ode) {
+            Ok(sol) => ode_success(equation, &sol, "linear"),
+            Err(e) => ode_error(equation, &format!("Linear solve failed: {}", e)),
+        }
+    } else {
+        ode_error(equation, "ODE is neither separable nor first-order linear")
+    }
+}
+
+/// Solve a first-order ODE initial value problem.
+///
+/// `initial_conditions_json` must be a JSON object with numeric keys `"x0"` and `"y0"`,
+/// e.g. `{"x0": 0.0, "y0": 1.0}`.
+fn solve_ode_ivp_ffi(
+    equation: &str,
+    dependent_var: &str,
+    independent_var: &str,
+    initial_conditions_json: &str,
+) -> ffi::ODEResultFFI {
+    use crate::ast::Expression;
+    use crate::ode::{solve_ivp, FirstOrderODE};
+
+    let rhs = match parse_expression(equation) {
+        Ok(expr) => expr,
+        Err(e) => return ode_error(equation, &format!("Parse error: {:?}", e)),
+    };
+
+    #[derive(serde::Deserialize)]
+    struct Ivp {
+        x0: f64,
+        y0: f64,
+    }
+
+    let ivp: Ivp = match serde_json::from_str(initial_conditions_json) {
+        Ok(v) => v,
+        Err(e) => return ode_error(equation, &format!("Invalid initial conditions JSON: {}", e)),
+    };
+
+    let ode = FirstOrderODE::new(dependent_var, independent_var, rhs);
+    let x0 = Expression::Float(ivp.x0);
+    let y0 = Expression::Float(ivp.y0);
+
+    match solve_ivp(&ode, &x0, &y0) {
+        Ok(sol) => ode_success(equation, &sol, "ivp"),
+        Err(e) => ode_error(equation, &format!("IVP solve failed: {}", e)),
+    }
+}
+
+/// Solve a second-order constant-coefficient ODE: `a*y'' + b*y' + c*y = f(x)`.
+///
+/// `coefficients_json` must be a JSON array `[a, b, c]`.
+/// `forcing_fn` is an optional expression string; use `""` for the homogeneous case.
+fn solve_second_order_ode_ffi(
+    coefficients_json: &str,
+    forcing_fn: &str,
+) -> Result<ffi::ODEResultFFI, String> {
+    use crate::ast::Expression;
+    use crate::ode::{solve_second_order_homogeneous, SecondOrderODE};
+
+    let coeffs: Vec<f64> = serde_json::from_str(coefficients_json)
+        .map_err(|e| format!("Invalid coefficients JSON: {}", e))?;
+    if coeffs.len() != 3 {
+        return Err(format!(
+            "Expected 3 coefficients [a, b, c], got {}",
+            coeffs.len()
+        ));
+    }
+    let (a, b, c) = (coeffs[0], coeffs[1], coeffs[2]);
+
+    let forcing = if forcing_fn.is_empty() {
+        Expression::Integer(0)
+    } else {
+        parse_expression(forcing_fn)
+            .map_err(|e| format!("Parse error in forcing function: {:?}", e))?
+    };
+
+    let ode = SecondOrderODE::new("y", "x", a, b, c, forcing);
+    match solve_second_order_homogeneous(&ode) {
+        Ok(sol) => {
+            let simplified = sol.general_solution.clone().simplify();
+            Ok(ffi::ODEResultFFI {
+                equation: coefficients_json.to_string(),
+                solution: format!("{}", simplified),
+                solution_latex: simplified.to_latex(),
+                ode_type: "second_order".to_string(),
+                method_used: sol.method.clone(),
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ode_error(coefficients_json, &format!("{}", e))),
+    }
+}
+
+/// Solve an n-th order constant-coefficient homogeneous ODE.
+///
+/// `coefficients_json` must be a JSON array of at least 2 floats, ordered from
+/// the highest-order coefficient down to the zero-th order term.
+fn solve_higher_order_ode_ffi(coefficients_json: &str) -> Result<ffi::ODEResultFFI, String> {
+    use crate::ode_higher::{solve_higher_order_homogeneous, HigherOrderODE};
+
+    let coeffs: Vec<f64> = serde_json::from_str(coefficients_json)
+        .map_err(|e| format!("Invalid coefficients JSON: {}", e))?;
+    if coeffs.len() < 2 {
+        return Err("Need at least 2 coefficients to define an ODE".to_string());
+    }
+
+    let ode = HigherOrderODE::new("y", "x", coeffs);
+    match solve_higher_order_homogeneous(&ode) {
+        Ok(sol) => {
+            let simplified = sol.general_solution.clone().simplify();
+            Ok(ffi::ODEResultFFI {
+                equation: coefficients_json.to_string(),
+                solution: format!("{}", simplified),
+                solution_latex: simplified.to_latex(),
+                ode_type: "higher_order".to_string(),
+                method_used: sol.method.clone(),
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ode_error(coefficients_json, &format!("{}", e))),
+    }
+}
+
+/// Numerically integrate a scalar first-order ODE y' = f(x, y) using RK4.
+///
+/// `equation` is the RHS expression (e.g. `"y"` for y' = y).
+/// `variable` is the dependent variable name.
+/// Returns a JSON string containing the trajectory as an array of `[x, y]` pairs.
+fn rk4_solve_ffi(
+    equation: &str,
+    variable: &str,
+    x0: f64,
+    y0: f64,
+    x_end: f64,
+    steps: u32,
+) -> Result<String, String> {
+    use crate::runge_kutta::{rk4_solve, Rk4Config};
+    use std::collections::HashMap;
+
+    let expr = parse_expression(equation).map_err(|e| format!("Parse error: {:?}", e))?;
+    let var = variable.to_string();
+
+    let f = move |x: f64, y: f64| -> f64 {
+        let mut vars = HashMap::new();
+        vars.insert(var.clone(), y);
+        vars.insert("x".to_string(), x);
+        expr.evaluate(&vars).unwrap_or(f64::NAN)
+    };
+
+    let config = Rk4Config::new(x0, y0, x_end, steps as usize);
+    let sol = rk4_solve(f, config).map_err(|e| format!("RK4 error: {}", e))?;
+
+    serde_json::to_string(&sol.trajectory).map_err(|e| format!("Serialization error: {}", e))
+}
+
+// =============================================================================
+// Fourier series operations
+// =============================================================================
+
+/// Compute the Fourier series of an expression.
+///
+/// Pass `period = 0.0` to use the default period of 2π.
+fn fourier_series_ffi(
+    expression: &str,
+    variable: &str,
+    num_terms: u32,
+    period: f64,
+) -> Result<ffi::FourierSeriesResultFFI, String> {
+    use crate::ast::Variable;
+    use crate::fourier::fourier_series;
+
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
+    let var = Variable::new(variable);
+    let opt_period = if period <= 0.0 { None } else { Some(period) };
+
+    let result = fourier_series(&expr, &var, num_terms as usize, opt_period);
+
+    match result {
+        Ok(series) => {
+            let a_json = serde_json::to_string(&series.a_coefficients)
+                .map_err(|e| format!("Failed to serialize a_coefficients: {}", e))?;
+            let b_json = serde_json::to_string(&series.b_coefficients)
+                .map_err(|e| format!("Failed to serialize b_coefficients: {}", e))?;
+            Ok(ffi::FourierSeriesResultFFI {
+                original: expression.to_string(),
+                variable: variable.to_string(),
+                num_terms,
+                period: series.period,
+                a_coefficients_json: a_json,
+                b_coefficients_json: b_json,
+                series: series.to_display_string(),
+                series_latex: series.to_latex(),
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::FourierSeriesResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            num_terms,
+            period: if period <= 0.0 {
+                std::f64::consts::TAU
+            } else {
+                period
+            },
+            a_coefficients_json: String::new(),
+            b_coefficients_json: String::new(),
+            series: String::new(),
+            series_latex: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fourier_series_ffi_sin_x() {
+        let result = fourier_series_ffi("sin(x)", "x", 3, 0.0).unwrap();
+        assert!(
+            result.success,
+            "Expected success, got: {}",
+            result.error_message
+        );
+        assert_eq!(result.variable, "x");
+        assert_eq!(result.num_terms, 3);
+        assert!((result.period - std::f64::consts::TAU).abs() < 1e-10);
+        let b: Vec<f64> = serde_json::from_str(&result.b_coefficients_json).unwrap();
+        assert!((b[1] - 1.0).abs() < 1e-4, "b_1 should be ~1, got {}", b[1]);
+        assert!(!result.series.is_empty());
+        assert!(!result.series_latex.is_empty());
+    }
+
+    #[test]
+    fn test_fourier_series_ffi_cos_x() {
+        let result = fourier_series_ffi("cos(x)", "x", 3, 0.0).unwrap();
+        assert!(result.success);
+        let a: Vec<f64> = serde_json::from_str(&result.a_coefficients_json).unwrap();
+        assert!((a[1] - 1.0).abs() < 1e-4, "a_1 should be ~1, got {}", a[1]);
+    }
+
+    #[test]
+    fn test_fourier_series_ffi_custom_period() {
+        let result = fourier_series_ffi("cos(x)", "x", 3, std::f64::consts::TAU).unwrap();
+        assert!(result.success);
+        assert!((result.period - std::f64::consts::TAU).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_fourier_series_ffi_invalid_expression() {
+        let result = fourier_series_ffi("@@@", "x", 3, 0.0).unwrap();
+        assert!(!result.success);
+        assert!(!result.error_message.is_empty());
+    }
+
+    #[test]
+    fn test_fourier_series_ffi_zero_terms_error() {
+        let result = fourier_series_ffi("sin(x)", "x", 0, 0.0).unwrap();
+        assert!(!result.success);
+        assert!(result.error_message.contains("at least 1"));
+    }
+}
+
+// =============================================================================
+// Precision evaluation and manual-computation optimization
+// =============================================================================
+
+/// Parse a mode string into `PrecisionMode`, folding `precision` into the variant.
+fn parse_precision_mode(
+    mode: &str,
+    precision: u32,
+) -> Result<crate::precision::PrecisionMode, String> {
+    use crate::precision::PrecisionMode;
+    match mode {
+        "fixed" => Ok(PrecisionMode::FixedDecimal(precision)),
+        "significant" => Ok(PrecisionMode::SignificantFigures(precision)),
+        "arbitrary" => Ok(PrecisionMode::Arbitrary),
+        "full" => Ok(PrecisionMode::Full),
+        other => Err(format!(
+            "Unknown precision mode '{other}': expected fixed, significant, arbitrary, or full"
+        )),
+    }
+}
+
+/// Parse a rounding string into `RoundingMode`.
+fn parse_rounding_mode(rounding: &str) -> Result<crate::precision::RoundingMode, String> {
+    use crate::precision::RoundingMode;
+    match rounding {
+        "half_up" | "up" => Ok(RoundingMode::HalfUp),
+        "half_even" | "even" | "banker" => Ok(RoundingMode::HalfEven),
+        "truncate" | "trunc" => Ok(RoundingMode::Truncate),
+        "ceiling" | "ceil" => Ok(RoundingMode::Ceiling),
+        "floor" => Ok(RoundingMode::Floor),
+        "" => Ok(RoundingMode::default()),
+        other => Err(format!(
+            "Unknown rounding mode '{other}': expected half_up, half_even, truncate, ceiling, or floor"
+        )),
+    }
+}
+
+/// Evaluate an expression with configurable precision and rounding.
+fn evaluate_with_precision_ffi(
+    expression: &str,
+    values_json: &str,
+    mode: &str,
+    precision: u32,
+    rounding: &str,
+) -> Result<ffi::PrecisionEvaluationResultFFI, String> {
+    use crate::precision::{EvalContext, Value};
+    use std::collections::HashMap;
+
+    let precision_mode = parse_precision_mode(mode, precision)?;
+    let rounding_mode = parse_rounding_mode(rounding)?;
+
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
+
+    let values: HashMap<String, f64> = if values_json.is_empty() || values_json == "{}" {
+        HashMap::new()
+    } else {
+        serde_json::from_str(values_json)
+            .map_err(|e| format!("Failed to parse values JSON: {}", e))?
+    };
+
+    let mut ctx = EvalContext::new(precision_mode).with_rounding(rounding_mode);
+    for (name, val) in values {
+        ctx.set_f64(&name, val);
+    }
+
+    let precision_mode_str = format!("{:?}", precision_mode);
+    let rounding_mode_str = format!("{:?}", rounding_mode);
+
+    match ctx.evaluate(&expr) {
+        Ok(value) => {
+            let numeric = value.as_f64();
+            let value_string = format!("{}", value);
+            Ok(ffi::PrecisionEvaluationResultFFI {
+                original: expression.to_string(),
+                value: numeric,
+                value_string,
+                precision_mode: precision_mode_str,
+                rounding_mode: rounding_mode_str,
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::PrecisionEvaluationResultFFI {
+            original: expression.to_string(),
+            value: f64::NAN,
+            value_string: String::new(),
+            precision_mode: precision_mode_str,
+            rounding_mode: rounding_mode_str,
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
+/// Analyze an expression and return optimized manual-computation steps as JSON.
+///
+/// Returns a JSON object with fields `steps` (array of step descriptions) and
+/// `chains` (multiplicative chains suitable for slide-rule computation).
+fn optimize_for_manual_computation_ffi(expression: &str) -> Result<String, String> {
+    use crate::optimization::{
+        analyze_expression, find_multiplicative_chains, optimize_computation_order,
+        to_manual_steps, OperationConfig,
+    };
+
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
+    let config = OperationConfig::default();
+
+    let raw_steps = analyze_expression(&expr);
+    let optimized = optimize_computation_order(&raw_steps, &config);
+    let manual = to_manual_steps(&optimized, &config);
+    let chains = find_multiplicative_chains(&expr);
+
+    let steps_json: Vec<serde_json::Value> = manual
+        .iter()
+        .map(|s| {
+            serde_json::json!({
+                "instruction": s.instruction,
+                "precision": s.precision
+            })
+        })
+        .collect();
+
+    let chains_json: Vec<serde_json::Value> = chains
+        .iter()
+        .map(|c| {
+            let numerator: Vec<String> = c
+                .numerator_factors
+                .iter()
+                .map(|e| format!("{}", e))
+                .collect();
+            let denominator: Vec<String> = c
+                .denominator_factors
+                .iter()
+                .map(|e| format!("{}", e))
+                .collect();
+            serde_json::json!({
+                "numerator": numerator,
+                "denominator": denominator
+            })
+        })
+        .collect();
+
+    let result = serde_json::json!({
+        "original": expression,
+        "steps": steps_json,
+        "multiplicative_chains": chains_json,
+        "step_count": manual.len()
+    });
+
+    serde_json::to_string(&result).map_err(|e| format!("Failed to serialize result: {}", e))
+}
+
+/// Apply small-angle approximations to trigonometric functions in an expression.
+fn small_angle_approximation_ffi(
+    expression: &str,
+    variable: &str,
+    threshold: f64,
+) -> Result<String, String> {
+    use crate::approximations::apply_small_angle_approx;
+    use crate::ast::Variable;
+
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
+    let var = Variable::new(variable);
+
+    match apply_small_angle_approx(&expr, &var, threshold) {
+        Some(approx) => {
+            let result = serde_json::json!({
+                "original": expression,
+                "approximation": format!("{}", approx.approximation),
+                "approximation_latex": approx.approximation.to_latex(),
+                "formula_used": approx.formula_used,
+                "error_bound": approx.error_bound,
+                "valid_range": {
+                    "lower": approx.valid_range.0,
+                    "upper": approx.valid_range.1
+                }
+            });
+            serde_json::to_string(&result).map_err(|e| format!("Failed to serialize result: {}", e))
+        }
+        None => {
+            let result = serde_json::json!({
+                "original": expression,
+                "approximation": expression,
+                "approximation_latex": expr.to_latex(),
+                "formula_used": "no approximation applied",
+                "error_bound": 0.0,
+                "valid_range": { "lower": -threshold, "upper": threshold }
+            });
+            serde_json::to_string(&result).map_err(|e| format!("Failed to serialize result: {}", e))
+        }
+    }
+}
+
+#[cfg(test)]
+mod precision_tests {
+    use super::*;
+
+    #[test]
+    fn test_evaluate_with_precision_fixed_decimal() {
+        let result = evaluate_with_precision_ffi("1/3", "{}", "fixed", 4, "half_even").unwrap();
+        assert!(result.success);
+        assert!((result.value - 0.3333).abs() < 1e-3);
+        assert!(result.precision_mode.contains("FixedDecimal"));
+    }
+
+    #[test]
+    fn test_evaluate_with_precision_significant_figures() {
+        let result =
+            evaluate_with_precision_ffi("355/113", "{}", "significant", 6, "half_up").unwrap();
+        assert!(result.success);
+        assert!((result.value - std::f64::consts::PI).abs() < 1e-4);
+        assert!(result.precision_mode.contains("SignificantFigures"));
+    }
+
+    #[test]
+    fn test_evaluate_with_precision_with_variables() {
+        let result =
+            evaluate_with_precision_ffi("x * y", r#"{"x": 3.0, "y": 4.0}"#, "full", 0, "").unwrap();
+        assert!(result.success);
+        assert!((result.value - 12.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_evaluate_with_precision_unknown_mode() {
+        let err = evaluate_with_precision_ffi("x", "{}", "bogus", 3, "").unwrap_err();
+        assert!(err.contains("Unknown precision mode"));
+    }
+
+    #[test]
+    fn test_evaluate_with_precision_unknown_rounding() {
+        let err = evaluate_with_precision_ffi("1", "{}", "fixed", 2, "bogus").unwrap_err();
+        assert!(err.contains("Unknown rounding mode"));
+    }
+
+    #[test]
+    fn test_evaluate_with_precision_division_by_zero() {
+        let result = evaluate_with_precision_ffi("1/0", "{}", "full", 0, "").unwrap();
+        assert!(!result.success);
+        assert!(!result.error_message.is_empty());
+    }
+
+    #[test]
+    fn test_optimize_for_manual_computation_basic() {
+        let json = optimize_for_manual_computation_ffi("a * b + c").unwrap();
+        let val: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(val["steps"].is_array());
+        assert!(val["step_count"].as_u64().unwrap() > 0);
+        assert!(val["multiplicative_chains"].is_array());
+    }
+
+    #[test]
+    fn test_optimize_for_manual_computation_parse_error() {
+        let err = optimize_for_manual_computation_ffi("@@@invalid@@@").unwrap_err();
+        assert!(err.contains("Parse error"));
+    }
+
+    #[test]
+    fn test_small_angle_approximation_sin() {
+        let json = small_angle_approximation_ffi("sin(x)", "x", 0.1).unwrap();
+        let val: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(val["approximation"].as_str().unwrap(), "x");
+        assert!(val["formula_used"].as_str().unwrap().contains("sin"));
+    }
+
+    #[test]
+    fn test_small_angle_approximation_no_match() {
+        let json = small_angle_approximation_ffi("x^2 + 1", "x", 0.1).unwrap();
+        let val: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            val["formula_used"].as_str().unwrap(),
+            "no approximation applied"
+        );
+    }
+
+    #[test]
+    fn test_small_angle_approximation_parse_error() {
+        let err = small_angle_approximation_ffi("@@@", "x", 0.1).unwrap_err();
+        assert!(err.contains("Parse error"));
     }
 }

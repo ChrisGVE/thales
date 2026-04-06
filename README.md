@@ -28,7 +28,7 @@ A comprehensive Computer Algebra System (CAS) library for symbolic mathematics, 
 
 ```toml
 [dependencies]
-thales = "0.3.3"
+thales = "0.4.0"
 ```
 
 ## Quick Start
@@ -88,6 +88,53 @@ The full documentation is available on **[docs.rs/thales](https://docs.rs/thales
 | [Numerical Methods](https://docs.rs/thales/latest/thales/guides/numerical_methods/) | Root-finding algorithms |
 | [Working with Units](https://docs.rs/thales/latest/thales/guides/working_with_units/) | Dimensional analysis |
 | [Error Handling](https://docs.rs/thales/latest/thales/guides/error_handling/) | ThalesError patterns |
+
+## LaTeX Support
+
+Thales can parse LaTeX mathematical notation into its internal expression tree via `parse_latex`.
+
+### Supported constructs
+
+| Category | LaTeX syntax | Examples |
+|----------|-------------|---------|
+| Fractions | `\frac{num}{denom}` | `\frac{1}{2}`, `\frac{x+1}{y}` |
+| Square root | `\sqrt{x}` | `\sqrt{2}`, `\sqrt{x+1}` |
+| nth root | `\sqrt[n]{x}` | `\sqrt[3]{8}`, `\sqrt[n]{x}` |
+| Superscripts | `x^{n}` or `x^n` | `x^{2}`, `e^{-x}` |
+| Subscripts | `x_{n}` or `x_n` | `x_{1}`, `x_{12}` |
+| Greek letters | `\alpha`, `\beta`, `\pi`, etc. | `\alpha`, `\theta`, `\pi` |
+| Trig functions | `\sin`, `\cos`, `\tan`, etc. | `\sin{x}`, `\cos(\theta)` |
+| Logarithms / exp | `\ln`, `\log`, `\exp` | `\ln{x}`, `\log_{10}{x}`, `\log_{2}{8}` |
+| Integrals | `\int_{a}^{b} expr \, dx` | `\int_{0}^{1} x \, dx`, `\int x dx` |
+| Limits | `\lim_{x \to a}` | `\lim_{x \to 0} x`, `\lim_{x \to \infty} x` |
+| Sums | `\sum_{i=a}^{b}` | `\sum_{i=1}^{10} i` |
+| Operators | `\cdot`, `\times`, `\div`, `\pm` | `a \cdot b`, `2 \times 3` |
+
+### Not yet supported
+
+The following constructs are not currently parsed and will return an error:
+
+- Double/contour integrals: `\iint`, `\oint`
+- Products: `\prod`
+- Partial derivatives: `\partial`
+- Matrix environments: `\begin{matrix}`, `\begin{pmatrix}`, `\begin{bmatrix}`, etc.
+
+## Optional LAPACK Acceleration
+
+Enable hardware-accelerated matrix operations (eigenvalues, eigenvectors, QR decomposition, linear system solving) by selecting a LAPACK backend:
+
+```toml
+# macOS / iOS — links against Apple Accelerate.framework
+thales = { version = "0.3", features = ["lapack-accelerate"] }
+
+# Linux — uses reference LAPACK (requires liblapack-dev / gfortran)
+thales = { version = "0.3", features = ["lapack-netlib"] }
+
+# Linux — uses OpenBLAS (requires libopenblas-dev)
+thales = { version = "0.3", features = ["lapack-openblas"] }
+```
+
+The `lapack` feature is an alias for `lapack-accelerate`. Without any LAPACK feature, thales uses pure-Rust implementations for all numerical linear algebra.
 
 ## iOS Cross-Compilation
 

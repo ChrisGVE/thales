@@ -44,9 +44,8 @@ use crate::numerical::{NumericalConfig, SmartNumericalSolver};
 use crate::resolution_path::{Operation, ResolutionPath};
 use crate::solver::{SmartSolver, Solution, Solver, SolverError};
 
-// Note: ODE and integration imports reserved for future implementation
-// use crate::ode::{FirstOrderODE, ODESolution, solve_separable, solve_linear as solve_linear_ode};
-// use crate::integration::integrate;
+use crate::integration::integrate;
+use crate::ode::{solve_linear as solve_linear_ode, solve_separable, FirstOrderODE};
 
 // ============================================================================
 // Error Types
@@ -713,7 +712,10 @@ pub enum SolveMethod {
     /// Simple substitution.
     Substitution,
     /// ODE solver with specified method.
-    ODE { method: String },
+    ODE {
+        /// Name of the ODE integration method (e.g., "runge-kutta4", "euler").
+        method: String,
+    },
     /// Integration.
     Integration,
     /// Differentiation.
@@ -862,19 +864,29 @@ impl SolutionValue {
 #[derive(Debug, Clone)]
 pub enum SystemOperation {
     /// Select an equation to work with.
-    SelectEquation { reason: String },
+    SelectEquation {
+        /// Human-readable explanation of why this equation was selected.
+        reason: String,
+    },
     /// Solve for a variable using a specific method.
     SolveFor {
+        /// Name of the variable being solved for.
         variable: String,
+        /// The solving method to apply.
         method: SolveMethod,
     },
     /// Substitute a result into equations.
     SubstituteResult {
+        /// Name of the variable whose value is being substituted.
         variable: String,
+        /// IDs of equations into which the result is substituted.
         into_equations: Vec<String>,
     },
     /// Verify a solution.
-    VerifySolution { variable: String },
+    VerifySolution {
+        /// Name of the variable whose solution is being verified.
+        variable: String,
+    },
     /// Delegate to an equation-level operation.
     EquationOperation(Operation),
 }
@@ -912,6 +924,7 @@ pub enum StepResult {
     Value(f64),
     /// Intermediate state showing what's known so far.
     Intermediate {
+        /// Map of variable names to their currently known expressions.
         known_so_far: HashMap<String, Expression>,
     },
 }
@@ -1508,32 +1521,48 @@ impl MultiEquationSolver {
         }
     }
 
-    /// Solve an ODE.
+    /// Solve an ODE by routing to the ode module.
     fn solve_ode(
         &self,
-        _equation: &Equation,
-        _variable: &str,
+        equation: &Equation,
+        variable: &str,
         _method: &str,
     ) -> Result<(SolutionValue, Option<ResolutionPath>), SystemError> {
-        // TODO: Integrate with ODE solver
-        // For now, return an error indicating ODE solving is not fully implemented
-        Err(SystemError::UnsolvableEquation {
-            id: "ode".to_string(),
-            reason: "ODE solving in multi-equation context not yet implemented".to_string(),
-        })
+        // Construct a first-order ODE from the equation: assume form dy/dx = rhs
+        // where the variable is the dependent variable.
+        let ode = FirstOrderODE {
+            dependent: variable.to_string(),
+            independent: "x".to_string(),
+            rhs: equation.right.clone(),
+        };
+
+        // Try separable first, then linear
+        let solution = solve_separable(&ode).or_else(|_| solve_linear_ode(&ode));
+
+        match solution {
+            Ok(sol) => Ok((SolutionValue::Symbolic(sol.general_solution), None)),
+            Err(e) => Err(SystemError::UnsolvableEquation {
+                id: "ode".to_string(),
+                reason: format!("ODE solver failed: {e:?}"),
+            }),
+        }
     }
 
-    /// Solve by integration.
+    /// Solve by integration — integrate the expression with respect to `variable`.
     fn solve_integration(
         &self,
-        _equation: &Equation,
-        _variable: &str,
+        equation: &Equation,
+        variable: &str,
     ) -> Result<(SolutionValue, Option<ResolutionPath>), SystemError> {
-        // TODO: Integrate with integration module
-        Err(SystemError::UnsolvableEquation {
-            id: "integration".to_string(),
-            reason: "Integration solving not yet implemented".to_string(),
-        })
+        // Integrate the left-hand side with respect to the variable
+        let integrated = integrate(&equation.left, variable);
+        match integrated {
+            Ok(result) => Ok((SolutionValue::Symbolic(result), None)),
+            Err(e) => Err(SystemError::UnsolvableEquation {
+                id: "integration".to_string(),
+                reason: format!("Integration failed: {e:?}"),
+            }),
+        }
     }
 
     /// Solve by simple substitution.

@@ -6,17 +6,17 @@ Swift bindings for the [thales](https://crates.io/crates/thales) Computer Algebr
 
 - iOS 14+ / macOS 11+
 - Xcode 14+
-- Pre-built `libthales.a` static library or XCFramework
+- Pre-built `libthales.a` static library
 
 ## Installation
 
-### Option 1: Swift Package Manager with Pre-built Library (Recommended)
+### Option 1: Swift Package Manager (Recommended)
 
 Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ChrisGVE/thales.git", from: "0.3.0")
+    .package(url: "https://github.com/ChrisGVE/thales.git", from: "0.4.0")
 ]
 ```
 
@@ -24,15 +24,7 @@ Or in Xcode: File > Add Package Dependencies > Enter the repository URL.
 
 **Important**: You must also configure your project to link against the pre-built Rust library. See [Configuration](#configuration) below.
 
-### Option 2: Using XCFramework from Releases
-
-Starting with version 0.4.0, pre-built XCFrameworks are available as GitHub release assets:
-
-1. Download `Thales.xcframework.zip` from the [latest release](https://github.com/ChrisGVE/thales/releases)
-2. Extract and add the XCFramework to your Xcode project
-3. The Package.swift will automatically use the binary target
-
-### Option 3: Manual Installation
+### Option 2: Manual Installation
 
 1. Copy the Swift files from `swift/Sources/Thales/` to your project
 2. Copy the headers from `swift/Sources/Thales/include/` to your project
@@ -165,6 +157,22 @@ See the [thales documentation](https://docs.rs/thales) for complete API referenc
 
 ### Evaluation
 - `Thales.evaluate(_:with:)` - Evaluate expression with values
+
+### ODE Solvers
+- `Thales.solveODE(_:for:withRespectTo:)` - Solve ordinary differential equations
+- `Thales.solveODEIVP(_:for:withRespectTo:initialConditions:)` - Solve ODE initial value problems
+
+### Series
+- `Thales.taylorSeries(_:variable:center:order:)` - Taylor series expansion
+- `Thales.maclaurinSeries(_:variable:order:)` - Maclaurin series expansion
+- `Thales.laurentSeries(_:variable:center:order:)` - Laurent series expansion
+- `Thales.asymptoticSeries(_:variable:direction:)` - Asymptotic series expansion
+
+### Special Functions
+- `Thales.gamma(_:)` - Gamma function
+- `Thales.beta(_:_:)` - Beta function
+- `Thales.erf(_:)` - Error function
+- `Thales.erfc(_:)` - Complementary error function
 
 ### Parsing
 - `Thales.parseEquation(_:)` - Parse equation string

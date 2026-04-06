@@ -135,6 +135,82 @@ fn bench_dimensions(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark matrix operations (eigenvalues, eigenvectors, QR).
+///
+/// When run with `--features lapack`, these exercise the LAPACK-accelerated path.
+/// Without the feature, they exercise the pure-Rust fallback.
+fn bench_matrix_operations(c: &mut Criterion) {
+    use thales::ast::Expression;
+    use thales::matrix::MatrixExpr;
+
+    let mut group = c.benchmark_group("matrix_operations");
+
+    // 2x2 eigenvalues
+    group.bench_function("eigenvalues_2x2", |b| {
+        let m = MatrixExpr::from_elements(vec![
+            vec![Expression::Integer(2), Expression::Integer(1)],
+            vec![Expression::Integer(1), Expression::Integer(2)],
+        ])
+        .unwrap();
+        b.iter(|| black_box(m.eigenvalues_numeric()));
+    });
+
+    // 5x5 eigenvalues (tridiagonal symmetric)
+    group.bench_function("eigenvalues_5x5", |b| {
+        let m = MatrixExpr::from_elements(vec![
+            vec![
+                Expression::Float(5.0),
+                Expression::Float(1.0),
+                Expression::Float(0.0),
+                Expression::Float(0.0),
+                Expression::Float(0.0),
+            ],
+            vec![
+                Expression::Float(1.0),
+                Expression::Float(4.0),
+                Expression::Float(1.0),
+                Expression::Float(0.0),
+                Expression::Float(0.0),
+            ],
+            vec![
+                Expression::Float(0.0),
+                Expression::Float(1.0),
+                Expression::Float(3.0),
+                Expression::Float(1.0),
+                Expression::Float(0.0),
+            ],
+            vec![
+                Expression::Float(0.0),
+                Expression::Float(0.0),
+                Expression::Float(1.0),
+                Expression::Float(2.0),
+                Expression::Float(1.0),
+            ],
+            vec![
+                Expression::Float(0.0),
+                Expression::Float(0.0),
+                Expression::Float(0.0),
+                Expression::Float(1.0),
+                Expression::Float(1.0),
+            ],
+        ])
+        .unwrap();
+        b.iter(|| black_box(m.eigenvalues_numeric()));
+    });
+
+    // 2x2 eigenpairs
+    group.bench_function("eigenpairs_2x2", |b| {
+        let m = MatrixExpr::from_elements(vec![
+            vec![Expression::Integer(2), Expression::Integer(1)],
+            vec![Expression::Integer(1), Expression::Integer(2)],
+        ])
+        .unwrap();
+        b.iter(|| black_box(m.eigenpairs_numeric()));
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_coordinate_transforms,
@@ -144,6 +220,7 @@ criterion_group!(
     bench_evaluation,
     bench_complex_operations,
     bench_dimensions,
+    bench_matrix_operations,
 );
 
 criterion_main!(benches);
@@ -151,6 +228,5 @@ criterion_main!(benches);
 // TODO: Add benchmarks for large equation systems
 // TODO: Add benchmarks for worst-case scenarios
 // TODO: Add memory allocation benchmarks
-// TODO: Add comparison benchmarks with other math libraries
 // TODO: Add FFI call overhead benchmarks
 // TODO: Add parallel solving benchmarks
