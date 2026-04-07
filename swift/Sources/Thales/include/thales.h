@@ -335,6 +335,12 @@ __swift_bridge__$asymptotic_series_ffi(struct RustStr expression,
                                        struct RustStr variable,
                                        struct RustStr direction,
                                        uint32_t num_terms);
+struct __swift_bridge__$ResultTaylorSeriesResultFFIAndString
+__swift_bridge__$compose_series_ffi(struct RustStr outer, struct RustStr inner,
+                                    struct RustStr variable, uint32_t order);
+struct __swift_bridge__$ResultTaylorSeriesResultFFIAndString
+__swift_bridge__$reversion_series_ffi(struct RustStr expression,
+                                      struct RustStr variable, uint32_t order);
 struct __swift_bridge__$ResultSpecialFunctionResultFFIAndString
 __swift_bridge__$gamma_ffi(double x);
 struct __swift_bridge__$ResultSpecialFunctionResultFFIAndString

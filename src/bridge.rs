@@ -348,6 +348,17 @@ mod ffi {
             direction: &str,
             num_terms: u32,
         ) -> Result<AsymptoticSeriesResultFFI, String>;
+        fn compose_series_ffi(
+            outer: &str,
+            inner: &str,
+            variable: &str,
+            order: u32,
+        ) -> Result<TaylorSeriesResultFFI, String>;
+        fn reversion_series_ffi(
+            expression: &str,
+            variable: &str,
+            order: u32,
+        ) -> Result<TaylorSeriesResultFFI, String>;
     }
 
     // =========================================================================

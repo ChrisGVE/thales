@@ -240,6 +240,22 @@ public func asymptotic_series_ffi<GenericToRustStr: ToRustStr>(_ expression: Gen
     })
     })
 }
+public func compose_series_ffi<GenericToRustStr: ToRustStr>(_ outer: GenericToRustStr, _ inner: GenericToRustStr, _ variable: GenericToRustStr, _ order: UInt32) throws -> TaylorSeriesResultFFI {
+    return variable.toRustStr({ variableAsRustStr in
+        return inner.toRustStr({ innerAsRustStr in
+        return outer.toRustStr({ outerAsRustStr in
+        try { let val = __swift_bridge__$compose_series_ffi(outerAsRustStr, innerAsRustStr, variableAsRustStr, order); switch val.tag { case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+    })
+    })
+    })
+}
+public func reversion_series_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ order: UInt32) throws -> TaylorSeriesResultFFI {
+    return variable.toRustStr({ variableAsRustStr in
+        return expression.toRustStr({ expressionAsRustStr in
+        try { let val = __swift_bridge__$reversion_series_ffi(expressionAsRustStr, variableAsRustStr, order); switch val.tag { case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+    })
+    })
+}
 public func gamma_ffi(_ x: Double) throws -> SpecialFunctionResultFFI {
     try { let val = __swift_bridge__$gamma_ffi(x); switch val.tag { case __swift_bridge__$ResultSpecialFunctionResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultSpecialFunctionResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
 }

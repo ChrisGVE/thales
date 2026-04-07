@@ -1809,6 +1809,88 @@ extension Thales {
       throw ThalesError.operationFailed(String(describing: error))
     }
   }
+
+  /// Composes two power series: computes `outer(inner(x))`.
+  ///
+  /// Both expressions are expanded as Maclaurin series to the given order,
+  /// then composed. The inner series must have a zero constant term.
+  ///
+  /// - Parameters:
+  ///   - outer: The outer function expression
+  ///   - inner: The inner function expression (must have f(0) = 0)
+  ///   - variable: The expansion variable
+  ///   - order: Number of terms to compute
+  ///
+  /// - Returns: A ``TaylorSeriesResult`` representing the composed series
+  ///
+  /// - Throws: ``ThalesError`` if composition fails
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // exp(sin(x)) expanded to 5 terms
+  /// let result = try Thales.composeSeries(
+  ///     outer: "exp(x)", inner: "sin(x)", variable: "x", order: 5)
+  /// print(result.series)
+  /// ```
+  public static func composeSeries(
+    outer: String,
+    inner: String,
+    variable: String,
+    order: UInt32
+  ) throws -> TaylorSeriesResult {
+    do {
+      let result = try compose_series_ffi(outer, inner, variable, order)
+      guard result.success else {
+        throw ThalesError.operationFailed(result.error_message.toString())
+      }
+      return TaylorSeriesResult(ffiResult: result)
+    } catch let error as ThalesError {
+      throw error
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+
+  /// Computes the compositional inverse (reversion) of a power series.
+  ///
+  /// Given a function `f(x)` expanded as a Maclaurin series, computes the
+  /// series for `g(x)` such that `f(g(x)) = x`. The function must satisfy
+  /// `f(0) = 0` and `f'(0) ≠ 0`.
+  ///
+  /// - Parameters:
+  ///   - expression: The function to invert
+  ///   - variable: The expansion variable
+  ///   - order: Number of terms to compute
+  ///
+  /// - Returns: A ``TaylorSeriesResult`` representing the inverse series
+  ///
+  /// - Throws: ``ThalesError`` if reversion fails
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // Inverse of sin(x) = arcsin(x)
+  /// let result = try Thales.reversionSeries("sin(x)", variable: "x", order: 7)
+  /// print(result.series)
+  /// ```
+  public static func reversionSeries(
+    _ expression: String,
+    variable: String,
+    order: UInt32
+  ) throws -> TaylorSeriesResult {
+    do {
+      let result = try reversion_series_ffi(expression, variable, order)
+      guard result.success else {
+        throw ThalesError.operationFailed(result.error_message.toString())
+      }
+      return TaylorSeriesResult(ffiResult: result)
+    } catch let error as ThalesError {
+      throw error
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
 }
 
 // MARK: - Series Result Types

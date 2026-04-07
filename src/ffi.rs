@@ -355,6 +355,17 @@ mod ffi {
             direction: &str,
             num_terms: u32,
         ) -> Result<AsymptoticSeriesResultFFI, String>;
+        fn compose_series_ffi(
+            outer: &str,
+            inner: &str,
+            variable: &str,
+            order: u32,
+        ) -> Result<TaylorSeriesResultFFI, String>;
+        fn reversion_series_ffi(
+            expression: &str,
+            variable: &str,
+            order: u32,
+        ) -> Result<TaylorSeriesResultFFI, String>;
         fn gamma_ffi(x: f64) -> Result<SpecialFunctionResultFFI, String>;
         fn erf_ffi(x: f64) -> Result<SpecialFunctionResultFFI, String>;
         fn beta_ffi(a: f64, b: f64) -> Result<SpecialFunctionResultFFI, String>;
@@ -1689,6 +1700,105 @@ fn rk4_solve_ffi(
     let sol = rk4_solve(f, config).map_err(|e| format!("RK4 error: {}", e))?;
 
     serde_json::to_string(&sol.trajectory).map_err(|e| format!("Serialization error: {}", e))
+}
+
+// =============================================================================
+// Series composition and reversion
+// =============================================================================
+
+/// Compose two power series: compute outer(inner(x)).
+///
+/// Both expressions are first expanded as Maclaurin series to the given order,
+/// then composed. The inner series must have a zero constant term.
+fn compose_series_ffi(
+    outer: &str,
+    inner: &str,
+    variable: &str,
+    order: u32,
+) -> Result<ffi::TaylorSeriesResultFFI, String> {
+    use crate::ast::Variable;
+    use crate::series::{compose_series, maclaurin};
+
+    let outer_expr =
+        parse_expression(outer).map_err(|e| format!("Parse error in outer: {:?}", e))?;
+    let inner_expr =
+        parse_expression(inner).map_err(|e| format!("Parse error in inner: {:?}", e))?;
+    let var = Variable::new(variable);
+
+    let outer_series =
+        maclaurin(&outer_expr, &var, order).map_err(|e| format!("Outer series error: {}", e))?;
+    let inner_series =
+        maclaurin(&inner_expr, &var, order).map_err(|e| format!("Inner series error: {}", e))?;
+
+    match compose_series(&outer_series, &inner_series) {
+        Ok(composed) => {
+            let expr = composed.to_expression();
+            Ok(ffi::TaylorSeriesResultFFI {
+                original: format!("({}) ∘ ({})", outer, inner),
+                variable: variable.to_string(),
+                center: 0.0,
+                order,
+                series: format!("{}", expr),
+                series_latex: expr.to_latex(),
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::TaylorSeriesResultFFI {
+            original: format!("({}) ∘ ({})", outer, inner),
+            variable: variable.to_string(),
+            center: 0.0,
+            order,
+            series: String::new(),
+            series_latex: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
+/// Compute the compositional inverse (reversion) of a power series.
+///
+/// The expression is expanded as a Maclaurin series, then reverted.
+/// The series must have a zero constant term and nonzero linear coefficient.
+fn reversion_series_ffi(
+    expression: &str,
+    variable: &str,
+    order: u32,
+) -> Result<ffi::TaylorSeriesResultFFI, String> {
+    use crate::ast::Variable;
+    use crate::series::{maclaurin, reversion};
+
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
+    let var = Variable::new(variable);
+
+    let series = maclaurin(&expr, &var, order).map_err(|e| format!("Series error: {}", e))?;
+
+    match reversion(&series) {
+        Ok(reverted) => {
+            let rev_expr = reverted.to_expression();
+            Ok(ffi::TaylorSeriesResultFFI {
+                original: expression.to_string(),
+                variable: variable.to_string(),
+                center: 0.0,
+                order,
+                series: format!("{}", rev_expr),
+                series_latex: rev_expr.to_latex(),
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::TaylorSeriesResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            center: 0.0,
+            order,
+            series: String::new(),
+            series_latex: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
 }
 
 // =============================================================================
