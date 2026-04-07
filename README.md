@@ -28,7 +28,7 @@ A comprehensive Computer Algebra System (CAS) library for symbolic mathematics, 
 
 ```toml
 [dependencies]
-thales = "0.4.0"
+thales = "0.4.1"
 ```
 
 ## Quick Start
