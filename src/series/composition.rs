@@ -1,6 +1,6 @@
 //! Series composition, reversion, and arithmetic operations.
 
-use crate::ast::{BinaryOp, Expression, Variable};
+use crate::ast::{BinaryOp, Expression};
 use std::collections::HashMap;
 use std::ops::{Add, Div, Mul, Sub};
 

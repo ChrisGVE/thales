@@ -895,6 +895,8 @@ impl StepAnnotation {
     }
 }
 
+/// A single step in the resolution path, recording one algebraic manipulation
+/// with its operation type, explanation, result, and optional educational annotation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolutionStep {
     /// The operation performed in this step.
