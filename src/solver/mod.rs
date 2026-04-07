@@ -117,6 +117,7 @@ mod helpers;
 pub mod linear;
 pub mod polynomial;
 pub mod quadratic;
+pub mod symbolic_isolation;
 pub mod system;
 pub mod transcendental;
 pub mod types;
@@ -130,7 +131,7 @@ pub use transcendental::TranscendentalSolver;
 pub use types::{Constraint, Solution, SolverError, SolverResult};
 
 use crate::ast::{Equation, Expression, Variable};
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionStep};
+use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder, ResolutionStep};
 use helpers::{evaluate_constants, substitute_values};
 use std::collections::HashMap;
 
@@ -321,7 +322,20 @@ impl Solver for SmartSolver {
         equation: &Equation,
         variable: &Variable,
     ) -> SolverResult<(Solution, ResolutionPath)> {
-        // Priority order: linear -> quadratic -> polynomial -> transcendental
+        // Try general symbolic isolation first — it handles arbitrary
+        // rearrangements that the specialized solvers miss.
+        let path_builder = ResolutionPathBuilder::new(equation.left.clone());
+        if let Ok((result_expr, builder)) = symbolic_isolation::symbolic_isolate(
+            &equation.left,
+            &equation.right,
+            variable,
+            path_builder,
+        ) {
+            let path = builder.finish(result_expr.clone());
+            return Ok((Solution::Unique(result_expr), path));
+        }
+
+        // Fall back: linear -> quadratic -> polynomial -> transcendental
         if self.linear.can_solve(equation) {
             self.linear.solve(equation, variable)
         } else if self.quadratic.can_solve(equation) {
