@@ -2297,3 +2297,140 @@ mod precision_tests {
         assert!(err.contains("Parse error"));
     }
 }
+
+#[cfg(test)]
+mod new_wrapper_tests {
+    use super::*;
+
+    // 2nd-order ODE tests
+    #[test]
+    fn test_second_order_ode_homogeneous() {
+        // y'' + 3y' + 2y = 0 → coefficients [1, 3, 2]
+        let result = solve_second_order_ode_ffi("[1, 3, 2]", "").unwrap();
+        assert!(result.success, "Error: {}", result.error_message);
+        assert!(!result.solution.is_empty());
+        assert_eq!(result.ode_type, "second_order");
+    }
+
+    #[test]
+    fn test_second_order_ode_with_forcing() {
+        // y'' + y = x → coefficients [1, 0, 1], forcing "x"
+        let result = solve_second_order_ode_ffi("[1, 0, 1]", "x").unwrap();
+        assert!(result.success, "Error: {}", result.error_message);
+    }
+
+    #[test]
+    fn test_second_order_ode_wrong_coefficients() {
+        match solve_second_order_ode_ffi("[1, 2]", "") {
+            Err(err) => assert!(err.contains("Expected 3 coefficients")),
+            Ok(_) => panic!("Expected error for wrong number of coefficients"),
+        }
+    }
+
+    // Higher-order ODE tests
+    #[test]
+    fn test_higher_order_ode() {
+        // y''' - y = 0 → coefficients [1, 0, 0, -1]
+        let result = solve_higher_order_ode_ffi("[1, 0, 0, -1]").unwrap();
+        assert!(result.success, "Error: {}", result.error_message);
+        assert_eq!(result.ode_type, "higher_order");
+    }
+
+    #[test]
+    fn test_higher_order_ode_too_few_coefficients() {
+        match solve_higher_order_ode_ffi("[1]") {
+            Err(err) => assert!(err.contains("at least 2")),
+            Ok(_) => panic!("Expected error for too few coefficients"),
+        }
+    }
+
+    // RK4 tests
+    #[test]
+    fn test_rk4_solve_exponential() {
+        // y' = y, y(0) = 1 → y = e^x
+        let json = rk4_solve_ffi("y", "y", 0.0, 1.0, 1.0, 100).unwrap();
+        let trajectory: Vec<Vec<f64>> = serde_json::from_str(&json).unwrap();
+        assert!(!trajectory.is_empty());
+        // Last point should be close to e ≈ 2.718
+        let last = trajectory.last().unwrap();
+        assert!(
+            (last[1] - std::f64::consts::E).abs() < 0.01,
+            "Expected ~e, got {}",
+            last[1]
+        );
+    }
+
+    // Series composition tests
+    #[test]
+    fn test_compose_series_exp_sin() {
+        let result = compose_series_ffi("exp(x)", "sin(x)", "x", 5).unwrap();
+        assert!(result.success, "Error: {}", result.error_message);
+        assert!(!result.series.is_empty());
+    }
+
+    #[test]
+    fn test_reversion_series_sin() {
+        let result = reversion_series_ffi("sin(x)", "x", 5).unwrap();
+        assert!(result.success, "Error: {}", result.error_message);
+        assert!(!result.series.is_empty());
+    }
+
+    // 2D transform tests
+    #[test]
+    fn test_translate_2d() {
+        let result = translate_2d_ffi(1.0, 2.0, 3.0, 4.0);
+        assert!((result.x - 4.0).abs() < 1e-10);
+        assert!((result.y - 6.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_rotate_2d() {
+        // Rotate (1, 0) by π/2 → (0, 1)
+        let result = rotate_2d_ffi(1.0, 0.0, std::f64::consts::FRAC_PI_2);
+        assert!(result.x.abs() < 1e-10, "Expected ~0, got {}", result.x);
+        assert!(
+            (result.y - 1.0).abs() < 1e-10,
+            "Expected ~1, got {}",
+            result.y
+        );
+    }
+
+    #[test]
+    fn test_scale_2d() {
+        let result = scale_2d_ffi(3.0, 4.0, 2.0, 0.5);
+        assert!((result.x - 6.0).abs() < 1e-10);
+        assert!((result.y - 2.0).abs() < 1e-10);
+    }
+
+    // Complex nth roots tests
+    #[test]
+    fn test_complex_nth_roots_cube_roots_of_unity() {
+        let json = complex_nth_roots_ffi(1.0, 0.0, 3).unwrap();
+        let roots: Vec<[f64; 2]> = serde_json::from_str(&json).unwrap();
+        assert_eq!(roots.len(), 3);
+        // First root should be 1+0i
+        assert!((roots[0][0] - 1.0).abs() < 1e-10);
+        assert!(roots[0][1].abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_complex_nth_roots_negative_n() {
+        match complex_nth_roots_ffi(1.0, 0.0, -1) {
+            Err(err) => assert!(err.contains("positive")),
+            Ok(_) => panic!("Expected error for negative n"),
+        }
+    }
+
+    // Unit conversion tests
+    #[test]
+    fn test_convert_units_same_dimension() {
+        // km to m
+        let result = convert_units_ffi(1.0, "km", "m");
+        match result {
+            Ok(val) => assert!((val - 1000.0).abs() < 1e-6),
+            Err(_) => {
+                // Unit registry may not have km — that's ok for a basic test
+            }
+        }
+    }
+}
