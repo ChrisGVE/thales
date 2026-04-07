@@ -1,10 +1,12 @@
+import ThalesBridge
+
 public func parse_equation_ffi<GenericToRustStr: ToRustStr>(_ input: GenericToRustStr) throws -> RustString {
-    return input.toRustStr({ inputAsRustStr in
+    return try input.toRustStr({ inputAsRustStr in
         try { let val = __swift_bridge__$parse_equation_ffi(inputAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
 }
 public func parse_expression_ffi<GenericToRustStr: ToRustStr>(_ input: GenericToRustStr) throws -> RustString {
-    return input.toRustStr({ inputAsRustStr in
+    return try input.toRustStr({ inputAsRustStr in
         try { let val = __swift_bridge__$parse_expression_ffi(inputAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
 }
@@ -29,43 +31,43 @@ public func solve_ode_ivp_ffi<GenericToRustStr: ToRustStr>(_ equation: GenericTo
     })
 }
 public func solve_second_order_ode_ffi<GenericToRustStr: ToRustStr>(_ coefficients_json: GenericToRustStr, _ forcing_fn: GenericToRustStr) throws -> ODEResultFFI {
-    return forcing_fn.toRustStr({ forcing_fnAsRustStr in
-        return coefficients_json.toRustStr({ coefficients_jsonAsRustStr in
+    return try forcing_fn.toRustStr({ forcing_fnAsRustStr in
+        return try coefficients_json.toRustStr({ coefficients_jsonAsRustStr in
         try { let val = __swift_bridge__$solve_second_order_ode_ffi(coefficients_jsonAsRustStr, forcing_fnAsRustStr); switch val.tag { case __swift_bridge__$ResultODEResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultODEResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
 }
 public func solve_higher_order_ode_ffi<GenericToRustStr: ToRustStr>(_ coefficients_json: GenericToRustStr) throws -> ODEResultFFI {
-    return coefficients_json.toRustStr({ coefficients_jsonAsRustStr in
+    return try coefficients_json.toRustStr({ coefficients_jsonAsRustStr in
         try { let val = __swift_bridge__$solve_higher_order_ode_ffi(coefficients_jsonAsRustStr); switch val.tag { case __swift_bridge__$ResultODEResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultODEResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
 }
 public func rk4_solve_ffi<GenericToRustStr: ToRustStr>(_ equation: GenericToRustStr, _ variable: GenericToRustStr, _ x0: Double, _ y0: Double, _ x_end: Double, _ steps: UInt32) throws -> RustString {
-    return variable.toRustStr({ variableAsRustStr in
-        return equation.toRustStr({ equationAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try equation.toRustStr({ equationAsRustStr in
         try { let val = __swift_bridge__$rk4_solve_ffi(equationAsRustStr, variableAsRustStr, x0, y0, x_end, steps); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
     })
 }
 public func solve_equation_ffi<GenericToRustStr: ToRustStr>(_ equation: GenericToRustStr, _ variable: GenericToRustStr) throws -> RustString {
-    return variable.toRustStr({ variableAsRustStr in
-        return equation.toRustStr({ equationAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try equation.toRustStr({ equationAsRustStr in
         try { let val = __swift_bridge__$solve_equation_ffi(equationAsRustStr, variableAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
     })
 }
 public func solve_with_values_ffi<GenericToRustStr: ToRustStr>(_ equation: GenericToRustStr, _ variable: GenericToRustStr, _ known_values_json: GenericToRustStr) throws -> ResolutionPathFFI {
-    return known_values_json.toRustStr({ known_values_jsonAsRustStr in
-        return variable.toRustStr({ variableAsRustStr in
-        return equation.toRustStr({ equationAsRustStr in
+    return try known_values_json.toRustStr({ known_values_jsonAsRustStr in
+        return try variable.toRustStr({ variableAsRustStr in
+        return try equation.toRustStr({ equationAsRustStr in
         try { let val = __swift_bridge__$solve_with_values_ffi(equationAsRustStr, variableAsRustStr, known_values_jsonAsRustStr); switch val.tag { case __swift_bridge__$ResultResolutionPathFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultResolutionPathFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
     })
 }
 public func solve_numerically_ffi<GenericToRustStr: ToRustStr>(_ equation: GenericToRustStr, _ variable: GenericToRustStr, _ initial_guess: Double) throws -> Double {
-    return variable.toRustStr({ variableAsRustStr in
-        return equation.toRustStr({ equationAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try equation.toRustStr({ equationAsRustStr in
         try { let val = __swift_bridge__$solve_numerically_ffi(equationAsRustStr, variableAsRustStr, initial_guess); switch val.tag { case __swift_bridge__$ResultF64AndString$ResultOk: return val.payload.ok case __swift_bridge__$ResultF64AndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
@@ -95,163 +97,163 @@ public func complex_power_ffi(_ re: Double, _ im: Double, _ n: Double) -> Comple
     __swift_bridge__$complex_power_ffi(re, im, n).intoSwiftRepr()
 }
 public func parse_latex_ffi<GenericToRustStr: ToRustStr>(_ input: GenericToRustStr) throws -> RustString {
-    return input.toRustStr({ inputAsRustStr in
+    return try input.toRustStr({ inputAsRustStr in
         try { let val = __swift_bridge__$parse_latex_ffi(inputAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
 }
 public func parse_latex_to_latex_ffi<GenericToRustStr: ToRustStr>(_ input: GenericToRustStr) throws -> RustString {
-    return input.toRustStr({ inputAsRustStr in
+    return try input.toRustStr({ inputAsRustStr in
         try { let val = __swift_bridge__$parse_latex_to_latex_ffi(inputAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
 }
 public func to_latex_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr) throws -> RustString {
-    return expression.toRustStr({ expressionAsRustStr in
+    return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$to_latex_ffi(expressionAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
 }
 public func differentiate_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr) throws -> DifferentiationResultFFI {
-    return variable.toRustStr({ variableAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$differentiate_ffi(expressionAsRustStr, variableAsRustStr); switch val.tag { case __swift_bridge__$ResultDifferentiationResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultDifferentiationResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
 }
 public func differentiate_n_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ n: UInt32) throws -> DifferentiationResultFFI {
-    return variable.toRustStr({ variableAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$differentiate_n_ffi(expressionAsRustStr, variableAsRustStr, n); switch val.tag { case __swift_bridge__$ResultDifferentiationResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultDifferentiationResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
 }
 public func gradient_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variables_json: GenericToRustStr) throws -> RustString {
-    return variables_json.toRustStr({ variables_jsonAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try variables_json.toRustStr({ variables_jsonAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$gradient_ffi(expressionAsRustStr, variables_jsonAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
     })
 }
 public func integrate_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr) throws -> IntegrationResultFFI {
-    return variable.toRustStr({ variableAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$integrate_ffi(expressionAsRustStr, variableAsRustStr); switch val.tag { case __swift_bridge__$ResultIntegrationResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultIntegrationResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
 }
 public func definite_integral_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ lower: Double, _ upper: Double) throws -> DefiniteIntegralResultFFI {
-    return variable.toRustStr({ variableAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$definite_integral_ffi(expressionAsRustStr, variableAsRustStr, lower, upper); switch val.tag { case __swift_bridge__$ResultDefiniteIntegralResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultDefiniteIntegralResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
 }
 public func limit_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ approaches: Double) throws -> LimitResultFFI {
-    return variable.toRustStr({ variableAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$limit_ffi(expressionAsRustStr, variableAsRustStr, approaches); switch val.tag { case __swift_bridge__$ResultLimitResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultLimitResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
 }
 public func limit_infinity_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr) throws -> LimitResultFFI {
-    return variable.toRustStr({ variableAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$limit_infinity_ffi(expressionAsRustStr, variableAsRustStr); switch val.tag { case __swift_bridge__$ResultLimitResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultLimitResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
 }
 public func evaluate_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ values_json: GenericToRustStr) throws -> EvaluationResultFFI {
-    return values_json.toRustStr({ values_jsonAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try values_json.toRustStr({ values_jsonAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$evaluate_ffi(expressionAsRustStr, values_jsonAsRustStr); switch val.tag { case __swift_bridge__$ResultEvaluationResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultEvaluationResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
 }
 public func simplify_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr) throws -> SimplificationResultFFI {
-    return expression.toRustStr({ expressionAsRustStr in
+    return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$simplify_ffi(expressionAsRustStr); switch val.tag { case __swift_bridge__$ResultSimplificationResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultSimplificationResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
 }
 public func simplify_trig_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr) throws -> SimplificationResultFFI {
-    return expression.toRustStr({ expressionAsRustStr in
+    return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$simplify_trig_ffi(expressionAsRustStr); switch val.tag { case __swift_bridge__$ResultSimplificationResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultSimplificationResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
 }
 public func simplify_trig_with_steps_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr) throws -> RustString {
-    return expression.toRustStr({ expressionAsRustStr in
+    return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$simplify_trig_with_steps_ffi(expressionAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
 }
 public func solve_system_ffi<GenericToRustStr: ToRustStr>(_ equations_json: GenericToRustStr) throws -> RustString {
-    return equations_json.toRustStr({ equations_jsonAsRustStr in
+    return try equations_json.toRustStr({ equations_jsonAsRustStr in
         try { let val = __swift_bridge__$solve_system_ffi(equations_jsonAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
 }
 public func solve_inequality_ffi<GenericToRustStr: ToRustStr>(_ inequality: GenericToRustStr, _ variable: GenericToRustStr) throws -> RustString {
-    return variable.toRustStr({ variableAsRustStr in
-        return inequality.toRustStr({ inequalityAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try inequality.toRustStr({ inequalityAsRustStr in
         try { let val = __swift_bridge__$solve_inequality_ffi(inequalityAsRustStr, variableAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
     })
 }
 public func partial_fractions_ffi<GenericToRustStr: ToRustStr>(_ numerator: GenericToRustStr, _ denominator: GenericToRustStr, _ variable: GenericToRustStr) throws -> RustString {
-    return variable.toRustStr({ variableAsRustStr in
-        return denominator.toRustStr({ denominatorAsRustStr in
-        return numerator.toRustStr({ numeratorAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try denominator.toRustStr({ denominatorAsRustStr in
+        return try numerator.toRustStr({ numeratorAsRustStr in
         try { let val = __swift_bridge__$partial_fractions_ffi(numeratorAsRustStr, denominatorAsRustStr, variableAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
     })
     })
 }
 public func solve_equation_system_ffi<GenericToRustStr: ToRustStr>(_ equations_json: GenericToRustStr, _ known_values_json: GenericToRustStr, _ targets_json: GenericToRustStr) throws -> RustString {
-    return targets_json.toRustStr({ targets_jsonAsRustStr in
-        return known_values_json.toRustStr({ known_values_jsonAsRustStr in
-        return equations_json.toRustStr({ equations_jsonAsRustStr in
+    return try targets_json.toRustStr({ targets_jsonAsRustStr in
+        return try known_values_json.toRustStr({ known_values_jsonAsRustStr in
+        return try equations_json.toRustStr({ equations_jsonAsRustStr in
         try { let val = __swift_bridge__$solve_equation_system_ffi(equations_jsonAsRustStr, known_values_jsonAsRustStr, targets_jsonAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
     })
     })
 }
 public func taylor_series_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ center: Double, _ order: UInt32) throws -> TaylorSeriesResultFFI {
-    return variable.toRustStr({ variableAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$taylor_series_ffi(expressionAsRustStr, variableAsRustStr, center, order); switch val.tag { case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
 }
 public func maclaurin_series_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ order: UInt32) throws -> TaylorSeriesResultFFI {
-    return variable.toRustStr({ variableAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$maclaurin_series_ffi(expressionAsRustStr, variableAsRustStr, order); switch val.tag { case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
 }
 public func laurent_series_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ center: Double, _ neg_order: UInt32, _ pos_order: UInt32) throws -> LaurentSeriesResultFFI {
-    return variable.toRustStr({ variableAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$laurent_series_ffi(expressionAsRustStr, variableAsRustStr, center, neg_order, pos_order); switch val.tag { case __swift_bridge__$ResultLaurentSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultLaurentSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
 }
 public func asymptotic_series_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ direction: GenericToRustStr, _ num_terms: UInt32) throws -> AsymptoticSeriesResultFFI {
-    return direction.toRustStr({ directionAsRustStr in
-        return variable.toRustStr({ variableAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try direction.toRustStr({ directionAsRustStr in
+        return try variable.toRustStr({ variableAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$asymptotic_series_ffi(expressionAsRustStr, variableAsRustStr, directionAsRustStr, num_terms); switch val.tag { case __swift_bridge__$ResultAsymptoticSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultAsymptoticSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
     })
 }
 public func compose_series_ffi<GenericToRustStr: ToRustStr>(_ outer: GenericToRustStr, _ inner: GenericToRustStr, _ variable: GenericToRustStr, _ order: UInt32) throws -> TaylorSeriesResultFFI {
-    return variable.toRustStr({ variableAsRustStr in
-        return inner.toRustStr({ innerAsRustStr in
-        return outer.toRustStr({ outerAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try inner.toRustStr({ innerAsRustStr in
+        return try outer.toRustStr({ outerAsRustStr in
         try { let val = __swift_bridge__$compose_series_ffi(outerAsRustStr, innerAsRustStr, variableAsRustStr, order); switch val.tag { case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
     })
 }
 public func reversion_series_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ order: UInt32) throws -> TaylorSeriesResultFFI {
-    return variable.toRustStr({ variableAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$reversion_series_ffi(expressionAsRustStr, variableAsRustStr, order); switch val.tag { case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
@@ -269,10 +271,10 @@ public func erfc_ffi(_ x: Double) throws -> SpecialFunctionResultFFI {
     try { let val = __swift_bridge__$erfc_ffi(x); switch val.tag { case __swift_bridge__$ResultSpecialFunctionResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultSpecialFunctionResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
 }
 public func evaluate_with_precision_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ values_json: GenericToRustStr, _ mode: GenericToRustStr, _ precision: UInt32, _ rounding: GenericToRustStr) throws -> PrecisionEvaluationResultFFI {
-    return rounding.toRustStr({ roundingAsRustStr in
-        return mode.toRustStr({ modeAsRustStr in
-        return values_json.toRustStr({ values_jsonAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try rounding.toRustStr({ roundingAsRustStr in
+        return try mode.toRustStr({ modeAsRustStr in
+        return try values_json.toRustStr({ values_jsonAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$evaluate_with_precision_ffi(expressionAsRustStr, values_jsonAsRustStr, modeAsRustStr, precision, roundingAsRustStr); switch val.tag { case __swift_bridge__$ResultPrecisionEvaluationResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultPrecisionEvaluationResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
@@ -280,20 +282,20 @@ public func evaluate_with_precision_ffi<GenericToRustStr: ToRustStr>(_ expressio
     })
 }
 public func optimize_for_manual_computation_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr) throws -> RustString {
-    return expression.toRustStr({ expressionAsRustStr in
+    return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$optimize_for_manual_computation_ffi(expressionAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
 }
 public func small_angle_approximation_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ threshold: Double) throws -> RustString {
-    return variable.toRustStr({ variableAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$small_angle_approximation_ffi(expressionAsRustStr, variableAsRustStr, threshold); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
     })
 }
 public func fourier_series_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ num_terms: UInt32, _ period: Double) throws -> FourierSeriesResultFFI {
-    return variable.toRustStr({ variableAsRustStr in
-        return expression.toRustStr({ expressionAsRustStr in
+    return try variable.toRustStr({ variableAsRustStr in
+        return try expression.toRustStr({ expressionAsRustStr in
         try { let val = __swift_bridge__$fourier_series_ffi(expressionAsRustStr, variableAsRustStr, num_terms, period); switch val.tag { case __swift_bridge__$ResultFourierSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultFourierSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
@@ -311,14 +313,14 @@ public func complex_nth_roots_ffi(_ re: Double, _ im: Double, _ n: Int32) throws
     try { let val = __swift_bridge__$complex_nth_roots_ffi(re, im, n); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
 }
 public func convert_units_ffi<GenericToRustStr: ToRustStr>(_ value: Double, _ from_unit: GenericToRustStr, _ to_unit: GenericToRustStr) throws -> Double {
-    return to_unit.toRustStr({ to_unitAsRustStr in
-        return from_unit.toRustStr({ from_unitAsRustStr in
+    return try to_unit.toRustStr({ to_unitAsRustStr in
+        return try from_unit.toRustStr({ from_unitAsRustStr in
         try { let val = __swift_bridge__$convert_units_ffi(value, from_unitAsRustStr, to_unitAsRustStr); switch val.tag { case __swift_bridge__$ResultF64AndString$ResultOk: return val.payload.ok case __swift_bridge__$ResultF64AndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
     })
     })
 }
 public func parse_latex_calculus_ffi<GenericToRustStr: ToRustStr>(_ input: GenericToRustStr) throws -> RustString {
-    return input.toRustStr({ inputAsRustStr in
+    return try input.toRustStr({ inputAsRustStr in
         try { let val = __swift_bridge__$parse_latex_calculus_ffi(inputAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
 }

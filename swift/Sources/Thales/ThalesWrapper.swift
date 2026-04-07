@@ -5,6 +5,7 @@
 // auto-generated FFI bindings from swift-bridge.
 
 import Foundation
+import ThalesBridge
 
 // MARK: - Thales Namespace
 
