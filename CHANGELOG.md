@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-04-07
+
+### Added
+
+- **Swift wrappers for 2nd-order ODE**: `solveODE2ndOrder` and `solveODE2ndOrderIVP` for constant-coefficient ODEs with optional forcing function
+- **Swift wrappers for higher-order ODE**: `solveHigherOrderODE` for nth-order constant-coefficient homogeneous ODEs
+- **Swift wrapper for RK4 numerical ODE integration**: `solveODENumerical` returns trajectory as array of (x, y) pairs
+- **Swift wrapper for precision-controlled evaluation**: `evaluate(_:with:precision:decimalPlaces:rounding:)` with `PrecisionMode` and `RoundingMode` enums
+- **Swift wrapper for Fourier series**: `fourierSeries` with `FourierSeriesResult` containing parsed coefficients
+- **Series composition and reversion**: `composeSeries` for f(g(x)) and `reversionSeries` for functional inverse, with new FFI bindings
+- **2D coordinate transform wrappers**: `translate2D`, `rotate2D`, `scale2D` via FFI
+- **Complex nth roots wrapper**: `complexNthRoots` returns all n roots of a complex number
+- **Unit conversion wrapper**: `convertUnits` using the built-in dimensional analysis registry
+- **LaTeX calculus notation parsing wrapper**: `parseLatexCalculus` for integral, limit, and sum notations
+
+### Fixed
+
+- Sync bridge.rs with ffi.rs: add missing result type structs for Taylor, Laurent, Asymptotic, and SpecialFunction series
+- Regenerate Swift bridge bindings to include all FFI functions added since v0.3.0
+- Fix ComplexNumber field references in Swift wrapper (re/im to real/imaginary)
+- Fix Fourier series FFI test that expected Ok for parse errors (now correctly expects Err)
+- Fix precision evaluation tests to avoid Debug trait requirement on bridge types
+
 ## [0.4.0] - 2026-04-06
 
 ### Added

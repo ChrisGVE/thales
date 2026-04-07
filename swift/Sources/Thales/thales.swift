@@ -8,6 +8,45 @@ public func parse_expression_ffi<GenericToRustStr: ToRustStr>(_ input: GenericTo
         try { let val = __swift_bridge__$parse_expression_ffi(inputAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
 }
+public func solve_ode_ffi<GenericToRustStr: ToRustStr>(_ equation: GenericToRustStr, _ dependent_var: GenericToRustStr, _ independent_var: GenericToRustStr) -> ODEResultFFI {
+    return independent_var.toRustStr({ independent_varAsRustStr in
+        return dependent_var.toRustStr({ dependent_varAsRustStr in
+        return equation.toRustStr({ equationAsRustStr in
+        __swift_bridge__$solve_ode_ffi(equationAsRustStr, dependent_varAsRustStr, independent_varAsRustStr).intoSwiftRepr()
+    })
+    })
+    })
+}
+public func solve_ode_ivp_ffi<GenericToRustStr: ToRustStr>(_ equation: GenericToRustStr, _ dependent_var: GenericToRustStr, _ independent_var: GenericToRustStr, _ initial_conditions_json: GenericToRustStr) -> ODEResultFFI {
+    return initial_conditions_json.toRustStr({ initial_conditions_jsonAsRustStr in
+        return independent_var.toRustStr({ independent_varAsRustStr in
+        return dependent_var.toRustStr({ dependent_varAsRustStr in
+        return equation.toRustStr({ equationAsRustStr in
+        __swift_bridge__$solve_ode_ivp_ffi(equationAsRustStr, dependent_varAsRustStr, independent_varAsRustStr, initial_conditions_jsonAsRustStr).intoSwiftRepr()
+    })
+    })
+    })
+    })
+}
+public func solve_second_order_ode_ffi<GenericToRustStr: ToRustStr>(_ coefficients_json: GenericToRustStr, _ forcing_fn: GenericToRustStr) throws -> ODEResultFFI {
+    return forcing_fn.toRustStr({ forcing_fnAsRustStr in
+        return coefficients_json.toRustStr({ coefficients_jsonAsRustStr in
+        try { let val = __swift_bridge__$solve_second_order_ode_ffi(coefficients_jsonAsRustStr, forcing_fnAsRustStr); switch val.tag { case __swift_bridge__$ResultODEResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultODEResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+    })
+    })
+}
+public func solve_higher_order_ode_ffi<GenericToRustStr: ToRustStr>(_ coefficients_json: GenericToRustStr) throws -> ODEResultFFI {
+    return coefficients_json.toRustStr({ coefficients_jsonAsRustStr in
+        try { let val = __swift_bridge__$solve_higher_order_ode_ffi(coefficients_jsonAsRustStr); switch val.tag { case __swift_bridge__$ResultODEResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultODEResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+    })
+}
+public func rk4_solve_ffi<GenericToRustStr: ToRustStr>(_ equation: GenericToRustStr, _ variable: GenericToRustStr, _ x0: Double, _ y0: Double, _ x_end: Double, _ steps: UInt32) throws -> RustString {
+    return variable.toRustStr({ variableAsRustStr in
+        return equation.toRustStr({ equationAsRustStr in
+        try { let val = __swift_bridge__$rk4_solve_ffi(equationAsRustStr, variableAsRustStr, x0, y0, x_end, steps); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+    })
+    })
+}
 public func solve_equation_ffi<GenericToRustStr: ToRustStr>(_ equation: GenericToRustStr, _ variable: GenericToRustStr) throws -> RustString {
     return variable.toRustStr({ variableAsRustStr in
         return equation.toRustStr({ equationAsRustStr in
@@ -169,6 +208,118 @@ public func solve_equation_system_ffi<GenericToRustStr: ToRustStr>(_ equations_j
         try { let val = __swift_bridge__$solve_equation_system_ffi(equations_jsonAsRustStr, known_values_jsonAsRustStr, targets_jsonAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
     })
+    })
+}
+public func taylor_series_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ center: Double, _ order: UInt32) throws -> TaylorSeriesResultFFI {
+    return variable.toRustStr({ variableAsRustStr in
+        return expression.toRustStr({ expressionAsRustStr in
+        try { let val = __swift_bridge__$taylor_series_ffi(expressionAsRustStr, variableAsRustStr, center, order); switch val.tag { case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+    })
+    })
+}
+public func maclaurin_series_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ order: UInt32) throws -> TaylorSeriesResultFFI {
+    return variable.toRustStr({ variableAsRustStr in
+        return expression.toRustStr({ expressionAsRustStr in
+        try { let val = __swift_bridge__$maclaurin_series_ffi(expressionAsRustStr, variableAsRustStr, order); switch val.tag { case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+    })
+    })
+}
+public func laurent_series_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ center: Double, _ neg_order: UInt32, _ pos_order: UInt32) throws -> LaurentSeriesResultFFI {
+    return variable.toRustStr({ variableAsRustStr in
+        return expression.toRustStr({ expressionAsRustStr in
+        try { let val = __swift_bridge__$laurent_series_ffi(expressionAsRustStr, variableAsRustStr, center, neg_order, pos_order); switch val.tag { case __swift_bridge__$ResultLaurentSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultLaurentSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+    })
+    })
+}
+public func asymptotic_series_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ direction: GenericToRustStr, _ num_terms: UInt32) throws -> AsymptoticSeriesResultFFI {
+    return direction.toRustStr({ directionAsRustStr in
+        return variable.toRustStr({ variableAsRustStr in
+        return expression.toRustStr({ expressionAsRustStr in
+        try { let val = __swift_bridge__$asymptotic_series_ffi(expressionAsRustStr, variableAsRustStr, directionAsRustStr, num_terms); switch val.tag { case __swift_bridge__$ResultAsymptoticSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultAsymptoticSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+    })
+    })
+    })
+}
+public func compose_series_ffi<GenericToRustStr: ToRustStr>(_ outer: GenericToRustStr, _ inner: GenericToRustStr, _ variable: GenericToRustStr, _ order: UInt32) throws -> TaylorSeriesResultFFI {
+    return variable.toRustStr({ variableAsRustStr in
+        return inner.toRustStr({ innerAsRustStr in
+        return outer.toRustStr({ outerAsRustStr in
+        try { let val = __swift_bridge__$compose_series_ffi(outerAsRustStr, innerAsRustStr, variableAsRustStr, order); switch val.tag { case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+    })
+    })
+    })
+}
+public func reversion_series_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ order: UInt32) throws -> TaylorSeriesResultFFI {
+    return variable.toRustStr({ variableAsRustStr in
+        return expression.toRustStr({ expressionAsRustStr in
+        try { let val = __swift_bridge__$reversion_series_ffi(expressionAsRustStr, variableAsRustStr, order); switch val.tag { case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultTaylorSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+    })
+    })
+}
+public func gamma_ffi(_ x: Double) throws -> SpecialFunctionResultFFI {
+    try { let val = __swift_bridge__$gamma_ffi(x); switch val.tag { case __swift_bridge__$ResultSpecialFunctionResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultSpecialFunctionResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+}
+public func erf_ffi(_ x: Double) throws -> SpecialFunctionResultFFI {
+    try { let val = __swift_bridge__$erf_ffi(x); switch val.tag { case __swift_bridge__$ResultSpecialFunctionResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultSpecialFunctionResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+}
+public func beta_ffi(_ a: Double, _ b: Double) throws -> SpecialFunctionResultFFI {
+    try { let val = __swift_bridge__$beta_ffi(a, b); switch val.tag { case __swift_bridge__$ResultSpecialFunctionResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultSpecialFunctionResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+}
+public func erfc_ffi(_ x: Double) throws -> SpecialFunctionResultFFI {
+    try { let val = __swift_bridge__$erfc_ffi(x); switch val.tag { case __swift_bridge__$ResultSpecialFunctionResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultSpecialFunctionResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+}
+public func evaluate_with_precision_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ values_json: GenericToRustStr, _ mode: GenericToRustStr, _ precision: UInt32, _ rounding: GenericToRustStr) throws -> PrecisionEvaluationResultFFI {
+    return rounding.toRustStr({ roundingAsRustStr in
+        return mode.toRustStr({ modeAsRustStr in
+        return values_json.toRustStr({ values_jsonAsRustStr in
+        return expression.toRustStr({ expressionAsRustStr in
+        try { let val = __swift_bridge__$evaluate_with_precision_ffi(expressionAsRustStr, values_jsonAsRustStr, modeAsRustStr, precision, roundingAsRustStr); switch val.tag { case __swift_bridge__$ResultPrecisionEvaluationResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultPrecisionEvaluationResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+    })
+    })
+    })
+    })
+}
+public func optimize_for_manual_computation_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr) throws -> RustString {
+    return expression.toRustStr({ expressionAsRustStr in
+        try { let val = __swift_bridge__$optimize_for_manual_computation_ffi(expressionAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+    })
+}
+public func small_angle_approximation_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ threshold: Double) throws -> RustString {
+    return variable.toRustStr({ variableAsRustStr in
+        return expression.toRustStr({ expressionAsRustStr in
+        try { let val = __swift_bridge__$small_angle_approximation_ffi(expressionAsRustStr, variableAsRustStr, threshold); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+    })
+    })
+}
+public func fourier_series_ffi<GenericToRustStr: ToRustStr>(_ expression: GenericToRustStr, _ variable: GenericToRustStr, _ num_terms: UInt32, _ period: Double) throws -> FourierSeriesResultFFI {
+    return variable.toRustStr({ variableAsRustStr in
+        return expression.toRustStr({ expressionAsRustStr in
+        try { let val = __swift_bridge__$fourier_series_ffi(expressionAsRustStr, variableAsRustStr, num_terms, period); switch val.tag { case __swift_bridge__$ResultFourierSeriesResultFFIAndString$ResultOk: return val.payload.ok.intoSwiftRepr() case __swift_bridge__$ResultFourierSeriesResultFFIAndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+    })
+    })
+}
+public func translate_2d_ffi(_ x: Double, _ y: Double, _ dx: Double, _ dy: Double) -> CartesianCoords2D {
+    __swift_bridge__$translate_2d_ffi(x, y, dx, dy).intoSwiftRepr()
+}
+public func rotate_2d_ffi(_ x: Double, _ y: Double, _ theta: Double) -> CartesianCoords2D {
+    __swift_bridge__$rotate_2d_ffi(x, y, theta).intoSwiftRepr()
+}
+public func scale_2d_ffi(_ x: Double, _ y: Double, _ sx: Double, _ sy: Double) -> CartesianCoords2D {
+    __swift_bridge__$scale_2d_ffi(x, y, sx, sy).intoSwiftRepr()
+}
+public func complex_nth_roots_ffi(_ re: Double, _ im: Double, _ n: Int32) throws -> RustString {
+    try { let val = __swift_bridge__$complex_nth_roots_ffi(re, im, n); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
+public func convert_units_ffi<GenericToRustStr: ToRustStr>(_ value: Double, _ from_unit: GenericToRustStr, _ to_unit: GenericToRustStr) throws -> Double {
+    return to_unit.toRustStr({ to_unitAsRustStr in
+        return from_unit.toRustStr({ from_unitAsRustStr in
+        try { let val = __swift_bridge__$convert_units_ffi(value, from_unitAsRustStr, to_unitAsRustStr); switch val.tag { case __swift_bridge__$ResultF64AndString$ResultOk: return val.payload.ok case __swift_bridge__$ResultF64AndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+    })
+    })
+}
+public func parse_latex_calculus_ffi<GenericToRustStr: ToRustStr>(_ input: GenericToRustStr) throws -> RustString {
+    return input.toRustStr({ inputAsRustStr in
+        try { let val = __swift_bridge__$parse_latex_calculus_ffi(inputAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
     })
 }
 public struct ResolutionPathFFI {
@@ -688,6 +839,361 @@ extension __swift_bridge__$Option$SimplificationResultFFI {
             return __swift_bridge__$Option$SimplificationResultFFI(is_some: true, val: v.intoFfiRepr())
         } else {
             return __swift_bridge__$Option$SimplificationResultFFI(is_some: false, val: __swift_bridge__$SimplificationResultFFI())
+        }
+    }
+}
+public struct ODEResultFFI {
+    public var equation: RustString
+    public var solution: RustString
+    public var solution_latex: RustString
+    public var ode_type: RustString
+    public var method_used: RustString
+    public var success: Bool
+    public var error_message: RustString
+
+    public init(equation: RustString,solution: RustString,solution_latex: RustString,ode_type: RustString,method_used: RustString,success: Bool,error_message: RustString) {
+        self.equation = equation
+        self.solution = solution
+        self.solution_latex = solution_latex
+        self.ode_type = ode_type
+        self.method_used = method_used
+        self.success = success
+        self.error_message = error_message
+    }
+
+    @inline(__always)
+    func intoFfiRepr() -> __swift_bridge__$ODEResultFFI {
+        { let val = self; return __swift_bridge__$ODEResultFFI(equation: { let rustString = val.equation.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), solution: { let rustString = val.solution.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), solution_latex: { let rustString = val.solution_latex.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), ode_type: { let rustString = val.ode_type.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), method_used: { let rustString = val.method_used.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), success: val.success, error_message: { let rustString = val.error_message.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); }()
+    }
+}
+extension __swift_bridge__$ODEResultFFI {
+    @inline(__always)
+    func intoSwiftRepr() -> ODEResultFFI {
+        { let val = self; return ODEResultFFI(equation: RustString(ptr: val.equation), solution: RustString(ptr: val.solution), solution_latex: RustString(ptr: val.solution_latex), ode_type: RustString(ptr: val.ode_type), method_used: RustString(ptr: val.method_used), success: val.success, error_message: RustString(ptr: val.error_message)); }()
+    }
+}
+extension __swift_bridge__$Option$ODEResultFFI {
+    @inline(__always)
+    func intoSwiftRepr() -> Optional<ODEResultFFI> {
+        if self.is_some {
+            return self.val.intoSwiftRepr()
+        } else {
+            return nil
+        }
+    }
+
+    @inline(__always)
+    static func fromSwiftRepr(_ val: Optional<ODEResultFFI>) -> __swift_bridge__$Option$ODEResultFFI {
+        if let v = val {
+            return __swift_bridge__$Option$ODEResultFFI(is_some: true, val: v.intoFfiRepr())
+        } else {
+            return __swift_bridge__$Option$ODEResultFFI(is_some: false, val: __swift_bridge__$ODEResultFFI())
+        }
+    }
+}
+public struct TaylorSeriesResultFFI {
+    public var original: RustString
+    public var variable: RustString
+    public var center: Double
+    public var order: UInt32
+    public var series: RustString
+    public var series_latex: RustString
+    public var success: Bool
+    public var error_message: RustString
+
+    public init(original: RustString,variable: RustString,center: Double,order: UInt32,series: RustString,series_latex: RustString,success: Bool,error_message: RustString) {
+        self.original = original
+        self.variable = variable
+        self.center = center
+        self.order = order
+        self.series = series
+        self.series_latex = series_latex
+        self.success = success
+        self.error_message = error_message
+    }
+
+    @inline(__always)
+    func intoFfiRepr() -> __swift_bridge__$TaylorSeriesResultFFI {
+        { let val = self; return __swift_bridge__$TaylorSeriesResultFFI(original: { let rustString = val.original.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), variable: { let rustString = val.variable.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), center: val.center, order: val.order, series: { let rustString = val.series.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), series_latex: { let rustString = val.series_latex.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), success: val.success, error_message: { let rustString = val.error_message.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); }()
+    }
+}
+extension __swift_bridge__$TaylorSeriesResultFFI {
+    @inline(__always)
+    func intoSwiftRepr() -> TaylorSeriesResultFFI {
+        { let val = self; return TaylorSeriesResultFFI(original: RustString(ptr: val.original), variable: RustString(ptr: val.variable), center: val.center, order: val.order, series: RustString(ptr: val.series), series_latex: RustString(ptr: val.series_latex), success: val.success, error_message: RustString(ptr: val.error_message)); }()
+    }
+}
+extension __swift_bridge__$Option$TaylorSeriesResultFFI {
+    @inline(__always)
+    func intoSwiftRepr() -> Optional<TaylorSeriesResultFFI> {
+        if self.is_some {
+            return self.val.intoSwiftRepr()
+        } else {
+            return nil
+        }
+    }
+
+    @inline(__always)
+    static func fromSwiftRepr(_ val: Optional<TaylorSeriesResultFFI>) -> __swift_bridge__$Option$TaylorSeriesResultFFI {
+        if let v = val {
+            return __swift_bridge__$Option$TaylorSeriesResultFFI(is_some: true, val: v.intoFfiRepr())
+        } else {
+            return __swift_bridge__$Option$TaylorSeriesResultFFI(is_some: false, val: __swift_bridge__$TaylorSeriesResultFFI())
+        }
+    }
+}
+public struct LaurentSeriesResultFFI {
+    public var original: RustString
+    public var variable: RustString
+    public var center: Double
+    public var neg_order: UInt32
+    public var pos_order: UInt32
+    public var series: RustString
+    public var series_latex: RustString
+    public var success: Bool
+    public var error_message: RustString
+
+    public init(original: RustString,variable: RustString,center: Double,neg_order: UInt32,pos_order: UInt32,series: RustString,series_latex: RustString,success: Bool,error_message: RustString) {
+        self.original = original
+        self.variable = variable
+        self.center = center
+        self.neg_order = neg_order
+        self.pos_order = pos_order
+        self.series = series
+        self.series_latex = series_latex
+        self.success = success
+        self.error_message = error_message
+    }
+
+    @inline(__always)
+    func intoFfiRepr() -> __swift_bridge__$LaurentSeriesResultFFI {
+        { let val = self; return __swift_bridge__$LaurentSeriesResultFFI(original: { let rustString = val.original.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), variable: { let rustString = val.variable.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), center: val.center, neg_order: val.neg_order, pos_order: val.pos_order, series: { let rustString = val.series.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), series_latex: { let rustString = val.series_latex.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), success: val.success, error_message: { let rustString = val.error_message.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); }()
+    }
+}
+extension __swift_bridge__$LaurentSeriesResultFFI {
+    @inline(__always)
+    func intoSwiftRepr() -> LaurentSeriesResultFFI {
+        { let val = self; return LaurentSeriesResultFFI(original: RustString(ptr: val.original), variable: RustString(ptr: val.variable), center: val.center, neg_order: val.neg_order, pos_order: val.pos_order, series: RustString(ptr: val.series), series_latex: RustString(ptr: val.series_latex), success: val.success, error_message: RustString(ptr: val.error_message)); }()
+    }
+}
+extension __swift_bridge__$Option$LaurentSeriesResultFFI {
+    @inline(__always)
+    func intoSwiftRepr() -> Optional<LaurentSeriesResultFFI> {
+        if self.is_some {
+            return self.val.intoSwiftRepr()
+        } else {
+            return nil
+        }
+    }
+
+    @inline(__always)
+    static func fromSwiftRepr(_ val: Optional<LaurentSeriesResultFFI>) -> __swift_bridge__$Option$LaurentSeriesResultFFI {
+        if let v = val {
+            return __swift_bridge__$Option$LaurentSeriesResultFFI(is_some: true, val: v.intoFfiRepr())
+        } else {
+            return __swift_bridge__$Option$LaurentSeriesResultFFI(is_some: false, val: __swift_bridge__$LaurentSeriesResultFFI())
+        }
+    }
+}
+public struct AsymptoticSeriesResultFFI {
+    public var original: RustString
+    public var variable: RustString
+    public var direction: RustString
+    public var num_terms: UInt32
+    public var series: RustString
+    public var series_latex: RustString
+    public var success: Bool
+    public var error_message: RustString
+
+    public init(original: RustString,variable: RustString,direction: RustString,num_terms: UInt32,series: RustString,series_latex: RustString,success: Bool,error_message: RustString) {
+        self.original = original
+        self.variable = variable
+        self.direction = direction
+        self.num_terms = num_terms
+        self.series = series
+        self.series_latex = series_latex
+        self.success = success
+        self.error_message = error_message
+    }
+
+    @inline(__always)
+    func intoFfiRepr() -> __swift_bridge__$AsymptoticSeriesResultFFI {
+        { let val = self; return __swift_bridge__$AsymptoticSeriesResultFFI(original: { let rustString = val.original.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), variable: { let rustString = val.variable.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), direction: { let rustString = val.direction.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), num_terms: val.num_terms, series: { let rustString = val.series.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), series_latex: { let rustString = val.series_latex.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), success: val.success, error_message: { let rustString = val.error_message.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); }()
+    }
+}
+extension __swift_bridge__$AsymptoticSeriesResultFFI {
+    @inline(__always)
+    func intoSwiftRepr() -> AsymptoticSeriesResultFFI {
+        { let val = self; return AsymptoticSeriesResultFFI(original: RustString(ptr: val.original), variable: RustString(ptr: val.variable), direction: RustString(ptr: val.direction), num_terms: val.num_terms, series: RustString(ptr: val.series), series_latex: RustString(ptr: val.series_latex), success: val.success, error_message: RustString(ptr: val.error_message)); }()
+    }
+}
+extension __swift_bridge__$Option$AsymptoticSeriesResultFFI {
+    @inline(__always)
+    func intoSwiftRepr() -> Optional<AsymptoticSeriesResultFFI> {
+        if self.is_some {
+            return self.val.intoSwiftRepr()
+        } else {
+            return nil
+        }
+    }
+
+    @inline(__always)
+    static func fromSwiftRepr(_ val: Optional<AsymptoticSeriesResultFFI>) -> __swift_bridge__$Option$AsymptoticSeriesResultFFI {
+        if let v = val {
+            return __swift_bridge__$Option$AsymptoticSeriesResultFFI(is_some: true, val: v.intoFfiRepr())
+        } else {
+            return __swift_bridge__$Option$AsymptoticSeriesResultFFI(is_some: false, val: __swift_bridge__$AsymptoticSeriesResultFFI())
+        }
+    }
+}
+public struct SpecialFunctionResultFFI {
+    public var value: RustString
+    public var value_latex: RustString
+    public var numeric_value: Double
+    public var derivation_steps: RustString
+    public var success: Bool
+    public var error_message: RustString
+
+    public init(value: RustString,value_latex: RustString,numeric_value: Double,derivation_steps: RustString,success: Bool,error_message: RustString) {
+        self.value = value
+        self.value_latex = value_latex
+        self.numeric_value = numeric_value
+        self.derivation_steps = derivation_steps
+        self.success = success
+        self.error_message = error_message
+    }
+
+    @inline(__always)
+    func intoFfiRepr() -> __swift_bridge__$SpecialFunctionResultFFI {
+        { let val = self; return __swift_bridge__$SpecialFunctionResultFFI(value: { let rustString = val.value.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), value_latex: { let rustString = val.value_latex.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), numeric_value: val.numeric_value, derivation_steps: { let rustString = val.derivation_steps.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), success: val.success, error_message: { let rustString = val.error_message.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); }()
+    }
+}
+extension __swift_bridge__$SpecialFunctionResultFFI {
+    @inline(__always)
+    func intoSwiftRepr() -> SpecialFunctionResultFFI {
+        { let val = self; return SpecialFunctionResultFFI(value: RustString(ptr: val.value), value_latex: RustString(ptr: val.value_latex), numeric_value: val.numeric_value, derivation_steps: RustString(ptr: val.derivation_steps), success: val.success, error_message: RustString(ptr: val.error_message)); }()
+    }
+}
+extension __swift_bridge__$Option$SpecialFunctionResultFFI {
+    @inline(__always)
+    func intoSwiftRepr() -> Optional<SpecialFunctionResultFFI> {
+        if self.is_some {
+            return self.val.intoSwiftRepr()
+        } else {
+            return nil
+        }
+    }
+
+    @inline(__always)
+    static func fromSwiftRepr(_ val: Optional<SpecialFunctionResultFFI>) -> __swift_bridge__$Option$SpecialFunctionResultFFI {
+        if let v = val {
+            return __swift_bridge__$Option$SpecialFunctionResultFFI(is_some: true, val: v.intoFfiRepr())
+        } else {
+            return __swift_bridge__$Option$SpecialFunctionResultFFI(is_some: false, val: __swift_bridge__$SpecialFunctionResultFFI())
+        }
+    }
+}
+public struct PrecisionEvaluationResultFFI {
+    public var original: RustString
+    public var value: Double
+    public var value_string: RustString
+    public var precision_mode: RustString
+    public var rounding_mode: RustString
+    public var success: Bool
+    public var error_message: RustString
+
+    public init(original: RustString,value: Double,value_string: RustString,precision_mode: RustString,rounding_mode: RustString,success: Bool,error_message: RustString) {
+        self.original = original
+        self.value = value
+        self.value_string = value_string
+        self.precision_mode = precision_mode
+        self.rounding_mode = rounding_mode
+        self.success = success
+        self.error_message = error_message
+    }
+
+    @inline(__always)
+    func intoFfiRepr() -> __swift_bridge__$PrecisionEvaluationResultFFI {
+        { let val = self; return __swift_bridge__$PrecisionEvaluationResultFFI(original: { let rustString = val.original.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), value: val.value, value_string: { let rustString = val.value_string.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), precision_mode: { let rustString = val.precision_mode.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), rounding_mode: { let rustString = val.rounding_mode.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), success: val.success, error_message: { let rustString = val.error_message.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); }()
+    }
+}
+extension __swift_bridge__$PrecisionEvaluationResultFFI {
+    @inline(__always)
+    func intoSwiftRepr() -> PrecisionEvaluationResultFFI {
+        { let val = self; return PrecisionEvaluationResultFFI(original: RustString(ptr: val.original), value: val.value, value_string: RustString(ptr: val.value_string), precision_mode: RustString(ptr: val.precision_mode), rounding_mode: RustString(ptr: val.rounding_mode), success: val.success, error_message: RustString(ptr: val.error_message)); }()
+    }
+}
+extension __swift_bridge__$Option$PrecisionEvaluationResultFFI {
+    @inline(__always)
+    func intoSwiftRepr() -> Optional<PrecisionEvaluationResultFFI> {
+        if self.is_some {
+            return self.val.intoSwiftRepr()
+        } else {
+            return nil
+        }
+    }
+
+    @inline(__always)
+    static func fromSwiftRepr(_ val: Optional<PrecisionEvaluationResultFFI>) -> __swift_bridge__$Option$PrecisionEvaluationResultFFI {
+        if let v = val {
+            return __swift_bridge__$Option$PrecisionEvaluationResultFFI(is_some: true, val: v.intoFfiRepr())
+        } else {
+            return __swift_bridge__$Option$PrecisionEvaluationResultFFI(is_some: false, val: __swift_bridge__$PrecisionEvaluationResultFFI())
+        }
+    }
+}
+public struct FourierSeriesResultFFI {
+    public var original: RustString
+    public var variable: RustString
+    public var num_terms: UInt32
+    public var period: Double
+    public var a_coefficients_json: RustString
+    public var b_coefficients_json: RustString
+    public var series: RustString
+    public var series_latex: RustString
+    public var success: Bool
+    public var error_message: RustString
+
+    public init(original: RustString,variable: RustString,num_terms: UInt32,period: Double,a_coefficients_json: RustString,b_coefficients_json: RustString,series: RustString,series_latex: RustString,success: Bool,error_message: RustString) {
+        self.original = original
+        self.variable = variable
+        self.num_terms = num_terms
+        self.period = period
+        self.a_coefficients_json = a_coefficients_json
+        self.b_coefficients_json = b_coefficients_json
+        self.series = series
+        self.series_latex = series_latex
+        self.success = success
+        self.error_message = error_message
+    }
+
+    @inline(__always)
+    func intoFfiRepr() -> __swift_bridge__$FourierSeriesResultFFI {
+        { let val = self; return __swift_bridge__$FourierSeriesResultFFI(original: { let rustString = val.original.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), variable: { let rustString = val.variable.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), num_terms: val.num_terms, period: val.period, a_coefficients_json: { let rustString = val.a_coefficients_json.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), b_coefficients_json: { let rustString = val.b_coefficients_json.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), series: { let rustString = val.series.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), series_latex: { let rustString = val.series_latex.intoRustString(); rustString.isOwned = false; return rustString.ptr }(), success: val.success, error_message: { let rustString = val.error_message.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); }()
+    }
+}
+extension __swift_bridge__$FourierSeriesResultFFI {
+    @inline(__always)
+    func intoSwiftRepr() -> FourierSeriesResultFFI {
+        { let val = self; return FourierSeriesResultFFI(original: RustString(ptr: val.original), variable: RustString(ptr: val.variable), num_terms: val.num_terms, period: val.period, a_coefficients_json: RustString(ptr: val.a_coefficients_json), b_coefficients_json: RustString(ptr: val.b_coefficients_json), series: RustString(ptr: val.series), series_latex: RustString(ptr: val.series_latex), success: val.success, error_message: RustString(ptr: val.error_message)); }()
+    }
+}
+extension __swift_bridge__$Option$FourierSeriesResultFFI {
+    @inline(__always)
+    func intoSwiftRepr() -> Optional<FourierSeriesResultFFI> {
+        if self.is_some {
+            return self.val.intoSwiftRepr()
+        } else {
+            return nil
+        }
+    }
+
+    @inline(__always)
+    static func fromSwiftRepr(_ val: Optional<FourierSeriesResultFFI>) -> __swift_bridge__$Option$FourierSeriesResultFFI {
+        if let v = val {
+            return __swift_bridge__$Option$FourierSeriesResultFFI(is_some: true, val: v.intoFfiRepr())
+        } else {
+            return __swift_bridge__$Option$FourierSeriesResultFFI(is_some: false, val: __swift_bridge__$FourierSeriesResultFFI())
         }
     }
 }

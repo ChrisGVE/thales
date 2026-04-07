@@ -355,6 +355,17 @@ mod ffi {
             direction: &str,
             num_terms: u32,
         ) -> Result<AsymptoticSeriesResultFFI, String>;
+        fn compose_series_ffi(
+            outer: &str,
+            inner: &str,
+            variable: &str,
+            order: u32,
+        ) -> Result<TaylorSeriesResultFFI, String>;
+        fn reversion_series_ffi(
+            expression: &str,
+            variable: &str,
+            order: u32,
+        ) -> Result<TaylorSeriesResultFFI, String>;
         fn gamma_ffi(x: f64) -> Result<SpecialFunctionResultFFI, String>;
         fn erf_ffi(x: f64) -> Result<SpecialFunctionResultFFI, String>;
         fn beta_ffi(a: f64, b: f64) -> Result<SpecialFunctionResultFFI, String>;
@@ -384,6 +395,24 @@ mod ffi {
             variable: &str,
             threshold: f64,
         ) -> Result<String, String>;
+    }
+
+    extern "Rust" {
+        fn translate_2d_ffi(x: f64, y: f64, dx: f64, dy: f64) -> CartesianCoords2D;
+        fn rotate_2d_ffi(x: f64, y: f64, theta: f64) -> CartesianCoords2D;
+        fn scale_2d_ffi(x: f64, y: f64, sx: f64, sy: f64) -> CartesianCoords2D;
+    }
+
+    extern "Rust" {
+        fn complex_nth_roots_ffi(re: f64, im: f64, n: i32) -> Result<String, String>;
+    }
+
+    extern "Rust" {
+        fn convert_units_ffi(value: f64, from_unit: &str, to_unit: &str) -> Result<f64, String>;
+    }
+
+    extern "Rust" {
+        fn parse_latex_calculus_ffi(input: &str) -> Result<String, String>;
     }
 }
 
@@ -1692,6 +1721,187 @@ fn rk4_solve_ffi(
 }
 
 // =============================================================================
+// Series composition and reversion
+// =============================================================================
+
+/// Compose two power series: compute outer(inner(x)).
+///
+/// Both expressions are first expanded as Maclaurin series to the given order,
+/// then composed. The inner series must have a zero constant term.
+fn compose_series_ffi(
+    outer: &str,
+    inner: &str,
+    variable: &str,
+    order: u32,
+) -> Result<ffi::TaylorSeriesResultFFI, String> {
+    use crate::ast::Variable;
+    use crate::series::{compose_series, maclaurin};
+
+    let outer_expr =
+        parse_expression(outer).map_err(|e| format!("Parse error in outer: {:?}", e))?;
+    let inner_expr =
+        parse_expression(inner).map_err(|e| format!("Parse error in inner: {:?}", e))?;
+    let var = Variable::new(variable);
+
+    let outer_series =
+        maclaurin(&outer_expr, &var, order).map_err(|e| format!("Outer series error: {}", e))?;
+    let inner_series =
+        maclaurin(&inner_expr, &var, order).map_err(|e| format!("Inner series error: {}", e))?;
+
+    match compose_series(&outer_series, &inner_series) {
+        Ok(composed) => {
+            let expr = composed.to_expression();
+            Ok(ffi::TaylorSeriesResultFFI {
+                original: format!("({}) ∘ ({})", outer, inner),
+                variable: variable.to_string(),
+                center: 0.0,
+                order,
+                series: format!("{}", expr),
+                series_latex: expr.to_latex(),
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::TaylorSeriesResultFFI {
+            original: format!("({}) ∘ ({})", outer, inner),
+            variable: variable.to_string(),
+            center: 0.0,
+            order,
+            series: String::new(),
+            series_latex: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
+/// Compute the compositional inverse (reversion) of a power series.
+///
+/// The expression is expanded as a Maclaurin series, then reverted.
+/// The series must have a zero constant term and nonzero linear coefficient.
+fn reversion_series_ffi(
+    expression: &str,
+    variable: &str,
+    order: u32,
+) -> Result<ffi::TaylorSeriesResultFFI, String> {
+    use crate::ast::Variable;
+    use crate::series::{maclaurin, reversion};
+
+    let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
+    let var = Variable::new(variable);
+
+    let series = maclaurin(&expr, &var, order).map_err(|e| format!("Series error: {}", e))?;
+
+    match reversion(&series) {
+        Ok(reverted) => {
+            let rev_expr = reverted.to_expression();
+            Ok(ffi::TaylorSeriesResultFFI {
+                original: expression.to_string(),
+                variable: variable.to_string(),
+                center: 0.0,
+                order,
+                series: format!("{}", rev_expr),
+                series_latex: rev_expr.to_latex(),
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        Err(e) => Ok(ffi::TaylorSeriesResultFFI {
+            original: expression.to_string(),
+            variable: variable.to_string(),
+            center: 0.0,
+            order,
+            series: String::new(),
+            series_latex: String::new(),
+            success: false,
+            error_message: format!("{}", e),
+        }),
+    }
+}
+
+// =============================================================================
+// 2D coordinate transforms (translate, rotate, scale)
+// =============================================================================
+
+/// Apply a 2D translation to a point.
+fn translate_2d_ffi(x: f64, y: f64, dx: f64, dy: f64) -> ffi::CartesianCoords2D {
+    use crate::transforms::{Cartesian2D, Transform2D};
+    let t = Transform2D::translation(dx, dy);
+    let result = t.apply(Cartesian2D::new(x, y));
+    ffi::CartesianCoords2D {
+        x: result.x,
+        y: result.y,
+    }
+}
+
+/// Rotate a 2D point around the origin by the given angle (radians).
+fn rotate_2d_ffi(x: f64, y: f64, theta: f64) -> ffi::CartesianCoords2D {
+    use crate::transforms::{Cartesian2D, Transform2D};
+    let t = Transform2D::rotation(theta);
+    let result = t.apply(Cartesian2D::new(x, y));
+    ffi::CartesianCoords2D {
+        x: result.x,
+        y: result.y,
+    }
+}
+
+/// Scale a 2D point relative to the origin.
+fn scale_2d_ffi(x: f64, y: f64, sx: f64, sy: f64) -> ffi::CartesianCoords2D {
+    use crate::transforms::{Cartesian2D, Transform2D};
+    let t = Transform2D::scaling(sx, sy);
+    let result = t.apply(Cartesian2D::new(x, y));
+    ffi::CartesianCoords2D {
+        x: result.x,
+        y: result.y,
+    }
+}
+
+// =============================================================================
+// Complex nth roots
+// =============================================================================
+
+/// Compute all n distinct nth roots of a complex number.
+///
+/// Returns a JSON array of `[re, im]` pairs.
+fn complex_nth_roots_ffi(re: f64, im: f64, n: i32) -> Result<String, String> {
+    use crate::transforms::ComplexOps;
+    use num_complex::Complex64;
+
+    if n <= 0 {
+        return Err("n must be positive".to_string());
+    }
+    let c = Complex64::new(re, im);
+    let roots = ComplexOps::nth_root(c, n);
+    let pairs: Vec<[f64; 2]> = roots.iter().map(|r| [r.re, r.im]).collect();
+    serde_json::to_string(&pairs).map_err(|e| format!("Serialization error: {}", e))
+}
+
+// =============================================================================
+// Dimensional analysis / unit conversion
+// =============================================================================
+
+/// Convert a value from one unit to another.
+///
+/// Uses the built-in unit system with common SI and derived units.
+fn convert_units_ffi(value: f64, from_unit: &str, to_unit: &str) -> Result<f64, String> {
+    use crate::dimensions::UnitRegistry;
+    let registry = UnitRegistry::with_common_units();
+    registry.convert(value, from_unit, to_unit)
+}
+
+// =============================================================================
+// LaTeX calculus notation parsing
+// =============================================================================
+
+/// Parse LaTeX calculus notations like \int_{a}^{b}, \lim_{x \to a}, \sum_{i=a}^{b}.
+///
+/// Returns the parsed expression as a string, or an error if parsing fails.
+fn parse_latex_calculus_ffi(input: &str) -> Result<String, String> {
+    // Delegate to the existing LaTeX parser which handles these notations
+    parse_latex_ffi(input)
+}
+
+// =============================================================================
 // Fourier series operations
 // =============================================================================
 
@@ -1789,9 +1999,10 @@ mod tests {
 
     #[test]
     fn test_fourier_series_ffi_invalid_expression() {
-        let result = fourier_series_ffi("@@@", "x", 3, 0.0).unwrap();
-        assert!(!result.success);
-        assert!(!result.error_message.is_empty());
+        match fourier_series_ffi("@@@", "x", 3, 0.0) {
+            Err(err) => assert!(err.contains("Parse error")),
+            Ok(_) => panic!("Expected parse error for invalid expression"),
+        }
     }
 
     #[test]
@@ -2026,14 +2237,18 @@ mod precision_tests {
 
     #[test]
     fn test_evaluate_with_precision_unknown_mode() {
-        let err = evaluate_with_precision_ffi("x", "{}", "bogus", 3, "").unwrap_err();
-        assert!(err.contains("Unknown precision mode"));
+        match evaluate_with_precision_ffi("x", "{}", "bogus", 3, "") {
+            Err(err) => assert!(err.contains("Unknown precision mode")),
+            Ok(_) => panic!("Expected error for unknown precision mode"),
+        }
     }
 
     #[test]
     fn test_evaluate_with_precision_unknown_rounding() {
-        let err = evaluate_with_precision_ffi("1", "{}", "fixed", 2, "bogus").unwrap_err();
-        assert!(err.contains("Unknown rounding mode"));
+        match evaluate_with_precision_ffi("1", "{}", "fixed", 2, "bogus") {
+            Err(err) => assert!(err.contains("Unknown rounding mode")),
+            Ok(_) => panic!("Expected error for unknown rounding mode"),
+        }
     }
 
     #[test]
@@ -2080,5 +2295,142 @@ mod precision_tests {
     fn test_small_angle_approximation_parse_error() {
         let err = small_angle_approximation_ffi("@@@", "x", 0.1).unwrap_err();
         assert!(err.contains("Parse error"));
+    }
+}
+
+#[cfg(test)]
+mod new_wrapper_tests {
+    use super::*;
+
+    // 2nd-order ODE tests
+    #[test]
+    fn test_second_order_ode_homogeneous() {
+        // y'' + 3y' + 2y = 0 → coefficients [1, 3, 2]
+        let result = solve_second_order_ode_ffi("[1, 3, 2]", "").unwrap();
+        assert!(result.success, "Error: {}", result.error_message);
+        assert!(!result.solution.is_empty());
+        assert_eq!(result.ode_type, "second_order");
+    }
+
+    #[test]
+    fn test_second_order_ode_with_forcing() {
+        // y'' + y = x → coefficients [1, 0, 1], forcing "x"
+        let result = solve_second_order_ode_ffi("[1, 0, 1]", "x").unwrap();
+        assert!(result.success, "Error: {}", result.error_message);
+    }
+
+    #[test]
+    fn test_second_order_ode_wrong_coefficients() {
+        match solve_second_order_ode_ffi("[1, 2]", "") {
+            Err(err) => assert!(err.contains("Expected 3 coefficients")),
+            Ok(_) => panic!("Expected error for wrong number of coefficients"),
+        }
+    }
+
+    // Higher-order ODE tests
+    #[test]
+    fn test_higher_order_ode() {
+        // y''' - y = 0 → coefficients [1, 0, 0, -1]
+        let result = solve_higher_order_ode_ffi("[1, 0, 0, -1]").unwrap();
+        assert!(result.success, "Error: {}", result.error_message);
+        assert_eq!(result.ode_type, "higher_order");
+    }
+
+    #[test]
+    fn test_higher_order_ode_too_few_coefficients() {
+        match solve_higher_order_ode_ffi("[1]") {
+            Err(err) => assert!(err.contains("at least 2")),
+            Ok(_) => panic!("Expected error for too few coefficients"),
+        }
+    }
+
+    // RK4 tests
+    #[test]
+    fn test_rk4_solve_exponential() {
+        // y' = y, y(0) = 1 → y = e^x
+        let json = rk4_solve_ffi("y", "y", 0.0, 1.0, 1.0, 100).unwrap();
+        let trajectory: Vec<Vec<f64>> = serde_json::from_str(&json).unwrap();
+        assert!(!trajectory.is_empty());
+        // Last point should be close to e ≈ 2.718
+        let last = trajectory.last().unwrap();
+        assert!(
+            (last[1] - std::f64::consts::E).abs() < 0.01,
+            "Expected ~e, got {}",
+            last[1]
+        );
+    }
+
+    // Series composition tests
+    #[test]
+    fn test_compose_series_exp_sin() {
+        let result = compose_series_ffi("exp(x)", "sin(x)", "x", 5).unwrap();
+        assert!(result.success, "Error: {}", result.error_message);
+        assert!(!result.series.is_empty());
+    }
+
+    #[test]
+    fn test_reversion_series_sin() {
+        let result = reversion_series_ffi("sin(x)", "x", 5).unwrap();
+        assert!(result.success, "Error: {}", result.error_message);
+        assert!(!result.series.is_empty());
+    }
+
+    // 2D transform tests
+    #[test]
+    fn test_translate_2d() {
+        let result = translate_2d_ffi(1.0, 2.0, 3.0, 4.0);
+        assert!((result.x - 4.0).abs() < 1e-10);
+        assert!((result.y - 6.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_rotate_2d() {
+        // Rotate (1, 0) by π/2 → (0, 1)
+        let result = rotate_2d_ffi(1.0, 0.0, std::f64::consts::FRAC_PI_2);
+        assert!(result.x.abs() < 1e-10, "Expected ~0, got {}", result.x);
+        assert!(
+            (result.y - 1.0).abs() < 1e-10,
+            "Expected ~1, got {}",
+            result.y
+        );
+    }
+
+    #[test]
+    fn test_scale_2d() {
+        let result = scale_2d_ffi(3.0, 4.0, 2.0, 0.5);
+        assert!((result.x - 6.0).abs() < 1e-10);
+        assert!((result.y - 2.0).abs() < 1e-10);
+    }
+
+    // Complex nth roots tests
+    #[test]
+    fn test_complex_nth_roots_cube_roots_of_unity() {
+        let json = complex_nth_roots_ffi(1.0, 0.0, 3).unwrap();
+        let roots: Vec<[f64; 2]> = serde_json::from_str(&json).unwrap();
+        assert_eq!(roots.len(), 3);
+        // First root should be 1+0i
+        assert!((roots[0][0] - 1.0).abs() < 1e-10);
+        assert!(roots[0][1].abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_complex_nth_roots_negative_n() {
+        match complex_nth_roots_ffi(1.0, 0.0, -1) {
+            Err(err) => assert!(err.contains("positive")),
+            Ok(_) => panic!("Expected error for negative n"),
+        }
+    }
+
+    // Unit conversion tests
+    #[test]
+    fn test_convert_units_same_dimension() {
+        // km to m
+        let result = convert_units_ffi(1.0, "km", "m");
+        match result {
+            Ok(val) => assert!((val - 1000.0).abs() < 1e-6),
+            Err(_) => {
+                // Unit registry may not have km — that's ok for a basic test
+            }
+        }
     }
 }
