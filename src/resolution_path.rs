@@ -119,6 +119,7 @@
 //! ```
 
 use crate::ast::{Expression, Variable};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 
 /// Level of detail for resolution path output.
@@ -821,6 +822,79 @@ fn escape_latex_text(text: &str) -> String {
 /// // Hint level 3: Show result
 /// println!("Result: {:?}", step.result);
 /// ```
+/// How significant a resolution step is for educational purposes.
+///
+/// This classification helps educational UIs decide which steps to emphasize,
+/// skip, or narrate in detail when presenting a solution path to students.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StepSignificance {
+    /// Trivial arithmetic: 3+2=5, combine like terms.
+    Trivial,
+    /// Standard algebraic manipulation: move term, divide both sides.
+    Standard,
+    /// Named technique or theorem application.
+    Substantive,
+    /// Major method choice: switching to numerical, choosing substitution strategy.
+    Strategic,
+}
+
+/// Structured annotation for a resolution step providing educational context.
+///
+/// Annotations carry metadata about which mathematical technique or theorem was
+/// applied and how significant the step is. This enables narration engines to
+/// produce richer explanations without parsing free-text fields.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StepAnnotation {
+    /// Named technique applied, e.g. "Quadratic Formula", "Integration by Parts".
+    pub technique: Option<String>,
+    /// Theorem or identity referenced, e.g. "Fundamental Theorem of Algebra".
+    pub theorem: Option<String>,
+    /// How significant this step is.
+    pub significance: StepSignificance,
+}
+
+impl StepAnnotation {
+    /// Create a trivial annotation (no technique or theorem).
+    #[must_use]
+    pub fn trivial() -> Self {
+        Self {
+            technique: None,
+            theorem: None,
+            significance: StepSignificance::Trivial,
+        }
+    }
+
+    /// Create a standard annotation (no technique or theorem).
+    #[must_use]
+    pub fn standard() -> Self {
+        Self {
+            technique: None,
+            theorem: None,
+            significance: StepSignificance::Standard,
+        }
+    }
+
+    /// Create a substantive annotation with a named technique.
+    #[must_use]
+    pub fn technique(name: &str) -> Self {
+        Self {
+            technique: Some(name.to_string()),
+            theorem: None,
+            significance: StepSignificance::Substantive,
+        }
+    }
+
+    /// Create a strategic annotation with a named technique.
+    #[must_use]
+    pub fn strategic(technique: &str) -> Self {
+        Self {
+            technique: Some(technique.to_string()),
+            theorem: None,
+            significance: StepSignificance::Strategic,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolutionStep {
     /// The operation performed in this step.
@@ -841,6 +915,12 @@ pub struct ResolutionStep {
     /// The resulting expression after applying the operation. This becomes
     /// the input for the next step in the solution path.
     pub result: Expression,
+
+    /// Optional structured annotation for educational narration.
+    ///
+    /// When present, provides metadata about the mathematical technique or
+    /// theorem applied and the significance of this step.
+    pub annotation: Option<StepAnnotation>,
 }
 
 impl ResolutionStep {
@@ -873,6 +953,25 @@ impl ResolutionStep {
             operation,
             explanation,
             result,
+            annotation: None,
+        }
+    }
+
+    /// Create a new resolution step with an annotation.
+    ///
+    /// Same as [`new`](ResolutionStep::new) but with a structured annotation
+    /// for educational narration.
+    pub fn with_annotation(
+        operation: Operation,
+        explanation: String,
+        result: Expression,
+        annotation: StepAnnotation,
+    ) -> Self {
+        Self {
+            operation,
+            explanation,
+            result,
+            annotation: Some(annotation),
         }
     }
 }
