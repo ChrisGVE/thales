@@ -1789,9 +1789,10 @@ mod tests {
 
     #[test]
     fn test_fourier_series_ffi_invalid_expression() {
-        let result = fourier_series_ffi("@@@", "x", 3, 0.0).unwrap();
-        assert!(!result.success);
-        assert!(!result.error_message.is_empty());
+        match fourier_series_ffi("@@@", "x", 3, 0.0) {
+            Err(err) => assert!(err.contains("Parse error")),
+            Ok(_) => panic!("Expected parse error for invalid expression"),
+        }
     }
 
     #[test]
@@ -2026,14 +2027,18 @@ mod precision_tests {
 
     #[test]
     fn test_evaluate_with_precision_unknown_mode() {
-        let err = evaluate_with_precision_ffi("x", "{}", "bogus", 3, "").unwrap_err();
-        assert!(err.contains("Unknown precision mode"));
+        match evaluate_with_precision_ffi("x", "{}", "bogus", 3, "") {
+            Err(err) => assert!(err.contains("Unknown precision mode")),
+            Ok(_) => panic!("Expected error for unknown precision mode"),
+        }
     }
 
     #[test]
     fn test_evaluate_with_precision_unknown_rounding() {
-        let err = evaluate_with_precision_ffi("1", "{}", "fixed", 2, "bogus").unwrap_err();
-        assert!(err.contains("Unknown rounding mode"));
+        match evaluate_with_precision_ffi("1", "{}", "fixed", 2, "bogus") {
+            Err(err) => assert!(err.contains("Unknown rounding mode")),
+            Ok(_) => panic!("Expected error for unknown rounding mode"),
+        }
     }
 
     #[test]

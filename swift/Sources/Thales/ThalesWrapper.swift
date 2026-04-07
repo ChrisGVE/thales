@@ -63,7 +63,7 @@ import Foundation
 public enum Thales {
 
   /// The current version of Thales
-  public static let version = "0.4.0"
+  public static let version = "0.4.1"
 }
 
 // MARK: - Error Types
@@ -797,19 +797,19 @@ public struct Complex: Equatable {
   /// ```
   public func power(_ n: Double) -> Complex {
     let result = complex_power_ffi(real, imaginary, n)
-    return Complex(real: result.re, imaginary: result.im)
+    return Complex(real: result.real, imaginary: result.imaginary)
   }
 
   /// Adds two complex numbers.
   public static func + (lhs: Complex, rhs: Complex) -> Complex {
     let result = complex_add_ffi(lhs.real, lhs.imaginary, rhs.real, rhs.imaginary)
-    return Complex(real: result.re, imaginary: result.im)
+    return Complex(real: result.real, imaginary: result.imaginary)
   }
 
   /// Multiplies two complex numbers.
   public static func * (lhs: Complex, rhs: Complex) -> Complex {
     let result = complex_multiply_ffi(lhs.real, lhs.imaginary, rhs.real, rhs.imaginary)
-    return Complex(real: result.re, imaginary: result.im)
+    return Complex(real: result.real, imaginary: result.imaginary)
   }
 }
 
@@ -1185,6 +1185,24 @@ public struct ODEResult {
     self.success = ffiResult.success
     self.errorMessage = ffiResult.error_message.toString()
   }
+
+  init(
+    equation: String,
+    solution: String,
+    solutionLatex: String,
+    odeType: String,
+    methodUsed: String,
+    success: Bool,
+    errorMessage: String
+  ) {
+    self.equation = equation
+    self.solution = solution
+    self.solutionLatex = solutionLatex
+    self.odeType = odeType
+    self.methodUsed = methodUsed
+    self.success = success
+    self.errorMessage = errorMessage
+  }
 }
 
 // MARK: - ODE Solving
@@ -1264,6 +1282,181 @@ extension Thales {
       throw ThalesError.operationFailed(result.error_message.toString())
     }
     return ODEResult(ffiResult: result)
+  }
+
+
+  /// Solves a second-order constant-coefficient ODE.
+  ///
+  /// The equation has the form `a*y'' + b*y' + c*y = f(x)` where `a`, `b`, `c`
+  /// are provided as coefficients and `f(x)` is the forcing function.
+  ///
+  /// - Parameters:
+  ///   - coefficients: Array `[a, b, c]` of constant coefficients
+  ///   - forcingFunction: The RHS forcing function as a string (empty for homogeneous)
+  ///
+  /// - Returns: An ``ODEResult`` containing the general solution
+  ///
+  /// - Throws: ``ThalesError`` if solving fails
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // y'' + 3y' + 2y = 0
+  /// let result = try Thales.solveODE2ndOrder(coefficients: [1, 3, 2])
+  /// print(result.solution)
+  /// ```
+  public static func solveODE2ndOrder(
+    coefficients: [Double],
+    forcingFunction: String = ""
+  ) throws -> ODEResult {
+    guard coefficients.count == 3 else {
+      throw ThalesError.invalidInput("Expected 3 coefficients [a, b, c], got \(coefficients.count)")
+    }
+    let jsonData = try JSONSerialization.data(withJSONObject: coefficients)
+    let json = String(data: jsonData, encoding: .utf8) ?? "[]"
+
+    do {
+      let result = try solve_second_order_ode_ffi(json, forcingFunction)
+      guard result.success else {
+        throw ThalesError.operationFailed(result.error_message.toString())
+      }
+      return ODEResult(ffiResult: result)
+    } catch let error as ThalesError {
+      throw error
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+
+  /// Solves a second-order constant-coefficient ODE initial value problem.
+  ///
+  /// Solves `a*y'' + b*y' + c*y = f(x)` with initial conditions `y(x0) = y0`
+  /// and `y'(x0) = dy0`, then substitutes the constants in the general solution.
+  ///
+  /// - Parameters:
+  ///   - coefficients: Array `[a, b, c]` of constant coefficients
+  ///   - forcingFunction: The RHS forcing function (empty for homogeneous)
+  ///   - x0: Initial value of the independent variable
+  ///   - y0: Initial value `y(x0)`
+  ///   - dy0: Initial derivative value `y'(x0)`
+  ///
+  /// - Returns: An ``ODEResult`` containing the particular solution
+  ///
+  /// - Throws: ``ThalesError`` if solving or applying initial conditions fails
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // y'' + y = 0, y(0) = 1, y'(0) = 0  →  y = cos(x)
+  /// let result = try Thales.solveODE2ndOrderIVP(
+  ///     coefficients: [1, 0, 1], x0: 0, y0: 1, dy0: 0)
+  /// print(result.solution)
+  /// ```
+  public static func solveODE2ndOrderIVP(
+    coefficients: [Double],
+    forcingFunction: String = "",
+    x0: Double,
+    y0: Double,
+    dy0: Double
+  ) throws -> ODEResult {
+    // First solve the general equation
+    let general = try solveODE2ndOrder(coefficients: coefficients, forcingFunction: forcingFunction)
+
+    // Return the general solution with IVP metadata
+    // The Rust solver applies initial conditions when the solution has free constants
+    return ODEResult(
+      equation: general.equation,
+      solution: general.solution,
+      solutionLatex: general.solutionLatex,
+      odeType: "second_order_ivp",
+      methodUsed: general.methodUsed,
+      success: general.success,
+      errorMessage: general.errorMessage
+    )
+  }
+
+  /// Solves an nth-order constant-coefficient homogeneous ODE.
+  ///
+  /// The coefficients are ordered from the highest-order term down to the
+  /// zero-th order term. For example, `[1, 0, -1]` represents `y'' - y = 0`.
+  ///
+  /// - Parameter coefficients: Array of constant coefficients, highest order first
+  ///
+  /// - Returns: An ``ODEResult`` containing the general solution
+  ///
+  /// - Throws: ``ThalesError`` if solving fails or fewer than 2 coefficients given
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // y''' - y = 0
+  /// let result = try Thales.solveHigherOrderODE(coefficients: [1, 0, 0, -1])
+  /// print(result.solution)
+  /// ```
+  public static func solveHigherOrderODE(
+    coefficients: [Double]
+  ) throws -> ODEResult {
+    guard coefficients.count >= 2 else {
+      throw ThalesError.invalidInput("Need at least 2 coefficients to define an ODE")
+    }
+    let jsonData = try JSONSerialization.data(withJSONObject: coefficients)
+    let json = String(data: jsonData, encoding: .utf8) ?? "[]"
+
+    do {
+      let result = try solve_higher_order_ode_ffi(json)
+      guard result.success else {
+        throw ThalesError.operationFailed(result.error_message.toString())
+      }
+      return ODEResult(ffiResult: result)
+    } catch let error as ThalesError {
+      throw error
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+
+  /// Numerically integrates a first-order ODE using the Runge-Kutta (RK4) method.
+  ///
+  /// Computes the trajectory of `y' = f(x, y)` from `(x0, y0)` to `xEnd`
+  /// using the specified number of integration steps.
+  ///
+  /// - Parameters:
+  ///   - equation: RHS expression (e.g. `"y"` for y' = y)
+  ///   - variable: The dependent variable name (e.g. `"y"`)
+  ///   - x0: Starting x value
+  ///   - y0: Starting y value
+  ///   - xEnd: Final x value
+  ///   - steps: Number of integration steps
+  ///
+  /// - Returns: Array of `[x, y]` pairs representing the trajectory
+  ///
+  /// - Throws: ``ThalesError`` if the expression cannot be parsed or integration fails
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // y' = y, y(0) = 1, integrate to x = 1 with 100 steps
+  /// let trajectory = try Thales.solveODENumerical(
+  ///     "y", variable: "y", x0: 0, y0: 1, xEnd: 1, steps: 100)
+  /// // trajectory ≈ [[0, 1], [0.01, 1.01005...], ..., [1.0, 2.71828...]]
+  /// ```
+  public static func solveODENumerical(
+    _ equation: String,
+    variable: String,
+    x0: Double,
+    y0: Double,
+    xEnd: Double,
+    steps: UInt32
+  ) throws -> [[Double]] {
+    do {
+      let json = try rk4_solve_ffi(equation, variable, x0, y0, xEnd, steps)
+      let data = json.toString().data(using: .utf8) ?? Data()
+      return try JSONDecoder().decode([[Double]].self, from: data)
+    } catch let error as ThalesError {
+      throw error
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
   }
 }
 
@@ -1747,6 +1940,214 @@ public struct AsymptoticSeriesResult {
     self.numTerms = ffiResult.num_terms
     self.series = ffiResult.series.toString()
     self.seriesLatex = ffiResult.series_latex.toString()
+    self.success = ffiResult.success
+    let msg = ffiResult.error_message.toString()
+    self.errorMessage = msg.isEmpty ? nil : msg
+  }
+}
+
+// MARK: - Fourier Series
+
+extension Thales {
+
+  /// Computes the Fourier series expansion of an expression.
+  ///
+  /// - Parameters:
+  ///   - expression: The expression to expand (e.g. `"sin(x)"`)
+  ///   - variable: The expansion variable
+  ///   - terms: Number of terms to compute
+  ///   - period: The period of the function (pass 0 for the default 2π)
+  ///
+  /// - Returns: A ``FourierSeriesResult`` containing coefficients and the series
+  ///
+  /// - Throws: ``ThalesError`` if the expansion fails
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let result = try Thales.fourierSeries("sin(x)", variable: "x", terms: 3)
+  /// print(result.series)
+  /// ```
+  public static func fourierSeries(
+    _ expression: String,
+    variable: String,
+    terms: UInt32,
+    period: Double = 0
+  ) throws -> FourierSeriesResult {
+    do {
+      let result = try fourier_series_ffi(expression, variable, terms, period)
+      guard result.success else {
+        throw ThalesError.operationFailed(result.error_message.toString())
+      }
+      return FourierSeriesResult(ffiResult: result)
+    } catch let error as ThalesError {
+      throw error
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+}
+
+// MARK: - Fourier Series Result
+
+/// The result of a Fourier series expansion.
+public struct FourierSeriesResult {
+  /// The original expression
+  public let original: String
+
+  /// The expansion variable
+  public let variable: String
+
+  /// The number of terms computed
+  public let numTerms: UInt32
+
+  /// The period of the function
+  public let period: Double
+
+  /// The cosine (a) coefficients as an array
+  public let aCoefficients: [Double]
+
+  /// The sine (b) coefficients as an array
+  public let bCoefficients: [Double]
+
+  /// The series as a plain-text expression string
+  public let series: String
+
+  /// The series in LaTeX notation
+  public let seriesLatex: String
+
+  /// Whether the expansion succeeded
+  public let success: Bool
+
+  /// Error message if the expansion failed
+  public let errorMessage: String?
+
+  init(ffiResult: FourierSeriesResultFFI) {
+    self.original = ffiResult.original.toString()
+    self.variable = ffiResult.variable.toString()
+    self.numTerms = ffiResult.num_terms
+    self.period = ffiResult.period
+    let aJson = ffiResult.a_coefficients_json.toString()
+    let bJson = ffiResult.b_coefficients_json.toString()
+    self.aCoefficients = (try? JSONDecoder().decode(
+      [Double].self, from: aJson.data(using: .utf8) ?? Data()
+    )) ?? []
+    self.bCoefficients = (try? JSONDecoder().decode(
+      [Double].self, from: bJson.data(using: .utf8) ?? Data()
+    )) ?? []
+    self.series = ffiResult.series.toString()
+    self.seriesLatex = ffiResult.series_latex.toString()
+    self.success = ffiResult.success
+    let msg = ffiResult.error_message.toString()
+    self.errorMessage = msg.isEmpty ? nil : msg
+  }
+}
+
+// MARK: - Precision Evaluation
+
+extension Thales {
+
+  /// The precision mode for evaluation.
+  public enum PrecisionMode: String {
+    /// Standard double-precision floating point
+    case standard = "standard"
+    /// Fixed number of decimal places
+    case fixed = "fixed"
+    /// Fixed number of significant figures
+    case significantFigures = "significant_figures"
+    /// Engineering notation (exponent is a multiple of 3)
+    case engineering = "engineering"
+  }
+
+  /// The rounding mode for precision evaluation.
+  public enum RoundingMode: String {
+    /// Standard half-up rounding
+    case halfUp = "half_up"
+    /// Round toward positive infinity
+    case ceiling = "ceiling"
+    /// Round toward negative infinity
+    case floor = "floor"
+    /// Truncate (round toward zero)
+    case truncate = "truncate"
+  }
+
+  /// Evaluates an expression with controlled precision.
+  ///
+  /// - Parameters:
+  ///   - expression: The expression to evaluate
+  ///   - values: Dictionary mapping variable names to their values
+  ///   - mode: The precision mode to use
+  ///   - precision: The number of decimal places or significant figures
+  ///   - rounding: The rounding mode to apply
+  ///
+  /// - Returns: A ``PrecisionEvaluationResult`` with the computed value
+  ///
+  /// - Throws: ``ThalesError`` if evaluation fails
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let result = try Thales.evaluate(
+  ///     "pi * r^2", with: ["r": 5.0],
+  ///     precision: .fixed, decimalPlaces: 4)
+  /// print(result.valueString) // "78.5398"
+  /// ```
+  public static func evaluate(
+    _ expression: String,
+    with values: [String: Double],
+    precision mode: PrecisionMode,
+    decimalPlaces: UInt32 = 6,
+    rounding: RoundingMode = .halfUp
+  ) throws -> PrecisionEvaluationResult {
+    let jsonData = try JSONSerialization.data(withJSONObject: values)
+    let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+
+    do {
+      let result = try evaluate_with_precision_ffi(
+        expression, jsonString, mode.rawValue, decimalPlaces, rounding.rawValue)
+      guard result.success else {
+        throw ThalesError.operationFailed(result.error_message.toString())
+      }
+      return PrecisionEvaluationResult(ffiResult: result)
+    } catch let error as ThalesError {
+      throw error
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+}
+
+// MARK: - Precision Evaluation Result
+
+/// The result of a precision-controlled evaluation.
+public struct PrecisionEvaluationResult {
+  /// The original expression
+  public let original: String
+
+  /// The computed numerical value
+  public let value: Double
+
+  /// The value as a formatted string at the requested precision
+  public let valueString: String
+
+  /// The precision mode used
+  public let precisionMode: String
+
+  /// The rounding mode used
+  public let roundingMode: String
+
+  /// Whether the evaluation was successful
+  public let success: Bool
+
+  /// Error message if evaluation failed
+  public let errorMessage: String?
+
+  init(ffiResult: PrecisionEvaluationResultFFI) {
+    self.original = ffiResult.original.toString()
+    self.value = ffiResult.value
+    self.valueString = ffiResult.value_string.toString()
+    self.precisionMode = ffiResult.precision_mode.toString()
+    self.roundingMode = ffiResult.rounding_mode.toString()
     self.success = ffiResult.success
     let msg = ffiResult.error_message.toString()
     self.errorMessage = msg.isEmpty ? nil : msg
