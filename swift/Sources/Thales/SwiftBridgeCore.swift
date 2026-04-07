@@ -864,6 +864,11 @@ protocol SwiftBridgeGenericFreer {
     
 protocol SwiftBridgeGenericCopyTypeFfiRepr {}
 
+public struct __private__UncheckedSendable<T>: @unchecked Sendable {
+    public let value: T
+    @inlinable public init(_ value: T) { self.value = value }
+}
+
 public class RustString: RustStringRefMut {
     var isOwned: Bool = true
 

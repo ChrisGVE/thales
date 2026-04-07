@@ -121,6 +121,53 @@ mod ffi {
         pub error_message: String,
     }
 
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct TaylorSeriesResultFFI {
+        pub original: String,
+        pub variable: String,
+        pub center: f64,
+        pub order: u32,
+        pub series: String,
+        pub series_latex: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct LaurentSeriesResultFFI {
+        pub original: String,
+        pub variable: String,
+        pub center: f64,
+        pub neg_order: u32,
+        pub pos_order: u32,
+        pub series: String,
+        pub series_latex: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct AsymptoticSeriesResultFFI {
+        pub original: String,
+        pub variable: String,
+        pub direction: String,
+        pub num_terms: u32,
+        pub series: String,
+        pub series_latex: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
+    #[swift_bridge(swift_repr = "struct")]
+    pub struct SpecialFunctionResultFFI {
+        pub value: String,
+        pub value_latex: String,
+        pub numeric_value: f64,
+        pub derivation_steps: String,
+        pub success: bool,
+        pub error_message: String,
+    }
+
     // =========================================================================
     // Parsing functions
     // =========================================================================
@@ -270,6 +317,48 @@ mod ffi {
             known_values_json: &str,
             targets_json: &str,
         ) -> Result<String, String>;
+    }
+
+    // =========================================================================
+    // Series expansion functions
+    // =========================================================================
+
+    extern "Rust" {
+        fn taylor_series_ffi(
+            expression: &str,
+            variable: &str,
+            center: f64,
+            order: u32,
+        ) -> Result<TaylorSeriesResultFFI, String>;
+        fn maclaurin_series_ffi(
+            expression: &str,
+            variable: &str,
+            order: u32,
+        ) -> Result<TaylorSeriesResultFFI, String>;
+        fn laurent_series_ffi(
+            expression: &str,
+            variable: &str,
+            center: f64,
+            neg_order: u32,
+            pos_order: u32,
+        ) -> Result<LaurentSeriesResultFFI, String>;
+        fn asymptotic_series_ffi(
+            expression: &str,
+            variable: &str,
+            direction: &str,
+            num_terms: u32,
+        ) -> Result<AsymptoticSeriesResultFFI, String>;
+    }
+
+    // =========================================================================
+    // Special functions
+    // =========================================================================
+
+    extern "Rust" {
+        fn gamma_ffi(x: f64) -> Result<SpecialFunctionResultFFI, String>;
+        fn erf_ffi(x: f64) -> Result<SpecialFunctionResultFFI, String>;
+        fn beta_ffi(a: f64, b: f64) -> Result<SpecialFunctionResultFFI, String>;
+        fn erfc_ffi(x: f64) -> Result<SpecialFunctionResultFFI, String>;
     }
 
     // =========================================================================
