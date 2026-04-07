@@ -433,4 +433,38 @@ mod ffi {
             period: f64,
         ) -> Result<FourierSeriesResultFFI, String>;
     }
+
+    // =========================================================================
+    // 2D coordinate transforms
+    // =========================================================================
+
+    extern "Rust" {
+        fn translate_2d_ffi(x: f64, y: f64, dx: f64, dy: f64) -> CartesianCoords2D;
+        fn rotate_2d_ffi(x: f64, y: f64, theta: f64) -> CartesianCoords2D;
+        fn scale_2d_ffi(x: f64, y: f64, sx: f64, sy: f64) -> CartesianCoords2D;
+    }
+
+    // =========================================================================
+    // Complex nth roots
+    // =========================================================================
+
+    extern "Rust" {
+        fn complex_nth_roots_ffi(re: f64, im: f64, n: i32) -> Result<String, String>;
+    }
+
+    // =========================================================================
+    // Dimensional analysis / unit conversion
+    // =========================================================================
+
+    extern "Rust" {
+        fn convert_units_ffi(value: f64, from_unit: &str, to_unit: &str) -> Result<f64, String>;
+    }
+
+    // =========================================================================
+    // LaTeX calculus notation parsing
+    // =========================================================================
+
+    extern "Rust" {
+        fn parse_latex_calculus_ffi(input: &str) -> Result<String, String>;
+    }
 }

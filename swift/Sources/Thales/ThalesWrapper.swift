@@ -2235,3 +2235,152 @@ public struct PrecisionEvaluationResult {
     self.errorMessage = msg.isEmpty ? nil : msg
   }
 }
+
+// MARK: - 2D Coordinate Transforms
+
+extension Thales {
+
+  /// Translates a 2D point by the given offsets.
+  ///
+  /// - Parameters:
+  ///   - point: The point to translate
+  ///   - dx: Translation in the x direction
+  ///   - dy: Translation in the y direction
+  ///
+  /// - Returns: The translated point
+  public static func translate2D(_ point: Point2D, dx: Double, dy: Double) -> Point2D {
+    let result = translate_2d_ffi(point.x, point.y, dx, dy)
+    return Point2D(x: result.x, y: result.y)
+  }
+
+  /// Rotates a 2D point around the origin by the given angle.
+  ///
+  /// - Parameters:
+  ///   - point: The point to rotate
+  ///   - angle: Rotation angle in radians (counterclockwise)
+  ///
+  /// - Returns: The rotated point
+  public static func rotate2D(_ point: Point2D, angle: Double) -> Point2D {
+    let result = rotate_2d_ffi(point.x, point.y, angle)
+    return Point2D(x: result.x, y: result.y)
+  }
+
+  /// Scales a 2D point relative to the origin.
+  ///
+  /// - Parameters:
+  ///   - point: The point to scale
+  ///   - sx: Scale factor in the x direction
+  ///   - sy: Scale factor in the y direction
+  ///
+  /// - Returns: The scaled point
+  public static func scale2D(_ point: Point2D, sx: Double, sy: Double) -> Point2D {
+    let result = scale_2d_ffi(point.x, point.y, sx, sy)
+    return Point2D(x: result.x, y: result.y)
+  }
+}
+
+// MARK: - Complex Nth Roots
+
+extension Thales {
+
+  /// Computes all n distinct nth roots of a complex number.
+  ///
+  /// - Parameters:
+  ///   - real: Real part of the complex number
+  ///   - imaginary: Imaginary part of the complex number
+  ///   - n: The root degree (must be positive)
+  ///
+  /// - Returns: Array of `Complex` values representing all nth roots
+  ///
+  /// - Throws: ``ThalesError`` if n is not positive
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// // Cube roots of 1
+  /// let roots = try Thales.complexNthRoots(real: 1, imaginary: 0, n: 3)
+  /// // Returns 3 roots: 1, -0.5+0.866i, -0.5-0.866i
+  /// ```
+  public static func complexNthRoots(
+    real: Double,
+    imaginary: Double,
+    n: Int32
+  ) throws -> [Complex] {
+    do {
+      let json = try complex_nth_roots_ffi(real, imaginary, n)
+      let data = json.toString().data(using: .utf8) ?? Data()
+      let pairs = try JSONDecoder().decode([[Double]].self, from: data)
+      return pairs.map { Complex(real: $0[0], imaginary: $0[1]) }
+    } catch let error as ThalesError {
+      throw error
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+}
+
+// MARK: - Unit Conversion
+
+extension Thales {
+
+  /// Converts a value from one unit to another.
+  ///
+  /// Uses the built-in unit registry with common SI and derived units.
+  ///
+  /// - Parameters:
+  ///   - value: The value to convert
+  ///   - from: Source unit name (e.g. `"m"`, `"kg"`, `"s"`)
+  ///   - to: Target unit name
+  ///
+  /// - Returns: The converted value
+  ///
+  /// - Throws: ``ThalesError`` if the units are incompatible or unknown
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let meters = try Thales.convertUnits(1000, from: "mm", to: "m")
+  /// // meters == 1.0
+  /// ```
+  public static func convertUnits(
+    _ value: Double,
+    from: String,
+    to: String
+  ) throws -> Double {
+    do {
+      return try convert_units_ffi(value, from, to)
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+}
+
+// MARK: - LaTeX Calculus Notation Parsing
+
+extension Thales {
+
+  /// Parses LaTeX calculus notations into expressions.
+  ///
+  /// Handles notations like `\int_{a}^{b}`, `\lim_{x \to a}`,
+  /// `\sum_{i=a}^{b}`, and other standard LaTeX mathematical syntax.
+  ///
+  /// - Parameter latex: The LaTeX string to parse
+  ///
+  /// - Returns: The parsed expression as a string
+  ///
+  /// - Throws: ``ThalesError`` if the LaTeX cannot be parsed
+  ///
+  /// ## Example
+  ///
+  /// ```swift
+  /// let expr = try Thales.parseLatexCalculus("\\int_{0}^{1} x^2 dx")
+  /// print(expr)
+  /// ```
+  public static func parseLatexCalculus(_ latex: String) throws -> String {
+    do {
+      return try parse_latex_calculus_ffi(latex).toString()
+    } catch {
+      throw ThalesError.operationFailed(String(describing: error))
+    }
+  }
+}

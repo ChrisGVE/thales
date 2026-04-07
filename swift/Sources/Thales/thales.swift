@@ -298,6 +298,30 @@ public func fourier_series_ffi<GenericToRustStr: ToRustStr>(_ expression: Generi
     })
     })
 }
+public func translate_2d_ffi(_ x: Double, _ y: Double, _ dx: Double, _ dy: Double) -> CartesianCoords2D {
+    __swift_bridge__$translate_2d_ffi(x, y, dx, dy).intoSwiftRepr()
+}
+public func rotate_2d_ffi(_ x: Double, _ y: Double, _ theta: Double) -> CartesianCoords2D {
+    __swift_bridge__$rotate_2d_ffi(x, y, theta).intoSwiftRepr()
+}
+public func scale_2d_ffi(_ x: Double, _ y: Double, _ sx: Double, _ sy: Double) -> CartesianCoords2D {
+    __swift_bridge__$scale_2d_ffi(x, y, sx, sy).intoSwiftRepr()
+}
+public func complex_nth_roots_ffi(_ re: Double, _ im: Double, _ n: Int32) throws -> RustString {
+    try { let val = __swift_bridge__$complex_nth_roots_ffi(re, im, n); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+}
+public func convert_units_ffi<GenericToRustStr: ToRustStr>(_ value: Double, _ from_unit: GenericToRustStr, _ to_unit: GenericToRustStr) throws -> Double {
+    return to_unit.toRustStr({ to_unitAsRustStr in
+        return from_unit.toRustStr({ from_unitAsRustStr in
+        try { let val = __swift_bridge__$convert_units_ffi(value, from_unitAsRustStr, to_unitAsRustStr); switch val.tag { case __swift_bridge__$ResultF64AndString$ResultOk: return val.payload.ok case __swift_bridge__$ResultF64AndString$ResultErr: throw RustString(ptr: val.payload.err) default: fatalError() } }()
+    })
+    })
+}
+public func parse_latex_calculus_ffi<GenericToRustStr: ToRustStr>(_ input: GenericToRustStr) throws -> RustString {
+    return input.toRustStr({ inputAsRustStr in
+        try { let val = __swift_bridge__$parse_latex_calculus_ffi(inputAsRustStr); if val.is_ok { return RustString(ptr: val.ok_or_err!) } else { throw RustString(ptr: val.ok_or_err!) } }()
+    })
+}
 public struct ResolutionPathFFI {
     public var initial_expr: RustString
     public var steps_json: RustString

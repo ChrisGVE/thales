@@ -365,6 +365,19 @@ struct __swift_bridge__$ResultFourierSeriesResultFFIAndString
 __swift_bridge__$fourier_series_ffi(struct RustStr expression,
                                     struct RustStr variable, uint32_t num_terms,
                                     double period);
+struct __swift_bridge__$CartesianCoords2D
+__swift_bridge__$translate_2d_ffi(double x, double y, double dx, double dy);
+struct __swift_bridge__$CartesianCoords2D
+__swift_bridge__$rotate_2d_ffi(double x, double y, double theta);
+struct __swift_bridge__$CartesianCoords2D
+__swift_bridge__$scale_2d_ffi(double x, double y, double sx, double sy);
+struct __private__ResultPtrAndPtr
+__swift_bridge__$complex_nth_roots_ffi(double re, double im, int32_t n);
+struct __swift_bridge__$ResultF64AndString
+__swift_bridge__$convert_units_ffi(double value, struct RustStr from_unit,
+                                   struct RustStr to_unit);
+struct __private__ResultPtrAndPtr
+__swift_bridge__$parse_latex_calculus_ffi(struct RustStr input);
 typedef enum __swift_bridge__$ResultODEResultFFIAndString$Tag {
   __swift_bridge__$ResultODEResultFFIAndString$ResultOk,
   __swift_bridge__$ResultODEResultFFIAndString$ResultErr

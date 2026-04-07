@@ -396,6 +396,24 @@ mod ffi {
             threshold: f64,
         ) -> Result<String, String>;
     }
+
+    extern "Rust" {
+        fn translate_2d_ffi(x: f64, y: f64, dx: f64, dy: f64) -> CartesianCoords2D;
+        fn rotate_2d_ffi(x: f64, y: f64, theta: f64) -> CartesianCoords2D;
+        fn scale_2d_ffi(x: f64, y: f64, sx: f64, sy: f64) -> CartesianCoords2D;
+    }
+
+    extern "Rust" {
+        fn complex_nth_roots_ffi(re: f64, im: f64, n: i32) -> Result<String, String>;
+    }
+
+    extern "Rust" {
+        fn convert_units_ffi(value: f64, from_unit: &str, to_unit: &str) -> Result<f64, String>;
+    }
+
+    extern "Rust" {
+        fn parse_latex_calculus_ffi(input: &str) -> Result<String, String>;
+    }
 }
 
 // =============================================================================
@@ -1799,6 +1817,88 @@ fn reversion_series_ffi(
             error_message: format!("{}", e),
         }),
     }
+}
+
+// =============================================================================
+// 2D coordinate transforms (translate, rotate, scale)
+// =============================================================================
+
+/// Apply a 2D translation to a point.
+fn translate_2d_ffi(x: f64, y: f64, dx: f64, dy: f64) -> ffi::CartesianCoords2D {
+    use crate::transforms::{Cartesian2D, Transform2D};
+    let t = Transform2D::translation(dx, dy);
+    let result = t.apply(Cartesian2D::new(x, y));
+    ffi::CartesianCoords2D {
+        x: result.x,
+        y: result.y,
+    }
+}
+
+/// Rotate a 2D point around the origin by the given angle (radians).
+fn rotate_2d_ffi(x: f64, y: f64, theta: f64) -> ffi::CartesianCoords2D {
+    use crate::transforms::{Cartesian2D, Transform2D};
+    let t = Transform2D::rotation(theta);
+    let result = t.apply(Cartesian2D::new(x, y));
+    ffi::CartesianCoords2D {
+        x: result.x,
+        y: result.y,
+    }
+}
+
+/// Scale a 2D point relative to the origin.
+fn scale_2d_ffi(x: f64, y: f64, sx: f64, sy: f64) -> ffi::CartesianCoords2D {
+    use crate::transforms::{Cartesian2D, Transform2D};
+    let t = Transform2D::scaling(sx, sy);
+    let result = t.apply(Cartesian2D::new(x, y));
+    ffi::CartesianCoords2D {
+        x: result.x,
+        y: result.y,
+    }
+}
+
+// =============================================================================
+// Complex nth roots
+// =============================================================================
+
+/// Compute all n distinct nth roots of a complex number.
+///
+/// Returns a JSON array of `[re, im]` pairs.
+fn complex_nth_roots_ffi(re: f64, im: f64, n: i32) -> Result<String, String> {
+    use crate::transforms::ComplexOps;
+    use num_complex::Complex64;
+
+    if n <= 0 {
+        return Err("n must be positive".to_string());
+    }
+    let c = Complex64::new(re, im);
+    let roots = ComplexOps::nth_root(c, n);
+    let pairs: Vec<[f64; 2]> = roots.iter().map(|r| [r.re, r.im]).collect();
+    serde_json::to_string(&pairs).map_err(|e| format!("Serialization error: {}", e))
+}
+
+// =============================================================================
+// Dimensional analysis / unit conversion
+// =============================================================================
+
+/// Convert a value from one unit to another.
+///
+/// Uses the built-in unit system with common SI and derived units.
+fn convert_units_ffi(value: f64, from_unit: &str, to_unit: &str) -> Result<f64, String> {
+    use crate::dimensions::UnitRegistry;
+    let registry = UnitRegistry::with_common_units();
+    registry.convert(value, from_unit, to_unit)
+}
+
+// =============================================================================
+// LaTeX calculus notation parsing
+// =============================================================================
+
+/// Parse LaTeX calculus notations like \int_{a}^{b}, \lim_{x \to a}, \sum_{i=a}^{b}.
+///
+/// Returns the parsed expression as a string, or an error if parsing fails.
+fn parse_latex_calculus_ffi(input: &str) -> Result<String, String> {
+    // Delegate to the existing LaTeX parser which handles these notations
+    parse_latex_ffi(input)
 }
 
 // =============================================================================
