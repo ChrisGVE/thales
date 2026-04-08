@@ -88,11 +88,41 @@ pub(super) fn solve_with_values_ffi(
         .steps
         .iter()
         .map(|step| {
-            serde_json::json!({
+            let mut obj = serde_json::json!({
                 "operation": step.operation.describe(),
                 "explanation": step.explanation,
                 "result": format!("{:?}", step.result)
-            })
+            });
+
+            // Add annotation fields when present
+            if let Some(ref ann) = step.annotation {
+                obj["technique"] = serde_json::json!(ann.technique);
+                obj["theorem"] = serde_json::json!(ann.theorem);
+                obj["significance"] = serde_json::json!(format!("{}", ann.significance));
+            }
+
+            // Add structured data for special operation variants
+            match &step.operation {
+                crate::resolution_path::Operation::SymbolicToNumericalHandoff {
+                    reason,
+                    recommended_method,
+                } => {
+                    obj["handoff_reason"] = serde_json::json!(reason);
+                    obj["recommended_method"] = serde_json::json!(recommended_method);
+                }
+                crate::resolution_path::Operation::NumericalConverged {
+                    method,
+                    iterations,
+                    final_error,
+                } => {
+                    obj["convergence_method"] = serde_json::json!(method);
+                    obj["convergence_iterations"] = serde_json::json!(iterations);
+                    obj["convergence_error"] = serde_json::json!(final_error);
+                }
+                _ => {}
+            }
+
+            obj
         })
         .collect();
 
