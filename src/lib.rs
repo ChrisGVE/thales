@@ -509,8 +509,8 @@ pub use partial_fractions::{
 };
 pub use precision::{EvalContext, EvalError, PrecisionMode, RoundingMode, Value};
 pub use resolution_path::{
-    Operation, OperationCounts, PathStatistics, ResolutionPath, ResolutionPathBuilder,
-    ResolutionStep, StepAnnotation, StepSignificance, Verbosity,
+    NumericalConvergenceInfo, Operation, OperationCounts, PathStatistics, ResolutionPath,
+    ResolutionPathBuilder, ResolutionStep, StepAnnotation, StepSignificance, Verbosity,
 };
 pub use series::{
     arctan_series,

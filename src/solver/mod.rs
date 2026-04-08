@@ -548,8 +548,22 @@ fn try_numerical_solve(
 ) -> Result<(f64, ResolutionPath), SolverError> {
     let solver = SmartNumericalSolver::with_default_config();
     match solver.solve(equation, variable) {
-        Ok((solution, path)) => {
+        Ok((solution, mut path)) => {
             if solution.converged {
+                // Record convergence information in the resolution path
+                let method_name = infer_numerical_method(&path);
+                path.add_step(ResolutionStep::new(
+                    Operation::NumericalConverged {
+                        method: method_name,
+                        iterations: solution.iterations,
+                        final_error: solution.residual,
+                    },
+                    format!(
+                        "Converged to x = {:.8} in {} iterations (error: {:.2e})",
+                        solution.value, solution.iterations, solution.residual
+                    ),
+                    Expression::Float(solution.value),
+                ));
                 Ok((solution.value, path))
             } else {
                 Err(SolverError::Other(
@@ -562,6 +576,26 @@ fn try_numerical_solve(
             e
         ))),
     }
+}
+
+/// Infer which numerical method was used by inspecting the resolution path steps.
+fn infer_numerical_method(path: &ResolutionPath) -> String {
+    for step in &path.steps {
+        let explanation = step.explanation.to_lowercase();
+        if explanation.contains("newton") {
+            return "Newton-Raphson".to_string();
+        }
+        if explanation.contains("bisection") {
+            return "Bisection".to_string();
+        }
+        if explanation.contains("brent") {
+            return "Brent".to_string();
+        }
+        if explanation.contains("secant") {
+            return "Secant".to_string();
+        }
+    }
+    "Numerical".to_string()
 }
 
 // ============================================================================

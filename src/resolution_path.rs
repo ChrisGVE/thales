@@ -137,6 +137,39 @@ use serde_json::{json, Value as JsonValue};
 /// let minimal = path.to_text(Verbosity::Minimal);
 /// let detailed = path.to_text(Verbosity::Detailed);
 /// ```
+/// Information about numerical method convergence.
+///
+/// Records diagnostic details when a numerical solver converges to a solution,
+/// including which method was used, how many iterations it took, and the
+/// accuracy achieved.
+///
+/// # Example
+///
+/// ```rust
+/// use thales::resolution_path::NumericalConvergenceInfo;
+///
+/// let info = NumericalConvergenceInfo {
+///     method: "Newton-Raphson".to_string(),
+///     iterations: 7,
+///     final_error: 1.2e-12,
+///     tolerance: 1e-10,
+/// };
+///
+/// assert_eq!(info.method, "Newton-Raphson");
+/// assert!(info.final_error < info.tolerance);
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct NumericalConvergenceInfo {
+    /// Name of the numerical method used (e.g., "Newton-Raphson", "Bisection")
+    pub method: String,
+    /// Number of iterations performed before convergence
+    pub iterations: usize,
+    /// Final residual error |f(x)| at the solution
+    pub final_error: f64,
+    /// Convergence tolerance that was configured
+    pub tolerance: f64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Verbosity {
     /// Key transformations only - shows just the essential operations.
@@ -1220,6 +1253,24 @@ pub enum Operation {
     /// Applied when symbolic methods fail or exact solutions are impractical
     NumericalApproximation,
 
+    /// Numerical method converged to a solution.
+    ///
+    /// Records that a numerical solver successfully found a root, including
+    /// the method used, iteration count, and final error.
+    ///
+    /// # Example
+    ///
+    /// After Newton-Raphson converges on `e^x = 3`:
+    /// - `NumericalConverged { method: "Newton-Raphson", iterations: 7, final_error: 1e-12 }`
+    NumericalConverged {
+        /// The numerical method that was used
+        method: String,
+        /// Number of iterations to convergence
+        iterations: usize,
+        /// Final residual error |f(x)|
+        final_error: f64,
+    },
+
     // ===== Calculus Operations =====
     /// Differentiate an expression with respect to a variable.
     ///
@@ -1394,6 +1445,16 @@ impl Operation {
             Operation::QuadraticFormula => "Apply quadratic formula".to_string(),
             Operation::CompleteSquare => "Complete the square".to_string(),
             Operation::NumericalApproximation => "Use numerical approximation".to_string(),
+            Operation::NumericalConverged {
+                method,
+                iterations,
+                final_error,
+            } => {
+                format!(
+                    "Numerical method {} converged in {} iterations (error: {:.2e})",
+                    method, iterations, final_error
+                )
+            }
             // Calculus operations
             Operation::Differentiate { variable, rule } => {
                 format!("Differentiate with respect to {} ({})", variable, rule)
@@ -1577,7 +1638,8 @@ impl Operation {
             // Advanced methods
             Operation::QuadraticFormula
             | Operation::CompleteSquare
-            | Operation::NumericalApproximation => "advanced".to_string(),
+            | Operation::NumericalApproximation
+            | Operation::NumericalConverged { .. } => "advanced".to_string(),
 
             // Calculus operations
             Operation::Differentiate { .. }
@@ -1774,6 +1836,26 @@ impl ResolutionPathBuilder {
     pub fn step(mut self, operation: Operation, explanation: String, result: Expression) -> Self {
         self.path
             .add_step(ResolutionStep::new(operation, explanation, result));
+        self
+    }
+
+    /// Add a step with a structured annotation.
+    ///
+    /// Same as [`step`](ResolutionPathBuilder::step) but attaches a
+    /// [`StepAnnotation`] for educational narration metadata.
+    pub fn annotated_step(
+        mut self,
+        operation: Operation,
+        explanation: String,
+        result: Expression,
+        annotation: StepAnnotation,
+    ) -> Self {
+        self.path.add_step(ResolutionStep::with_annotation(
+            operation,
+            explanation,
+            result,
+            annotation,
+        ));
         self
     }
 
@@ -2345,5 +2427,63 @@ mod tests {
         // No steps, just result
         assert!(!text.contains("Step"));
         assert!(text.contains("Result:"));
+    }
+
+    #[test]
+    fn test_numerical_converged_operation() {
+        let op = Operation::NumericalConverged {
+            method: "Newton-Raphson".to_string(),
+            iterations: 7,
+            final_error: 1.2e-12,
+        };
+
+        let desc = op.describe();
+        assert!(desc.contains("Newton-Raphson"));
+        assert!(desc.contains("7 iterations"));
+        assert!(desc.contains("1.20e-12"));
+
+        assert_eq!(op.category(), "advanced");
+        assert!(op.is_key_operation());
+    }
+
+    #[test]
+    fn test_numerical_convergence_info_struct() {
+        let info = NumericalConvergenceInfo {
+            method: "Bisection".to_string(),
+            iterations: 42,
+            final_error: 5e-11,
+            tolerance: 1e-10,
+        };
+
+        assert_eq!(info.method, "Bisection");
+        assert_eq!(info.iterations, 42);
+        assert!(info.final_error < info.tolerance);
+    }
+
+    #[test]
+    fn test_numerical_converged_in_path() {
+        let mut path = ResolutionPath::new(Expression::Integer(0));
+        path.add_step(ResolutionStep::new(
+            Operation::NumericalConverged {
+                method: "Newton-Raphson".to_string(),
+                iterations: 5,
+                final_error: 3.0e-13,
+            },
+            "Converged to x = 1.09861229 in 5 iterations (error: 3.00e-13)".to_string(),
+            Expression::Float(1.09861229),
+        ));
+        path.set_result(Expression::Float(1.09861229));
+
+        assert_eq!(path.steps.len(), 1);
+        let step = &path.steps[0];
+        assert!(matches!(
+            &step.operation,
+            Operation::NumericalConverged {
+                method,
+                iterations: 5,
+                ..
+            } if method == "Newton-Raphson"
+        ));
+        assert!(step.explanation.contains("5 iterations"));
     }
 }
