@@ -1176,32 +1176,6 @@ impl StepAnnotation {
             difficulty,
         }
     }
-
-    // --- Backward-compatible aliases (deprecated, will be removed) ---
-
-    /// Alias for `elementary()`. Prefer `elementary()` in new code.
-    #[must_use]
-    pub fn trivial() -> Self {
-        Self::elementary()
-    }
-
-    /// Alias for `elementary()`. Prefer `elementary()` in new code.
-    #[must_use]
-    pub fn standard() -> Self {
-        Self::elementary()
-    }
-
-    /// Alias for `algebraic()`. Prefer `algebraic()` in new code.
-    #[must_use]
-    pub fn technique(name: &str) -> Self {
-        Self::algebraic(name)
-    }
-
-    /// Alias for `advanced()`. Prefer the tier-specific constructor in new code.
-    #[must_use]
-    pub fn strategic(name: &str) -> Self {
-        Self::advanced(name)
-    }
 }
 
 /// A single step in the resolution path, recording one algebraic manipulation
