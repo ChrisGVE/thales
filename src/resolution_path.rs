@@ -855,76 +855,155 @@ fn escape_latex_text(text: &str) -> String {
 /// // Hint level 3: Show result
 /// println!("Result: {:?}", step.result);
 /// ```
-/// How significant a resolution step is for educational purposes.
+/// Intrinsic difficulty of the mathematical technique required for a step.
 ///
-/// This classification helps educational UIs decide which steps to emphasize,
-/// skip, or narrate in detail when presenting a solution path to students.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum StepSignificance {
-    /// Trivial arithmetic: 3+2=5, combine like terms.
-    Trivial,
-    /// Standard algebraic manipulation: move term, divide both sides.
-    Standard,
-    /// Named technique or theorem application.
-    Substantive,
-    /// Major method choice: switching to numerical, choosing substitution strategy.
-    Strategic,
+/// This classification is based on the kind of mathematics involved, not on
+/// the number of steps. A single integration step is harder than ten elementary
+/// algebra steps. The tier maps to an approximate educational level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TechniqueDifficulty {
+    /// Add, subtract, multiply, divide both sides; move terms; isolate variable.
+    /// Educational level: middle school.
+    Elementary = 1,
+    /// Square/cube both sides, take nth root, apply exponent rules, logarithms.
+    /// Educational level: high school algebra.
+    PowerAndRoots = 2,
+    /// Factor, expand, complete the square, quadratic formula, combine/partial fractions.
+    /// Educational level: pre-calculus.
+    AlgebraicManip = 3,
+    /// Trig inversion (arcsin etc.), trig identities, hyperbolic functions, substitution.
+    /// Educational level: trigonometry.
+    Transcendental = 4,
+    /// Differentiate, integrate, integration by parts, u-substitution, ODE, limits.
+    /// Educational level: calculus.
+    Calculus = 5,
+    /// Matrix operations, series expansion, numerical methods, special functions,
+    /// Laplace/Fourier transforms, tensors.
+    /// Educational level: university.
+    Advanced = 6,
 }
 
 /// Structured annotation for a resolution step providing educational context.
 ///
 /// Annotations carry metadata about which mathematical technique or theorem was
-/// applied and how significant the step is. This enables narration engines to
-/// produce richer explanations without parsing free-text fields.
+/// applied and the intrinsic difficulty of the technique. This enables narration
+/// engines and condensation logic to make informed decisions about which steps
+/// to show, collapse, or narrate in detail.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StepAnnotation {
     /// Named technique applied, e.g. "Quadratic Formula", "Integration by Parts".
     pub technique: Option<String>,
     /// Theorem or identity referenced, e.g. "Fundamental Theorem of Algebra".
     pub theorem: Option<String>,
-    /// How significant this step is.
-    pub significance: StepSignificance,
+    /// Intrinsic difficulty of the mathematical technique used in this step.
+    pub difficulty: TechniqueDifficulty,
 }
 
 impl StepAnnotation {
-    /// Create a trivial annotation (no technique or theorem).
+    /// Create an elementary annotation (no technique or theorem).
+    /// Use for basic arithmetic and simple variable isolation.
     #[must_use]
-    pub fn trivial() -> Self {
+    pub fn elementary() -> Self {
         Self {
             technique: None,
             theorem: None,
-            significance: StepSignificance::Trivial,
+            difficulty: TechniqueDifficulty::Elementary,
         }
     }
 
-    /// Create a standard annotation (no technique or theorem).
+    /// Create a power/roots annotation (no technique or theorem).
+    /// Use for exponentiation, root extraction, and logarithm steps.
     #[must_use]
-    pub fn standard() -> Self {
+    pub fn power_and_roots() -> Self {
         Self {
             technique: None,
             theorem: None,
-            significance: StepSignificance::Standard,
+            difficulty: TechniqueDifficulty::PowerAndRoots,
         }
     }
 
-    /// Create a substantive annotation with a named technique.
+    /// Create an algebraic manipulation annotation with a named technique.
+    /// Use for factoring, expanding, quadratic formula, etc.
     #[must_use]
-    pub fn technique(name: &str) -> Self {
+    pub fn algebraic(name: &str) -> Self {
         Self {
             technique: Some(name.to_string()),
             theorem: None,
-            significance: StepSignificance::Substantive,
+            difficulty: TechniqueDifficulty::AlgebraicManip,
         }
     }
 
-    /// Create a strategic annotation with a named technique.
+    /// Create a transcendental annotation with a named technique.
+    /// Use for trig inversion, trig identities, hyperbolic functions.
     #[must_use]
-    pub fn strategic(technique: &str) -> Self {
+    pub fn transcendental(name: &str) -> Self {
         Self {
-            technique: Some(technique.to_string()),
+            technique: Some(name.to_string()),
             theorem: None,
-            significance: StepSignificance::Strategic,
+            difficulty: TechniqueDifficulty::Transcendental,
         }
+    }
+
+    /// Create a calculus annotation with a named technique.
+    /// Use for differentiation, integration, ODE solving.
+    #[must_use]
+    pub fn calculus(name: &str) -> Self {
+        Self {
+            technique: Some(name.to_string()),
+            theorem: None,
+            difficulty: TechniqueDifficulty::Calculus,
+        }
+    }
+
+    /// Create an advanced annotation with a named technique.
+    /// Use for matrix operations, series, numerical methods, special functions.
+    #[must_use]
+    pub fn advanced(name: &str) -> Self {
+        Self {
+            technique: Some(name.to_string()),
+            theorem: None,
+            difficulty: TechniqueDifficulty::Advanced,
+        }
+    }
+
+    /// Create an annotation with explicit difficulty, technique, and theorem.
+    #[must_use]
+    pub fn with_details(
+        difficulty: TechniqueDifficulty,
+        technique: Option<&str>,
+        theorem: Option<&str>,
+    ) -> Self {
+        Self {
+            technique: technique.map(String::from),
+            theorem: theorem.map(String::from),
+            difficulty,
+        }
+    }
+
+    // --- Backward-compatible aliases (deprecated, will be removed) ---
+
+    /// Alias for `elementary()`. Prefer `elementary()` in new code.
+    #[must_use]
+    pub fn trivial() -> Self {
+        Self::elementary()
+    }
+
+    /// Alias for `elementary()`. Prefer `elementary()` in new code.
+    #[must_use]
+    pub fn standard() -> Self {
+        Self::elementary()
+    }
+
+    /// Alias for `algebraic()`. Prefer `algebraic()` in new code.
+    #[must_use]
+    pub fn technique(name: &str) -> Self {
+        Self::algebraic(name)
+    }
+
+    /// Alias for `advanced()`. Prefer the tier-specific constructor in new code.
+    #[must_use]
+    pub fn strategic(name: &str) -> Self {
+        Self::advanced(name)
     }
 }
 
@@ -954,7 +1033,7 @@ pub struct ResolutionStep {
     /// Optional structured annotation for educational narration.
     ///
     /// When present, provides metadata about the mathematical technique or
-    /// theorem applied and the significance of this step.
+    /// theorem applied and the difficulty tier of the technique used.
     pub annotation: Option<StepAnnotation>,
 }
 
@@ -1959,34 +2038,28 @@ impl ResolutionPathBuilder {
     }
 }
 
-impl std::fmt::Display for StepSignificance {
+impl std::fmt::Display for TechniqueDifficulty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Trivial => write!(f, "trivial"),
-            Self::Standard => write!(f, "standard"),
-            Self::Substantive => write!(f, "substantive"),
-            Self::Strategic => write!(f, "strategic"),
+            Self::Elementary => write!(f, "elementary"),
+            Self::PowerAndRoots => write!(f, "power/roots"),
+            Self::AlgebraicManip => write!(f, "algebraic"),
+            Self::Transcendental => write!(f, "transcendental"),
+            Self::Calculus => write!(f, "calculus"),
+            Self::Advanced => write!(f, "advanced"),
         }
     }
 }
 
-impl PartialOrd for StepSignificance {
+impl PartialOrd for TechniqueDifficulty {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for StepSignificance {
+impl Ord for TechniqueDifficulty {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let rank = |s: &Self| -> u8 {
-            match s {
-                Self::Trivial => 0,
-                Self::Standard => 1,
-                Self::Substantive => 2,
-                Self::Strategic => 3,
-            }
-        };
-        rank(self).cmp(&rank(other))
+        (*self as u8).cmp(&(*other as u8))
     }
 }
 
@@ -2344,21 +2417,31 @@ mod tests {
     }
 
     #[test]
-    fn test_step_significance_display() {
-        assert_eq!(StepSignificance::Trivial.to_string(), "trivial");
-        assert_eq!(StepSignificance::Standard.to_string(), "standard");
-        assert_eq!(StepSignificance::Substantive.to_string(), "substantive");
-        assert_eq!(StepSignificance::Strategic.to_string(), "strategic");
+    fn test_technique_difficulty_display() {
+        assert_eq!(TechniqueDifficulty::Elementary.to_string(), "elementary");
+        assert_eq!(
+            TechniqueDifficulty::PowerAndRoots.to_string(),
+            "power/roots"
+        );
+        assert_eq!(TechniqueDifficulty::AlgebraicManip.to_string(), "algebraic");
+        assert_eq!(
+            TechniqueDifficulty::Transcendental.to_string(),
+            "transcendental"
+        );
+        assert_eq!(TechniqueDifficulty::Calculus.to_string(), "calculus");
+        assert_eq!(TechniqueDifficulty::Advanced.to_string(), "advanced");
     }
 
     #[test]
-    fn test_step_significance_ord() {
-        assert!(StepSignificance::Trivial < StepSignificance::Standard);
-        assert!(StepSignificance::Standard < StepSignificance::Substantive);
-        assert!(StepSignificance::Substantive < StepSignificance::Strategic);
-        assert!(StepSignificance::Trivial < StepSignificance::Strategic);
+    fn test_technique_difficulty_ord() {
+        assert!(TechniqueDifficulty::Elementary < TechniqueDifficulty::PowerAndRoots);
+        assert!(TechniqueDifficulty::PowerAndRoots < TechniqueDifficulty::AlgebraicManip);
+        assert!(TechniqueDifficulty::AlgebraicManip < TechniqueDifficulty::Transcendental);
+        assert!(TechniqueDifficulty::Transcendental < TechniqueDifficulty::Calculus);
+        assert!(TechniqueDifficulty::Calculus < TechniqueDifficulty::Advanced);
+        assert!(TechniqueDifficulty::Elementary < TechniqueDifficulty::Advanced);
         assert_eq!(
-            StepSignificance::Standard.cmp(&StepSignificance::Standard),
+            TechniqueDifficulty::Elementary.cmp(&TechniqueDifficulty::Elementary),
             std::cmp::Ordering::Equal
         );
     }
@@ -2387,7 +2470,7 @@ mod tests {
             StepAnnotation {
                 technique: Some("Quadratic Formula".to_string()),
                 theorem: Some("Fundamental Theorem of Algebra".to_string()),
-                significance: StepSignificance::Strategic,
+                difficulty: TechniqueDifficulty::AlgebraicManip,
             },
         );
         let text = step.to_string();
