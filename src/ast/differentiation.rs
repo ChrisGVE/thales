@@ -271,475 +271,391 @@ impl Expression {
                 }
             }
 
-            // Unary operations
-            Expression::Unary(op, expr) => {
-                let inner_derivative = expr.differentiate(with_respect_to);
-                match op {
-                    // d/dx[-f] = -f'
-                    UnaryOp::Neg => Expression::Unary(UnaryOp::Neg, Box::new(inner_derivative)),
-                    // d/dx[|f|] = sign(f) * f' (simplified, assumes f != 0)
-                    UnaryOp::Abs => {
-                        let sign =
-                            Expression::Function(Function::Sign, vec![expr.as_ref().clone()]);
-                        Expression::Binary(
-                            BinaryOp::Mul,
-                            Box::new(sign),
-                            Box::new(inner_derivative),
-                        )
-                    }
-                    // d/dx[!f] = 0 (logical NOT is discrete)
-                    UnaryOp::Not => Expression::Integer(0),
-                }
-            }
-
-            // Binary operations
+            Expression::Unary(op, expr) => differentiate_unary(op, expr, with_respect_to),
             Expression::Binary(op, left, right) => {
-                let left_deriv = left.differentiate(with_respect_to);
-                let right_deriv = right.differentiate(with_respect_to);
-
-                match op {
-                    // Sum rule: d/dx[u + v] = du/dx + dv/dx
-                    BinaryOp::Add => Expression::Binary(
-                        BinaryOp::Add,
-                        Box::new(left_deriv),
-                        Box::new(right_deriv),
-                    ),
-
-                    // Difference rule: d/dx[u - v] = du/dx - dv/dx
-                    BinaryOp::Sub => Expression::Binary(
-                        BinaryOp::Sub,
-                        Box::new(left_deriv),
-                        Box::new(right_deriv),
-                    ),
-
-                    // Product rule: d/dx[u * v] = u * dv/dx + v * du/dx
-                    BinaryOp::Mul => {
-                        let term1 =
-                            Expression::Binary(BinaryOp::Mul, left.clone(), Box::new(right_deriv));
-                        let term2 =
-                            Expression::Binary(BinaryOp::Mul, right.clone(), Box::new(left_deriv));
-                        Expression::Binary(BinaryOp::Add, Box::new(term1), Box::new(term2))
-                    }
-
-                    // Quotient rule: d/dx[u / v] = (v * du/dx - u * dv/dx) / v^2
-                    BinaryOp::Div => {
-                        let numerator_term1 =
-                            Expression::Binary(BinaryOp::Mul, right.clone(), Box::new(left_deriv));
-                        let numerator_term2 =
-                            Expression::Binary(BinaryOp::Mul, left.clone(), Box::new(right_deriv));
-                        let numerator = Expression::Binary(
-                            BinaryOp::Sub,
-                            Box::new(numerator_term1),
-                            Box::new(numerator_term2),
-                        );
-                        let denominator =
-                            Expression::Power(right.clone(), Box::new(Expression::Integer(2)));
-                        Expression::Binary(
-                            BinaryOp::Div,
-                            Box::new(numerator),
-                            Box::new(denominator),
-                        )
-                    }
-
-                    // Modulo: derivative is complex, not commonly needed
-                    BinaryOp::Mod => Expression::Integer(0),
-                }
+                differentiate_binary(op, left, right, with_respect_to)
             }
-
-            // Power rule with chain rule
             Expression::Power(base, exponent) => {
-                let base_has_var = base.contains_variable(with_respect_to);
-                let exp_has_var = exponent.contains_variable(with_respect_to);
-
-                if !base_has_var && !exp_has_var {
-                    // d/dx[c^d] = 0 (constant)
-                    Expression::Integer(0)
-                } else if base_has_var && !exp_has_var {
-                    // Power rule: d/dx[u^n] = n * u^(n-1) * du/dx
-                    let base_deriv = base.differentiate(with_respect_to);
-                    let n_minus_1 = Expression::Binary(
-                        BinaryOp::Sub,
-                        exponent.clone(),
-                        Box::new(Expression::Integer(1)),
-                    );
-                    let power_term = Expression::Power(base.clone(), Box::new(n_minus_1));
-                    let scaled =
-                        Expression::Binary(BinaryOp::Mul, exponent.clone(), Box::new(power_term));
-                    Expression::Binary(BinaryOp::Mul, Box::new(scaled), Box::new(base_deriv))
-                } else if !base_has_var && exp_has_var {
-                    // Exponential rule: d/dx[a^v] = a^v * ln(a) * dv/dx
-                    let exp_deriv = exponent.differentiate(with_respect_to);
-                    let ln_base = Expression::Function(Function::Ln, vec![base.as_ref().clone()]);
-                    let power_term = Expression::Power(base.clone(), exponent.clone());
-                    let scaled =
-                        Expression::Binary(BinaryOp::Mul, Box::new(power_term), Box::new(ln_base));
-                    Expression::Binary(BinaryOp::Mul, Box::new(scaled), Box::new(exp_deriv))
-                } else {
-                    // General case: d/dx[u^v] = u^v * (v' * ln(u) + v * u'/u)
-                    // This is the full logarithmic differentiation formula
-                    let base_deriv = base.differentiate(with_respect_to);
-                    let exp_deriv = exponent.differentiate(with_respect_to);
-
-                    let ln_base = Expression::Function(Function::Ln, vec![base.as_ref().clone()]);
-                    let term1 =
-                        Expression::Binary(BinaryOp::Mul, Box::new(exp_deriv), Box::new(ln_base));
-
-                    let u_prime_over_u =
-                        Expression::Binary(BinaryOp::Div, Box::new(base_deriv), base.clone());
-                    let term2 = Expression::Binary(
-                        BinaryOp::Mul,
-                        exponent.clone(),
-                        Box::new(u_prime_over_u),
-                    );
-
-                    let sum = Expression::Binary(BinaryOp::Add, Box::new(term1), Box::new(term2));
-                    let power = Expression::Power(base.clone(), exponent.clone());
-
-                    Expression::Binary(BinaryOp::Mul, Box::new(power), Box::new(sum))
-                }
+                differentiate_power(base, exponent, with_respect_to)
             }
-
-            // Function derivatives with chain rule
-            Expression::Function(func, args) => {
-                if args.is_empty() {
-                    return Expression::Integer(0);
-                }
-
-                match func {
-                    // Trigonometric functions
-                    Function::Sin => {
-                        // d/dx[sin(u)] = cos(u) * du/dx
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let cos_u = Expression::Function(Function::Cos, vec![arg.clone()]);
-                        Expression::Binary(BinaryOp::Mul, Box::new(cos_u), Box::new(arg_deriv))
-                    }
-
-                    Function::Cos => {
-                        // d/dx[cos(u)] = -sin(u) * du/dx
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let sin_u = Expression::Function(Function::Sin, vec![arg.clone()]);
-                        let neg_sin = Expression::Unary(UnaryOp::Neg, Box::new(sin_u));
-                        Expression::Binary(BinaryOp::Mul, Box::new(neg_sin), Box::new(arg_deriv))
-                    }
-
-                    Function::Tan => {
-                        // d/dx[tan(u)] = sec^2(u) * du/dx = (1/cos^2(u)) * du/dx
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let cos_u = Expression::Function(Function::Cos, vec![arg.clone()]);
-                        let cos_squared =
-                            Expression::Power(Box::new(cos_u), Box::new(Expression::Integer(2)));
-                        let sec_squared = Expression::Binary(
-                            BinaryOp::Div,
-                            Box::new(Expression::Integer(1)),
-                            Box::new(cos_squared),
-                        );
-                        Expression::Binary(
-                            BinaryOp::Mul,
-                            Box::new(sec_squared),
-                            Box::new(arg_deriv),
-                        )
-                    }
-
-                    // Inverse trigonometric functions
-                    Function::Asin => {
-                        // d/dx[asin(u)] = 1/sqrt(1 - u^2) * du/dx
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let u_squared = Expression::Power(
-                            Box::new(arg.clone()),
-                            Box::new(Expression::Integer(2)),
-                        );
-                        let one_minus_u_sq = Expression::Binary(
-                            BinaryOp::Sub,
-                            Box::new(Expression::Integer(1)),
-                            Box::new(u_squared),
-                        );
-                        let sqrt_term = Expression::Function(Function::Sqrt, vec![one_minus_u_sq]);
-                        let deriv_factor = Expression::Binary(
-                            BinaryOp::Div,
-                            Box::new(Expression::Integer(1)),
-                            Box::new(sqrt_term),
-                        );
-                        Expression::Binary(
-                            BinaryOp::Mul,
-                            Box::new(deriv_factor),
-                            Box::new(arg_deriv),
-                        )
-                    }
-
-                    Function::Acos => {
-                        // d/dx[acos(u)] = -1/sqrt(1 - u^2) * du/dx
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let u_squared = Expression::Power(
-                            Box::new(arg.clone()),
-                            Box::new(Expression::Integer(2)),
-                        );
-                        let one_minus_u_sq = Expression::Binary(
-                            BinaryOp::Sub,
-                            Box::new(Expression::Integer(1)),
-                            Box::new(u_squared),
-                        );
-                        let sqrt_term = Expression::Function(Function::Sqrt, vec![one_minus_u_sq]);
-                        let deriv_factor = Expression::Binary(
-                            BinaryOp::Div,
-                            Box::new(Expression::Integer(1)),
-                            Box::new(sqrt_term),
-                        );
-                        let neg_deriv = Expression::Unary(UnaryOp::Neg, Box::new(deriv_factor));
-                        Expression::Binary(BinaryOp::Mul, Box::new(neg_deriv), Box::new(arg_deriv))
-                    }
-
-                    Function::Atan => {
-                        // d/dx[atan(u)] = 1/(1 + u^2) * du/dx
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let u_squared = Expression::Power(
-                            Box::new(arg.clone()),
-                            Box::new(Expression::Integer(2)),
-                        );
-                        let one_plus_u_sq = Expression::Binary(
-                            BinaryOp::Add,
-                            Box::new(Expression::Integer(1)),
-                            Box::new(u_squared),
-                        );
-                        let deriv_factor = Expression::Binary(
-                            BinaryOp::Div,
-                            Box::new(Expression::Integer(1)),
-                            Box::new(one_plus_u_sq),
-                        );
-                        Expression::Binary(
-                            BinaryOp::Mul,
-                            Box::new(deriv_factor),
-                            Box::new(arg_deriv),
-                        )
-                    }
-
-                    Function::Atan2 => {
-                        // d/dx[atan2(y, x)] is more complex, not commonly needed for uncertainty propagation
-                        Expression::Integer(0)
-                    }
-
-                    // Hyperbolic functions
-                    Function::Sinh => {
-                        // d/dx[sinh(u)] = cosh(u) * du/dx
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let cosh_u = Expression::Function(Function::Cosh, vec![arg.clone()]);
-                        Expression::Binary(BinaryOp::Mul, Box::new(cosh_u), Box::new(arg_deriv))
-                    }
-
-                    Function::Cosh => {
-                        // d/dx[cosh(u)] = sinh(u) * du/dx
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let sinh_u = Expression::Function(Function::Sinh, vec![arg.clone()]);
-                        Expression::Binary(BinaryOp::Mul, Box::new(sinh_u), Box::new(arg_deriv))
-                    }
-
-                    Function::Tanh => {
-                        // d/dx[tanh(u)] = sech^2(u) * du/dx = (1/cosh^2(u)) * du/dx
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let cosh_u = Expression::Function(Function::Cosh, vec![arg.clone()]);
-                        let cosh_squared =
-                            Expression::Power(Box::new(cosh_u), Box::new(Expression::Integer(2)));
-                        let sech_squared = Expression::Binary(
-                            BinaryOp::Div,
-                            Box::new(Expression::Integer(1)),
-                            Box::new(cosh_squared),
-                        );
-                        Expression::Binary(
-                            BinaryOp::Mul,
-                            Box::new(sech_squared),
-                            Box::new(arg_deriv),
-                        )
-                    }
-
-                    // Exponential and logarithmic functions
-                    Function::Exp => {
-                        // d/dx[exp(u)] = exp(u) * du/dx
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let exp_u = Expression::Function(Function::Exp, vec![arg.clone()]);
-                        Expression::Binary(BinaryOp::Mul, Box::new(exp_u), Box::new(arg_deriv))
-                    }
-
-                    Function::Ln => {
-                        // d/dx[ln(u)] = (1/u) * du/dx
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let one_over_u = Expression::Binary(
-                            BinaryOp::Div,
-                            Box::new(Expression::Integer(1)),
-                            Box::new(arg.clone()),
-                        );
-                        Expression::Binary(BinaryOp::Mul, Box::new(one_over_u), Box::new(arg_deriv))
-                    }
-
-                    Function::Log10 => {
-                        // d/dx[log10(u)] = 1/(u * ln(10)) * du/dx
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let ln_10 =
-                            Expression::Function(Function::Ln, vec![Expression::Integer(10)]);
-                        let u_times_ln10 = Expression::Binary(
-                            BinaryOp::Mul,
-                            Box::new(arg.clone()),
-                            Box::new(ln_10),
-                        );
-                        let deriv_factor = Expression::Binary(
-                            BinaryOp::Div,
-                            Box::new(Expression::Integer(1)),
-                            Box::new(u_times_ln10),
-                        );
-                        Expression::Binary(
-                            BinaryOp::Mul,
-                            Box::new(deriv_factor),
-                            Box::new(arg_deriv),
-                        )
-                    }
-
-                    Function::Log2 => {
-                        // d/dx[log2(u)] = 1/(u * ln(2)) * du/dx
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let ln_2 = Expression::Function(Function::Ln, vec![Expression::Integer(2)]);
-                        let u_times_ln2 = Expression::Binary(
-                            BinaryOp::Mul,
-                            Box::new(arg.clone()),
-                            Box::new(ln_2),
-                        );
-                        let deriv_factor = Expression::Binary(
-                            BinaryOp::Div,
-                            Box::new(Expression::Integer(1)),
-                            Box::new(u_times_ln2),
-                        );
-                        Expression::Binary(
-                            BinaryOp::Mul,
-                            Box::new(deriv_factor),
-                            Box::new(arg_deriv),
-                        )
-                    }
-
-                    Function::Log => {
-                        // d/dx[log(u, b)] = 1/(u * ln(b)) * du/dx
-                        if args.len() >= 2 {
-                            let arg = &args[0];
-                            let base = &args[1];
-                            let arg_deriv = arg.differentiate(with_respect_to);
-                            let ln_base = Expression::Function(Function::Ln, vec![base.clone()]);
-                            let u_times_lnb = Expression::Binary(
-                                BinaryOp::Mul,
-                                Box::new(arg.clone()),
-                                Box::new(ln_base),
-                            );
-                            let deriv_factor = Expression::Binary(
-                                BinaryOp::Div,
-                                Box::new(Expression::Integer(1)),
-                                Box::new(u_times_lnb),
-                            );
-                            Expression::Binary(
-                                BinaryOp::Mul,
-                                Box::new(deriv_factor),
-                                Box::new(arg_deriv),
-                            )
-                        } else {
-                            Expression::Integer(0)
-                        }
-                    }
-
-                    // Root functions
-                    Function::Sqrt => {
-                        // d/dx[sqrt(u)] = 1/(2*sqrt(u)) * du/dx = (1/2) * u^(-1/2) * du/dx
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let sqrt_u = Expression::Function(Function::Sqrt, vec![arg.clone()]);
-                        let two_sqrt_u = Expression::Binary(
-                            BinaryOp::Mul,
-                            Box::new(Expression::Integer(2)),
-                            Box::new(sqrt_u),
-                        );
-                        let deriv_factor = Expression::Binary(
-                            BinaryOp::Div,
-                            Box::new(Expression::Integer(1)),
-                            Box::new(two_sqrt_u),
-                        );
-                        Expression::Binary(
-                            BinaryOp::Mul,
-                            Box::new(deriv_factor),
-                            Box::new(arg_deriv),
-                        )
-                    }
-
-                    Function::Cbrt => {
-                        // d/dx[cbrt(u)] = 1/(3*u^(2/3)) * du/dx
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let two_thirds = Expression::Binary(
-                            BinaryOp::Div,
-                            Box::new(Expression::Integer(2)),
-                            Box::new(Expression::Integer(3)),
-                        );
-                        let u_to_2_3 =
-                            Expression::Power(Box::new(arg.clone()), Box::new(two_thirds));
-                        let three_u_2_3 = Expression::Binary(
-                            BinaryOp::Mul,
-                            Box::new(Expression::Integer(3)),
-                            Box::new(u_to_2_3),
-                        );
-                        let deriv_factor = Expression::Binary(
-                            BinaryOp::Div,
-                            Box::new(Expression::Integer(1)),
-                            Box::new(three_u_2_3),
-                        );
-                        Expression::Binary(
-                            BinaryOp::Mul,
-                            Box::new(deriv_factor),
-                            Box::new(arg_deriv),
-                        )
-                    }
-
-                    Function::Pow => {
-                        // pow(u, v) is equivalent to u^v, handle like Power
-                        if args.len() >= 2 {
-                            let power_expr = Expression::Power(
-                                Box::new(args[0].clone()),
-                                Box::new(args[1].clone()),
-                            );
-                            power_expr.differentiate(with_respect_to)
-                        } else {
-                            Expression::Integer(0)
-                        }
-                    }
-
-                    // Rounding functions (derivatives are 0 almost everywhere)
-                    Function::Floor | Function::Ceil | Function::Round => Expression::Integer(0),
-
-                    // Absolute value and sign
-                    Function::Abs => {
-                        // d/dx[abs(u)] = sign(u) * du/dx (simplified)
-                        let arg = &args[0];
-                        let arg_deriv = arg.differentiate(with_respect_to);
-                        let sign_u = Expression::Function(Function::Sign, vec![arg.clone()]);
-                        Expression::Binary(BinaryOp::Mul, Box::new(sign_u), Box::new(arg_deriv))
-                    }
-
-                    Function::Sign => {
-                        // Derivative of sign function is 0 almost everywhere
-                        Expression::Integer(0)
-                    }
-
-                    // Min/Max (derivatives are piecewise, simplified to 0)
-                    Function::Min | Function::Max => Expression::Integer(0),
-
-                    // Custom functions - cannot differentiate
-                    Function::Custom(_) => Expression::Integer(0),
-                }
-            }
+            Expression::Function(func, args) => differentiate_function(func, args, with_respect_to),
         }
     }
+}
+
+/// Differentiate a unary operation.
+fn differentiate_unary(op: &UnaryOp, expr: &Expression, wrt: &str) -> Expression {
+    let inner_derivative = expr.differentiate(wrt);
+    match op {
+        // d/dx[-f] = -f'
+        UnaryOp::Neg => Expression::Unary(UnaryOp::Neg, Box::new(inner_derivative)),
+        // d/dx[|f|] = sign(f) * f' (simplified, assumes f != 0)
+        UnaryOp::Abs => {
+            let sign = Expression::Function(Function::Sign, vec![expr.clone()]);
+            Expression::Binary(BinaryOp::Mul, Box::new(sign), Box::new(inner_derivative))
+        }
+        // d/dx[!f] = 0 (logical NOT is discrete)
+        UnaryOp::Not => Expression::Integer(0),
+    }
+}
+
+/// Differentiate a binary operation (sum, product, quotient rules).
+fn differentiate_binary(
+    op: &BinaryOp,
+    left: &Expression,
+    right: &Expression,
+    wrt: &str,
+) -> Expression {
+    let left_deriv = left.differentiate(wrt);
+    let right_deriv = right.differentiate(wrt);
+
+    match op {
+        // Sum rule: d/dx[u + v] = du/dx + dv/dx
+        BinaryOp::Add => {
+            Expression::Binary(BinaryOp::Add, Box::new(left_deriv), Box::new(right_deriv))
+        }
+        // Difference rule: d/dx[u - v] = du/dx - dv/dx
+        BinaryOp::Sub => {
+            Expression::Binary(BinaryOp::Sub, Box::new(left_deriv), Box::new(right_deriv))
+        }
+        // Product rule: d/dx[u * v] = u * dv/dx + v * du/dx
+        BinaryOp::Mul => {
+            let term1 =
+                Expression::Binary(BinaryOp::Mul, Box::new(left.clone()), Box::new(right_deriv));
+            let term2 =
+                Expression::Binary(BinaryOp::Mul, Box::new(right.clone()), Box::new(left_deriv));
+            Expression::Binary(BinaryOp::Add, Box::new(term1), Box::new(term2))
+        }
+        // Quotient rule: d/dx[u / v] = (v * du/dx - u * dv/dx) / v^2
+        BinaryOp::Div => {
+            let num_t1 =
+                Expression::Binary(BinaryOp::Mul, Box::new(right.clone()), Box::new(left_deriv));
+            let num_t2 =
+                Expression::Binary(BinaryOp::Mul, Box::new(left.clone()), Box::new(right_deriv));
+            let numerator = Expression::Binary(BinaryOp::Sub, Box::new(num_t1), Box::new(num_t2));
+            let denominator =
+                Expression::Power(Box::new(right.clone()), Box::new(Expression::Integer(2)));
+            Expression::Binary(BinaryOp::Div, Box::new(numerator), Box::new(denominator))
+        }
+        // Modulo: derivative is complex, not commonly needed
+        BinaryOp::Mod => Expression::Integer(0),
+    }
+}
+
+/// Differentiate a power expression using the appropriate rule based on
+/// whether the base and/or exponent contain the differentiation variable.
+fn differentiate_power(base: &Expression, exponent: &Expression, wrt: &str) -> Expression {
+    let base_has_var = base.contains_variable(wrt);
+    let exp_has_var = exponent.contains_variable(wrt);
+
+    if !base_has_var && !exp_has_var {
+        // d/dx[c^d] = 0 (constant)
+        Expression::Integer(0)
+    } else if base_has_var && !exp_has_var {
+        // Power rule: d/dx[u^n] = n * u^(n-1) * du/dx
+        let base_deriv = base.differentiate(wrt);
+        let n_minus_1 = Expression::Binary(
+            BinaryOp::Sub,
+            Box::new(exponent.clone()),
+            Box::new(Expression::Integer(1)),
+        );
+        let power_term = Expression::Power(Box::new(base.clone()), Box::new(n_minus_1));
+        let scaled = Expression::Binary(
+            BinaryOp::Mul,
+            Box::new(exponent.clone()),
+            Box::new(power_term),
+        );
+        Expression::Binary(BinaryOp::Mul, Box::new(scaled), Box::new(base_deriv))
+    } else if !base_has_var && exp_has_var {
+        // Exponential rule: d/dx[a^v] = a^v * ln(a) * dv/dx
+        let exp_deriv = exponent.differentiate(wrt);
+        let ln_base = Expression::Function(Function::Ln, vec![base.clone()]);
+        let power_term = Expression::Power(Box::new(base.clone()), Box::new(exponent.clone()));
+        let scaled = Expression::Binary(BinaryOp::Mul, Box::new(power_term), Box::new(ln_base));
+        Expression::Binary(BinaryOp::Mul, Box::new(scaled), Box::new(exp_deriv))
+    } else {
+        // General case: d/dx[u^v] = u^v * (v' * ln(u) + v * u'/u)
+        diff_power_general(base, exponent, wrt)
+    }
+}
+
+/// General power rule: d/dx[u^v] = u^v * (v' * ln(u) + v * u'/u)
+/// (logarithmic differentiation, both base and exponent contain the variable).
+fn diff_power_general(base: &Expression, exponent: &Expression, wrt: &str) -> Expression {
+    let base_deriv = base.differentiate(wrt);
+    let exp_deriv = exponent.differentiate(wrt);
+
+    let ln_base = Expression::Function(Function::Ln, vec![base.clone()]);
+    let term1 = Expression::Binary(BinaryOp::Mul, Box::new(exp_deriv), Box::new(ln_base));
+
+    let u_prime_over_u =
+        Expression::Binary(BinaryOp::Div, Box::new(base_deriv), Box::new(base.clone()));
+    let term2 = Expression::Binary(
+        BinaryOp::Mul,
+        Box::new(exponent.clone()),
+        Box::new(u_prime_over_u),
+    );
+
+    let sum = Expression::Binary(BinaryOp::Add, Box::new(term1), Box::new(term2));
+    let power = Expression::Power(Box::new(base.clone()), Box::new(exponent.clone()));
+
+    Expression::Binary(BinaryOp::Mul, Box::new(power), Box::new(sum))
+}
+
+/// Dispatch function derivatives with chain rule to category-specific helpers.
+fn differentiate_function(func: &Function, args: &[Expression], wrt: &str) -> Expression {
+    if args.is_empty() {
+        return Expression::Integer(0);
+    }
+
+    match func {
+        Function::Sin | Function::Cos | Function::Tan => diff_trig(func, args, wrt),
+        Function::Asin | Function::Acos | Function::Atan => diff_inverse_trig(func, args, wrt),
+        Function::Atan2 => Expression::Integer(0),
+        Function::Sinh | Function::Cosh | Function::Tanh => diff_hyperbolic(func, args, wrt),
+        Function::Exp | Function::Ln | Function::Log10 | Function::Log2 | Function::Log => {
+            diff_exp_log(func, args, wrt)
+        }
+        Function::Sqrt | Function::Cbrt => diff_root(func, args, wrt),
+        Function::Pow => {
+            if args.len() >= 2 {
+                let power_expr =
+                    Expression::Power(Box::new(args[0].clone()), Box::new(args[1].clone()));
+                power_expr.differentiate(wrt)
+            } else {
+                Expression::Integer(0)
+            }
+        }
+        Function::Floor | Function::Ceil | Function::Round => Expression::Integer(0),
+        Function::Abs => {
+            let arg_deriv = args[0].differentiate(wrt);
+            let sign_u = Expression::Function(Function::Sign, vec![args[0].clone()]);
+            Expression::Binary(BinaryOp::Mul, Box::new(sign_u), Box::new(arg_deriv))
+        }
+        Function::Sign | Function::Min | Function::Max | Function::Custom(_) => {
+            Expression::Integer(0)
+        }
+    }
+}
+
+/// Differentiate trigonometric functions (sin, cos, tan) with chain rule.
+fn diff_trig(func: &Function, args: &[Expression], wrt: &str) -> Expression {
+    let arg = &args[0];
+    let arg_deriv = arg.differentiate(wrt);
+
+    let outer_deriv = match func {
+        Function::Sin => {
+            // d/dx[sin(u)] = cos(u)
+            Expression::Function(Function::Cos, vec![arg.clone()])
+        }
+        Function::Cos => {
+            // d/dx[cos(u)] = -sin(u)
+            let sin_u = Expression::Function(Function::Sin, vec![arg.clone()]);
+            Expression::Unary(UnaryOp::Neg, Box::new(sin_u))
+        }
+        Function::Tan => {
+            // d/dx[tan(u)] = sec^2(u) = 1/cos^2(u)
+            let cos_u = Expression::Function(Function::Cos, vec![arg.clone()]);
+            let cos_sq = Expression::Power(Box::new(cos_u), Box::new(Expression::Integer(2)));
+            Expression::Binary(
+                BinaryOp::Div,
+                Box::new(Expression::Integer(1)),
+                Box::new(cos_sq),
+            )
+        }
+        _ => unreachable!(),
+    };
+
+    Expression::Binary(BinaryOp::Mul, Box::new(outer_deriv), Box::new(arg_deriv))
+}
+
+/// Differentiate inverse trigonometric functions (asin, acos, atan) with chain rule.
+fn diff_inverse_trig(func: &Function, args: &[Expression], wrt: &str) -> Expression {
+    let arg = &args[0];
+    let arg_deriv = arg.differentiate(wrt);
+
+    let u_squared = Expression::Power(Box::new(arg.clone()), Box::new(Expression::Integer(2)));
+
+    let outer_deriv = match func {
+        Function::Asin => {
+            // d/dx[asin(u)] = 1/sqrt(1 - u^2)
+            let one_minus = Expression::Binary(
+                BinaryOp::Sub,
+                Box::new(Expression::Integer(1)),
+                Box::new(u_squared),
+            );
+            let sqrt_term = Expression::Function(Function::Sqrt, vec![one_minus]);
+            Expression::Binary(
+                BinaryOp::Div,
+                Box::new(Expression::Integer(1)),
+                Box::new(sqrt_term),
+            )
+        }
+        Function::Acos => {
+            // d/dx[acos(u)] = -1/sqrt(1 - u^2)
+            let one_minus = Expression::Binary(
+                BinaryOp::Sub,
+                Box::new(Expression::Integer(1)),
+                Box::new(u_squared),
+            );
+            let sqrt_term = Expression::Function(Function::Sqrt, vec![one_minus]);
+            let pos = Expression::Binary(
+                BinaryOp::Div,
+                Box::new(Expression::Integer(1)),
+                Box::new(sqrt_term),
+            );
+            Expression::Unary(UnaryOp::Neg, Box::new(pos))
+        }
+        Function::Atan => {
+            // d/dx[atan(u)] = 1/(1 + u^2)
+            let one_plus = Expression::Binary(
+                BinaryOp::Add,
+                Box::new(Expression::Integer(1)),
+                Box::new(u_squared),
+            );
+            Expression::Binary(
+                BinaryOp::Div,
+                Box::new(Expression::Integer(1)),
+                Box::new(one_plus),
+            )
+        }
+        _ => unreachable!(),
+    };
+
+    Expression::Binary(BinaryOp::Mul, Box::new(outer_deriv), Box::new(arg_deriv))
+}
+
+/// Differentiate hyperbolic functions (sinh, cosh, tanh) with chain rule.
+fn diff_hyperbolic(func: &Function, args: &[Expression], wrt: &str) -> Expression {
+    let arg = &args[0];
+    let arg_deriv = arg.differentiate(wrt);
+
+    let outer_deriv = match func {
+        Function::Sinh => {
+            // d/dx[sinh(u)] = cosh(u)
+            Expression::Function(Function::Cosh, vec![arg.clone()])
+        }
+        Function::Cosh => {
+            // d/dx[cosh(u)] = sinh(u)
+            Expression::Function(Function::Sinh, vec![arg.clone()])
+        }
+        Function::Tanh => {
+            // d/dx[tanh(u)] = sech^2(u) = 1/cosh^2(u)
+            let cosh_u = Expression::Function(Function::Cosh, vec![arg.clone()]);
+            let cosh_sq = Expression::Power(Box::new(cosh_u), Box::new(Expression::Integer(2)));
+            Expression::Binary(
+                BinaryOp::Div,
+                Box::new(Expression::Integer(1)),
+                Box::new(cosh_sq),
+            )
+        }
+        _ => unreachable!(),
+    };
+
+    Expression::Binary(BinaryOp::Mul, Box::new(outer_deriv), Box::new(arg_deriv))
+}
+
+/// Differentiate exponential and logarithmic functions with chain rule.
+fn diff_exp_log(func: &Function, args: &[Expression], wrt: &str) -> Expression {
+    let arg = &args[0];
+    let arg_deriv = arg.differentiate(wrt);
+
+    let outer_deriv = match func {
+        Function::Exp => {
+            // d/dx[exp(u)] = exp(u)
+            Expression::Function(Function::Exp, vec![arg.clone()])
+        }
+        Function::Ln => {
+            // d/dx[ln(u)] = 1/u
+            Expression::Binary(
+                BinaryOp::Div,
+                Box::new(Expression::Integer(1)),
+                Box::new(arg.clone()),
+            )
+        }
+        Function::Log10 => {
+            // d/dx[log10(u)] = 1/(u * ln(10))
+            let ln_10 = Expression::Function(Function::Ln, vec![Expression::Integer(10)]);
+            let u_ln10 = Expression::Binary(BinaryOp::Mul, Box::new(arg.clone()), Box::new(ln_10));
+            Expression::Binary(
+                BinaryOp::Div,
+                Box::new(Expression::Integer(1)),
+                Box::new(u_ln10),
+            )
+        }
+        Function::Log2 => {
+            // d/dx[log2(u)] = 1/(u * ln(2))
+            let ln_2 = Expression::Function(Function::Ln, vec![Expression::Integer(2)]);
+            let u_ln2 = Expression::Binary(BinaryOp::Mul, Box::new(arg.clone()), Box::new(ln_2));
+            Expression::Binary(
+                BinaryOp::Div,
+                Box::new(Expression::Integer(1)),
+                Box::new(u_ln2),
+            )
+        }
+        Function::Log => {
+            // d/dx[log(u, b)] = 1/(u * ln(b))
+            if args.len() >= 2 {
+                let base = &args[1];
+                let ln_base = Expression::Function(Function::Ln, vec![base.clone()]);
+                let u_lnb =
+                    Expression::Binary(BinaryOp::Mul, Box::new(arg.clone()), Box::new(ln_base));
+                Expression::Binary(
+                    BinaryOp::Div,
+                    Box::new(Expression::Integer(1)),
+                    Box::new(u_lnb),
+                )
+            } else {
+                return Expression::Integer(0);
+            }
+        }
+        _ => unreachable!(),
+    };
+
+    Expression::Binary(BinaryOp::Mul, Box::new(outer_deriv), Box::new(arg_deriv))
+}
+
+/// Differentiate root functions (sqrt, cbrt) with chain rule.
+fn diff_root(func: &Function, args: &[Expression], wrt: &str) -> Expression {
+    let arg = &args[0];
+    let arg_deriv = arg.differentiate(wrt);
+
+    let outer_deriv = match func {
+        Function::Sqrt => {
+            // d/dx[sqrt(u)] = 1/(2*sqrt(u))
+            let sqrt_u = Expression::Function(Function::Sqrt, vec![arg.clone()]);
+            let two_sqrt = Expression::Binary(
+                BinaryOp::Mul,
+                Box::new(Expression::Integer(2)),
+                Box::new(sqrt_u),
+            );
+            Expression::Binary(
+                BinaryOp::Div,
+                Box::new(Expression::Integer(1)),
+                Box::new(two_sqrt),
+            )
+        }
+        Function::Cbrt => {
+            // d/dx[cbrt(u)] = 1/(3*u^(2/3))
+            let two_thirds = Expression::Binary(
+                BinaryOp::Div,
+                Box::new(Expression::Integer(2)),
+                Box::new(Expression::Integer(3)),
+            );
+            let u_2_3 = Expression::Power(Box::new(arg.clone()), Box::new(two_thirds));
+            let three_u = Expression::Binary(
+                BinaryOp::Mul,
+                Box::new(Expression::Integer(3)),
+                Box::new(u_2_3),
+            );
+            Expression::Binary(
+                BinaryOp::Div,
+                Box::new(Expression::Integer(1)),
+                Box::new(three_u),
+            )
+        }
+        _ => unreachable!(),
+    };
+
+    Expression::Binary(BinaryOp::Mul, Box::new(outer_deriv), Box::new(arg_deriv))
 }
