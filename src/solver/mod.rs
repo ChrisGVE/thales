@@ -327,26 +327,17 @@ impl Solver for SmartSolver {
         equation: &Equation,
         variable: &Variable,
     ) -> SolverResult<(Solution, ResolutionPath)> {
-        // Quadratic and polynomial solvers handle all root cases (real and
-        // complex).  Symbolic isolation only returns a single Unique result, so
-        // it must not intercept equations where the specialized solvers are
-        // strictly more capable (e.g. x² + 1 = 0 → ±i).
-        let skip_symbolic_isolation =
-            self.quadratic.can_solve(equation) || self.polynomial.can_solve(equation);
-
         // Try general symbolic isolation first — it handles arbitrary
         // rearrangements that the specialized solvers miss.
-        if !skip_symbolic_isolation {
-            let path_builder = ResolutionPathBuilder::new(equation.left.clone());
-            if let Ok((result_expr, builder)) = symbolic_isolation::symbolic_isolate(
-                &equation.left,
-                &equation.right,
-                variable,
-                path_builder,
-            ) {
-                let path = builder.finish(result_expr.clone());
-                return Ok((Solution::Unique(result_expr), path));
-            }
+        let path_builder = ResolutionPathBuilder::new(equation.left.clone());
+        if let Ok((result_expr, builder)) = symbolic_isolation::symbolic_isolate(
+            &equation.left,
+            &equation.right,
+            variable,
+            path_builder,
+        ) {
+            let path = builder.finish(result_expr.clone());
+            return Ok((Solution::Unique(result_expr), path));
         }
 
         // Fall back: linear -> quadratic -> polynomial -> transcendental

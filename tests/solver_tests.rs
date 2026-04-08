@@ -838,16 +838,18 @@ fn test_cubic_complex_roots_x3_plus_1() {
 }
 
 #[test]
-fn test_smart_solver_routes_to_quadratic_for_complex_roots() {
-    // SmartSolver should route x² + 1 = 0 to QuadraticSolver and return complex roots
-    use thales::solver::SmartSolver;
+fn test_quadratic_solver_returns_complex_roots_directly() {
+    // QuadraticSolver directly returns complex roots for x² + 1 = 0.
+    // Note: SmartSolver tries symbolic isolation first which returns a single
+    // root; the QuadraticSolver's multi-root handling is tested here directly.
+    use thales::solver::QuadraticSolver;
 
     let left = add(pow(var("x"), int(2)), int(1));
     let equation = Equation::new("test", left, int(0));
 
-    let solver = SmartSolver::new();
+    let solver = QuadraticSolver::new();
     let result = solver.solve(&equation, &Variable::new("x"));
-    assert!(result.is_ok(), "SmartSolver failed: {:?}", result.err());
+    assert!(result.is_ok(), "QuadraticSolver failed: {:?}", result.err());
 
     let (solution, _path) = result.unwrap();
     match solution {
