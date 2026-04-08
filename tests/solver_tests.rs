@@ -689,6 +689,228 @@ fn test_polynomial_solver_quintic_numerical() {
 }
 
 // ============================================================================
+// Complex Root Tests
+// ============================================================================
+
+#[test]
+fn test_quadratic_complex_roots_x2_plus_4() {
+    // x² + 4 = 0 => x = ±2i
+    let left = add(pow(var("x"), int(2)), int(4));
+    let equation = Equation::new("test", left, int(0));
+
+    let solver = QuadraticSolver::new();
+    let (solution, _path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+    match solution {
+        Solution::Multiple(roots) => {
+            assert_eq!(roots.len(), 2);
+            for root in &roots {
+                match root {
+                    Expression::Complex(c) => {
+                        assert!(c.re.abs() < 1e-10, "real part should be 0, got {}", c.re);
+                        assert!(
+                            (c.im.abs() - 2.0).abs() < 1e-10,
+                            "imag should be ±2, got {}",
+                            c.im
+                        );
+                    }
+                    _ => panic!("Expected complex root, got {:?}", root),
+                }
+            }
+            // Roots should be conjugates
+            if let (Expression::Complex(c1), Expression::Complex(c2)) = (&roots[0], &roots[1]) {
+                assert!((c1.im + c2.im).abs() < 1e-10, "roots should be conjugates");
+            }
+        }
+        _ => panic!("Expected multiple solutions"),
+    }
+}
+
+#[test]
+fn test_quadratic_complex_roots_x2_plus_2x_plus_5() {
+    // x² + 2x + 5 = 0 => x = -1 ± 2i
+    let left = add(add(pow(var("x"), int(2)), mul(int(2), var("x"))), int(5));
+    let equation = Equation::new("test", left, int(0));
+
+    let solver = QuadraticSolver::new();
+    let (solution, _path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+    match solution {
+        Solution::Multiple(roots) => {
+            assert_eq!(roots.len(), 2);
+            for root in &roots {
+                match root {
+                    Expression::Complex(c) => {
+                        assert!(
+                            (c.re + 1.0).abs() < 1e-10,
+                            "real part should be -1, got {}",
+                            c.re
+                        );
+                        assert!(
+                            (c.im.abs() - 2.0).abs() < 1e-10,
+                            "imag part should be ±2, got {}",
+                            c.im
+                        );
+                    }
+                    _ => panic!("Expected complex root, got {:?}", root),
+                }
+            }
+            // One root is -1+2i, the other is -1-2i
+            let imag_values: Vec<f64> = roots
+                .iter()
+                .filter_map(|r| {
+                    if let Expression::Complex(c) = r {
+                        Some(c.im)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            assert!(
+                imag_values.iter().any(|v| (*v - 2.0).abs() < 1e-10),
+                "Expected root with +2i"
+            );
+            assert!(
+                imag_values.iter().any(|v| (*v + 2.0).abs() < 1e-10),
+                "Expected root with -2i"
+            );
+        }
+        _ => panic!("Expected multiple solutions"),
+    }
+}
+
+#[test]
+fn test_cubic_complex_roots_x3_plus_1() {
+    // x³ + 1 = 0 => x = -1, x = (1 ± i√3)/2
+    let left = add(pow(var("x"), int(3)), int(1));
+    let equation = Equation::new("test", left, int(0));
+
+    let solver = PolynomialSolver::new();
+    let (solution, _path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+    match solution {
+        Solution::Multiple(roots) => {
+            assert_eq!(roots.len(), 3);
+            // Collect real roots (evaluate returns Some only for real-valued expressions)
+            let real_vals: Vec<f64> = roots
+                .iter()
+                .filter_map(|r| r.evaluate(&HashMap::new()))
+                .collect();
+            // One real root: x = -1
+            assert!(
+                real_vals.iter().any(|v| (v + 1.0).abs() < 1e-10),
+                "Expected real root -1"
+            );
+            // Two complex roots
+            let complex_count = roots
+                .iter()
+                .filter(|r| matches!(r, Expression::Complex(c) if c.im.abs() > 1e-10))
+                .count();
+            assert_eq!(complex_count, 2, "Expected two complex roots");
+            // Complex roots should be conjugates with re=0.5, im=±√3/2
+            let complex_roots: Vec<_> = roots
+                .iter()
+                .filter_map(|r| {
+                    if let Expression::Complex(c) = r {
+                        if c.im.abs() > 1e-10 {
+                            Some(*c)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            assert_eq!(complex_roots.len(), 2);
+            for c in &complex_roots {
+                assert!(
+                    (c.re - 0.5).abs() < 1e-10,
+                    "real part of complex root should be 0.5, got {}",
+                    c.re
+                );
+                assert!(
+                    (c.im.abs() - (3.0_f64).sqrt() / 2.0).abs() < 1e-10,
+                    "imag magnitude should be √3/2, got {}",
+                    c.im.abs()
+                );
+            }
+        }
+        _ => panic!("Expected multiple solutions"),
+    }
+}
+
+#[test]
+fn test_smart_solver_routes_to_quadratic_for_complex_roots() {
+    // SmartSolver should route x² + 1 = 0 to QuadraticSolver and return complex roots
+    use thales::solver::SmartSolver;
+
+    let left = add(pow(var("x"), int(2)), int(1));
+    let equation = Equation::new("test", left, int(0));
+
+    let solver = SmartSolver::new();
+    let result = solver.solve(&equation, &Variable::new("x"));
+    assert!(result.is_ok(), "SmartSolver failed: {:?}", result.err());
+
+    let (solution, _path) = result.unwrap();
+    match solution {
+        Solution::Multiple(roots) => {
+            assert_eq!(roots.len(), 2, "Expected 2 roots");
+            for root in &roots {
+                assert!(
+                    matches!(root, Expression::Complex(_)),
+                    "Expected complex root, got {:?}",
+                    root
+                );
+            }
+        }
+        _ => panic!("Expected multiple complex solutions"),
+    }
+}
+
+#[test]
+fn test_complex_root_display_format() {
+    // Verify that complex roots display with a+bi / a-bi notation
+    let root_pos = Expression::Complex(num_complex::Complex64::new(-1.0, 2.0));
+    let root_neg = Expression::Complex(num_complex::Complex64::new(-1.0, -2.0));
+    let root_pure_imag = Expression::Complex(num_complex::Complex64::new(0.0, 3.0));
+
+    let s_pos = format!("{}", root_pos);
+    let s_neg = format!("{}", root_neg);
+    let s_pure = format!("{}", root_pure_imag);
+
+    // Positive imaginary: should contain '+' between real and imaginary parts
+    assert!(
+        s_pos.contains('+') || s_pos.contains('i'),
+        "Positive-imaginary display '{}' should contain '+' or 'i'",
+        s_pos
+    );
+    // Negative imaginary: should show negative sign
+    assert!(
+        s_neg.contains('-') && s_neg.contains('i'),
+        "Negative-imaginary display '{}' should contain '-' and 'i'",
+        s_neg
+    );
+    // Pure imaginary
+    assert!(
+        s_pure.contains('i'),
+        "Pure-imaginary display '{}' should contain 'i'",
+        s_pure
+    );
+}
+
+#[test]
+fn test_complex_root_evaluate_returns_none_for_nonzero_imaginary() {
+    // evaluate() should return None when imaginary part is nonzero
+    let root = Expression::Complex(num_complex::Complex64::new(1.0, 2.0));
+    assert_eq!(root.evaluate(&HashMap::new()), None);
+}
+
+#[test]
+fn test_complex_root_evaluate_returns_real_for_zero_imaginary() {
+    // evaluate() should return the real part when imaginary is ~0
+    let root = Expression::Complex(num_complex::Complex64::new(3.5, 0.0));
+    assert_eq!(root.evaluate(&HashMap::new()), Some(3.5));
+}
+
+// ============================================================================
 // Step Annotation Tests
 // ============================================================================
 
