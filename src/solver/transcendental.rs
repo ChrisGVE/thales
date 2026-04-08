@@ -1,7 +1,7 @@
 //! Transcendental equation solver for equations with trig, exp, and log functions.
 
 use crate::ast::{BinaryOp, Equation, Expression, Variable};
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionStep};
+use crate::resolution_path::{Operation, ResolutionPath, ResolutionStep, StepAnnotation};
 use std::collections::HashMap;
 
 use super::helpers::{
@@ -154,10 +154,11 @@ impl TranscendentalSolver {
             if let Err(_e) = Self::validate_trig_domain(value, &func) {
                 return None;
             }
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::ApplyFunction("asin".to_string()),
                 format!("Apply arcsine to solve sin({}) = value", variable),
                 result.clone(),
+                StepAnnotation::technique("Inverse Trigonometric Function"),
             ));
             return Some(result);
         }
@@ -173,10 +174,11 @@ impl TranscendentalSolver {
             if let Err(_e) = Self::validate_trig_domain(value, &func) {
                 return None;
             }
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::ApplyFunction("asin".to_string()),
                 format!("Apply arcsine to solve sin({}) = value", variable),
                 result.clone(),
+                StepAnnotation::technique("Inverse Trigonometric Function"),
             ));
             return Some(result);
         }
@@ -192,10 +194,11 @@ impl TranscendentalSolver {
             if let Err(_e) = Self::validate_trig_domain(value, &func) {
                 return None;
             }
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::ApplyFunction("acos".to_string()),
                 format!("Apply arccosine to solve cos({}) = value", variable),
                 result.clone(),
+                StepAnnotation::technique("Inverse Trigonometric Function"),
             ));
             return Some(result);
         }
@@ -211,10 +214,11 @@ impl TranscendentalSolver {
             if let Err(_e) = Self::validate_trig_domain(value, &func) {
                 return None;
             }
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::ApplyFunction("acos".to_string()),
                 format!("Apply arccosine to solve cos({}) = value", variable),
                 result.clone(),
+                StepAnnotation::technique("Inverse Trigonometric Function"),
             ));
             return Some(result);
         }
@@ -227,10 +231,11 @@ impl TranscendentalSolver {
             crate::ast::Function::Tan,
             crate::ast::Function::Atan,
         ) {
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::ApplyFunction("atan".to_string()),
                 format!("Apply arctangent to solve tan({}) = value", variable),
                 result.clone(),
+                StepAnnotation::technique("Inverse Trigonometric Function"),
             ));
             return Some(result);
         }
@@ -243,10 +248,11 @@ impl TranscendentalSolver {
             crate::ast::Function::Tan,
             crate::ast::Function::Atan,
         ) {
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::ApplyFunction("atan".to_string()),
                 format!("Apply arctangent to solve tan({}) = value", variable),
                 result.clone(),
+                StepAnnotation::technique("Inverse Trigonometric Function"),
             ));
             return Some(result);
         }
@@ -436,40 +442,44 @@ impl TranscendentalSolver {
 
         // Pattern: ln(x) = a  →  x = exp(a)
         if let Some(result) = self.match_log_pattern(&equation.left, &equation.right, var_name) {
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::ApplyFunction("exp".to_string()),
                 format!("Apply exponential to solve ln({}) = value", variable),
                 result.clone(),
+                StepAnnotation::technique("Natural Logarithm"),
             ));
             return Some(result);
         }
 
         // Pattern: a = ln(x)  →  x = exp(a)
         if let Some(result) = self.match_log_pattern(&equation.right, &equation.left, var_name) {
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::ApplyFunction("exp".to_string()),
                 format!("Apply exponential to solve ln({}) = value", variable),
                 result.clone(),
+                StepAnnotation::technique("Natural Logarithm"),
             ));
             return Some(result);
         }
 
         // Pattern: log10(x) = a  →  x = 10^a
         if let Some(result) = self.match_log10_pattern(&equation.left, &equation.right, var_name) {
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::PowerBothSides(Expression::Integer(10)),
                 format!("Apply 10^x to solve log10({}) = value", variable),
                 result.clone(),
+                StepAnnotation::technique("Logarithm"),
             ));
             return Some(result);
         }
 
         // Pattern: a = log10(x)  →  x = 10^a
         if let Some(result) = self.match_log10_pattern(&equation.right, &equation.left, var_name) {
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::PowerBothSides(Expression::Integer(10)),
                 format!("Apply 10^x to solve log10({}) = value", variable),
                 result.clone(),
+                StepAnnotation::technique("Logarithm"),
             ));
             return Some(result);
         }
@@ -477,13 +487,14 @@ impl TranscendentalSolver {
         // Pattern: log(x, b) = a  →  x = b^a
         if let Some(result) = self.match_log_base_pattern(&equation.left, &equation.right, var_name)
         {
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::ApplyLogProperty("exponential form".to_string()),
                 format!(
                     "Convert logarithm to exponential form to solve for {}",
                     variable
                 ),
                 result.clone(),
+                StepAnnotation::technique("Logarithm"),
             ));
             return Some(result);
         }
@@ -491,13 +502,14 @@ impl TranscendentalSolver {
         // Pattern: a = log(x, b)  →  x = b^a
         if let Some(result) = self.match_log_base_pattern(&equation.right, &equation.left, var_name)
         {
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::ApplyLogProperty("exponential form".to_string()),
                 format!(
                     "Convert logarithm to exponential form to solve for {}",
                     variable
                 ),
                 result.clone(),
+                StepAnnotation::technique("Logarithm"),
             ));
             return Some(result);
         }
@@ -637,40 +649,44 @@ impl TranscendentalSolver {
 
         // Pattern: exp(x) = a  →  x = ln(a)
         if let Some(result) = self.match_exp_pattern(&equation.left, &equation.right, var_name) {
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::ApplyFunction("ln".to_string()),
                 format!("Apply natural logarithm to solve exp({}) = value", variable),
                 result.clone(),
+                StepAnnotation::technique("Natural Logarithm"),
             ));
             return Some(result);
         }
 
         // Pattern: a = exp(x)  →  x = ln(a)
         if let Some(result) = self.match_exp_pattern(&equation.right, &equation.left, var_name) {
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::ApplyFunction("ln".to_string()),
                 format!("Apply natural logarithm to solve exp({}) = value", variable),
                 result.clone(),
+                StepAnnotation::technique("Natural Logarithm"),
             ));
             return Some(result);
         }
 
         // Pattern: a^x = b  →  x = ln(b) / ln(a)
         if let Some(result) = self.match_power_pattern(&equation.left, &equation.right, var_name) {
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::ApplyLogProperty("change of base".to_string()),
                 format!("Apply logarithm to solve for {} in exponent", variable),
                 result.clone(),
+                StepAnnotation::technique("Natural Logarithm"),
             ));
             return Some(result);
         }
 
         // Pattern: b = a^x  →  x = ln(b) / ln(a)
         if let Some(result) = self.match_power_pattern(&equation.right, &equation.left, var_name) {
-            path.add_step(ResolutionStep::new(
+            path.add_step(ResolutionStep::with_annotation(
                 Operation::ApplyLogProperty("change of base".to_string()),
                 format!("Apply logarithm to solve for {} in exponent", variable),
                 result.clone(),
+                StepAnnotation::technique("Natural Logarithm"),
             ));
             return Some(result);
         }

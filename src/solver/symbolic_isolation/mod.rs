@@ -5,7 +5,7 @@
 //! arithmetic, powers, and invertible functions.
 
 use crate::ast::{BinaryOp, Expression, Function, UnaryOp, Variable};
-use crate::resolution_path::{Operation, ResolutionPathBuilder};
+use crate::resolution_path::{Operation, ResolutionPathBuilder, StepAnnotation};
 
 use super::helpers::contains_variable;
 use super::types::SolverError;
@@ -87,10 +87,11 @@ fn unwrap_variable(
         // Unary negation: -expr(v) => other = -other
         Expression::Unary(UnaryOp::Neg, inner) if contains_variable(inner, var) => {
             let new_other = Expression::Unary(UnaryOp::Neg, Box::new(other.clone())).simplify();
-            let p = path.step(
+            let p = path.annotated_step(
                 Operation::MultiplyBothSides(Expression::Integer(-1)),
                 "Negate both sides".to_string(),
                 new_other.clone(),
+                StepAnnotation::standard(),
             );
             unwrap_variable(inner, &new_other, var, p)
         }
@@ -142,10 +143,11 @@ fn unwrap_binary(
                 Box::new(const_child.clone()),
             )
             .simplify();
-            let p = path.step(
+            let p = path.annotated_step(
                 Operation::SubtractBothSides(const_child.clone()),
                 format!("Subtract {} from both sides", const_child),
                 new_other.clone(),
+                StepAnnotation::standard(),
             );
             unwrap_variable(var_child, &new_other, var, p)
         }
@@ -160,10 +162,11 @@ fn unwrap_binary(
                     Box::new(right.clone()),
                 )
                 .simplify();
-                let p = path.step(
+                let p = path.annotated_step(
                     Operation::AddBothSides(right.clone()),
                     format!("Add {} to both sides", right),
                     new_other.clone(),
+                    StepAnnotation::standard(),
                 );
                 unwrap_variable(left, &new_other, var, p)
             } else {
@@ -174,13 +177,14 @@ fn unwrap_binary(
                     Box::new(other.clone()),
                 )
                 .simplify();
-                let p = path.step(
+                let p = path.annotated_step(
                     Operation::SubtractBothSides(other.clone()),
                     format!(
                         "Rearrange: {} - expr = other becomes expr = {} - other",
                         left, left
                     ),
                     new_other.clone(),
+                    StepAnnotation::standard(),
                 );
                 unwrap_variable(right, &new_other, var, p)
             }
@@ -199,10 +203,11 @@ fn unwrap_binary(
                 Box::new(const_child.clone()),
             )
             .simplify();
-            let p = path.step(
+            let p = path.annotated_step(
                 Operation::DivideBothSides(const_child.clone()),
                 format!("Divide both sides by {}", const_child),
                 new_other.clone(),
+                StepAnnotation::standard(),
             );
             unwrap_variable(var_child, &new_other, var, p)
         }
@@ -217,10 +222,11 @@ fn unwrap_binary(
                     Box::new(right.clone()),
                 )
                 .simplify();
-                let p = path.step(
+                let p = path.annotated_step(
                     Operation::MultiplyBothSides(right.clone()),
                     format!("Multiply both sides by {}", right),
                     new_other.clone(),
+                    StepAnnotation::standard(),
                 );
                 unwrap_variable(left, &new_other, var, p)
             } else {
@@ -231,13 +237,14 @@ fn unwrap_binary(
                     Box::new(other.clone()),
                 )
                 .simplify();
-                let p = path.step(
+                let p = path.annotated_step(
                     Operation::DivideBothSides(other.clone()),
                     format!(
                         "Rearrange: {} / expr = other becomes expr = {} / other",
                         left, left
                     ),
                     new_other.clone(),
+                    StepAnnotation::standard(),
                 );
                 unwrap_variable(right, &new_other, var, p)
             }
@@ -278,10 +285,11 @@ fn unwrap_power(
         .simplify();
         let new_other =
             Expression::Power(Box::new(other.clone()), Box::new(inv_exp.clone())).simplify();
-        let p = path.step(
+        let p = path.annotated_step(
             Operation::RootBothSides(exp.clone()),
             format!("Take the {} root of both sides", exp),
             new_other.clone(),
+            StepAnnotation::standard(),
         );
         unwrap_variable(base, &new_other, var, p)
     } else {
@@ -292,10 +300,11 @@ fn unwrap_power(
             Box::new(Expression::Function(Function::Ln, vec![base.clone()])),
         )
         .simplify();
-        let p = path.step(
+        let p = path.annotated_step(
             Operation::ApplyFunction("log".to_string()),
             format!("Take logarithm base {} of both sides", base),
             new_other.clone(),
+            StepAnnotation::standard(),
         );
         unwrap_variable(exp, &new_other, var, p)
     }
@@ -376,10 +385,11 @@ fn unwrap_function(
 
     let simplified = new_other.simplify();
     let func_name = format!("{:?}", func);
-    let p = path.step(
+    let p = path.annotated_step(
         Operation::ApplyFunction(func_name),
         desc.to_string(),
         simplified.clone(),
+        StepAnnotation::standard(),
     );
     unwrap_variable(inner, &simplified, var, p)
 }
@@ -426,10 +436,11 @@ fn collect_linear_terms(
                 Box::new(combined_coeff.clone()),
             )
             .simplify();
-            let p = path.step(
+            let p = path.annotated_step(
                 Operation::DivideBothSides(combined_coeff),
                 format!("Collect terms and divide to isolate {}", var),
                 new_other.clone(),
+                StepAnnotation::standard(),
             );
             Ok((new_other, p))
         }

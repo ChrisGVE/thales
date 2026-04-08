@@ -687,3 +687,89 @@ fn test_polynomial_solver_quintic_numerical() {
         _ => panic!("Expected multiple solutions"),
     }
 }
+
+// ============================================================================
+// Step Annotation Tests
+// ============================================================================
+
+#[test]
+fn test_quadratic_solver_annotations() {
+    use thales::solver::QuadraticSolver;
+    // x² - 5x + 6 = 0
+    let lhs = binary(
+        BinaryOp::Add,
+        binary(
+            BinaryOp::Sub,
+            Expression::Power(Box::new(var("x")), Box::new(int(2))),
+            binary(BinaryOp::Mul, int(5), var("x")),
+        ),
+        int(6),
+    );
+    let eq = Equation::new("q", lhs, int(0));
+    let solver = QuadraticSolver::new();
+    let (_sol, path) = solver.solve(&eq, &Variable::new("x")).unwrap();
+
+    let disc_step = path
+        .steps
+        .iter()
+        .find(|s| s.explanation.contains("discriminant"));
+    assert!(disc_step.is_some(), "Expected a discriminant step");
+    let ann = disc_step.unwrap().annotation.as_ref();
+    assert!(ann.is_some(), "Discriminant step should have an annotation");
+    assert!(
+        ann.unwrap().technique.is_none(),
+        "Discriminant step should not name a technique"
+    );
+
+    let formula_step = path
+        .steps
+        .iter()
+        .find(|s| s.explanation.contains("Quadratic formula"));
+    assert!(formula_step.is_some(), "Expected a quadratic formula step");
+    let ann = formula_step.unwrap().annotation.as_ref().unwrap();
+    assert_eq!(ann.technique.as_deref(), Some("Quadratic Formula"));
+}
+
+#[test]
+fn test_transcendental_solver_annotations() {
+    use thales::ast::Function;
+    use thales::solver::TranscendentalSolver;
+    let eq = Equation::new(
+        "trig",
+        Expression::Function(Function::Sin, vec![var("x")]),
+        float(0.5),
+    );
+    let solver = TranscendentalSolver::new();
+    let (_sol, path) = solver.solve(&eq, &Variable::new("x")).unwrap();
+
+    let trig_step = path
+        .steps
+        .iter()
+        .find(|s| s.explanation.contains("arcsine"));
+    assert!(trig_step.is_some(), "Expected an arcsine step");
+    let ann = trig_step.unwrap().annotation.as_ref().unwrap();
+    assert_eq!(
+        ann.technique.as_deref(),
+        Some("Inverse Trigonometric Function")
+    );
+}
+
+#[test]
+fn test_symbolic_isolation_annotations() {
+    use thales::solver::SmartSolver;
+    // SmartSolver tries symbolic isolation first for 2*x + 3 = 7
+    let lhs = binary(
+        BinaryOp::Add,
+        binary(BinaryOp::Mul, int(2), var("x")),
+        int(3),
+    );
+    let eq = Equation::new("lin", lhs, int(7));
+    let solver = SmartSolver::new();
+    let (_sol, path) = solver.solve(&eq, &Variable::new("x")).unwrap();
+
+    let annotated_count = path.steps.iter().filter(|s| s.annotation.is_some()).count();
+    assert!(
+        annotated_count > 0,
+        "Expected at least one annotated step from symbolic isolation, got 0"
+    );
+}

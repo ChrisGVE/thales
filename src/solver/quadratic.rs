@@ -1,7 +1,7 @@
 //! Quadratic equation solver for equations of the form ax² + bx + c = 0.
 
 use crate::ast::{BinaryOp, Equation, Expression, Variable};
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder};
+use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder, StepAnnotation};
 
 use super::helpers::{
     contains_variable, extract_quadratic_coefficients, has_obvious_nonlinearity,
@@ -119,10 +119,11 @@ impl Solver for QuadraticSolver {
         // Compute discriminant Δ = b² - 4ac
         let discriminant = b * b - 4.0 * a * c;
 
-        path = path.step(
+        path = path.annotated_step(
             Operation::Simplify,
             format!("Computed discriminant: Δ = b² - 4ac = {}", discriminant),
             Expression::Float(discriminant),
+            StepAnnotation::standard(),
         );
 
         let epsilon = 1e-15;
@@ -135,10 +136,11 @@ impl Solver for QuadraticSolver {
             let root1 = simplify_numeric_expression(x1);
             let root2 = simplify_numeric_expression(x2);
 
-            path = path.step(
+            path = path.annotated_step(
                 Operation::Simplify,
                 format!("Quadratic formula: x = (-b ± √Δ)/(2a) = {} or {}", x1, x2),
                 root1.clone(),
+                StepAnnotation::technique("Quadratic Formula"),
             );
 
             let resolution_path = path.finish(root1.clone());
@@ -148,10 +150,11 @@ impl Solver for QuadraticSolver {
             let x = -b / (2.0 * a);
             let root = simplify_numeric_expression(x);
 
-            path = path.step(
+            path = path.annotated_step(
                 Operation::Simplify,
                 format!("Quadratic formula (Δ = 0): x = -b/(2a) = {}", x),
                 root.clone(),
+                StepAnnotation::technique("Quadratic Formula"),
             );
 
             let resolution_path = path.finish(root.clone());
@@ -164,10 +167,11 @@ impl Solver for QuadraticSolver {
             let root1 = Expression::Complex(num_complex::Complex64::new(real_part, imag_part));
             let root2 = Expression::Complex(num_complex::Complex64::new(real_part, -imag_part));
 
-            path = path.step(
+            path = path.annotated_step(
                 Operation::Simplify,
                 format!("Complex roots: x = {} ± {}i", real_part, imag_part),
                 root1.clone(),
+                StepAnnotation::technique("Quadratic Formula"),
             );
 
             let resolution_path = path.finish(root1.clone());

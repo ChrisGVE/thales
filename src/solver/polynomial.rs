@@ -1,7 +1,7 @@
 //! Polynomial equation solver for general degree n polynomials.
 
 use crate::ast::{BinaryOp, Equation, Expression, Variable};
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder};
+use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder, StepAnnotation};
 use std::collections::HashMap;
 
 use super::helpers::{
@@ -72,10 +72,11 @@ fn solve_cubic(
         Box::new(Expression::Float(r)),
     );
 
-    path = path.step(
+    path = path.annotated_step(
         Operation::Simplify,
         format!("Normalized cubic: x³ + {}x² + {}x + {} = 0", p, q, r),
         monic_cubic,
+        StepAnnotation::standard(),
     );
 
     // Depress the cubic: substitute x = t - p/3
@@ -92,10 +93,11 @@ fn solve_cubic(
         Box::new(Expression::Float(dep_q)),
     );
 
-    path = path.step(
+    path = path.annotated_step(
         Operation::Simplify,
         format!("Depressed cubic: t³ + {}t + {} = 0", dep_p, dep_q),
         depressed_cubic,
+        StepAnnotation::technique("Tschirnhaus Transformation"),
     );
 
     // Discriminant: Δ = -4p³ - 27q²
@@ -159,10 +161,11 @@ fn solve_cubic(
         ];
     }
 
-    path = path.step(
+    path = path.annotated_step(
         Operation::Simplify,
         "Applied Cardano's formula".to_string(),
         roots[0].clone(),
+        StepAnnotation::technique("Cardano's Formula"),
     );
 
     let resolution_path = path.finish(roots[0].clone());
@@ -240,13 +243,14 @@ fn solve_quartic(
         Box::new(Expression::Float(s)),
     );
 
-    path = path.step(
+    path = path.annotated_step(
         Operation::Simplify,
         format!(
             "Normalized quartic: x⁴ + {}x³ + {}x² + {}x + {} = 0",
             p, q, r, s
         ),
         monic_quartic,
+        StepAnnotation::standard(),
     );
 
     // Depress the quartic: substitute x = y - p/4
@@ -266,13 +270,14 @@ fn solve_quartic(
         Box::new(Expression::Float(gamma)),
     );
 
-    path = path.step(
+    path = path.annotated_step(
         Operation::Simplify,
         format!(
             "Depressed quartic: y⁴ + {}y² + {}y + {} = 0",
             alpha, beta, gamma
         ),
         depressed_quartic,
+        StepAnnotation::technique("Tschirnhaus Transformation"),
     );
 
     let shift = -p / 4.0;
@@ -440,10 +445,11 @@ fn solve_quartic(
         )));
     }
 
-    path = path.step(
+    path = path.annotated_step(
         Operation::Simplify,
         "Applied Ferrari's method".to_string(),
         roots[0].clone(),
+        StepAnnotation::technique("Ferrari's Method"),
     );
 
     let resolution_path = path.finish(roots[0].clone());
