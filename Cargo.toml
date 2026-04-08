@@ -36,6 +36,9 @@ lapack = ["dep:nalgebra-lapack"]
 lapack-accelerate = ["lapack", "nalgebra-lapack/accelerate"]
 lapack-netlib = ["lapack", "nalgebra-lapack/netlib"]
 lapack-openblas = ["lapack", "nalgebra-lapack/openblas"]
+# Domain extension features
+vector-calc = []
+number-theory = []
 
 [build-dependencies]
 swift-bridge-build = "0.1"

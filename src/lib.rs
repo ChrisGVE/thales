@@ -420,6 +420,9 @@ pub mod trigonometric;
 // User guides for common workflows
 pub mod guides;
 
+// Optional domain extensions (conditionally compiled)
+pub mod extensions;
+
 // LAPACK-accelerated linear algebra (conditionally compiled)
 #[cfg(feature = "lapack")]
 pub mod lapack;
