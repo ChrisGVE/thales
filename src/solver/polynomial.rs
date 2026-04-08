@@ -76,7 +76,7 @@ fn solve_cubic(
         Operation::Simplify,
         format!("Normalized cubic: x³ + {}x² + {}x + {} = 0", p, q, r),
         monic_cubic,
-        StepAnnotation::standard(),
+        StepAnnotation::elementary(),
     );
 
     // Depress the cubic: substitute x = t - p/3
@@ -97,7 +97,7 @@ fn solve_cubic(
         Operation::Simplify,
         format!("Depressed cubic: t³ + {}t + {} = 0", dep_p, dep_q),
         depressed_cubic,
-        StepAnnotation::technique("Tschirnhaus Transformation"),
+        StepAnnotation::algebraic("Tschirnhaus Transformation"),
     );
 
     // Discriminant: Δ = -4p³ - 27q²
@@ -165,7 +165,7 @@ fn solve_cubic(
         Operation::Simplify,
         "Applied Cardano's formula".to_string(),
         roots[0].clone(),
-        StepAnnotation::technique("Cardano's Formula"),
+        StepAnnotation::algebraic("Cardano's Formula"),
     );
 
     let resolution_path = path.finish(roots[0].clone());
@@ -250,7 +250,7 @@ fn solve_quartic(
             p, q, r, s
         ),
         monic_quartic,
-        StepAnnotation::standard(),
+        StepAnnotation::elementary(),
     );
 
     // Depress the quartic: substitute x = y - p/4
@@ -277,7 +277,7 @@ fn solve_quartic(
             alpha, beta, gamma
         ),
         depressed_quartic,
-        StepAnnotation::technique("Tschirnhaus Transformation"),
+        StepAnnotation::algebraic("Tschirnhaus Transformation"),
     );
 
     let shift = -p / 4.0;
@@ -449,7 +449,7 @@ fn solve_quartic(
         Operation::Simplify,
         "Applied Ferrari's method".to_string(),
         roots[0].clone(),
-        StepAnnotation::technique("Ferrari's Method"),
+        StepAnnotation::algebraic("Ferrari's Method"),
     );
 
     let resolution_path = path.finish(roots[0].clone());

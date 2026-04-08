@@ -123,7 +123,7 @@ impl Solver for QuadraticSolver {
             Operation::Simplify,
             format!("Computed discriminant: Δ = b² - 4ac = {}", discriminant),
             Expression::Float(discriminant),
-            StepAnnotation::standard(),
+            StepAnnotation::elementary(),
         );
 
         let epsilon = 1e-15;
@@ -140,7 +140,7 @@ impl Solver for QuadraticSolver {
                 Operation::Simplify,
                 format!("Quadratic formula: x = (-b ± √Δ)/(2a) = {} or {}", x1, x2),
                 root1.clone(),
-                StepAnnotation::technique("Quadratic Formula"),
+                StepAnnotation::algebraic("Quadratic Formula"),
             );
 
             let resolution_path = path.finish(root1.clone());
@@ -154,7 +154,7 @@ impl Solver for QuadraticSolver {
                 Operation::Simplify,
                 format!("Quadratic formula (Δ = 0): x = -b/(2a) = {}", x),
                 root.clone(),
-                StepAnnotation::technique("Quadratic Formula"),
+                StepAnnotation::algebraic("Quadratic Formula"),
             );
 
             let resolution_path = path.finish(root.clone());
@@ -171,7 +171,7 @@ impl Solver for QuadraticSolver {
                 Operation::Simplify,
                 format!("Complex roots: x = {} ± {}i", real_part, imag_part),
                 root1.clone(),
-                StepAnnotation::technique("Quadratic Formula"),
+                StepAnnotation::algebraic("Quadratic Formula"),
             );
 
             let resolution_path = path.finish(root1.clone());

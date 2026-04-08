@@ -158,7 +158,7 @@ impl TranscendentalSolver {
                 Operation::ApplyFunction("asin".to_string()),
                 format!("Apply arcsine to solve sin({}) = value", variable),
                 result.clone(),
-                StepAnnotation::technique("Inverse Trigonometric Function"),
+                StepAnnotation::transcendental("Inverse Trigonometric Function"),
             ));
             return Some(result);
         }
@@ -178,7 +178,7 @@ impl TranscendentalSolver {
                 Operation::ApplyFunction("asin".to_string()),
                 format!("Apply arcsine to solve sin({}) = value", variable),
                 result.clone(),
-                StepAnnotation::technique("Inverse Trigonometric Function"),
+                StepAnnotation::transcendental("Inverse Trigonometric Function"),
             ));
             return Some(result);
         }
@@ -198,7 +198,7 @@ impl TranscendentalSolver {
                 Operation::ApplyFunction("acos".to_string()),
                 format!("Apply arccosine to solve cos({}) = value", variable),
                 result.clone(),
-                StepAnnotation::technique("Inverse Trigonometric Function"),
+                StepAnnotation::transcendental("Inverse Trigonometric Function"),
             ));
             return Some(result);
         }
@@ -218,7 +218,7 @@ impl TranscendentalSolver {
                 Operation::ApplyFunction("acos".to_string()),
                 format!("Apply arccosine to solve cos({}) = value", variable),
                 result.clone(),
-                StepAnnotation::technique("Inverse Trigonometric Function"),
+                StepAnnotation::transcendental("Inverse Trigonometric Function"),
             ));
             return Some(result);
         }
@@ -235,7 +235,7 @@ impl TranscendentalSolver {
                 Operation::ApplyFunction("atan".to_string()),
                 format!("Apply arctangent to solve tan({}) = value", variable),
                 result.clone(),
-                StepAnnotation::technique("Inverse Trigonometric Function"),
+                StepAnnotation::transcendental("Inverse Trigonometric Function"),
             ));
             return Some(result);
         }
@@ -252,7 +252,7 @@ impl TranscendentalSolver {
                 Operation::ApplyFunction("atan".to_string()),
                 format!("Apply arctangent to solve tan({}) = value", variable),
                 result.clone(),
-                StepAnnotation::technique("Inverse Trigonometric Function"),
+                StepAnnotation::transcendental("Inverse Trigonometric Function"),
             ));
             return Some(result);
         }
@@ -446,7 +446,7 @@ impl TranscendentalSolver {
                 Operation::ApplyFunction("exp".to_string()),
                 format!("Apply exponential to solve ln({}) = value", variable),
                 result.clone(),
-                StepAnnotation::technique("Natural Logarithm"),
+                StepAnnotation::power_and_roots(),
             ));
             return Some(result);
         }
@@ -457,7 +457,7 @@ impl TranscendentalSolver {
                 Operation::ApplyFunction("exp".to_string()),
                 format!("Apply exponential to solve ln({}) = value", variable),
                 result.clone(),
-                StepAnnotation::technique("Natural Logarithm"),
+                StepAnnotation::power_and_roots(),
             ));
             return Some(result);
         }
@@ -468,7 +468,7 @@ impl TranscendentalSolver {
                 Operation::PowerBothSides(Expression::Integer(10)),
                 format!("Apply 10^x to solve log10({}) = value", variable),
                 result.clone(),
-                StepAnnotation::technique("Logarithm"),
+                StepAnnotation::power_and_roots(),
             ));
             return Some(result);
         }
@@ -479,7 +479,7 @@ impl TranscendentalSolver {
                 Operation::PowerBothSides(Expression::Integer(10)),
                 format!("Apply 10^x to solve log10({}) = value", variable),
                 result.clone(),
-                StepAnnotation::technique("Logarithm"),
+                StepAnnotation::power_and_roots(),
             ));
             return Some(result);
         }
@@ -494,7 +494,7 @@ impl TranscendentalSolver {
                     variable
                 ),
                 result.clone(),
-                StepAnnotation::technique("Logarithm"),
+                StepAnnotation::power_and_roots(),
             ));
             return Some(result);
         }
@@ -509,7 +509,7 @@ impl TranscendentalSolver {
                     variable
                 ),
                 result.clone(),
-                StepAnnotation::technique("Logarithm"),
+                StepAnnotation::power_and_roots(),
             ));
             return Some(result);
         }
@@ -653,7 +653,7 @@ impl TranscendentalSolver {
                 Operation::ApplyFunction("ln".to_string()),
                 format!("Apply natural logarithm to solve exp({}) = value", variable),
                 result.clone(),
-                StepAnnotation::technique("Natural Logarithm"),
+                StepAnnotation::power_and_roots(),
             ));
             return Some(result);
         }
@@ -664,7 +664,7 @@ impl TranscendentalSolver {
                 Operation::ApplyFunction("ln".to_string()),
                 format!("Apply natural logarithm to solve exp({}) = value", variable),
                 result.clone(),
-                StepAnnotation::technique("Natural Logarithm"),
+                StepAnnotation::power_and_roots(),
             ));
             return Some(result);
         }
@@ -675,7 +675,7 @@ impl TranscendentalSolver {
                 Operation::ApplyLogProperty("change of base".to_string()),
                 format!("Apply logarithm to solve for {} in exponent", variable),
                 result.clone(),
-                StepAnnotation::technique("Natural Logarithm"),
+                StepAnnotation::power_and_roots(),
             ));
             return Some(result);
         }
@@ -686,7 +686,7 @@ impl TranscendentalSolver {
                 Operation::ApplyLogProperty("change of base".to_string()),
                 format!("Apply logarithm to solve for {} in exponent", variable),
                 result.clone(),
-                StepAnnotation::technique("Natural Logarithm"),
+                StepAnnotation::power_and_roots(),
             ));
             return Some(result);
         }

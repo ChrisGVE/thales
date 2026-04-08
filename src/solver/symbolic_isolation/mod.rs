@@ -91,7 +91,7 @@ fn unwrap_variable(
                 Operation::MultiplyBothSides(Expression::Integer(-1)),
                 "Negate both sides".to_string(),
                 new_other.clone(),
-                StepAnnotation::standard(),
+                StepAnnotation::elementary(),
             );
             unwrap_variable(inner, &new_other, var, p)
         }
@@ -147,7 +147,7 @@ fn unwrap_binary(
                 Operation::SubtractBothSides(const_child.clone()),
                 format!("Subtract {} from both sides", const_child),
                 new_other.clone(),
-                StepAnnotation::standard(),
+                StepAnnotation::elementary(),
             );
             unwrap_variable(var_child, &new_other, var, p)
         }
@@ -166,7 +166,7 @@ fn unwrap_binary(
                     Operation::AddBothSides(right.clone()),
                     format!("Add {} to both sides", right),
                     new_other.clone(),
-                    StepAnnotation::standard(),
+                    StepAnnotation::elementary(),
                 );
                 unwrap_variable(left, &new_other, var, p)
             } else {
@@ -184,7 +184,7 @@ fn unwrap_binary(
                         left, left
                     ),
                     new_other.clone(),
-                    StepAnnotation::standard(),
+                    StepAnnotation::elementary(),
                 );
                 unwrap_variable(right, &new_other, var, p)
             }
@@ -207,7 +207,7 @@ fn unwrap_binary(
                 Operation::DivideBothSides(const_child.clone()),
                 format!("Divide both sides by {}", const_child),
                 new_other.clone(),
-                StepAnnotation::standard(),
+                StepAnnotation::elementary(),
             );
             unwrap_variable(var_child, &new_other, var, p)
         }
@@ -226,7 +226,7 @@ fn unwrap_binary(
                     Operation::MultiplyBothSides(right.clone()),
                     format!("Multiply both sides by {}", right),
                     new_other.clone(),
-                    StepAnnotation::standard(),
+                    StepAnnotation::elementary(),
                 );
                 unwrap_variable(left, &new_other, var, p)
             } else {
@@ -244,7 +244,7 @@ fn unwrap_binary(
                         left, left
                     ),
                     new_other.clone(),
-                    StepAnnotation::standard(),
+                    StepAnnotation::elementary(),
                 );
                 unwrap_variable(right, &new_other, var, p)
             }
@@ -289,7 +289,7 @@ fn unwrap_power(
             Operation::RootBothSides(exp.clone()),
             format!("Take the {} root of both sides", exp),
             new_other.clone(),
-            StepAnnotation::standard(),
+            StepAnnotation::power_and_roots(),
         );
         unwrap_variable(base, &new_other, var, p)
     } else {
@@ -304,7 +304,7 @@ fn unwrap_power(
             Operation::ApplyFunction("log".to_string()),
             format!("Take logarithm base {} of both sides", base),
             new_other.clone(),
-            StepAnnotation::standard(),
+            StepAnnotation::power_and_roots(),
         );
         unwrap_variable(exp, &new_other, var, p)
     }
@@ -385,11 +385,22 @@ fn unwrap_function(
 
     let simplified = new_other.simplify();
     let func_name = format!("{:?}", func);
+    let annotation = match func {
+        Function::Sin
+        | Function::Cos
+        | Function::Tan
+        | Function::Asin
+        | Function::Acos
+        | Function::Atan => StepAnnotation::transcendental("Inverse Trigonometric Function"),
+        Function::Exp | Function::Ln => StepAnnotation::power_and_roots(),
+        Function::Sqrt | Function::Cbrt => StepAnnotation::power_and_roots(),
+        _ => StepAnnotation::elementary(),
+    };
     let p = path.annotated_step(
         Operation::ApplyFunction(func_name),
         desc.to_string(),
         simplified.clone(),
-        StepAnnotation::standard(),
+        annotation,
     );
     unwrap_variable(inner, &simplified, var, p)
 }
@@ -440,7 +451,7 @@ fn collect_linear_terms(
                 Operation::DivideBothSides(combined_coeff),
                 format!("Collect terms and divide to isolate {}", var),
                 new_other.clone(),
-                StepAnnotation::standard(),
+                StepAnnotation::elementary(),
             );
             Ok((new_other, p))
         }
