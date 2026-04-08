@@ -122,7 +122,7 @@ impl Solver for QuadraticSolver {
         path = path.step(
             Operation::Simplify,
             format!("Computed discriminant: Δ = b² - 4ac = {}", discriminant),
-            combined.clone(),
+            Expression::Float(discriminant),
         );
 
         let epsilon = 1e-15;

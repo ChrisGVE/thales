@@ -43,10 +43,39 @@ fn solve_cubic(
     let q = c / a;
     let r = d / a;
 
+    // Build an expression representing the normalized monic cubic
+    let monic_cubic = Expression::Binary(
+        BinaryOp::Add,
+        Box::new(Expression::Binary(
+            BinaryOp::Add,
+            Box::new(Expression::Binary(
+                BinaryOp::Add,
+                Box::new(Expression::Power(
+                    Box::new(Expression::Variable(Variable::new(_var))),
+                    Box::new(Expression::Integer(3)),
+                )),
+                Box::new(Expression::Binary(
+                    BinaryOp::Mul,
+                    Box::new(Expression::Float(p)),
+                    Box::new(Expression::Power(
+                        Box::new(Expression::Variable(Variable::new(_var))),
+                        Box::new(Expression::Integer(2)),
+                    )),
+                )),
+            )),
+            Box::new(Expression::Binary(
+                BinaryOp::Mul,
+                Box::new(Expression::Float(q)),
+                Box::new(Expression::Variable(Variable::new(_var))),
+            )),
+        )),
+        Box::new(Expression::Float(r)),
+    );
+
     path = path.step(
         Operation::Simplify,
         format!("Normalized cubic: x³ + {}x² + {}x + {} = 0", p, q, r),
-        Expression::Integer(0),
+        monic_cubic,
     );
 
     // Depress the cubic: substitute x = t - p/3
@@ -56,10 +85,17 @@ fn solve_cubic(
     let dep_p = q - p * p / 3.0;
     let dep_q = r - p * q / 3.0 + 2.0 * p * p * p / 27.0;
 
+    // Build an expression representing the depressed cubic coefficients
+    let depressed_cubic = Expression::Binary(
+        BinaryOp::Add,
+        Box::new(Expression::Float(dep_p)),
+        Box::new(Expression::Float(dep_q)),
+    );
+
     path = path.step(
         Operation::Simplify,
         format!("Depressed cubic: t³ + {}t + {} = 0", dep_p, dep_q),
-        Expression::Integer(0),
+        depressed_cubic,
     );
 
     // Discriminant: Δ = -4p³ - 27q²
@@ -68,7 +104,7 @@ fn solve_cubic(
     path = path.step(
         Operation::Simplify,
         format!("Discriminant: Δ = {}", discriminant),
-        Expression::Integer(0),
+        Expression::Float(discriminant),
     );
 
     let shift = -p / 3.0;
@@ -164,13 +200,53 @@ fn solve_quartic(
     let r = d / a;
     let s = e / a;
 
+    // Build an expression representing the normalized monic quartic
+    let monic_quartic = Expression::Binary(
+        BinaryOp::Add,
+        Box::new(Expression::Binary(
+            BinaryOp::Add,
+            Box::new(Expression::Binary(
+                BinaryOp::Add,
+                Box::new(Expression::Binary(
+                    BinaryOp::Add,
+                    Box::new(Expression::Power(
+                        Box::new(Expression::Variable(Variable::new(_var))),
+                        Box::new(Expression::Integer(4)),
+                    )),
+                    Box::new(Expression::Binary(
+                        BinaryOp::Mul,
+                        Box::new(Expression::Float(p)),
+                        Box::new(Expression::Power(
+                            Box::new(Expression::Variable(Variable::new(_var))),
+                            Box::new(Expression::Integer(3)),
+                        )),
+                    )),
+                )),
+                Box::new(Expression::Binary(
+                    BinaryOp::Mul,
+                    Box::new(Expression::Float(q)),
+                    Box::new(Expression::Power(
+                        Box::new(Expression::Variable(Variable::new(_var))),
+                        Box::new(Expression::Integer(2)),
+                    )),
+                )),
+            )),
+            Box::new(Expression::Binary(
+                BinaryOp::Mul,
+                Box::new(Expression::Float(r)),
+                Box::new(Expression::Variable(Variable::new(_var))),
+            )),
+        )),
+        Box::new(Expression::Float(s)),
+    );
+
     path = path.step(
         Operation::Simplify,
         format!(
             "Normalized quartic: x⁴ + {}x³ + {}x² + {}x + {} = 0",
             p, q, r, s
         ),
-        Expression::Integer(0),
+        monic_quartic,
     );
 
     // Depress the quartic: substitute x = y - p/4
@@ -179,13 +255,24 @@ fn solve_quartic(
     let beta = r - p * q / 2.0 + p * p * p / 8.0;
     let gamma = s - p * r / 4.0 + p * p * q / 16.0 - 3.0 * p * p * p * p / 256.0;
 
+    // Build an expression representing the depressed quartic coefficients
+    let depressed_quartic = Expression::Binary(
+        BinaryOp::Add,
+        Box::new(Expression::Binary(
+            BinaryOp::Add,
+            Box::new(Expression::Float(alpha)),
+            Box::new(Expression::Float(beta)),
+        )),
+        Box::new(Expression::Float(gamma)),
+    );
+
     path = path.step(
         Operation::Simplify,
         format!(
             "Depressed quartic: y⁴ + {}y² + {}y + {} = 0",
             alpha, beta, gamma
         ),
-        Expression::Integer(0),
+        depressed_quartic,
     );
 
     let shift = -p / 4.0;
@@ -217,6 +304,11 @@ fn solve_quartic(
                     -sqrt_imag,
                 )));
             }
+            path = path.step(
+                Operation::Simplify,
+                "Solved biquadratic via complex square roots".to_string(),
+                roots[0].clone(),
+            );
             let resolution_path = path.finish(roots[0].clone());
             return Ok((Solution::Multiple(roots), resolution_path));
         } else {
@@ -238,6 +330,11 @@ fn solve_quartic(
                     )));
                 }
             }
+            path = path.step(
+                Operation::Simplify,
+                format!("Solved biquadratic: u = y², u₁ = {}, u₂ = {}", u1, u2),
+                roots[0].clone(),
+            );
             let resolution_path = path.finish(roots[0].clone());
             return Ok((Solution::Multiple(roots), resolution_path));
         }
@@ -283,7 +380,7 @@ fn solve_quartic(
     path = path.step(
         Operation::Simplify,
         format!("Resolvent cubic root: m = {}", m),
-        Expression::Integer(0),
+        Expression::Float(m),
     );
 
     // Factor quartic: (y² + m)² = (α + 2m)y² - βy + (m² + αm + γ - γ)
@@ -378,7 +475,7 @@ fn solve_polynomial_numerically(
             "Solving degree {} polynomial numerically (Durand-Kerner method)",
             degree
         ),
-        Expression::Integer(0),
+        Expression::Integer(degree as i64),
     );
 
     // Initial guess: roots evenly spaced on a circle
