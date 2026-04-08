@@ -115,6 +115,7 @@
 
 mod helpers;
 pub mod linear;
+pub mod ode_classifier;
 pub mod polynomial;
 pub mod quadratic;
 pub mod symbolic_isolation;
@@ -124,6 +125,9 @@ pub mod types;
 
 // Re-export all public types for backward compatibility
 pub use linear::LinearSolver;
+pub use ode_classifier::{
+    classify_first_order, classify_second_order, ODEClassification, ODELinearity, ODEOrder, ODEType,
+};
 pub use polynomial::PolynomialSolver;
 pub use quadratic::QuadraticSolver;
 pub use system::{LinearSystem, SystemSolution, SystemSolver};
@@ -323,17 +327,26 @@ impl Solver for SmartSolver {
         equation: &Equation,
         variable: &Variable,
     ) -> SolverResult<(Solution, ResolutionPath)> {
+        // Quadratic and polynomial solvers handle all root cases (real and
+        // complex).  Symbolic isolation only returns a single Unique result, so
+        // it must not intercept equations where the specialized solvers are
+        // strictly more capable (e.g. x² + 1 = 0 → ±i).
+        let skip_symbolic_isolation =
+            self.quadratic.can_solve(equation) || self.polynomial.can_solve(equation);
+
         // Try general symbolic isolation first — it handles arbitrary
         // rearrangements that the specialized solvers miss.
-        let path_builder = ResolutionPathBuilder::new(equation.left.clone());
-        if let Ok((result_expr, builder)) = symbolic_isolation::symbolic_isolate(
-            &equation.left,
-            &equation.right,
-            variable,
-            path_builder,
-        ) {
-            let path = builder.finish(result_expr.clone());
-            return Ok((Solution::Unique(result_expr), path));
+        if !skip_symbolic_isolation {
+            let path_builder = ResolutionPathBuilder::new(equation.left.clone());
+            if let Ok((result_expr, builder)) = symbolic_isolation::symbolic_isolate(
+                &equation.left,
+                &equation.right,
+                variable,
+                path_builder,
+            ) {
+                let path = builder.finish(result_expr.clone());
+                return Ok((Solution::Unique(result_expr), path));
+            }
         }
 
         // Fall back: linear -> quadratic -> polynomial -> transcendental

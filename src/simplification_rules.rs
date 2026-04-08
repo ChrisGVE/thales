@@ -27,6 +27,7 @@ pub fn arithmetic_rules() -> Vec<Rule> {
 
 /// x - x → 0
 fn sub_self_rule() -> Rule {
+    use crate::ast::BinaryOp;
     Rule::new(
         Pattern::binary(
             BinaryOp::Sub,
@@ -40,6 +41,7 @@ fn sub_self_rule() -> Rule {
 
 /// x / x → 1
 fn div_self_rule() -> Rule {
+    use crate::ast::BinaryOp;
     Rule::new(
         Pattern::binary(
             BinaryOp::Div,
@@ -114,6 +116,7 @@ pub fn trig_pythagorean_rule() -> Vec<Rule> {
 
 /// Builds the sin²(x) + cos²(x) → 1 pattern rule.
 fn sin_sq_plus_cos_sq_rule() -> Rule {
+    use crate::ast::BinaryOp;
     let sin_sq = Pattern::power(
         Pattern::function(Function::Sin, vec![Pattern::wildcard("x")]),
         Pattern::exact(Expression::Integer(2)),
@@ -142,7 +145,7 @@ pub fn euler_rules() -> Vec<Rule> {
 /// e^(i·x) → cos(x) + i·sin(x)
 ///
 /// Matches `e^(i*x)` where `e` is `Expression::Constant(SymbolicConstant::E)`
-/// and `i` is `Expression::Constant(SymbolicConstant::I)`. The multiplication
+/// and `i` is `Expression::Constant(SymbolicConstant::I)`.  The multiplication
 /// `i*x` is matched commutatively, so `x*i` also triggers the rule.
 fn euler_expansion_rule() -> Rule {
     let i = Expression::Constant(SymbolicConstant::I);
