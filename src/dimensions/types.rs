@@ -3,6 +3,8 @@
 use std::collections::HashMap;
 use std::fmt;
 
+/// let time = BaseDimension::Time;
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BaseDimension {
     /// Length dimension - fundamental measure of spatial extent.
