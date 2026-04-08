@@ -466,6 +466,84 @@ impl ResolutionPath {
         self.steps.is_empty()
     }
 
+    /// Return the highest difficulty tier of any step in this path.
+    ///
+    /// If the path has no steps, returns `Elementary` as the baseline.
+    /// The max difficulty represents the hardest mathematical technique
+    /// required to complete the entire solution.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use thales::resolution_path::{ResolutionPath, ResolutionStep, Operation, StepAnnotation, TechniqueDifficulty};
+    /// use thales::ast::Expression;
+    ///
+    /// let mut path = ResolutionPath::new(Expression::Integer(10));
+    /// path.add_step(ResolutionStep::with_annotation(
+    ///     Operation::SubtractBothSides(Expression::Integer(3)),
+    ///     "Subtract 3".to_string(),
+    ///     Expression::Integer(7),
+    ///     StepAnnotation::elementary(),
+    /// ));
+    /// path.add_step(ResolutionStep::with_annotation(
+    ///     Operation::RootBothSides(Expression::Integer(2)),
+    ///     "Take square root".to_string(),
+    ///     Expression::Integer(4),
+    ///     StepAnnotation::power_and_roots(),
+    /// ));
+    /// assert_eq!(path.max_difficulty(), TechniqueDifficulty::PowerAndRoots);
+    /// ```
+    #[must_use]
+    pub fn max_difficulty(&self) -> TechniqueDifficulty {
+        self.steps
+            .iter()
+            .map(|step| step.effective_difficulty())
+            .max()
+            .unwrap_or(TechniqueDifficulty::Elementary)
+    }
+
+    /// Check whether all steps in this path are at or below the given difficulty.
+    ///
+    /// Returns `true` if every step's technique difficulty is `<= level`.
+    /// An empty path is trivially at any level.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use thales::resolution_path::{ResolutionPath, ResolutionStep, Operation, StepAnnotation, TechniqueDifficulty};
+    /// use thales::ast::Expression;
+    ///
+    /// let mut path = ResolutionPath::new(Expression::Integer(10));
+    /// path.add_step(ResolutionStep::with_annotation(
+    ///     Operation::DivideBothSides(Expression::Integer(2)),
+    ///     "Divide by 2".to_string(),
+    ///     Expression::Integer(5),
+    ///     StepAnnotation::elementary(),
+    /// ));
+    /// assert!(path.is_trivial_at(TechniqueDifficulty::Elementary));
+    /// assert!(path.is_trivial_at(TechniqueDifficulty::Calculus));
+    /// ```
+    #[must_use]
+    pub fn is_trivial_at(&self, level: TechniqueDifficulty) -> bool {
+        self.max_difficulty() <= level
+    }
+
+    /// Return a breakdown of step counts per difficulty tier.
+    ///
+    /// The returned array is indexed by tier (0 = Elementary, 5 = Advanced).
+    /// This is useful for understanding the difficulty profile of a solution.
+    #[must_use]
+    pub fn difficulty_profile(&self) -> [usize; 6] {
+        let mut profile = [0usize; 6];
+        for step in &self.steps {
+            let tier = step.effective_difficulty() as u8;
+            if tier >= 1 && tier <= 6 {
+                profile[(tier - 1) as usize] += 1;
+            }
+        }
+        profile
+    }
+
     /// Generate human-readable explanation of the solution path.
     ///
     /// This method produces a formatted text description of all steps taken
@@ -1087,6 +1165,18 @@ impl ResolutionStep {
             result,
             annotation: Some(annotation),
         }
+    }
+
+    /// Return the effective difficulty of this step.
+    ///
+    /// If the step has an annotation, its explicit difficulty is used.
+    /// Otherwise, the difficulty is inferred from the operation type.
+    #[must_use]
+    pub fn effective_difficulty(&self) -> TechniqueDifficulty {
+        self.annotation
+            .as_ref()
+            .map(|a| a.difficulty)
+            .unwrap_or_else(|| self.operation.difficulty())
     }
 }
 
