@@ -646,6 +646,125 @@ impl ResolutionPath {
         output
     }
 
+    /// Convert the resolution path to text with condensation of easy steps.
+    ///
+    /// Steps at or below `condense_below` are collapsed into brief summaries.
+    /// Steps above the threshold are shown in full detail (what, why, result).
+    ///
+    /// # Arguments
+    ///
+    /// * `verbosity` - Level of detail for non-condensed steps
+    /// * `condense_below` - Steps at or below this difficulty are condensed
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use thales::resolution_path::{ResolutionPath, ResolutionStep, Operation, StepAnnotation, Verbosity, TechniqueDifficulty};
+    /// use thales::ast::Expression;
+    ///
+    /// let mut path = ResolutionPath::new(Expression::Integer(10));
+    /// path.add_step(ResolutionStep::with_annotation(
+    ///     Operation::SubtractBothSides(Expression::Integer(3)),
+    ///     "Subtract 3".to_string(),
+    ///     Expression::Integer(7),
+    ///     StepAnnotation::elementary(),
+    /// ));
+    /// path.add_step(ResolutionStep::with_annotation(
+    ///     Operation::RootBothSides(Expression::Integer(2)),
+    ///     "Take square root".to_string(),
+    ///     Expression::Integer(4),
+    ///     StepAnnotation::power_and_roots(),
+    /// ));
+    /// path.set_result(Expression::Integer(4));
+    ///
+    /// let text = path.to_text_condensed(Verbosity::Standard, TechniqueDifficulty::Elementary);
+    /// // Elementary steps are condensed, PowerAndRoots step is shown in detail
+    /// assert!(text.contains("power/roots"));
+    /// ```
+    pub fn to_text_condensed(
+        &self,
+        verbosity: Verbosity,
+        condense_below: TechniqueDifficulty,
+    ) -> String {
+        // If all steps are above the threshold, no condensation needed
+        if self
+            .steps
+            .iter()
+            .all(|s| s.effective_difficulty() > condense_below)
+        {
+            return self.to_text(verbosity);
+        }
+
+        let mut output = String::new();
+        output.push_str(&format!("Initial: {:?}\n\n", self.initial));
+
+        let mut i = 0;
+        let mut step_num = 1;
+        while i < self.steps.len() {
+            let step = &self.steps[i];
+            if step.effective_difficulty() <= condense_below {
+                // Collect consecutive condensable steps
+                let run_start = i;
+                while i < self.steps.len() && self.steps[i].effective_difficulty() <= condense_below
+                {
+                    i += 1;
+                }
+                let run = &self.steps[run_start..i];
+
+                if run.len() == 1 {
+                    output.push_str(&format!(
+                        "  ≡ {} → {:?}\n\n",
+                        run[0].operation.describe(),
+                        run[run.len() - 1].result
+                    ));
+                } else {
+                    let ops: Vec<String> = run.iter().map(|s| s.operation.describe()).collect();
+                    output.push_str(&format!(
+                        "  ≡ Rearrange: {} → {:?}\n\n",
+                        ops.join(", then "),
+                        run[run.len() - 1].result
+                    ));
+                }
+                step_num += 1;
+            } else {
+                // Show this step in detail
+                match verbosity {
+                    Verbosity::Minimal => {
+                        output.push_str(&format!(
+                            "Step {}: {}\n",
+                            step_num,
+                            step.operation.describe()
+                        ));
+                    }
+                    Verbosity::Standard => {
+                        output.push_str(&format!(
+                            "Step {}: {} [{}]\n",
+                            step_num,
+                            step.operation.describe(),
+                            step.effective_difficulty()
+                        ));
+                        output.push_str(&format!("  → {:?}\n\n", step.result));
+                    }
+                    Verbosity::Detailed => {
+                        output.push_str(&format!("--- Step {} ---\n", step_num));
+                        output.push_str(&format!(
+                            "Operation: {} [{}]\n",
+                            step.operation.describe(),
+                            step.effective_difficulty()
+                        ));
+                        output.push_str(&format!("Explanation: {}\n", step.explanation));
+                        output.push_str(&format!("Result: {:?}\n\n", step.result));
+                    }
+                }
+                step_num += 1;
+                i += 1;
+            }
+        }
+
+        output.push_str(&format!("Final result: {:?}\n", self.result));
+        output
+    }
+
     /// Convert the resolution path to LaTeX format.
     ///
     /// Generates a LaTeX representation of the solution path, suitable
