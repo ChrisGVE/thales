@@ -1,309 +1,13 @@
-//! Higher-Order ODE Solver
-//!
-//! Provides:
-//! - n-th order constant-coefficient homogeneous ODEs via the characteristic
-//!   equation (real distinct, repeated, and complex-conjugate roots).
-//! - 2nd-order undetermined coefficients for non-homogeneous ODEs where the
-//!   forcing function is a polynomial, exponential, or sinusoidal term.
-//!
-//! # Examples
-//!
-//! ```rust
-//! use thales::ode_higher::{HigherOrderODE, solve_higher_order_homogeneous};
-//!
-//! // y'' + y' - 2y = 0  =>  characteristic roots 1, -2
-//! let ode = HigherOrderODE::new("y", "x", vec![1.0, 1.0, -2.0]);
-//! let sol = solve_higher_order_homogeneous(&ode).unwrap();
-//! assert_eq!(sol.roots.len(), 2);
-//! ```
-
-use std::fmt;
+//! Helper functions for higher-order ODE solving.
 
 use crate::ast::{BinaryOp, Expression, Function, Variable};
-use crate::ode::{solve_second_order_homogeneous, ODEError, SecondOrderODE, SecondOrderSolution};
+use crate::ode::{ODEError, SecondOrderODE, SecondOrderSolution};
+use std::fmt;
 
-// ---------------------------------------------------------------------------
-// Root representation
-// ---------------------------------------------------------------------------
+use super::particular::ForcingKind;
+use super::types::CharRoot;
 
-/// A single root of the characteristic polynomial, with its multiplicity.
-#[derive(Debug, Clone)]
-pub struct CharRoot {
-    /// Real part of the root.
-    pub real: f64,
-    /// Imaginary part (0.0 for purely real roots).
-    pub imag: f64,
-    /// Algebraic multiplicity (≥ 1).
-    pub multiplicity: usize,
-}
-
-impl CharRoot {
-    fn is_real(&self) -> bool {
-        self.imag.abs() < 1e-10
-    }
-}
-
-// ---------------------------------------------------------------------------
-// HigherOrderODE
-// ---------------------------------------------------------------------------
-
-/// An n-th order constant-coefficient linear homogeneous ODE.
-///
-/// Represents: `coeffs[0]*y^(n) + coeffs[1]*y^(n-1) + … + coeffs[n]*y = 0`
-///
-/// `coeffs[0]` must be non-zero (leading coefficient).
-#[derive(Debug, Clone)]
-pub struct HigherOrderODE {
-    /// Dependent variable name (e.g., `"y"`).
-    pub dependent: String,
-    /// Independent variable name (e.g., `"x"`).
-    pub independent: String,
-    /// Coefficients from highest-order term to zero-th order term.
-    pub coeffs: Vec<f64>,
-}
-
-impl HigherOrderODE {
-    /// Create a new higher-order ODE.
-    ///
-    /// `coeffs` must have length ≥ 2; `coeffs[0]` is the leading coefficient.
-    pub fn new(dependent: &str, independent: &str, coeffs: Vec<f64>) -> Self {
-        Self {
-            dependent: dependent.to_string(),
-            independent: independent.to_string(),
-            coeffs,
-        }
-    }
-
-    /// Order of the ODE (`coeffs.len() - 1`).
-    pub fn order(&self) -> usize {
-        self.coeffs.len().saturating_sub(1)
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Solution type
-// ---------------------------------------------------------------------------
-
-/// Solution of a higher-order homogeneous ODE.
-#[derive(Debug, Clone)]
-pub struct HigherOrderSolution {
-    /// The general solution expression (contains C1, C2, … constants).
-    pub general_solution: Expression,
-    /// All characteristic roots (with multiplicity).
-    pub roots: Vec<CharRoot>,
-    /// Human-readable solution steps.
-    pub steps: Vec<String>,
-    /// Description of the method used.
-    pub method: String,
-}
-
-// ---------------------------------------------------------------------------
-// Public solver: higher-order homogeneous
-// ---------------------------------------------------------------------------
-
-/// Solve an n-th order constant-coefficient homogeneous ODE.
-///
-/// Uses companion-matrix eigenvalue finding (via companion matrix QR for
-/// degrees ≤ 4, or direct analytic formulas for degrees 2 and 3).
-///
-/// # Errors
-///
-/// Returns [`ODEError::CharacteristicEquationError`] if the leading
-/// coefficient is zero or if root-finding fails.
-pub fn solve_higher_order_homogeneous(
-    ode: &HigherOrderODE,
-) -> Result<HigherOrderSolution, ODEError> {
-    validate_ode(ode)?;
-
-    let mut steps = Vec::new();
-    steps.push(format_ode_string(ode));
-
-    // Delegate order-2 to the existing second-order solver for consistency.
-    if ode.order() == 2 {
-        return solve_via_second_order(ode, steps);
-    }
-
-    let roots = find_characteristic_roots(&ode.coeffs)?;
-    steps.push(format!("Characteristic roots: {}", format_roots(&roots)));
-
-    let solution = build_general_solution(&roots, &ode.independent, &mut steps);
-
-    Ok(HigherOrderSolution {
-        general_solution: solution,
-        roots,
-        steps,
-        method: "Characteristic equation".to_string(),
-    })
-}
-
-// ---------------------------------------------------------------------------
-// Undetermined coefficients for 2nd-order non-homogeneous ODEs
-// ---------------------------------------------------------------------------
-
-/// Forcing function shape supported by the undetermined-coefficients method.
-#[derive(Debug, Clone)]
-pub enum ForcingKind {
-    /// Polynomial of given degree: `p_n(x)`.
-    Polynomial(usize),
-    /// Pure exponential: `e^(ax)`.
-    Exponential(f64),
-    /// Sinusoidal: `cos(ωx)` or `sin(ωx)`.
-    Sinusoidal(f64),
-    /// Product of polynomial (degree n) and exponential: `p_n(x)·e^(ax)`.
-    PolynomialTimesExp {
-        /// Degree of the polynomial factor.
-        degree: usize,
-        /// Exponent coefficient in the exponential factor.
-        alpha: f64,
-    },
-}
-
-/// Solve a 2nd-order non-homogeneous ODE using undetermined coefficients.
-///
-/// The ODE has the form `a·y'' + b·y' + c·y = g(x)` where `g(x)` is
-/// characterised by `forcing_kind`.
-///
-/// Returns [`SecondOrderSolution`] with both homogeneous and particular parts.
-///
-/// # Errors
-///
-/// Returns [`ODEError::ResonanceDetected`] when the trial particular solution
-/// overlaps with the homogeneous solution (resonance case), and
-/// [`ODEError::CannotSolve`] for unsupported forcing shapes.
-pub fn solve_undetermined_coefficients(
-    ode: &SecondOrderODE,
-    forcing_kind: ForcingKind,
-) -> Result<SecondOrderSolution, ODEError> {
-    // Step 1: solve homogeneous part.
-    let hom = solve_second_order_homogeneous(ode)?;
-    let mut steps = hom.steps.clone();
-    steps.push(format!("Non-homogeneous forcing kind: {:?}", forcing_kind));
-
-    // Step 2: build and solve for the particular solution coefficients.
-    let particular = find_particular_solution(ode, &forcing_kind, &hom, &mut steps)?;
-
-    // Step 3: general = homogeneous + particular.
-    let general = Expression::Binary(
-        BinaryOp::Add,
-        Box::new(hom.general_solution.clone()),
-        Box::new(particular.clone()),
-    );
-
-    steps.push(format!(
-        "General solution: y_h + y_p = (homogeneous) + {}",
-        particular
-    ));
-
-    Ok(SecondOrderSolution {
-        homogeneous_solution: hom.general_solution,
-        particular_solution: Some(particular),
-        general_solution: general,
-        method: "Undetermined coefficients".to_string(),
-        roots: hom.roots,
-        steps,
-    })
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-fn validate_ode(ode: &HigherOrderODE) -> Result<(), ODEError> {
-    if ode.coeffs.len() < 2 {
-        return Err(ODEError::CharacteristicEquationError(
-            "ODE must have order ≥ 1 (coeffs.len() ≥ 2)".to_string(),
-        ));
-    }
-    if ode.coeffs[0].abs() < 1e-15 {
-        return Err(ODEError::CharacteristicEquationError(
-            "Leading coefficient must be non-zero".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-fn format_ode_string(ode: &HigherOrderODE) -> String {
-    let n = ode.order();
-    let terms: Vec<String> = ode
-        .coeffs
-        .iter()
-        .enumerate()
-        .map(|(i, &c)| {
-            let order = n - i;
-            match order {
-                0 => format!("{c}·{}", ode.dependent),
-                1 => format!("{c}·{}'", ode.dependent),
-                _ => format!("{c}·{}^({})", ode.dependent, order),
-            }
-        })
-        .collect();
-    format!("Given ODE: {} = 0", terms.join(" + "))
-}
-
-/// Solve order-2 by delegating to the existing `SecondOrderODE` solver.
-fn solve_via_second_order(
-    ode: &HigherOrderODE,
-    mut steps: Vec<String>,
-) -> Result<HigherOrderSolution, ODEError> {
-    let snd = SecondOrderODE::homogeneous(
-        &ode.dependent,
-        &ode.independent,
-        ode.coeffs[0],
-        ode.coeffs[1],
-        ode.coeffs[2],
-    );
-    let sol = solve_second_order_homogeneous(&snd)?;
-    steps.extend(sol.steps.clone());
-
-    // Re-express roots as CharRoot for the unified interface.
-    use crate::ode::RootType;
-    let roots = match sol.roots.root_type {
-        RootType::TwoDistinctReal => vec![
-            CharRoot {
-                real: sol.roots.r1,
-                imag: 0.0,
-                multiplicity: 1,
-            },
-            CharRoot {
-                real: sol.roots.r2,
-                imag: 0.0,
-                multiplicity: 1,
-            },
-        ],
-        RootType::RepeatedReal => vec![CharRoot {
-            real: sol.roots.r1,
-            imag: 0.0,
-            multiplicity: 2,
-        }],
-        RootType::ComplexConjugate => vec![
-            CharRoot {
-                real: sol.roots.r1,
-                imag: sol.roots.r2,
-                multiplicity: 1,
-            },
-            CharRoot {
-                real: sol.roots.r1,
-                imag: -sol.roots.r2,
-                multiplicity: 1,
-            },
-        ],
-    };
-
-    Ok(HigherOrderSolution {
-        general_solution: sol.general_solution,
-        roots,
-        steps,
-        method: "Characteristic equation (2nd order)".to_string(),
-    })
-}
-
-// ---------------------------------------------------------------------------
-// Root finding via companion matrix (Durand-Kerner / analytic up to order 4)
-// ---------------------------------------------------------------------------
-
-/// Find all roots of the characteristic polynomial using the
-/// Durand-Kerner iterative method, then cluster complex-conjugate pairs.
-fn find_characteristic_roots(coeffs: &[f64]) -> Result<Vec<CharRoot>, ODEError> {
+pub(super) fn find_characteristic_roots(coeffs: &[f64]) -> Result<Vec<CharRoot>, ODEError> {
     let n = coeffs.len() - 1; // polynomial degree
     let lead = coeffs[0];
 
@@ -360,7 +64,7 @@ fn find_characteristic_roots(coeffs: &[f64]) -> Result<Vec<CharRoot>, ODEError> 
 }
 
 /// Evaluate a monic polynomial with real coefficients at complex point (re, im).
-fn poly_eval_complex(p: &[f64], re: f64, im: f64) -> (f64, f64) {
+pub(super) fn poly_eval_complex(p: &[f64], re: f64, im: f64) -> (f64, f64) {
     let (mut re_acc, mut im_acc) = (0.0_f64, 0.0_f64);
     for &c in p {
         let new_re = re_acc * re - im_acc * im + c;
@@ -371,11 +75,11 @@ fn poly_eval_complex(p: &[f64], re: f64, im: f64) -> (f64, f64) {
     (re_acc, im_acc)
 }
 
-fn complex_mul(a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
+pub(super) fn complex_mul(a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
     (a.0 * b.0 - a.1 * b.1, a.0 * b.1 + a.1 * b.0)
 }
 
-fn complex_div(num: (f64, f64), den: (f64, f64)) -> Result<(f64, f64), ODEError> {
+pub(super) fn complex_div(num: (f64, f64), den: (f64, f64)) -> Result<(f64, f64), ODEError> {
     let denom = den.0 * den.0 + den.1 * den.1;
     if denom < 1e-30 {
         return Err(ODEError::CharacteristicEquationError(
@@ -389,7 +93,7 @@ fn complex_div(num: (f64, f64), den: (f64, f64)) -> Result<(f64, f64), ODEError>
 }
 
 /// Group near-identical roots and assign multiplicities.
-fn cluster_roots(roots: Vec<(f64, f64)>) -> Vec<CharRoot> {
+pub(super) fn cluster_roots(roots: Vec<(f64, f64)>) -> Vec<CharRoot> {
     const TOL: f64 = 1e-6;
     let mut result: Vec<CharRoot> = Vec::new();
     let mut used = vec![false; roots.len()];
@@ -422,7 +126,11 @@ fn cluster_roots(roots: Vec<(f64, f64)>) -> Vec<CharRoot> {
 // Build general solution from roots
 // ---------------------------------------------------------------------------
 
-fn build_general_solution(roots: &[CharRoot], x_var: &str, steps: &mut Vec<String>) -> Expression {
+pub(super) fn build_general_solution(
+    roots: &[CharRoot],
+    x_var: &str,
+    steps: &mut Vec<String>,
+) -> Expression {
     let x = Expression::Variable(Variable::new(x_var));
     let mut terms: Vec<Expression> = Vec::new();
     let mut c_index = 1usize;
@@ -467,7 +175,7 @@ fn build_general_solution(roots: &[CharRoot], x_var: &str, steps: &mut Vec<Strin
 }
 
 /// Build `e^(r*x)` (or `1` when r == 0).
-fn make_exp(r: f64, x: &Expression, _x_var: &str) -> Expression {
+pub(super) fn make_exp(r: f64, x: &Expression, _x_var: &str) -> Expression {
     if r.abs() < 1e-10 {
         return Expression::Integer(1);
     }
@@ -480,7 +188,11 @@ fn make_exp(r: f64, x: &Expression, _x_var: &str) -> Expression {
 }
 
 /// Build `C_k + C_{k+1}*x + … + C_{k+m-1}*x^(m-1)`, incrementing c_index.
-fn make_poly_constants(multiplicity: usize, x: &Expression, c_index: &mut usize) -> Expression {
+pub(super) fn make_poly_constants(
+    multiplicity: usize,
+    x: &Expression,
+    c_index: &mut usize,
+) -> Expression {
     let mut terms: Vec<Expression> = Vec::new();
     for k in 0..multiplicity {
         let c = Expression::Variable(Variable::new(&format!("C{}", *c_index)));
@@ -500,7 +212,7 @@ fn make_poly_constants(multiplicity: usize, x: &Expression, c_index: &mut usize)
 }
 
 /// Build `e^(αx) * [poly(x)·cos(βx) + poly(x)·sin(βx)]` for complex roots.
-fn make_oscillatory(
+pub(super) fn make_oscillatory(
     alpha: f64,
     beta: f64,
     multiplicity: usize,
@@ -538,7 +250,7 @@ fn make_oscillatory(
 // Undetermined coefficients – particular solution
 // ---------------------------------------------------------------------------
 
-fn find_particular_solution(
+pub(super) fn find_particular_solution(
     ode: &SecondOrderODE,
     kind: &ForcingKind,
     hom: &SecondOrderSolution,
@@ -557,7 +269,7 @@ fn find_particular_solution(
 /// Particular solution for g(x) = e^(α·x).
 ///
 /// Trial: A·e^(αx), or A·x·e^(αx) under resonance.
-fn particular_exponential(
+pub(super) fn particular_exponential(
     ode: &SecondOrderODE,
     alpha: f64,
     hom: &SecondOrderSolution,
@@ -605,7 +317,7 @@ fn particular_exponential(
 /// Particular solution for g(x) = x^n (polynomial of degree n).
 ///
 /// Trial: A_n·x^n + … + A_0 (all coefficients determined by substitution).
-fn particular_polynomial(
+pub(super) fn particular_polynomial(
     ode: &SecondOrderODE,
     degree: usize,
     steps: &mut Vec<String>,
@@ -702,7 +414,7 @@ fn particular_polynomial(
 /// Particular solution for g(x) = cos(ωx) or sin(ωx).
 ///
 /// Trial: A·cos(ωx) + B·sin(ωx); resonance when ω matches imaginary part.
-fn particular_sinusoidal(
+pub(super) fn particular_sinusoidal(
     ode: &SecondOrderODE,
     omega: f64,
     hom: &SecondOrderSolution,
@@ -764,7 +476,7 @@ fn particular_sinusoidal(
 }
 
 /// Particular solution for g(x) = x^n · e^(αx).
-fn particular_poly_exp(
+pub(super) fn particular_poly_exp(
     ode: &SecondOrderODE,
     degree: usize,
     alpha: f64,
@@ -819,7 +531,7 @@ fn particular_poly_exp(
 }
 
 /// Returns true if the homogeneous solution has a root with given real/imag parts.
-fn hom_has_root(hom: &SecondOrderSolution, re: f64, im: f64) -> bool {
+pub(super) fn hom_has_root(hom: &SecondOrderSolution, re: f64, im: f64) -> bool {
     use crate::ode::RootType;
     match hom.roots.root_type {
         RootType::TwoDistinctReal => {
@@ -838,7 +550,7 @@ fn hom_has_root(hom: &SecondOrderSolution, re: f64, im: f64) -> bool {
 // Display helpers
 // ---------------------------------------------------------------------------
 
-fn format_roots(roots: &[CharRoot]) -> String {
+pub(super) fn format_roots(roots: &[CharRoot]) -> String {
     roots
         .iter()
         .map(|r| {
@@ -869,141 +581,3 @@ impl fmt::Display for CharRoot {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ast::Expression;
-    use crate::ode::SecondOrderODE;
-
-    // ------------------------------------------------------------------
-    // Higher-order homogeneous
-    // ------------------------------------------------------------------
-
-    #[test]
-    fn test_second_order_y_double_prime_plus_y_prime_minus_2y() {
-        // y'' + y' - 2y = 0  =>  char eq r² + r - 2 = 0  =>  r = 1, -2
-        let ode = HigherOrderODE::new("y", "x", vec![1.0, 1.0, -2.0]);
-        let sol = solve_higher_order_homogeneous(&ode).unwrap();
-
-        assert_eq!(sol.roots.len(), 2);
-        let reals: Vec<f64> = {
-            let mut v: Vec<f64> = sol.roots.iter().map(|r| r.real).collect();
-            v.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            v
-        };
-        assert!(
-            (reals[0] - (-2.0)).abs() < 1e-4,
-            "Expected root -2, got {}",
-            reals[0]
-        );
-        assert!(
-            (reals[1] - 1.0).abs() < 1e-4,
-            "Expected root 1, got {}",
-            reals[1]
-        );
-    }
-
-    #[test]
-    fn test_third_order_char_roots_1_2_3() {
-        // y''' - 6y'' + 11y' - 6y = 0
-        // char eq: r³ - 6r² + 11r - 6 = 0  =>  r = 1, 2, 3
-        let ode = HigherOrderODE::new("y", "x", vec![1.0, -6.0, 11.0, -6.0]);
-        let sol = solve_higher_order_homogeneous(&ode).unwrap();
-
-        assert_eq!(sol.roots.len(), 3);
-        let mut reals: Vec<f64> = sol.roots.iter().map(|r| r.real).collect();
-        reals.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        assert!((reals[0] - 1.0).abs() < 1e-4, "root 0: {}", reals[0]);
-        assert!((reals[1] - 2.0).abs() < 1e-4, "root 1: {}", reals[1]);
-        assert!((reals[2] - 3.0).abs() < 1e-4, "root 2: {}", reals[2]);
-    }
-
-    #[test]
-    fn test_higher_order_solution_is_expression() {
-        let ode = HigherOrderODE::new("y", "x", vec![1.0, -6.0, 11.0, -6.0]);
-        let sol = solve_higher_order_homogeneous(&ode).unwrap();
-        // General solution must be an Expression (not a unit/zero trivially).
-        assert!(!matches!(sol.general_solution, Expression::Integer(0)));
-    }
-
-    #[test]
-    fn test_higher_order_invalid_leading_zero() {
-        let ode = HigherOrderODE::new("y", "x", vec![0.0, 1.0, -2.0]);
-        let result = solve_higher_order_homogeneous(&ode);
-        assert!(matches!(
-            result,
-            Err(ODEError::CharacteristicEquationError(_))
-        ));
-    }
-
-    #[test]
-    fn test_higher_order_too_short_coeffs() {
-        let ode = HigherOrderODE::new("y", "x", vec![1.0]);
-        let result = solve_higher_order_homogeneous(&ode);
-        assert!(matches!(
-            result,
-            Err(ODEError::CharacteristicEquationError(_))
-        ));
-    }
-
-    // ------------------------------------------------------------------
-    // Undetermined coefficients
-    // ------------------------------------------------------------------
-
-    #[test]
-    fn test_undetermined_coefficients_exponential() {
-        // y'' - 3y' + 2y = e^(4x)
-        // Homogeneous: r² - 3r + 2 = 0 => r = 1, 2
-        // Particular trial: A·e^(4x); A = 1/(16-12+2) = 1/6
-        let ode = SecondOrderODE::new("y", "x", 1.0, -3.0, 2.0, Expression::Integer(0));
-        let sol = solve_undetermined_coefficients(&ode, ForcingKind::Exponential(4.0)).unwrap();
-        assert!(sol.particular_solution.is_some());
-        let part = sol.particular_solution.unwrap();
-        // Evaluate at x=0: should be A = 1/6 ≈ 0.1667
-        let mut vars = std::collections::HashMap::new();
-        vars.insert("x".to_string(), 0.0);
-        let val = part.evaluate(&vars).unwrap();
-        assert!((val - 1.0 / 6.0).abs() < 1e-6, "A at x=0: {val}");
-    }
-
-    #[test]
-    fn test_undetermined_coefficients_polynomial_degree1() {
-        // y'' + y' + y = x  =>  particular y_p = x - 1
-        // A = 1/c = 1, B = -b·A/c = -1
-        let ode = SecondOrderODE::new("y", "x", 1.0, 1.0, 1.0, Expression::Integer(0));
-        let sol = solve_undetermined_coefficients(&ode, ForcingKind::Polynomial(1)).unwrap();
-        assert!(sol.particular_solution.is_some());
-    }
-
-    #[test]
-    fn test_undetermined_coefficients_sinusoidal() {
-        // y'' + 4y = cos(2x) => resonance (ω=2 matches imaginary part β=2)
-        let ode = SecondOrderODE::homogeneous("y", "x", 1.0, 0.0, 4.0);
-        let result = solve_undetermined_coefficients(&ode, ForcingKind::Sinusoidal(2.0));
-        assert!(matches!(result, Err(ODEError::ResonanceDetected(_))));
-    }
-
-    #[test]
-    fn test_undetermined_coefficients_sinusoidal_no_resonance() {
-        // y'' + 9y = cos(2x)  (ω=2 ≠ β=3)
-        // p = 9 - 4 = 5, q = 0, A = 5/25 = 1/5, B = 0
-        let ode = SecondOrderODE::homogeneous("y", "x", 1.0, 0.0, 9.0);
-        let sol = solve_undetermined_coefficients(&ode, ForcingKind::Sinusoidal(2.0)).unwrap();
-        assert!(sol.particular_solution.is_some());
-        let part = sol.particular_solution.unwrap();
-        let mut vars = std::collections::HashMap::new();
-        vars.insert("x".to_string(), 0.0);
-        let val = part.evaluate(&vars).unwrap();
-        // At x=0: A·cos(0) + B·sin(0) = A = 1/5
-        assert!((val - 0.2).abs() < 1e-6, "val at x=0: {val}");
-    }
-
-    #[test]
-    fn test_undetermined_coefficients_resonance_exponential() {
-        // y'' - y = e^x  =>  r=1 is a root, resonance
-        let ode = SecondOrderODE::new("y", "x", 1.0, 0.0, -1.0, Expression::Integer(0));
-        let result = solve_undetermined_coefficients(&ode, ForcingKind::Exponential(1.0));
-        assert!(matches!(result, Err(ODEError::ResonanceDetected(_))));
-    }
-}
