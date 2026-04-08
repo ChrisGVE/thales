@@ -130,7 +130,8 @@ pub use system::{LinearSystem, SystemSolution, SystemSolver};
 pub use transcendental::TranscendentalSolver;
 pub use types::{Constraint, Solution, SolverError, SolverResult, SymbolicFailureReason};
 
-use crate::ast::{Equation, Expression, Variable};
+use crate::ast::{BinaryOp, Equation, Expression, Variable};
+use crate::numerical::SmartNumericalSolver;
 use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder, ResolutionStep};
 use helpers::{evaluate_constants, substitute_values};
 use std::collections::HashMap;
@@ -336,16 +337,68 @@ impl Solver for SmartSolver {
         }
 
         // Fall back: linear -> quadratic -> polynomial -> transcendental
-        if self.linear.can_solve(equation) {
-            self.linear.solve(equation, variable)
+        let symbolic_result = if self.linear.can_solve(equation) {
+            Some(self.linear.solve(equation, variable))
         } else if self.quadratic.can_solve(equation) {
-            self.quadratic.solve(equation, variable)
+            Some(self.quadratic.solve(equation, variable))
         } else if self.polynomial.can_solve(equation) {
-            self.polynomial.solve(equation, variable)
+            Some(self.polynomial.solve(equation, variable))
         } else if self.transcendental.can_solve(equation) {
-            self.transcendental.solve(equation, variable)
+            Some(self.transcendental.solve(equation, variable))
         } else {
-            Err(SolverError::UnsupportedEquationType)
+            None
+        };
+
+        // If a specialized solver succeeded, return its result
+        if let Some(Ok(result)) = symbolic_result {
+            return Ok(result);
+        }
+
+        // All symbolic methods exhausted — attempt numerical handoff
+        let symbolic_error = symbolic_result
+            .and_then(|r| r.err())
+            .unwrap_or(SolverError::UnsupportedEquationType);
+
+        // Guard: if the variable doesn't appear in the equation at all,
+        // numerical solving is meaningless — return the symbolic error.
+        if !equation.left.contains_variable(&variable.name)
+            && !equation.right.contains_variable(&variable.name)
+        {
+            return Err(symbolic_error);
+        }
+
+        let failure_reason = analyze_symbolic_failure(equation, variable);
+        let recommended = recommend_numerical_method(equation);
+
+        // Build a path recording the handoff
+        let mut path = ResolutionPath::new(equation.left.clone());
+        path.add_step(ResolutionStep::new(
+            Operation::SymbolicToNumericalHandoff {
+                reason: format!("{}", failure_reason),
+                recommended_method: recommended.clone(),
+            },
+            format!(
+                "Symbolic methods exhausted: {}. Switching to {}.",
+                failure_reason, recommended
+            ),
+            equation.left.clone(),
+        ));
+
+        // Try numerical fallback
+        match try_numerical_solve(equation, variable) {
+            Ok((num_solution, num_path)) => {
+                // Append numerical steps to path
+                for step in &num_path.steps {
+                    path.add_step(step.clone());
+                }
+                let result_expr = Expression::Float(num_solution);
+                path.set_result(result_expr.clone());
+                Ok((Solution::Unique(result_expr), path))
+            }
+            Err(_) => {
+                // Numerical also failed — return the original symbolic error
+                Err(symbolic_error)
+            }
         }
     }
 
@@ -354,6 +407,160 @@ impl Solver for SmartSolver {
             || self.quadratic.can_solve(equation)
             || self.polynomial.can_solve(equation)
             || self.transcendental.can_solve(equation)
+    }
+}
+
+// ============================================================================
+// Symbolic-to-Numerical Handoff Helpers
+// ============================================================================
+
+/// Count the number of times a variable appears in an expression.
+fn count_variable_occurrences(expr: &Expression, var_name: &str) -> usize {
+    match expr {
+        Expression::Variable(v) if v.name == var_name => 1,
+        Expression::Variable(_)
+        | Expression::Integer(_)
+        | Expression::Float(_)
+        | Expression::Rational(_)
+        | Expression::Complex(_)
+        | Expression::Constant(_) => 0,
+        Expression::Unary(_, inner) => count_variable_occurrences(inner, var_name),
+        Expression::Binary(_, left, right) => {
+            count_variable_occurrences(left, var_name) + count_variable_occurrences(right, var_name)
+        }
+        Expression::Function(_, args) => args
+            .iter()
+            .map(|a| count_variable_occurrences(a, var_name))
+            .sum(),
+        Expression::Power(base, exp) => {
+            count_variable_occurrences(base, var_name) + count_variable_occurrences(exp, var_name)
+        }
+    }
+}
+
+/// Check whether the variable appears inside a transcendental function.
+fn variable_in_transcendental(expr: &Expression, var_name: &str) -> bool {
+    match expr {
+        Expression::Function(_, args) => args.iter().any(|a| a.contains_variable(var_name)),
+        Expression::Unary(_, inner) => variable_in_transcendental(inner, var_name),
+        Expression::Binary(_, left, right) => {
+            variable_in_transcendental(left, var_name)
+                || variable_in_transcendental(right, var_name)
+        }
+        Expression::Power(base, exp) => {
+            variable_in_transcendental(base, var_name) || variable_in_transcendental(exp, var_name)
+        }
+        _ => false,
+    }
+}
+
+/// Check whether the variable appears in an algebraic (non-transcendental) position.
+fn variable_in_algebraic(expr: &Expression, var_name: &str) -> bool {
+    match expr {
+        Expression::Variable(v) if v.name == var_name => true,
+        Expression::Variable(_)
+        | Expression::Integer(_)
+        | Expression::Float(_)
+        | Expression::Rational(_)
+        | Expression::Complex(_)
+        | Expression::Constant(_) => false,
+        Expression::Function(_, _) => false, // Skip into function args
+        Expression::Unary(_, inner) => variable_in_algebraic(inner, var_name),
+        Expression::Binary(_, left, right) => {
+            variable_in_algebraic(left, var_name) || variable_in_algebraic(right, var_name)
+        }
+        Expression::Power(base, exp) => {
+            // x^n where x contains var is algebraic; n^x is transcendental
+            if base.contains_variable(var_name) && !exp.contains_variable(var_name) {
+                true
+            } else {
+                variable_in_algebraic(base, var_name)
+            }
+        }
+    }
+}
+
+/// Check whether the expression mixes algebraic and transcendental uses of the variable.
+fn has_transcendental_mixing(expr: &Expression, var_name: &str) -> bool {
+    variable_in_transcendental(expr, var_name) && variable_in_algebraic(expr, var_name)
+}
+
+/// Analyze why symbolic solving failed and return a structured reason.
+fn analyze_symbolic_failure(equation: &Equation, variable: &Variable) -> SymbolicFailureReason {
+    let var_name = &variable.name;
+    let expr = Expression::Binary(
+        BinaryOp::Sub,
+        Box::new(equation.left.clone()),
+        Box::new(equation.right.clone()),
+    );
+
+    let occurrences = count_variable_occurrences(&expr, var_name);
+
+    if occurrences == 0 {
+        return SymbolicFailureReason::NonIsolable {
+            reason: "Variable not found in equation".to_string(),
+            occurrences: 0,
+        };
+    }
+
+    // Check for mixed algebraic-transcendental usage (e.g. x * exp(x) = 5)
+    if has_transcendental_mixing(&expr, var_name) {
+        return SymbolicFailureReason::Transcendental {
+            equation_type: "mixed algebraic-transcendental".to_string(),
+        };
+    }
+
+    // Pure transcendental usage
+    if variable_in_transcendental(&expr, var_name) {
+        return SymbolicFailureReason::Transcendental {
+            equation_type: "transcendental".to_string(),
+        };
+    }
+
+    if occurrences > 1 {
+        return SymbolicFailureReason::NonIsolable {
+            reason: format!(
+                "Variable appears {} times in non-combinable positions",
+                occurrences
+            ),
+            occurrences,
+        };
+    }
+
+    // Single occurrence, algebraic, but still unsolvable — generic fallback
+    SymbolicFailureReason::Transcendental {
+        equation_type: "unknown".to_string(),
+    }
+}
+
+/// Recommend a numerical method based on equation characteristics.
+fn recommend_numerical_method(_equation: &Equation) -> String {
+    // Simple heuristic: Newton-Raphson for smooth functions
+    "Newton-Raphson".to_string()
+}
+
+/// Attempt to solve the equation numerically using the smart numerical solver.
+///
+/// Returns the solution value and the resolution path from the numerical solver.
+fn try_numerical_solve(
+    equation: &Equation,
+    variable: &Variable,
+) -> Result<(f64, ResolutionPath), SolverError> {
+    let solver = SmartNumericalSolver::with_default_config();
+    match solver.solve(equation, variable) {
+        Ok((solution, path)) => {
+            if solution.converged {
+                Ok((solution.value, path))
+            } else {
+                Err(SolverError::Other(
+                    "Numerical solver did not converge".to_string(),
+                ))
+            }
+        }
+        Err(e) => Err(SolverError::Other(format!(
+            "Numerical solving failed: {}",
+            e
+        ))),
     }
 }
 
@@ -827,6 +1034,103 @@ mod system_solver_tests {
                 assert_eq!(sol.get(&y).unwrap().evaluate(&empty), Some(2.0));
             }
             _ => panic!("Expected unique solution"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod handoff_tests {
+    use super::*;
+    use crate::ast::{BinaryOp, Equation, Expression, Function, Variable};
+    use crate::resolution_path::Operation;
+
+    /// Test that a transcendental equation (x * exp(x) = 5) triggers the
+    /// symbolic-to-numerical handoff and produces an approximate solution.
+    #[test]
+    fn test_transcendental_handoff_x_exp_x() {
+        // Equation: x * exp(x) = 5
+        let x = Expression::Variable(Variable::new("x"));
+        let exp_x = Expression::Function(Function::Exp, vec![x.clone()]);
+        let left = Expression::Binary(BinaryOp::Mul, Box::new(x), Box::new(exp_x));
+        let right = Expression::Integer(5);
+        let equation = Equation::new("transcendental", left, right);
+
+        let solver = SmartSolver::new();
+        let result = solver.solve(&equation, &Variable::new("x"));
+
+        // Should succeed via numerical handoff
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+
+        let (solution, path) = result.unwrap();
+
+        // Check that the handoff step is recorded in the path
+        let has_handoff = path.steps.iter().any(|step| {
+            matches!(
+                &step.operation,
+                Operation::SymbolicToNumericalHandoff { .. }
+            )
+        });
+        assert!(has_handoff, "Expected a SymbolicToNumericalHandoff step");
+
+        // The solution should be numerical (x ≈ 1.3267)
+        match solution {
+            Solution::Unique(expr) => {
+                let val = expr.evaluate(&HashMap::new()).expect("Should evaluate");
+                // x * exp(x) = 5 => x ≈ 1.3267 (Lambert W function)
+                // Verify by computing x * exp(x) ≈ 5
+                let check = val * val.exp();
+                assert!(
+                    (check - 5.0).abs() < 1e-4,
+                    "x*exp(x) should be ≈ 5, got {} (x={})",
+                    check,
+                    val
+                );
+            }
+            _ => panic!("Expected Unique solution, got {:?}", solution),
+        }
+    }
+
+    /// Test that a normal linear equation does NOT trigger the handoff —
+    /// it should be solved purely symbolically.
+    #[test]
+    fn test_linear_no_handoff() {
+        // Equation: 3x + 6 = 15
+        let x = Expression::Variable(Variable::new("x"));
+        let three_x =
+            Expression::Binary(BinaryOp::Mul, Box::new(Expression::Integer(3)), Box::new(x));
+        let left = Expression::Binary(
+            BinaryOp::Add,
+            Box::new(three_x),
+            Box::new(Expression::Integer(6)),
+        );
+        let right = Expression::Integer(15);
+        let equation = Equation::new("linear", left, right);
+
+        let solver = SmartSolver::new();
+        let result = solver.solve(&equation, &Variable::new("x"));
+        assert!(result.is_ok());
+
+        let (solution, path) = result.unwrap();
+
+        // Should NOT have any handoff step
+        let has_handoff = path.steps.iter().any(|step| {
+            matches!(
+                &step.operation,
+                Operation::SymbolicToNumericalHandoff { .. }
+            )
+        });
+        assert!(
+            !has_handoff,
+            "Linear equation should not trigger numerical handoff"
+        );
+
+        // Solution should be x = 3
+        match solution {
+            Solution::Unique(expr) => {
+                let val = expr.evaluate(&HashMap::new()).expect("Should evaluate");
+                assert!((val - 3.0).abs() < 1e-10, "Expected x = 3, got {}", val);
+            }
+            _ => panic!("Expected Unique solution"),
         }
     }
 }
