@@ -22,10 +22,12 @@
 //! let ode = FirstOrderODE::new("y", "x", rhs);
 //! ```
 
+pub mod builder;
 mod first_order;
 mod second_order;
 mod types;
 
+pub use builder::{first_order_ode, second_order_homogeneous, ODEBuilder};
 pub use first_order::{solve_ivp, solve_linear, solve_separable};
 pub use second_order::{
     solve_characteristic_equation, solve_second_order_homogeneous, solve_second_order_ivp,

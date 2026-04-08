@@ -497,6 +497,7 @@ pub use numerical::{
     NumericalSolution, SmartNumericalSolver,
 };
 pub use ode::{
+    builder::{first_order_ode, second_order_homogeneous, ODEBuilder},
     solve_characteristic_equation, solve_ivp, solve_linear, solve_second_order_homogeneous,
     solve_second_order_ivp, solve_separable, CharacteristicRoots, FirstOrderODE, ODEError,
     ODESolution, RootType, SecondOrderODE, SecondOrderSolution,
