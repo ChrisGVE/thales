@@ -29,6 +29,7 @@
 
 mod display;
 mod eigen;
+mod lu;
 mod operations;
 mod types;
 
@@ -968,5 +969,148 @@ mod tests {
 
         let result = m.characteristic_polynomial("lambda");
         assert!(result.is_err());
+    }
+
+    // =========================================================================
+    // LU decomposition Tests
+    // =========================================================================
+
+    /// Build a permutation matrix P from a perm vector so we can verify P·A = L·U.
+    fn perm_matrix(perm: &[usize]) -> MatrixExpr {
+        let n = perm.len();
+        let mut elements = vec![vec![Expression::Integer(0); n]; n];
+        for (i, &src) in perm.iter().enumerate() {
+            elements[i][src] = Expression::Integer(1);
+        }
+        MatrixExpr::from_elements(elements).unwrap()
+    }
+
+    #[test]
+    fn test_lu_decompose_2x2() {
+        // A = [[4, 3], [6, 3]]
+        let a =
+            MatrixExpr::from_elements(vec![vec![int(4), int(3)], vec![int(6), int(3)]]).unwrap();
+
+        let (l, u, perm) = a.lu_decompose().unwrap();
+        assert_eq!(l.rows(), 2);
+        assert_eq!(u.rows(), 2);
+        assert_eq!(perm.len(), 2);
+
+        // Verify L·U = P·A
+        let pa = perm_matrix(&perm).mul(&a).unwrap();
+        let lu_prod = l.mul(&u).unwrap();
+        let vars = HashMap::new();
+        for i in 0..2 {
+            for j in 0..2 {
+                let lu_val = lu_prod.get(i, j).unwrap().evaluate(&vars).unwrap();
+                let pa_val = pa.get(i, j).unwrap().evaluate(&vars).unwrap();
+                assert!(
+                    (lu_val - pa_val).abs() < 1e-10,
+                    "LU[{i}][{j}] = {lu_val}, PA[{i}][{j}] = {pa_val}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_lu_decompose_3x3() {
+        // A = [[1, 2, 3], [0, 1, 4], [5, 6, 0]]
+        let a = MatrixExpr::from_elements(vec![
+            vec![int(1), int(2), int(3)],
+            vec![int(0), int(1), int(4)],
+            vec![int(5), int(6), int(0)],
+        ])
+        .unwrap();
+
+        let (l, u, perm) = a.lu_decompose().unwrap();
+
+        // Verify L·U = P·A
+        let pa = perm_matrix(&perm).mul(&a).unwrap();
+        let lu_prod = l.mul(&u).unwrap();
+        let vars = HashMap::new();
+        for i in 0..3 {
+            for j in 0..3 {
+                let lu_val = lu_prod.get(i, j).unwrap().evaluate(&vars).unwrap();
+                let pa_val = pa.get(i, j).unwrap().evaluate(&vars).unwrap();
+                assert!(
+                    (lu_val - pa_val).abs() < 1e-10,
+                    "LU[{i}][{j}] = {lu_val}, PA[{i}][{j}] = {pa_val}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_lu_decompose_identity() {
+        let a = MatrixExpr::identity(3);
+        let (l, u, perm) = a.lu_decompose().unwrap();
+
+        // For identity: perm should be identity, L = I, U = I
+        let vars = HashMap::new();
+        for i in 0..3 {
+            assert_eq!(perm[i], i);
+            for j in 0..3 {
+                let expected_l = if i == j { 1.0 } else { 0.0 };
+                let expected_u = if i == j { 1.0 } else { 0.0 };
+                assert!((l.get(i, j).unwrap().evaluate(&vars).unwrap() - expected_l).abs() < 1e-10);
+                assert!((u.get(i, j).unwrap().evaluate(&vars).unwrap() - expected_u).abs() < 1e-10);
+            }
+        }
+    }
+
+    #[test]
+    fn test_lu_decompose_non_square_error() {
+        let m = MatrixExpr::from_elements(vec![
+            vec![int(1), int(2), int(3)],
+            vec![int(4), int(5), int(6)],
+        ])
+        .unwrap();
+
+        assert!(m.lu_decompose().is_err());
+    }
+
+    #[test]
+    fn test_lu_decompose_singular_error() {
+        // Singular matrix: rows are linearly dependent.
+        let m =
+            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(2), int(4)]]).unwrap();
+
+        assert!(m.lu_decompose().is_err());
+    }
+
+    #[test]
+    fn test_solve_system_2x2() {
+        // Solve [[2, 1], [1, 3]] x = [[3], [4]]  => x = [1, 1]
+        let a =
+            MatrixExpr::from_elements(vec![vec![int(2), int(1)], vec![int(1), int(3)]]).unwrap();
+
+        let b = MatrixExpr::from_elements(vec![vec![int(3)], vec![int(4)]]).unwrap();
+
+        let x = a.solve_system(&b).unwrap();
+        assert_eq!(x.rows(), 2);
+        assert_eq!(x.cols(), 1);
+
+        let vars = HashMap::new();
+        let x0 = x.get(0, 0).unwrap().evaluate(&vars).unwrap();
+        let x1 = x.get(1, 0).unwrap().evaluate(&vars).unwrap();
+        assert!((x0 - 1.0).abs() < 1e-10, "x[0] = {x0}, expected 1.0");
+        assert!((x1 - 1.0).abs() < 1e-10, "x[1] = {x1}, expected 1.0");
+    }
+
+    #[test]
+    fn test_solve_system_non_column_vector_error() {
+        let a = MatrixExpr::identity(2);
+        let b =
+            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(3), int(4)]]).unwrap();
+
+        assert!(a.solve_system(&b).is_err());
+    }
+
+    #[test]
+    fn test_solve_system_dimension_mismatch_error() {
+        let a = MatrixExpr::identity(2);
+        let b = MatrixExpr::from_elements(vec![vec![int(1)], vec![int(2)], vec![int(3)]]).unwrap();
+
+        assert!(a.solve_system(&b).is_err());
     }
 }
