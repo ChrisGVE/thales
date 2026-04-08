@@ -128,7 +128,7 @@ pub use polynomial::PolynomialSolver;
 pub use quadratic::QuadraticSolver;
 pub use system::{LinearSystem, SystemSolution, SystemSolver};
 pub use transcendental::TranscendentalSolver;
-pub use types::{Constraint, Solution, SolverError, SolverResult};
+pub use types::{Constraint, Solution, SolverError, SolverResult, SymbolicFailureReason};
 
 use crate::ast::{Equation, Expression, Variable};
 use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder, ResolutionStep};

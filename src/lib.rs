@@ -549,7 +549,10 @@ pub use series::{
     Singularity,
     SingularityType,
 };
-pub use solver::{LinearSystem, SmartSolver, Solution, Solver, SystemSolution, SystemSolver};
+pub use solver::{
+    LinearSystem, SmartSolver, Solution, Solver, SymbolicFailureReason, SystemSolution,
+    SystemSolver,
+};
 pub use special::{beta, erf, erfc, gamma, SpecialFunctionError, SpecialFunctionResult};
 pub use transforms::{
     Cartesian2D, Cartesian3D, ComplexOps, Cylindrical, Polar, Spherical, Transform2D,

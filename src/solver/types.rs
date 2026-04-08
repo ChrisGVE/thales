@@ -82,6 +82,108 @@ impl std::fmt::Display for SolverError {
 
 impl std::error::Error for SolverError {}
 
+/// Explains why symbolic solving could not produce a closed-form solution.
+///
+/// This enum provides structured information about the mathematical reason
+/// a symbolic solver failed, enabling informed handoff to numerical methods.
+///
+/// # Examples
+///
+/// ```
+/// use thales::solver::SymbolicFailureReason;
+///
+/// let reason = SymbolicFailureReason::NoElementaryInverse {
+///     description: "x*e^x cannot be inverted with elementary functions".to_string(),
+///     special_function: Some("Lambert W".to_string()),
+/// };
+/// println!("{}", reason);
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub enum SymbolicFailureReason {
+    /// No elementary inverse exists (e.g., x*e^x requires Lambert W).
+    NoElementaryInverse {
+        /// Human-readable description of why no inverse exists
+        description: String,
+        /// Name of a special function that could solve it, if known
+        special_function: Option<String>,
+    },
+    /// Variable appears in multiple non-combinable positions.
+    NonIsolable {
+        /// Explanation of why the variable cannot be isolated
+        reason: String,
+        /// Number of distinct occurrences of the variable
+        occurrences: usize,
+    },
+    /// Equation is transcendental with no known closed form.
+    Transcendental {
+        /// Classification of the transcendental equation type
+        equation_type: String,
+    },
+    /// System is underdetermined.
+    Underdetermined {
+        /// Number of equations in the system
+        equations: usize,
+        /// Number of unknowns in the system
+        unknowns: usize,
+    },
+    /// Polynomial degree too high for radical solution (degree > 4).
+    HighDegreePolynomial {
+        /// Degree of the polynomial
+        degree: usize,
+    },
+}
+
+impl std::fmt::Display for SymbolicFailureReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SymbolicFailureReason::NoElementaryInverse {
+                description,
+                special_function,
+            } => {
+                write!(f, "No elementary inverse: {}", description)?;
+                if let Some(func) = special_function {
+                    write!(f, " (requires {})", func)?;
+                }
+                Ok(())
+            }
+            SymbolicFailureReason::NonIsolable {
+                reason,
+                occurrences,
+            } => {
+                write!(
+                    f,
+                    "Variable not isolable: {} ({} occurrences)",
+                    reason, occurrences
+                )
+            }
+            SymbolicFailureReason::Transcendental { equation_type } => {
+                write!(
+                    f,
+                    "Transcendental equation with no closed form: {}",
+                    equation_type
+                )
+            }
+            SymbolicFailureReason::Underdetermined {
+                equations,
+                unknowns,
+            } => {
+                write!(
+                    f,
+                    "Underdetermined system: {} equations, {} unknowns",
+                    equations, unknowns
+                )
+            }
+            SymbolicFailureReason::HighDegreePolynomial { degree } => {
+                write!(
+                    f,
+                    "Polynomial of degree {} has no general radical solution",
+                    degree
+                )
+            }
+        }
+    }
+}
+
 /// Result type for solver operations.
 pub type SolverResult<T> = Result<T, SolverError>;
 
