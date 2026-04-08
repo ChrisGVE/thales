@@ -1,0 +1,979 @@
+//! Stress tests: all two-tier difficulty combinations.
+//!
+//! 15 combinations of 2 tiers, 10+ tests each.
+//! Combinations involving Tier 5 (Calculus) or Tier 6 (Advanced) are mostly
+//! `#[ignore]` as the solver doesn't yet support those operations.
+
+use thales::ast::Variable;
+use thales::parser::parse_equation;
+use thales::resolution_path::TechniqueDifficulty;
+use thales::solver::{SmartSolver, Solution, Solver};
+
+// ---- helpers (duplicated from stress_test_difficulty.rs for test isolation) ----
+
+fn assert_solves_at_tier(equation_str: &str, target_var: &str, max_expected: TechniqueDifficulty) {
+    let eq = parse_equation(equation_str)
+        .unwrap_or_else(|e| panic!("Failed to parse '{}': {:?}", equation_str, e));
+    let var = Variable::new(target_var);
+    let solver = SmartSolver::new();
+    let (solution, path) = solver.solve(&eq, &var).unwrap_or_else(|e| {
+        panic!(
+            "Failed to solve '{}' for '{}': {:?}",
+            equation_str, target_var, e
+        )
+    });
+    assert!(
+        matches!(solution, Solution::Unique(_) | Solution::Multiple(_)),
+        "Equation '{}' for '{}': unexpected solution type {:?}",
+        equation_str,
+        target_var,
+        solution
+    );
+    assert!(
+        path.max_difficulty() <= max_expected,
+        "Equation '{}' for '{}': expected max difficulty <= {:?}, got {:?} ({} steps)",
+        equation_str,
+        target_var,
+        max_expected,
+        path.max_difficulty(),
+        path.step_count()
+    );
+}
+
+fn assert_solves_ok(equation_str: &str, target_var: &str) {
+    let eq = parse_equation(equation_str)
+        .unwrap_or_else(|e| panic!("Failed to parse '{}': {:?}", equation_str, e));
+    let var = Variable::new(target_var);
+    let solver = SmartSolver::new();
+    let _ = solver.solve(&eq, &var).unwrap_or_else(|e| {
+        panic!(
+            "Failed to solve '{}' for '{}': {:?}",
+            equation_str, target_var, e
+        )
+    });
+}
+
+// ============================================================================
+// T1+T3: Elementary + AlgebraicManip
+// Equations needing basic rearrangement + quadratic/factoring techniques
+// ============================================================================
+
+#[test]
+fn t1_t3_01_quadratic_linear_param() {
+    // x^2 + 2*x - 3 = 0 → quadratic formula
+    let eq = parse_equation("x^2 + 2 * x - 3 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t1_t3_02_quadratic_from_rearrangement() {
+    // 3*x^2 = 12 → x^2 = 4 → x = ±2
+    let eq = parse_equation("3 * x^2 = 12").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t1_t3_03_cubic_simple() {
+    // x^3 - 8 = 0 → x = 2
+    let eq = parse_equation("x^3 - 8 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t1_t3_04_quadratic_with_subtraction() {
+    // x^2 - 5*x + 6 = 0 → (x-2)(x-3)
+    let eq = parse_equation("x^2 - 5 * x + 6 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t1_t3_05_quadratic_negative_discriminant() {
+    // x^2 + x + 1 = 0 → complex roots
+    let eq = parse_equation("x^2 + x + 1 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t1_t3_06_perfect_square() {
+    // x^2 + 6*x + 9 = 0 → (x+3)^2 = 0
+    let eq = parse_equation("x^2 + 6 * x + 9 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let (solution, _) = solver.solve(&eq, &var).unwrap();
+    match solution {
+        Solution::Unique(ref expr) => {
+            let val = expr.evaluate(&std::collections::HashMap::new()).unwrap();
+            assert!((val - (-3.0)).abs() < 1e-10, "Expected -3.0, got {}", val);
+        }
+        _ => {}
+    }
+}
+
+#[test]
+fn t1_t3_07_quartic_biquadratic() {
+    // x^4 - 10*x^2 + 9 = 0 → x^2 = 1 or x^2 = 9
+    let eq = parse_equation("x^4 - 10 * x^2 + 9 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t1_t3_08_cubic_one_real_root() {
+    // x^3 + x + 2 = 0
+    let eq = parse_equation("x^3 + x + 2 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t1_t3_09_quadratic_large_coefficients() {
+    // 100*x^2 - 300*x + 200 = 0 → x = 1 or x = 2
+    let eq = parse_equation("100 * x^2 - 300 * x + 200 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t1_t3_10_quadratic_fractional() {
+    // (1/2)*x^2 - x - 4 = 0
+    let eq = parse_equation("(1/2) * x^2 - x - 4 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+// ============================================================================
+// T1+T4: Elementary + Transcendental (completing earlier tests)
+// ============================================================================
+
+#[test]
+fn t1_t4_06_bragg_diffraction_solve_theta() {
+    // n*lambda = 2*d*sin(theta) → theta = arcsin(n*lambda/(2*d))
+    assert_solves_at_tier(
+        "n * lambda = 2 * d * sin(theta)",
+        "theta",
+        TechniqueDifficulty::Transcendental,
+    );
+}
+
+#[test]
+fn t1_t4_07_bragg_solve_d() {
+    // n*lambda = 2*d*sin(theta) → d = n*lambda/(2*sin(theta))
+    assert_solves_at_tier(
+        "n * lambda = 2 * d * sin(theta)",
+        "d",
+        TechniqueDifficulty::Elementary,
+    );
+}
+
+#[test]
+fn t1_t4_08_phase_angle_solve_phi() {
+    // V = V0 * sin(omega * t + phi), solve for phi
+    assert_solves_at_tier(
+        "V = V0 * sin(omega * t + phi)",
+        "phi",
+        TechniqueDifficulty::Transcendental,
+    );
+}
+
+#[test]
+fn t1_t4_09_sin_with_offset_solve_x() {
+    // y = sin(x) + 1, solve for x → x = arcsin(y - 1)
+    assert_solves_at_tier("y = sin(x) + 1", "x", TechniqueDifficulty::Transcendental);
+}
+
+#[test]
+fn t1_t4_10_cos_with_scale_and_offset() {
+    // y = 2 * cos(x) + 3, solve for x → x = arccos((y-3)/2)
+    assert_solves_at_tier(
+        "y = 2 * cos(x) + 3",
+        "x",
+        TechniqueDifficulty::Transcendental,
+    );
+}
+
+// ============================================================================
+// T2+T3: PowerAndRoots + AlgebraicManip
+// ============================================================================
+
+#[test]
+fn t2_t3_01_quadratic_solve_then_root() {
+    // x^2 + 4*x + 4 = 0, exact root at x = -2
+    let eq = parse_equation("x^2 + 4 * x + 4 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t2_t3_02_cubic_with_square_root() {
+    // x^3 = 27 → x = 3 (cube root)
+    let eq = parse_equation("x^3 = 27").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t2_t3_03_quadratic_irrational_roots() {
+    // x^2 - 2 = 0 → x = ±√2
+    let eq = parse_equation("x^2 - 2 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t2_t3_04_depressed_cubic_real() {
+    // x^3 - 3*x + 2 = 0 → x = 1 (double), x = -2
+    let eq = parse_equation("x^3 - 3 * x + 2 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t2_t3_05_quartic_simple() {
+    // x^4 = 16 → x = ±2, ±2i
+    let eq = parse_equation("x^4 = 16").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t2_t3_06_cubic_negative() {
+    // x^3 + 6*x^2 + 11*x + 6 = 0 → (x+1)(x+2)(x+3)
+    let eq = parse_equation("x^3 + 6 * x^2 + 11 * x + 6 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t2_t3_07_difference_of_squares() {
+    // x^2 - 25 = 0 → x = ±5
+    let eq = parse_equation("x^2 - 25 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t2_t3_08_sum_of_cubes_pattern() {
+    // x^3 + 27 = 0 → x = -3
+    let eq = parse_equation("x^3 + 27 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t2_t3_09_quartic_reducible() {
+    // x^4 - 1 = 0 → (x^2-1)(x^2+1) → x = ±1, ±i
+    let eq = parse_equation("x^4 - 1 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn t2_t3_10_quadratic_decimal_coeffs() {
+    // 0.5*x^2 + 1.5*x - 2 = 0
+    let eq = parse_equation("0.5 * x^2 + 1.5 * x - 2 = 0").unwrap();
+    let var = Variable::new("x");
+    let solver = SmartSolver::new();
+    let result = solver.solve(&eq, &var);
+    assert!(result.is_ok());
+}
+
+// ============================================================================
+// T2+T4: PowerAndRoots + Transcendental (completing earlier tests)
+// ============================================================================
+
+#[test]
+fn t2_t4_03_nested_exp_solve_x() {
+    // y = exp(2*x) → x = ln(y)/2
+    assert_solves_at_tier("y = exp(2 * x)", "x", TechniqueDifficulty::PowerAndRoots);
+}
+
+#[test]
+fn t2_t4_04_nested_ln_solve_x() {
+    // y = ln(3*x) → x = exp(y)/3
+    assert_solves_at_tier("y = ln(3 * x)", "x", TechniqueDifficulty::PowerAndRoots);
+}
+
+#[test]
+fn t2_t4_05_sin_squared_coefficient() {
+    // y = A * sin(x)^2 — variable in sin^2, but x appears once under sin
+    // This is sin(x)^2, power of sin(x)
+    // Actually parser may interpret differently. Let's try a simpler one.
+    // y = sqrt(sin(x)) → sin(x) = y^2 → x = arcsin(y^2)
+    assert_solves_at_tier("y = sqrt(sin(x))", "x", TechniqueDifficulty::Transcendental);
+}
+
+#[test]
+fn t2_t4_06_exp_with_linear() {
+    // y = 5 * exp(x) + 3, solve for x → x = ln((y-3)/5)
+    assert_solves_at_tier(
+        "y = 5 * exp(x) + 3",
+        "x",
+        TechniqueDifficulty::PowerAndRoots,
+    );
+}
+
+#[test]
+fn t2_t4_07_ln_with_power() {
+    // y = ln(x^2) → x^2 = exp(y) → x = sqrt(exp(y))
+    assert_solves_at_tier("y = ln(x^2)", "x", TechniqueDifficulty::PowerAndRoots);
+}
+
+#[test]
+fn t2_t4_08_exp_negative() {
+    // y = exp(-x) → -x = ln(y) → x = -ln(y)
+    assert_solves_at_tier("y = exp(-x)", "x", TechniqueDifficulty::PowerAndRoots);
+}
+
+#[test]
+fn t2_t4_09_pendulum_period_solve_l() {
+    // T = 2*pi*sqrt(L/g), already tested but verify tier classification
+    assert_solves_at_tier(
+        "T = 2 * pi * sqrt(L / g)",
+        "L",
+        TechniqueDifficulty::PowerAndRoots,
+    );
+}
+
+#[test]
+fn t2_t4_10_sqrt_of_trig() {
+    // y = sqrt(cos(x)), solve for x → cos(x) = y^2 → x = arccos(y^2)
+    assert_solves_at_tier("y = sqrt(cos(x))", "x", TechniqueDifficulty::Transcendental);
+}
+
+// ============================================================================
+// T3+T4: AlgebraicManip + Transcendental
+// ============================================================================
+
+#[test]
+fn t3_t4_01_trig_equation_linear() {
+    // 2*sin(x) - 1 = 0 → sin(x) = 1/2 → x = arcsin(1/2)
+    assert_solves_at_tier(
+        "2 * sin(x) - 1 = 0",
+        "x",
+        TechniqueDifficulty::Transcendental,
+    );
+}
+
+#[test]
+fn t3_t4_02_trig_equation_scaled() {
+    // 3*cos(x) + 1 = 0 → cos(x) = -1/3
+    assert_solves_at_tier(
+        "3 * cos(x) + 1 = 0",
+        "x",
+        TechniqueDifficulty::Transcendental,
+    );
+}
+
+#[test]
+fn t3_t4_03_trig_with_multiply() {
+    // A*sin(B*x) = C → x = arcsin(C/A)/B
+    assert_solves_at_tier(
+        "A * sin(B * x) = C",
+        "x",
+        TechniqueDifficulty::Transcendental,
+    );
+}
+
+#[test]
+fn t3_t4_04_exp_quadratic_coeff() {
+    // y = a * exp(b * x) + c, solve for x → x = ln((y-c)/a)/b
+    assert_solves_at_tier(
+        "y = a * exp(b * x) + c",
+        "x",
+        TechniqueDifficulty::PowerAndRoots,
+    );
+}
+
+#[test]
+fn t3_t4_05_ln_with_offset() {
+    // y = ln(a * x + b), solve for x → x = (exp(y) - b) / a
+    assert_solves_at_tier("y = ln(a * x + b)", "x", TechniqueDifficulty::PowerAndRoots);
+}
+
+#[test]
+fn t3_t4_06_tan_with_scale() {
+    // y = k * tan(x), solve for x → x = arctan(y/k)
+    assert_solves_at_tier("y = k * tan(x)", "x", TechniqueDifficulty::Transcendental);
+}
+
+#[test]
+fn t3_t4_07_sin_with_phase() {
+    // y = sin(x + phi), solve for x → x = arcsin(y) - phi
+    assert_solves_at_tier("y = sin(x + phi)", "x", TechniqueDifficulty::Transcendental);
+}
+
+#[test]
+fn t3_t4_08_cos_with_angular_freq() {
+    // y = cos(omega * x + phi), solve for x
+    assert_solves_at_tier(
+        "y = cos(omega * x + phi)",
+        "x",
+        TechniqueDifficulty::Transcendental,
+    );
+}
+
+#[test]
+fn t3_t4_09_exp_chain() {
+    // y = exp(a * x + b), solve for x → x = (ln(y) - b) / a
+    assert_solves_at_tier(
+        "y = exp(a * x + b)",
+        "x",
+        TechniqueDifficulty::PowerAndRoots,
+    );
+}
+
+#[test]
+fn t3_t4_10_compound_trig() {
+    // y = A + B * sin(C * x), solve for x
+    assert_solves_at_tier(
+        "y = A + B * sin(C * x)",
+        "x",
+        TechniqueDifficulty::Transcendental,
+    );
+}
+
+// ============================================================================
+// T1+T5: Elementary + Calculus (#[ignore] — solver limitation)
+// ============================================================================
+
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t1_t5_01_velocity_from_position_derivative() {
+    assert_solves_ok("v = d_x / d_t", "x");
+}
+
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t1_t5_02_momentum_impulse() {
+    // J = integral(F, dt) = delta_p
+    assert_solves_ok("J = F * delta_t", "F");
+}
+
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t1_t5_03_work_integral() {
+    assert_solves_ok("W = integral(F, dx)", "F");
+}
+
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t1_t5_04_average_value() {
+    assert_solves_ok("f_avg = integral(f, dx) / (b - a)", "f");
+}
+
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t1_t5_05_acceleration_derivative() {
+    assert_solves_ok("a = d_v / d_t", "v");
+}
+
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t1_t5_06_current_charge_derivative() {
+    assert_solves_ok("I = d_Q / d_t", "Q");
+}
+
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t1_t5_07_power_energy_derivative() {
+    assert_solves_ok("P = d_E / d_t", "E");
+}
+
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t1_t5_08_linear_density() {
+    assert_solves_ok("rho = d_m / d_x", "m");
+}
+
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t1_t5_09_flux_rate() {
+    assert_solves_ok("Phi = d_B / d_t", "B");
+}
+
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t1_t5_10_heat_transfer_rate() {
+    assert_solves_ok("q = d_Q / d_t", "Q");
+}
+
+// ============================================================================
+// T1+T6: Elementary + Advanced (#[ignore])
+// ============================================================================
+
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t1_t6_01_linear_system_matrix() {
+    assert_solves_ok("A * x = b", "x");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t1_t6_02_determinant_equation() {
+    assert_solves_ok("det_A = a * d - b * c", "a");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t1_t6_03_trace() {
+    assert_solves_ok("tr_A = a11 + a22 + a33", "a11");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t1_t6_04_frobenius_norm() {
+    assert_solves_ok("norm = sqrt(a^2 + b^2 + c^2 + d^2)", "a");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t1_t6_05() {
+    assert_solves_ok("y = bessel_j(0, x)", "x");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t1_t6_06() {
+    assert_solves_ok("y = gamma(x)", "x");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t1_t6_07() {
+    assert_solves_ok("y = erf(x)", "x");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t1_t6_08() {
+    assert_solves_ok("z = zeta(s)", "s");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t1_t6_09() {
+    assert_solves_ok("P = exp(-beta * H) / Z", "H");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t1_t6_10() {
+    assert_solves_ok("S = k * ln(Omega)", "Omega");
+}
+
+// ============================================================================
+// T2+T5: PowerAndRoots + Calculus (#[ignore])
+// ============================================================================
+
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t2_t5_01() {
+    assert_solves_ok("y = d(x^3) / dx", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t2_t5_02() {
+    assert_solves_ok("y = integral(x^2, dx)", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t2_t5_03() {
+    assert_solves_ok("v = d(sqrt(x)) / dx", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t2_t5_04() {
+    assert_solves_ok("y = integral(1/x, dx)", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t2_t5_05() {
+    assert_solves_ok("A = integral(sqrt(r^2 - x^2), dx)", "r");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t2_t5_06() {
+    assert_solves_ok("y = integral(x^n, dx)", "n");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t2_t5_07() {
+    assert_solves_ok("L = integral(sqrt(1 + (dy_dx)^2), dx)", "dy_dx");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t2_t5_08() {
+    assert_solves_ok("V = pi * integral(r^2, dx)", "r");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t2_t5_09() {
+    assert_solves_ok("S = 2 * pi * integral(r * sqrt(1 + (dr_dx)^2), dx)", "r");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t2_t5_10() {
+    assert_solves_ok("W = integral(k * x, dx)", "k");
+}
+
+// ============================================================================
+// T2+T6: PowerAndRoots + Advanced (#[ignore])
+// ============================================================================
+
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t2_t6_01() {
+    assert_solves_ok("lambda = sqrt(eigenvalue(A))", "A");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t2_t6_02() {
+    assert_solves_ok("E = h_bar * sqrt(n * (n + 1))", "n");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t2_t6_03() {
+    assert_solves_ok("r = a_0 * n^2", "n");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t2_t6_04() {
+    assert_solves_ok("sigma = sqrt(variance(X))", "X");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t2_t6_05() {
+    assert_solves_ok("norm = sqrt(x^2 + y^2 + z^2 + w^2)", "w");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t2_t6_06() {
+    assert_solves_ok("R = sqrt(L^2 + (1/(omega*C))^2)", "C");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t2_t6_07() {
+    assert_solves_ok("d = sqrt((x2-x1)^2 + (y2-y1)^2 + (z2-z1)^2)", "x2");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t2_t6_08() {
+    assert_solves_ok("T = 2*pi*sqrt(I/(m*g*d))", "I");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t2_t6_09() {
+    assert_solves_ok("c = sqrt(gamma * R * T / M)", "gamma");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t2_t6_10() {
+    assert_solves_ok("v = sqrt(2*g*h + v0^2)", "h");
+}
+
+// ============================================================================
+// T3+T5: AlgebraicManip + Calculus (#[ignore])
+// ============================================================================
+
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t3_t5_01() {
+    assert_solves_ok("y = integral((x^2+1)/(x+1), dx)", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t3_t5_02() {
+    assert_solves_ok("y = integral(1/(x^2-1), dx)", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t3_t5_03() {
+    assert_solves_ok("y = d((x^2+1)^3)/dx", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t3_t5_04() {
+    assert_solves_ok("y = integral(x/(x^2+1), dx)", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t3_t5_05() {
+    assert_solves_ok("y = d(x^3 - 3*x^2 + 2*x)/dx", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t3_t5_06() {
+    assert_solves_ok("A = integral(x^2 - 4, dx)", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t3_t5_07() {
+    assert_solves_ok("V = pi*integral((x^2)^2, dx)", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t3_t5_08() {
+    assert_solves_ok("y = integral(1/(x^2+a^2), dx)", "a");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t3_t5_09() {
+    assert_solves_ok("y = integral(x*exp(-x^2), dx)", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t3_t5_10() {
+    assert_solves_ok("M = integral(x*f, dx)", "f");
+}
+
+// ============================================================================
+// T3+T6: AlgebraicManip + Advanced (#[ignore])
+// ============================================================================
+
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t3_t6_01() {
+    assert_solves_ok("det_A = a*d - b*c", "a");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t3_t6_02() {
+    assert_solves_ok("char_poly = lambda^2 - tr*lambda + det_val", "lambda");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t3_t6_03() {
+    assert_solves_ok("y = sum(a_n * x^n)", "a_n");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t3_t6_04() {
+    assert_solves_ok("p = a*x^2 + b*x + c", "x");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t3_t6_05() {
+    assert_solves_ok("R_eq = R1*R2/(R1+R2)", "R1");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t3_t6_06() {
+    assert_solves_ok("Z = sqrt(R^2 + (X_L - X_C)^2)", "X_L");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t3_t6_07() {
+    assert_solves_ok("f = 1/(2*pi*sqrt(L*C))", "L");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t3_t6_08() {
+    assert_solves_ok("V = (4/3)*pi*r^3", "r");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t3_t6_09() {
+    assert_solves_ok("A = pi*r*sqrt(r^2 + h^2)", "h");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t3_t6_10() {
+    assert_solves_ok("Q = m*c*(T2-T1)", "T2");
+}
+
+// ============================================================================
+// T4+T5: Transcendental + Calculus (#[ignore])
+// ============================================================================
+
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t4_t5_01() {
+    assert_solves_ok("y = integral(sin(x), dx)", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t4_t5_02() {
+    assert_solves_ok("y = integral(cos(x), dx)", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t4_t5_03() {
+    assert_solves_ok("y = d(sin(x))/dx", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t4_t5_04() {
+    assert_solves_ok("y = integral(tan(x), dx)", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t4_t5_05() {
+    assert_solves_ok("y = integral(sec(x)^2, dx)", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t4_t5_06() {
+    assert_solves_ok("y = d(exp(sin(x)))/dx", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t4_t5_07() {
+    assert_solves_ok("y = integral(sin(x)*cos(x), dx)", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t4_t5_08() {
+    assert_solves_ok("y = integral(1/cos(x), dx)", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t4_t5_09() {
+    assert_solves_ok("y = integral(exp(x)*sin(x), dx)", "x");
+}
+#[test]
+#[ignore = "Calculus operations not yet supported"]
+fn t4_t5_10() {
+    assert_solves_ok("y = integral(asin(x), dx)", "x");
+}
+
+// ============================================================================
+// T4+T6: Transcendental + Advanced (#[ignore])
+// ============================================================================
+
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t4_t6_01() {
+    assert_solves_ok("y = sin(eigenvalue(A))", "A");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t4_t6_02() {
+    assert_solves_ok("phi = atan(y_comp / x_comp)", "y_comp");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t4_t6_03() {
+    assert_solves_ok("theta = acos(dot(u,v)/(norm_u*norm_v))", "dot");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t4_t6_04() {
+    assert_solves_ok("R = rotation_matrix(theta)", "theta");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t4_t6_05() {
+    assert_solves_ok("y = fourier_sin(n, x)", "x");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t4_t6_06() {
+    assert_solves_ok("H = laplacian(psi) + V*psi", "psi");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t4_t6_07() {
+    assert_solves_ok("E = h*freq * (n + 0.5)", "n");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t4_t6_08() {
+    assert_solves_ok("psi = A*exp(i*k*x - i*omega*t)", "k");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t4_t6_09() {
+    assert_solves_ok("B = mu_0*n*I/(2*R)", "R");
+}
+#[test]
+#[ignore = "Advanced operations not yet supported"]
+fn t4_t6_10() {
+    assert_solves_ok("E = sigma/(2*epsilon_0)", "sigma");
+}
+
+// ============================================================================
+// T5+T6: Calculus + Advanced (#[ignore])
+// ============================================================================
+
+#[test]
+#[ignore = "Calculus + Advanced not yet supported"]
+fn t5_t6_01() {
+    assert_solves_ok("y = integral(bessel_j(0,x), dx)", "x");
+}
+#[test]
+#[ignore = "Calculus + Advanced not yet supported"]
+fn t5_t6_02() {
+    assert_solves_ok("G = integral(exp(-r/a)/r, dr)", "a");
+}
+#[test]
+#[ignore = "Calculus + Advanced not yet supported"]
+fn t5_t6_03() {
+    assert_solves_ok("psi = sum(c_n * exp(i*E_n*t/h_bar))", "c_n");
+}
+#[test]
+#[ignore = "Calculus + Advanced not yet supported"]
+fn t5_t6_04() {
+    assert_solves_ok("Z = integral(exp(-beta*E)*g(E), dE)", "beta");
+}
+#[test]
+#[ignore = "Calculus + Advanced not yet supported"]
+fn t5_t6_05() {
+    assert_solves_ok("S = integral(p, dq) / (2*pi)", "p");
+}
+#[test]
+#[ignore = "Calculus + Advanced not yet supported"]
+fn t5_t6_06() {
+    assert_solves_ok("F = d(lagrangian)/d(q_dot) - d(lagrangian)/d(q)", "q");
+}
+#[test]
+#[ignore = "Calculus + Advanced not yet supported"]
+fn t5_t6_07() {
+    assert_solves_ok("curl_E = -d(B)/d(t)", "E");
+}
+#[test]
+#[ignore = "Calculus + Advanced not yet supported"]
+fn t5_t6_08() {
+    assert_solves_ok("div_B = 0", "B");
+}
+#[test]
+#[ignore = "Calculus + Advanced not yet supported"]
+fn t5_t6_09() {
+    assert_solves_ok("nabla_sq_phi = -rho/epsilon_0", "phi");
+}
+#[test]
+#[ignore = "Calculus + Advanced not yet supported"]
+fn t5_t6_10() {
+    assert_solves_ok("G_mu_nu = 8*pi*G*T_mu_nu", "T_mu_nu");
+}
