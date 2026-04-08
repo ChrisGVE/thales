@@ -136,7 +136,7 @@ fn sin_sq_plus_cos_sq_rule() -> Rule {
 /// - e^(i·x) → cos(x) + i·sin(x)
 /// - |e^(i·x)| → 1
 pub fn euler_rules() -> Vec<Rule> {
-    vec![euler_expansion_rule(), euler_magnitude_rule()]
+    vec![euler_magnitude_rule(), euler_expansion_rule()]
 }
 
 /// e^(i·x) → cos(x) + i·sin(x)

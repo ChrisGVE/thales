@@ -473,6 +473,7 @@ pub use equation_system::{
     SolveStep,
     SolverConfig,
     StepResult,
+    SubstitutionSolver,
     SystemContext,
     SystemError,
     SystemOperation,
