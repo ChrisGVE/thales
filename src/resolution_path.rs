@@ -1769,6 +1769,84 @@ impl Operation {
             _ => true,
         }
     }
+
+    /// Return the intrinsic difficulty tier of this operation.
+    ///
+    /// The difficulty is determined by the kind of mathematical technique
+    /// required, not by the complexity of the operands. For example,
+    /// `AddBothSides` is always `Elementary` regardless of what is being added.
+    #[must_use]
+    pub fn difficulty(&self) -> TechniqueDifficulty {
+        match self {
+            // Tier 1 — Elementary: basic arithmetic on both sides, move terms
+            Operation::AddBothSides(_)
+            | Operation::SubtractBothSides(_)
+            | Operation::MultiplyBothSides(_)
+            | Operation::DivideBothSides(_)
+            | Operation::Simplify
+            | Operation::Cancel
+            | Operation::Substitute { .. }
+            | Operation::Isolate(_)
+            | Operation::MoveTerm(_) => TechniqueDifficulty::Elementary,
+
+            // Tier 2 — PowerAndRoots: exponents, roots, logarithm properties
+            Operation::PowerBothSides(_)
+            | Operation::RootBothSides(_)
+            | Operation::ApplyLogProperty(_) => TechniqueDifficulty::PowerAndRoots,
+
+            // Tier 3 — AlgebraicManip: factor, expand, quadratic formula, fractions
+            Operation::Expand
+            | Operation::Factor
+            | Operation::CombineFractions
+            | Operation::QuadraticFormula
+            | Operation::CompleteSquare
+            | Operation::ApplyIdentity(_) => TechniqueDifficulty::AlgebraicManip,
+
+            // Tier 4 — Transcendental: trig identities, function inversion
+            Operation::ApplyTrigIdentity(_) => TechniqueDifficulty::Transcendental,
+
+            // ApplyFunction depends on the function name
+            Operation::ApplyFunction(name) => classify_function_difficulty(name),
+
+            // Tier 5 — Calculus
+            Operation::Differentiate { .. }
+            | Operation::Integrate { .. }
+            | Operation::EvaluateLimit { .. }
+            | Operation::IntegrationByParts { .. }
+            | Operation::USubstitution { .. }
+            | Operation::SolveODE { .. } => TechniqueDifficulty::Calculus,
+
+            // Tier 6 — Advanced
+            Operation::MatrixOperation { .. }
+            | Operation::GaussianElimination
+            | Operation::ComputeDeterminant { .. }
+            | Operation::NumericalApproximation
+            | Operation::NumericalConverged { .. }
+            | Operation::ApproximationSubstitution { .. }
+            | Operation::SymbolicToNumericalHandoff { .. } => TechniqueDifficulty::Advanced,
+
+            // Custom: default to elementary, callers should annotate explicitly
+            Operation::Custom(_) => TechniqueDifficulty::Elementary,
+        }
+    }
+}
+
+/// Classify an `ApplyFunction` operation's difficulty based on the function name.
+fn classify_function_difficulty(name: &str) -> TechniqueDifficulty {
+    let lower = name.to_lowercase();
+    match lower.as_str() {
+        // Tier 2 — logarithms and exponentials
+        "ln" | "log" | "log2" | "log10" | "exp" | "sqrt" | "cbrt" => {
+            TechniqueDifficulty::PowerAndRoots
+        }
+        // Tier 4 — trig and inverse trig
+        "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "arcsin" | "arccos" | "arctan"
+        | "sinh" | "cosh" | "tanh" | "asinh" | "acosh" | "atanh" | "sec" | "csc" | "cot" => {
+            TechniqueDifficulty::Transcendental
+        }
+        // Default for unknown functions
+        _ => TechniqueDifficulty::AlgebraicManip,
+    }
 }
 
 /// Builder for constructing resolution paths with a fluent API.
