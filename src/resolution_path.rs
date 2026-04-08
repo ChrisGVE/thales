@@ -1307,6 +1307,23 @@ pub enum Operation {
         error_bound: f64,
     },
 
+    // ===== Handoff Operations =====
+    /// Transition from symbolic to numerical methods with explanation.
+    ///
+    /// Records the reason symbolic solving failed and what numerical
+    /// method is recommended as a fallback.
+    ///
+    /// # Example
+    ///
+    /// When a transcendental equation cannot be solved symbolically:
+    /// - `SymbolicToNumericalHandoff { reason: "...", recommended_method: "Newton-Raphson" }`
+    SymbolicToNumericalHandoff {
+        /// Why symbolic solving could not produce a closed-form solution
+        reason: String,
+        /// The numerical method recommended as a fallback
+        recommended_method: String,
+    },
+
     /// Custom operation with a free-form description.
     ///
     /// Use this for operations not covered by the other variants
@@ -1420,6 +1437,15 @@ impl Operation {
                 format!(
                     "Approximate {:?} ≈ {:?} (error bound: {:.2e})",
                     original, approximation, error_bound
+                )
+            }
+            Operation::SymbolicToNumericalHandoff {
+                reason,
+                recommended_method,
+            } => {
+                format!(
+                    "Symbolic-to-numerical handoff: {} (recommended: {})",
+                    reason, recommended_method
                 )
             }
             Operation::Custom(desc) => desc.clone(),
@@ -1568,6 +1594,9 @@ impl Operation {
 
             // Approximation
             Operation::ApproximationSubstitution { .. } => "approximation".to_string(),
+
+            // Handoff
+            Operation::SymbolicToNumericalHandoff { .. } => "handoff".to_string(),
 
             // Custom
             Operation::Custom(_) => "custom".to_string(),
@@ -1845,6 +1874,63 @@ impl ResolutionPathBuilder {
     pub fn finish(mut self, result: Expression) -> ResolutionPath {
         self.path.set_result(result);
         self.path
+    }
+}
+
+impl std::fmt::Display for StepSignificance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Trivial => write!(f, "trivial"),
+            Self::Standard => write!(f, "standard"),
+            Self::Substantive => write!(f, "substantive"),
+            Self::Strategic => write!(f, "strategic"),
+        }
+    }
+}
+
+impl PartialOrd for StepSignificance {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for StepSignificance {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let rank = |s: &Self| -> u8 {
+            match s {
+                Self::Trivial => 0,
+                Self::Standard => 1,
+                Self::Substantive => 2,
+                Self::Strategic => 3,
+            }
+        };
+        rank(self).cmp(&rank(other))
+    }
+}
+
+impl std::fmt::Display for ResolutionStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(ref annotation) = self.annotation {
+            if let Some(ref technique) = annotation.technique {
+                write!(f, "[{}] ", technique)?;
+            }
+        }
+        write!(f, "{}", self.explanation)?;
+        if let Some(ref annotation) = self.annotation {
+            if let Some(ref theorem) = annotation.theorem {
+                write!(f, " ({})", theorem)?;
+            }
+        }
+        write!(f, " => {}", self.result)
+    }
+}
+
+impl std::fmt::Display for ResolutionPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, step) in self.steps.iter().enumerate() {
+            writeln!(f, "Step {}: {}", i + 1, step)?;
+        }
+        write!(f, "Result: {}", self.result)
     }
 }
 
@@ -2173,5 +2259,91 @@ mod tests {
         assert!(escaped.contains("\\%"));
         assert!(escaped.contains("\\&"));
         assert!(escaped.contains("\\#"));
+    }
+
+    #[test]
+    fn test_step_significance_display() {
+        assert_eq!(StepSignificance::Trivial.to_string(), "trivial");
+        assert_eq!(StepSignificance::Standard.to_string(), "standard");
+        assert_eq!(StepSignificance::Substantive.to_string(), "substantive");
+        assert_eq!(StepSignificance::Strategic.to_string(), "strategic");
+    }
+
+    #[test]
+    fn test_step_significance_ord() {
+        assert!(StepSignificance::Trivial < StepSignificance::Standard);
+        assert!(StepSignificance::Standard < StepSignificance::Substantive);
+        assert!(StepSignificance::Substantive < StepSignificance::Strategic);
+        assert!(StepSignificance::Trivial < StepSignificance::Strategic);
+        assert_eq!(
+            StepSignificance::Standard.cmp(&StepSignificance::Standard),
+            std::cmp::Ordering::Equal
+        );
+    }
+
+    #[test]
+    fn test_resolution_step_display_plain() {
+        let step = ResolutionStep::new(
+            Operation::Simplify,
+            "Combine like terms".to_string(),
+            Expression::Integer(5),
+        );
+        let text = step.to_string();
+        assert!(text.contains("Combine like terms"));
+        assert!(text.contains("=>"));
+        // No technique or theorem prefix/suffix
+        assert!(!text.contains("["));
+        assert!(!text.contains("("));
+    }
+
+    #[test]
+    fn test_resolution_step_display_with_annotation() {
+        let step = ResolutionStep::with_annotation(
+            Operation::QuadraticFormula,
+            "Apply the quadratic formula".to_string(),
+            Expression::Integer(3),
+            StepAnnotation {
+                technique: Some("Quadratic Formula".to_string()),
+                theorem: Some("Fundamental Theorem of Algebra".to_string()),
+                significance: StepSignificance::Strategic,
+            },
+        );
+        let text = step.to_string();
+        assert!(text.contains("[Quadratic Formula]"));
+        assert!(text.contains("Apply the quadratic formula"));
+        assert!(text.contains("(Fundamental Theorem of Algebra)"));
+        assert!(text.contains("=>"));
+    }
+
+    #[test]
+    fn test_resolution_path_display() {
+        let mut path = ResolutionPath::new(Expression::Integer(10));
+        path.add_step(ResolutionStep::new(
+            Operation::SubtractBothSides(Expression::Integer(3)),
+            "Subtract 3 from both sides".to_string(),
+            Expression::Integer(7),
+        ));
+        path.add_step(ResolutionStep::new(
+            Operation::DivideBothSides(Expression::Integer(2)),
+            "Divide both sides by 2".to_string(),
+            Expression::Integer(3),
+        ));
+        path.set_result(Expression::Integer(3));
+
+        let text = path.to_string();
+        assert!(text.contains("Step 1:"));
+        assert!(text.contains("Step 2:"));
+        assert!(text.contains("Subtract 3 from both sides"));
+        assert!(text.contains("Divide both sides by 2"));
+        assert!(text.contains("Result:"));
+    }
+
+    #[test]
+    fn test_resolution_path_display_empty() {
+        let path = ResolutionPath::new(Expression::Integer(42));
+        let text = path.to_string();
+        // No steps, just result
+        assert!(!text.contains("Step"));
+        assert!(text.contains("Result:"));
     }
 }
