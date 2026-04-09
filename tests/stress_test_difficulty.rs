@@ -570,7 +570,6 @@ fn t5_03_exponential_decay() {
 }
 
 #[test]
-#[ignore = "Solver does not yet support L'Hopital's rule"]
 fn t5_04_lhopital_limit() {
     // lim_{x→0} sin(x)/x = 1 — requires limit evaluation
     assert_solve_fails("y = sin(x) / x", "x");
@@ -593,7 +592,6 @@ fn t5_06_chain_rule() {
 }
 
 #[test]
-#[ignore = "Solver does not yet support integration by parts"]
 fn t5_07_integration_by_parts() {
     // integral(x*exp(x)) = (x-1)*exp(x) + C
     assert_solve_fails("y = x * exp(x)", "x");
@@ -651,7 +649,6 @@ fn t6_01_matrix_equation() {
 }
 
 #[test]
-#[ignore = "Solver does not support eigenvalue problems"]
 fn t6_02_eigenvalue() {
     // det(A - lambda*I) = 0
     assert_solve_fails("det(A - lambda * I) = 0", "lambda");
@@ -694,7 +691,6 @@ fn t6_06_tensor_contraction() {
 }
 
 #[test]
-#[ignore = "Solver does not support numerical methods as primary"]
 fn t6_07_numerical_root_finding() {
     // x*exp(x) = 1 — Lambert W function, no closed form
     // The solver might fall back to numerical, but we test the boundary
@@ -709,7 +705,6 @@ fn t6_07_numerical_root_finding() {
 }
 
 #[test]
-#[ignore = "Solver does not support series convergence tests"]
 fn t6_08_series_convergence() {
     // Test convergence of sum(1/n^2) = pi^2/6
     assert_solve_fails("S = pi^2 / 6", "pi");

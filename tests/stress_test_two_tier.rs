@@ -1014,7 +1014,6 @@ fn t5_t6_01() {
     assert_solves_ok("y = integral(bessel_j(0,x), dx)", "x");
 }
 #[test]
-#[ignore = "Calculus + Advanced not yet supported"]
 fn t5_t6_02() {
     assert_solves_ok("G = integral(exp(-r/a)/r, dr)", "a");
 }
@@ -1024,7 +1023,6 @@ fn t5_t6_03() {
     assert_solves_ok("psi = sum(c_n * exp(i*E_n*t/h_bar))", "c_n");
 }
 #[test]
-#[ignore = "Calculus + Advanced not yet supported"]
 fn t5_t6_04() {
     assert_solves_ok("Z = integral(exp(-beta*E)*g(E), dE)", "beta");
 }
