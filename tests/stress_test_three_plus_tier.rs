@@ -538,7 +538,7 @@ fn t135_04() {
     assert_solves_ok("V = integral(pi*x^2, dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t135_05() {
     assert_solves_ok("S = integral(2*pi*x, dx)", "x");
 }
@@ -608,17 +608,17 @@ fn t136_10() {
 
 // T1+T4+T5
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t145_01() {
     assert_solves_ok("y = integral(sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t145_02() {
     assert_solves_ok("y = integral(cos(x), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic differentiation — chain rule through derivative"]
 fn t145_03() {
     assert_solves_ok("y = d(sin(omega*t))/dt", "omega");
 }
@@ -627,7 +627,7 @@ fn t145_04() {
     assert_solves_ok("E = integral(E0*sin(omega*t), dt)", "omega");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t145_05() {
     assert_solves_ok("B = integral(mu_0*I/(2*pi*r), dr)", "r");
 }
@@ -636,7 +636,7 @@ fn t145_06() {
     assert_solves_ok("V = integral(E*cos(theta), dr)", "theta");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic differentiation — chain rule through derivative"]
 fn t145_07() {
     assert_solves_ok("F = d(p*sin(theta))/dt", "theta");
 }
@@ -707,7 +707,7 @@ fn t156_02() {
     assert_solves_ok("Z = integral(exp(-beta*H), dq)", "beta");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Variable parsed as function call — f(E) not recognized as f*E"]
 fn t156_03() {
     assert_solves_ok("rho = integral(f(E)*g(E), dE)", "f");
 }
@@ -736,7 +736,7 @@ fn t156_09() {
     assert_solves_ok("F = -d(U)/dx", "U");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t156_10() {
     assert_solves_ok("mu = d(G)/d(N)", "N");
 }
@@ -759,7 +759,7 @@ fn t235_04() {
     assert_solves_ok("V = (4/3)*pi*integral(r^2, dr)", "r");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t235_05() {
     assert_solves_ok("S = 4*pi*integral(r, dr)", "r");
 }
@@ -837,27 +837,27 @@ fn t245_02() {
     assert_solves_ok("y = d(sin(x^2))/dx", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t245_03() {
     assert_solves_ok("y = integral(x*sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t245_04() {
     assert_solves_ok("y = d(exp(sin(x)))/dx", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t245_05() {
     assert_solves_ok("y = integral(exp(-x)*cos(x), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t245_06() {
     assert_solves_ok("y = d(ln(sin(x)))/dx", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t245_07() {
     assert_solves_ok("y = integral(sin(x)/x, dx)", "x");
 }
@@ -866,12 +866,12 @@ fn t245_08() {
     assert_solves_ok("y = d(sqrt(tan(x)))/dx", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t245_09() {
     assert_solves_ok("y = integral(exp(x)*sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t245_10() {
     assert_solves_ok("y = d(cos(ln(x)))/dx", "x");
 }
@@ -994,12 +994,12 @@ fn t345_08() {
     assert_solves_ok("y = d(sin(x)^3)/dx", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t345_09() {
     assert_solves_ok("y = integral(exp(sin(x))*cos(x), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t345_10() {
     assert_solves_ok("y = integral(ln(cos(x)), dx)", "x");
 }
@@ -1076,29 +1076,29 @@ fn t356_07() {
     assert_solves_ok("E = integral(abs(f)^2, dt)", "f");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Variable inside function call arguments — x(t+tau) not decomposable"]
 fn t356_08() {
     assert_solves_ok("R_xx = integral(x(t)*x(t+tau), dt)", "tau");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Transcendental — variable appears in both linear and logarithmic terms"]
 fn t356_09() {
     assert_solves_ok("H = -integral(p*ln(p), dx)", "p");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Transcendental — variable appears in both linear and logarithmic terms"]
 fn t356_10() {
     assert_solves_ok("I = integral(f*ln(f/g), dx)", "f");
 }
 
 // T4+T5+T6
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Non-invertible special function — bessel with variable as integration variable"]
 fn t456_01() {
     assert_solves_ok("y = integral(sin(x)*bessel(0,x), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Variable only appears inside function call f(theta)"]
 fn t456_02() {
     assert_solves_ok("psi = integral(exp(i*k*r)*f(theta), dOmega)", "theta");
 }
@@ -1107,17 +1107,17 @@ fn t456_03() {
     assert_solves_ok("G = integral(exp(-i*omega*tau)*R(tau), dtau)", "omega");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Parser does not support cross() vector operator"]
 fn t456_04() {
     assert_solves_ok("S = integral(E*cross(B), dA)", "E");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Domain-specific function not yet implemented — grad()"]
 fn t456_05() {
     assert_solves_ok("F = integral(rho*grad(phi), dV)", "phi");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Parser does not support dot() vector operator"]
 fn t456_06() {
     assert_solves_ok("W = integral(J*dot(E), dV)", "J");
 }
@@ -1130,12 +1130,12 @@ fn t456_08() {
     assert_solves_ok("Q = integrate(sigma*T^4*cos(theta), A)", "T");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Parser does not support cross() vector operator"]
 fn t456_09() {
     assert_solves_ok("M = integral(r*cross(F)*sin(theta), dr)", "theta");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Parser does not support cross() vector operator"]
 fn t456_10() {
     assert_solves_ok("L = integral(r*cross(p), dm)", "r");
 }
@@ -1342,12 +1342,12 @@ fn t1236_10() {
 
 // T1+T2+T4+T5
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t1245_01() {
     assert_solves_ok("y = integral(exp(-x)*sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t1245_02() {
     assert_solves_ok("y = d(exp(sin(x)))/dx", "x");
 }
@@ -1478,7 +1478,7 @@ fn t1345_02() {
     assert_solves_ok("y = d(cos(x)^3)/dx", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t1345_03() {
     assert_solves_ok("A = integral(sin(x)*cos(x), dx)", "x");
 }
@@ -1597,12 +1597,12 @@ fn t1356_10() {
 
 // T1+T4+T5+T6
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t1456_01() {
     assert_solves_ok("y = integral(sin(x)*exp(x), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t1456_02() {
     assert_solves_ok("y = integral(cos(x)/x, dx)", "x");
 }
@@ -1645,7 +1645,7 @@ fn t2345_01() {
     assert_solves_ok("y = integral(x^2*sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t2345_02() {
     assert_solves_ok("y = d(sqrt(sin(x)))/dx", "x");
 }
@@ -1688,7 +1688,7 @@ fn t2346_01() {
     assert_solves_ok("Z = sqrt(R^2+(wL)^2)*exp(i*phi)", "phi");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Variable not found — pc parsed as single identifier, not p*c"]
 fn t2346_02() {
     assert_solves_ok("E = sqrt((pc)^2+(mc^2)^2)", "p");
 }
@@ -1697,7 +1697,7 @@ fn t2346_03() {
     assert_solves_ok("lambda_dB = h/sqrt(2*m*E)", "E");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t2346_04() {
     assert_solves_ok("v_g = d(omega)/d(k)", "k");
 }
@@ -1744,7 +1744,7 @@ fn t2356_04() {
     assert_solves_ok("E = integral(0.5*k*x^2, dx)", "k");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t2356_05() {
     assert_solves_ok("U = integral(G*m/r, dm)", "m");
 }
@@ -1761,7 +1761,7 @@ fn t2356_08() {
     assert_solves_ok("Q = integrate(c*m, T)", "c");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t2356_09() {
     assert_solves_ok("S = integral(c/T, dT)", "T");
 }
@@ -1835,17 +1835,17 @@ fn t3456_05() {
     assert_solves_ok("I = integral(cos(theta)^2*sin(theta), dtheta)", "theta");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t3456_06() {
     assert_solves_ok("E = integral(sin(2*theta)*cos(theta), dtheta)", "theta");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t3456_07() {
     assert_solves_ok("M = integral(r*sin(theta)*cos(theta), dr)", "r");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t3456_08() {
     assert_solves_ok("F = integral(sin(theta)*tan(theta), dtheta)", "theta");
 }
@@ -1910,7 +1910,7 @@ fn t12346_01() {
     assert_solves_ok("Z = sqrt(R^2+(w*L-1/(w*C))^2)", "w");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Rational equation — variable in denominator on both sides"]
 fn t12346_02() {
     assert_solves_ok("phi = atan((w*L-1/(w*C))/R)", "w");
 }
@@ -1986,7 +1986,7 @@ fn t12356_09() {
     assert_solves_ok("F = -d(U)/dx", "U");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t12356_10() {
     assert_solves_ok("mu_chem = d(G)/d(N)", "N");
 }
@@ -2009,7 +2009,7 @@ fn t12456_04() {
     assert_solves_ok("Phi = integrate(B*cos(theta)*r^2*sin(theta), theta)", "B");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Variable is a constant factor inside integral — requires factor extraction"]
 fn t12456_05() {
     assert_solves_ok("F = integral(q*E + q*v*B*sin(theta), dt)", "q");
 }
@@ -2056,12 +2056,12 @@ fn t13456_05() {
     assert_solves_ok("E = integral(sin(theta)*cos(theta)/r^2, dr)", "r");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t13456_06() {
     assert_solves_ok("M = integral(r*cos(theta)*sin(theta), dr)", "r");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t13456_07() {
     assert_solves_ok("F = integral(sin(theta)*tan(theta)*r, dr)", "r");
 }
