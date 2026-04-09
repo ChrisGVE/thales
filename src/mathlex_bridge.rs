@@ -7,6 +7,15 @@
 use crate::ast::{BinaryOp, Equation, Expression, Function, SymbolicConstant, UnaryOp, Variable};
 use crate::ode::{FirstOrderODE, SecondOrderODE};
 
+/// Check if an expression is zero (integer 0 or float 0.0).
+fn is_zero_expr(expr: &Expression) -> bool {
+    match expr {
+        Expression::Integer(0) => true,
+        Expression::Float(f) => *f == 0.0,
+        _ => false,
+    }
+}
+
 /// Convert a mathlex expression into a thales expression.
 ///
 /// mathlex has ~60 expression variants covering calculus notation, set theory,
@@ -159,24 +168,54 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
         // Calculus notation — thales handles these internally, not via parsing
         mathlex::Expression::Derivative { expr, var, order } => {
             let inner = convert_expression(expr)?;
-            // Apply differentiation order times
-            let mut result = inner;
+            // Try symbolic differentiation first
+            let mut result = inner.clone();
             for _ in 0..*order {
                 result = result.differentiate(var);
             }
-            Ok(result)
+            // If differentiation collapses to zero/constant but the original had
+            // variables (e.g., d(V)/dt where V is treated as independent of t),
+            // preserve as opaque derivative wrapper so the solver can still find
+            // variables inside.
+            let original_vars = inner.variables();
+            let result_vars = result.variables();
+            if !original_vars.is_empty() && result_vars.is_empty() && is_zero_expr(&result) {
+                // Preserve as opaque derivative
+                Ok(Expression::Function(
+                    Function::Custom("derivative".to_string()),
+                    vec![
+                        inner,
+                        Expression::Variable(Variable::new(var)),
+                        Expression::Integer(*order as i64),
+                    ],
+                ))
+            } else {
+                Ok(result)
+            }
         }
 
         mathlex::Expression::PartialDerivative { expr, var, order } => {
             let inner = convert_expression(expr)?;
-            // Partial derivatives use the same differentiation engine as ordinary
-            // derivatives — the caller is responsible for holding other variables
-            // constant (which happens automatically in symbolic differentiation).
-            let mut result = inner;
+            // Try symbolic differentiation first
+            let mut result = inner.clone();
             for _ in 0..*order {
                 result = result.differentiate(var);
             }
-            Ok(result)
+            // Same opaque-preservation logic as ordinary derivatives
+            let original_vars = inner.variables();
+            let result_vars = result.variables();
+            if !original_vars.is_empty() && result_vars.is_empty() && is_zero_expr(&result) {
+                Ok(Expression::Function(
+                    Function::Custom("derivative".to_string()),
+                    vec![
+                        inner,
+                        Expression::Variable(Variable::new(var)),
+                        Expression::Integer(*order as i64),
+                    ],
+                ))
+            } else {
+                Ok(result)
+            }
         }
 
         mathlex::Expression::Gradient { expr } => {
@@ -900,12 +939,14 @@ mod tests {
         let ml = mathlex::parse("dy/dx").unwrap();
         // Should be Derivative { expr: Variable("y"), var: "x", order: 1 }
         let result = convert_expression(&ml).unwrap();
-        // d/dx(y) — y is treated as constant w.r.t. x, so derivative is 0
-        // This is correct: without knowing y = f(x), symbolic diff gives 0
-        assert_eq!(
-            result.evaluate(&std::collections::HashMap::new()),
-            Some(0.0)
-        );
+        // d/dx(y) — y is independent of x, so symbolic diff would give 0.
+        // But since that would lose variable "y", the bridge preserves
+        // it as an opaque derivative wrapper so the solver can find y.
+        assert!(result.contains_variable("y"));
+        assert!(matches!(
+            result,
+            Expression::Function(Function::Custom(_), _)
+        ));
     }
 
     #[test]
@@ -1047,13 +1088,14 @@ mod tests {
 
     #[test]
     fn test_parse_and_convert_derivative_latex() {
-        // \frac{d}{dx}(y) — y is constant w.r.t. x, so derivative is 0
+        // \frac{d}{dx}(y) — y is independent of x; preserved as opaque derivative
         let ml = mathlex::parse_latex(r#"\frac{d}{dx}(y)"#).unwrap();
         let result = convert_expression(&ml).unwrap();
-        assert_eq!(
-            result.evaluate(&std::collections::HashMap::new()),
-            Some(0.0)
-        );
+        assert!(result.contains_variable("y"));
+        assert!(matches!(
+            result,
+            Expression::Function(Function::Custom(_), _)
+        ));
     }
 
     #[test]

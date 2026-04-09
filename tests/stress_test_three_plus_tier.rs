@@ -438,7 +438,8 @@ fn t234_10_sin_exp_chain() {
 // T1+T2+T5
 #[test]
 fn t125_01() {
-    assert_solves_ok("v = 2*x*dx/dt", "x");
+    // v = d(x)/dt, solve for x — derivative preserved as opaque wrapper
+    assert_solves_ok("v = d(x)/dt", "x");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
