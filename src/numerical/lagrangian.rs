@@ -41,6 +41,7 @@
 //! ```
 
 use crate::ast::{BinaryOp, Expression, Variable};
+use crate::numerical::bordered_hessian;
 use crate::solver::SolverError;
 use std::collections::HashMap;
 
@@ -49,6 +50,21 @@ const MAX_ITER: usize = 1000;
 
 /// Step size for finite-difference Jacobian approximation.
 const FD_H: f64 = 1e-7;
+
+/// Classification of a critical point found by the Lagrangian solver.
+///
+/// Determined by the bordered Hessian second-order sufficiency conditions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OptimizationType {
+    /// The critical point satisfies the second-order sufficient conditions for a local minimum.
+    LocalMinimum,
+    /// The critical point satisfies the second-order sufficient conditions for a local maximum.
+    LocalMaximum,
+    /// The bordered Hessian test indicates a saddle point.
+    SaddlePoint,
+    /// The bordered Hessian test is inconclusive (degenerate or not implemented for m > 1).
+    Inconclusive,
+}
 
 /// Result of a Lagrangian constrained optimization.
 #[derive(Debug, Clone)]
@@ -60,6 +76,8 @@ pub struct LagrangianResult {
     pub multipliers: Vec<f64>,
     /// Objective function value at the solution.
     pub objective_value: f64,
+    /// Classification of the critical point via the bordered Hessian test.
+    pub classification: OptimizationType,
 }
 
 /// Solver for constrained optimization via the Lagrange multiplier method.
@@ -144,11 +162,45 @@ impl LagrangianSolver {
             SolverError::CannotSolve("Failed to evaluate objective at solution".to_string())
         })?;
 
+        let classification =
+            self.classify_critical_point(objective, constraints, variables, &point, &names);
+
         Ok(LagrangianResult {
             point: var_point,
             multipliers,
             objective_value: obj_val,
+            classification,
         })
+    }
+
+    /// Classify the critical point via the bordered Hessian second-order conditions.
+    ///
+    /// Supported for exactly one constraint (m = 1) with n ≥ 2 variables.
+    /// Returns [`OptimizationType::Inconclusive`] for other cases.
+    pub fn classify_critical_point(
+        &self,
+        objective: &Expression,
+        constraints: &[Expression],
+        variables: &[Variable],
+        point: &[f64],
+        names: &[String],
+    ) -> OptimizationType {
+        let n = variables.len();
+        let m = constraints.len();
+        if m != 1 || n < 2 {
+            return OptimizationType::Inconclusive;
+        }
+        let lagrangian = bordered_hessian::build_lagrangian(objective, constraints);
+        let Some(h) = bordered_hessian::lagrangian_hessian(&lagrangian, variables, names, point)
+        else {
+            return OptimizationType::Inconclusive;
+        };
+        let Some(grad_g) =
+            bordered_hessian::constraint_gradient(&constraints[0], variables, names, point)
+        else {
+            return OptimizationType::Inconclusive;
+        };
+        bordered_hessian::classify_1c(&h, &grad_g, n)
     }
 
     /// Build the n + m KKT stationarity equations (as `Expression`s set equal to zero).
@@ -328,7 +380,7 @@ fn newton_raphson_system(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{BinaryOp, Expression, Variable};
+    use crate::ast::{BinaryOp, Expression, UnaryOp, Variable};
 
     /// Build `x^2 + y^2`.
     fn norm_squared(x_name: &str, y_name: &str) -> Expression {
@@ -438,5 +490,68 @@ mod tests {
             "f(0,0) should be 0, got {}",
             result.objective_value
         );
+    }
+
+    #[test]
+    fn test_classification_minimum() {
+        // min x² + y²  s.t. x + y = 1  → local minimum at (0.5, 0.5)
+        let objective = norm_squared("x", "y");
+        let constraint = linear_sum_constraint("x", "y", 1);
+        let vars = vec![Variable::new("x"), Variable::new("y")];
+
+        let solver = LagrangianSolver::new();
+        let result = solver.solve(&objective, &[constraint], &vars).unwrap();
+
+        assert_eq!(
+            result.classification,
+            OptimizationType::LocalMinimum,
+            "expected LocalMinimum, got {:?}",
+            result.classification
+        );
+    }
+
+    #[test]
+    fn test_classification_maximum() {
+        // max x² + y²  s.t. x + y = 1
+        // Equivalently: min -(x² + y²)  s.t. x + y = 1
+        // The critical point (0.5, 0.5) is a constrained maximum of x²+y².
+        // Objective: -(x² + y²)
+        let neg_norm_sq = Expression::Unary(UnaryOp::Neg, Box::new(norm_squared("x", "y")));
+        let constraint = linear_sum_constraint("x", "y", 1);
+        let vars = vec![Variable::new("x"), Variable::new("y")];
+
+        // Classify via classify_critical_point directly at the known point.
+        let solver = LagrangianSolver::new();
+        // point: x=0.5, y=0.5, lambda=-1 (KKT for -(x²+y²) + λ(x+y-1))
+        let point = vec![0.5_f64, 0.5, -1.0];
+        let names = vec!["x".to_string(), "y".to_string(), "__lambda_0".to_string()];
+        let classification =
+            solver.classify_critical_point(&neg_norm_sq, &[constraint], &vars, &point, &names);
+        // -(x²+y²) is concave so the bordered Hessian test yields LocalMaximum.
+        assert_eq!(
+            classification,
+            OptimizationType::LocalMaximum,
+            "expected LocalMaximum, got {:?}",
+            classification
+        );
+    }
+
+    #[test]
+    fn test_hessian_numerics_quadratic() {
+        // For f = x² + y², the Hessian should be diag(2, 2).
+        let objective = norm_squared("x", "y");
+        let vars = vec![Variable::new("x"), Variable::new("y")];
+        // Names include a dummy lambda so names slice has right length.
+        let names = vec!["x".to_string(), "y".to_string(), "__lambda_0".to_string()];
+        let point = vec![0.5_f64, 0.5, 0.0];
+        // Lagrangian with zero-weighted constraint: L ≈ f here.
+        let dummy_constraint = linear_sum_constraint("x", "y", 1);
+        let lagrangian = bordered_hessian::build_lagrangian(&objective, &[dummy_constraint]);
+        let h = bordered_hessian::lagrangian_hessian(&lagrangian, &vars, &names, &point)
+            .expect("Hessian should be computable");
+        assert!((h[0][0] - 2.0).abs() < 1e-4, "H[0][0] ≈ 2, got {}", h[0][0]);
+        assert!((h[1][1] - 2.0).abs() < 1e-4, "H[1][1] ≈ 2, got {}", h[1][1]);
+        assert!(h[0][1].abs() < 1e-4, "H[0][1] ≈ 0, got {}", h[0][1]);
+        assert!(h[1][0].abs() < 1e-4, "H[1][0] ≈ 0, got {}", h[1][0]);
     }
 }

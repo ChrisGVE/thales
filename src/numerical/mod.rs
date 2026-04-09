@@ -43,11 +43,15 @@
 //! ```
 
 mod bisection;
+/// Bordered Hessian classification for constrained optimization.
+pub mod bordered_hessian;
 mod brent;
 /// Lagrangian constrained optimization solver.
 pub mod lagrangian;
 mod least_squares;
 mod newton;
+/// Penalty method for constrained optimization.
+pub mod penalty;
 mod secant;
 mod smart;
 mod types;

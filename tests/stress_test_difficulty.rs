@@ -710,17 +710,23 @@ fn t6_08_series_convergence() {
 }
 
 #[test]
-#[ignore = "Solver does not support quaternion algebra"]
 fn t6_09_quaternion() {
-    // q = a + bi + cj + dk, |q| = sqrt(a^2 + b^2 + c^2 + d^2)
-    assert_solve_fails("q = sqrt(a^2 + b^2 + c^2 + d^2)", "a");
+    // q = |quaternion| = sqrt(a^2 + b^2 + c^2 + d^2) — algebraic, solver handles it
+    assert_solves_at_tier(
+        "q = sqrt(a^2 + b^2 + c^2 + d^2)",
+        "a",
+        TechniqueDifficulty::Advanced,
+    );
 }
 
 #[test]
-#[ignore = "Solver does not support differential geometry"]
 fn t6_10_gaussian_curvature() {
-    // K = (LN - M^2) / (EG - F^2)
-    assert_solve_fails("K = (L * N - M^2) / (E * G - F^2)", "L");
+    // K = (LN - M^2) / (EG - F^2) — algebraic rearrangement, solver handles it
+    assert_solves_at_tier(
+        "K = (L * N - M^2) / (E * G - F^2)",
+        "L",
+        TechniqueDifficulty::Advanced,
+    );
 }
 
 // ============================================================================
