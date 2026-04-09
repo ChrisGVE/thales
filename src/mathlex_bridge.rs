@@ -998,4 +998,142 @@ mod tests {
         let ml = mathlex::parse("x + y = 0").unwrap();
         assert!(try_extract_ode(&ml).is_none());
     }
+
+    // ==================================================================
+    // LaTeX variants — each test above has a LaTeX counterpart ensuring
+    // both parsers produce equivalent results through the bridge.
+    // ==================================================================
+
+    #[test]
+    fn test_convert_derivative_first_order_latex() {
+        // \frac{d}{dx}(x^2) should evaluate to 2x
+        let ml = mathlex::parse_latex(r#"\frac{d}{dx}(x^2)"#).unwrap();
+        let result = convert_expression(&ml).unwrap();
+        let mut env = std::collections::HashMap::new();
+        env.insert("x".to_string(), 1.0);
+        assert_eq!(result.evaluate(&env), Some(2.0));
+    }
+
+    #[test]
+    fn test_convert_derivative_second_order_latex() {
+        // \frac{d^2}{dx^2}(x^3) should evaluate to 6x
+        let ml = mathlex::parse_latex(r#"\frac{d^2}{dx^2}(x^3)"#).unwrap();
+        let result = convert_expression(&ml).unwrap();
+        let mut env = std::collections::HashMap::new();
+        env.insert("x".to_string(), 2.0);
+        assert_eq!(result.evaluate(&env), Some(12.0));
+    }
+
+    #[test]
+    fn test_convert_partial_derivative_latex() {
+        // \frac{\partial}{\partial x}(x^2 \cdot y) should evaluate to 2xy
+        let ml = mathlex::parse_latex(r#"\frac{\partial}{\partial x}(x^2 \cdot y)"#).unwrap();
+        let result = convert_expression(&ml).unwrap();
+        let mut env = std::collections::HashMap::new();
+        env.insert("x".to_string(), 3.0);
+        env.insert("y".to_string(), 2.0);
+        assert_eq!(result.evaluate(&env), Some(12.0));
+    }
+
+    #[test]
+    fn test_convert_gradient_latex() {
+        let ml = mathlex::parse_latex(r#"\nabla f"#).unwrap();
+        let result = convert_expression(&ml).unwrap();
+        assert!(matches!(
+            result,
+            Expression::Function(Function::Custom(ref name), _) if name == "gradient"
+        ));
+    }
+
+    #[test]
+    fn test_parse_and_convert_derivative_latex() {
+        // \frac{d}{dx}(y) — y is constant w.r.t. x, so derivative is 0
+        let ml = mathlex::parse_latex(r#"\frac{d}{dx}(y)"#).unwrap();
+        let result = convert_expression(&ml).unwrap();
+        assert_eq!(
+            result.evaluate(&std::collections::HashMap::new()),
+            Some(0.0)
+        );
+    }
+
+    #[test]
+    fn test_extract_first_order_ode_latex() {
+        // \frac{d}{dx}(y) = x \cdot y
+        let ml = mathlex::parse_latex(r#"\frac{d}{dx}(y) = x \cdot y"#).unwrap();
+        let ode = try_extract_ode(&ml).unwrap();
+        match ode {
+            ExtractedODE::First(fo) => {
+                assert_eq!(fo.dependent, "y");
+                assert_eq!(fo.independent, "x");
+                let mut env = std::collections::HashMap::new();
+                env.insert("x".to_string(), 2.0);
+                env.insert("y".to_string(), 3.0);
+                assert_eq!(fo.rhs.evaluate(&env), Some(6.0));
+            }
+            _ => panic!("expected FirstOrderODE"),
+        }
+    }
+
+    #[test]
+    fn test_extract_first_order_ode_simple_latex() {
+        // \frac{d}{dx}(y) = y
+        let ml = mathlex::parse_latex(r#"\frac{d}{dx}(y) = y"#).unwrap();
+        let ode = try_extract_ode(&ml).unwrap();
+        match ode {
+            ExtractedODE::First(fo) => {
+                assert_eq!(fo.dependent, "y");
+                assert_eq!(fo.independent, "x");
+            }
+            _ => panic!("expected FirstOrderODE"),
+        }
+    }
+
+    #[test]
+    fn test_extract_second_order_ode_homogeneous_latex() {
+        // \frac{d^2}{dx^2}(y) + 3\frac{d}{dx}(y) + 2y = 0
+        let ml =
+            mathlex::parse_latex(r#"\frac{d^2}{dx^2}(y) + 3\frac{d}{dx}(y) + 2y = 0"#).unwrap();
+        let ode = try_extract_ode(&ml).unwrap();
+        match ode {
+            ExtractedODE::Second(so) => {
+                assert_eq!(so.dependent, "y");
+                assert_eq!(so.independent, "x");
+                assert!((so.a - 1.0).abs() < 1e-10);
+                assert!((so.b - 3.0).abs() < 1e-10);
+                assert!((so.c - 2.0).abs() < 1e-10);
+                assert!(so.is_homogeneous());
+            }
+            _ => panic!("expected SecondOrderODE"),
+        }
+    }
+
+    #[test]
+    fn test_extract_second_order_ode_forced_latex() {
+        // \frac{d^2}{dx^2}(y) + 2\frac{d}{dx}(y) + y = x
+        let ml = mathlex::parse_latex(r#"\frac{d^2}{dx^2}(y) + 2\frac{d}{dx}(y) + y = x"#).unwrap();
+        let ode = try_extract_ode(&ml).unwrap();
+        match ode {
+            ExtractedODE::Second(so) => {
+                assert_eq!(so.dependent, "y");
+                assert_eq!(so.independent, "x");
+                assert!((so.a - 1.0).abs() < 1e-10);
+                assert!((so.b - 2.0).abs() < 1e-10);
+                assert!((so.c - 1.0).abs() < 1e-10);
+                assert!(!so.is_homogeneous());
+            }
+            _ => panic!("expected SecondOrderODE"),
+        }
+    }
+
+    #[test]
+    fn test_extract_ode_not_an_equation_latex() {
+        let ml = mathlex::parse_latex(r#"\frac{d}{dx}(y)"#).unwrap();
+        assert!(try_extract_ode(&ml).is_none());
+    }
+
+    #[test]
+    fn test_extract_ode_no_derivatives_latex() {
+        let ml = mathlex::parse_latex(r#"x + y = 0"#).unwrap();
+        assert!(try_extract_ode(&ml).is_none());
+    }
 }

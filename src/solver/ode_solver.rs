@@ -284,6 +284,47 @@ pub fn solve_ode_from_text(input: &str) -> SolverResult<(Solution, ResolutionPat
     }
 }
 
+/// Parse a LaTeX ODE and solve it, returning a [`Solution`] and
+/// [`ResolutionPath`].
+///
+/// Accepts LaTeX derivative notation such as `\frac{d}{dx}(y)` and
+/// `\frac{d^2}{dx^2}(y)`. Both first and second-order constant-coefficient
+/// ODEs are supported.
+///
+/// # Errors
+///
+/// Returns [`SolverError::CannotSolve`] when:
+/// - The input cannot be parsed as a LaTeX equation.
+/// - The equation does not contain recognizable ODE derivative terms.
+/// - The extracted ODE type is not yet supported by the solver.
+///
+/// # Examples
+///
+/// ```rust
+/// use thales::solver::ode_solver::solve_ode_from_latex;
+/// use thales::solver::Solution;
+///
+/// let (solution, path) = solve_ode_from_latex(r#"\frac{d}{dx}(y) = y"#).unwrap();
+/// assert!(matches!(solution, Solution::Unique(_)));
+/// ```
+pub fn solve_ode_from_latex(input: &str) -> SolverResult<(Solution, ResolutionPath)> {
+    use crate::mathlex_bridge::{try_extract_ode, ExtractedODE};
+
+    let ml_expr = mathlex::parse_latex(input)
+        .map_err(|e| SolverError::CannotSolve(format!("failed to parse LaTeX ODE: {}", e)))?;
+
+    let extracted = try_extract_ode(&ml_expr).ok_or_else(|| {
+        SolverError::CannotSolve(
+            "equation does not contain recognizable ODE derivative terms".to_string(),
+        )
+    })?;
+
+    match extracted {
+        ExtractedODE::First(ode) => solve_ode_first_order(&ode),
+        ExtractedODE::Second(ode) => solve_ode_second_order(&ode),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -493,5 +534,110 @@ mod tests {
         assert!(result.is_ok(), "Expected Ok, got {result:?}");
         let (solution, _) = result.unwrap();
         assert!(matches!(solution, Solution::Unique(_)));
+    }
+
+    // ------------------------------------------------------------------
+    // LaTeX-based ODE solving (solve_ode_from_latex)
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn solve_from_latex_first_order_separable() {
+        // \frac{d}{dx}(y) = y → separable, y = C·eˣ
+        let result = solve_ode_from_latex(r#"\frac{d}{dx}(y) = y"#);
+        assert!(result.is_ok(), "Expected Ok, got {result:?}");
+        let (solution, path) = result.unwrap();
+        assert!(matches!(solution, Solution::Unique(_)));
+        assert!(!path.steps.is_empty());
+    }
+
+    #[test]
+    fn solve_from_latex_first_order_linear() {
+        // \frac{d}{dx}(y) = -y → linear, y = C·e^(-x)
+        let result = solve_ode_from_latex(r#"\frac{d}{dx}(y) = -y"#);
+        assert!(result.is_ok(), "Expected Ok, got {result:?}");
+        let (solution, _) = result.unwrap();
+        assert!(matches!(solution, Solution::Unique(_)));
+    }
+
+    #[test]
+    fn solve_from_latex_second_order_homogeneous() {
+        // \frac{d^2}{dx^2}(y) - y = 0
+        let result = solve_ode_from_latex(r#"\frac{d^2}{dx^2}(y) - y = 0"#);
+        assert!(result.is_ok(), "Expected Ok, got {result:?}");
+        let (solution, path) = result.unwrap();
+        assert!(matches!(solution, Solution::Unique(_)));
+        assert!(!path.steps.is_empty());
+    }
+
+    #[test]
+    fn solve_from_latex_second_order_with_first_deriv() {
+        // \frac{d^2}{dx^2}(y) + 2\frac{d}{dx}(y) + y = 0
+        let result = solve_ode_from_latex(r#"\frac{d^2}{dx^2}(y) + 2\frac{d}{dx}(y) + y = 0"#);
+        assert!(result.is_ok(), "Expected Ok, got {result:?}");
+        let (solution, _) = result.unwrap();
+        assert!(matches!(solution, Solution::Unique(_)));
+    }
+
+    #[test]
+    fn solve_from_latex_not_an_ode() {
+        let result = solve_ode_from_latex(r#"x + y = 0"#);
+        assert!(matches!(result, Err(SolverError::CannotSolve(_))));
+    }
+
+    #[test]
+    fn solve_from_latex_invalid_input() {
+        let result = solve_ode_from_latex(r#"\invalid{bad"#);
+        assert!(matches!(result, Err(SolverError::CannotSolve(_))));
+    }
+
+    // ------------------------------------------------------------------
+    // Text vs LaTeX equivalence
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn text_and_latex_produce_same_first_order_solution() {
+        let (text_sol, _) = solve_ode_from_text("dy/dx = y").unwrap();
+        let (latex_sol, _) = solve_ode_from_latex(r#"\frac{d}{dx}(y) = y"#).unwrap();
+
+        // Both should produce Unique solutions
+        let text_expr = match text_sol {
+            Solution::Unique(e) => e,
+            _ => panic!("text: expected Unique"),
+        };
+        let latex_expr = match latex_sol {
+            Solution::Unique(e) => e,
+            _ => panic!("latex: expected Unique"),
+        };
+
+        // Evaluate both at x=1 — they should give the same result
+        let mut env = std::collections::HashMap::new();
+        env.insert("x".to_string(), 1.0);
+        env.insert("C".to_string(), 1.0);
+        let text_val = text_expr.evaluate(&env);
+        let latex_val = latex_expr.evaluate(&env);
+        assert_eq!(text_val, latex_val, "text and latex solutions diverge");
+    }
+
+    #[test]
+    fn text_and_latex_produce_same_second_order_solution() {
+        let (text_sol, _) = solve_ode_from_text("d2y/dx2 - y = 0").unwrap();
+        let (latex_sol, _) = solve_ode_from_latex(r#"\frac{d^2}{dx^2}(y) - y = 0"#).unwrap();
+
+        let text_expr = match text_sol {
+            Solution::Unique(e) => e,
+            _ => panic!("text: expected Unique"),
+        };
+        let latex_expr = match latex_sol {
+            Solution::Unique(e) => e,
+            _ => panic!("latex: expected Unique"),
+        };
+
+        let mut env = std::collections::HashMap::new();
+        env.insert("x".to_string(), 1.0);
+        env.insert("C_1".to_string(), 1.0);
+        env.insert("C_2".to_string(), 1.0);
+        let text_val = text_expr.evaluate(&env);
+        let latex_val = latex_expr.evaluate(&env);
+        assert_eq!(text_val, latex_val, "text and latex solutions diverge");
     }
 }
