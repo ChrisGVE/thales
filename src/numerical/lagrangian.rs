@@ -143,12 +143,36 @@ impl LagrangianSolver {
             names.push(format!("__lambda_{}", j));
         }
 
-        // Initial guess: all variables at 1.0, multipliers at 0.0.
-        let mut point: Vec<f64> = vec![1.0; n];
-        point.extend(vec![0.0; m]);
+        // Generate multiple initial guesses to handle different constraint geometries.
+        let initial_guesses = generate_initial_guesses(n, m);
 
-        // Newton-Raphson iteration.
-        newton_raphson_system(&equations, &names, &mut point, total, self.tolerance)?;
+        // Try each initial guess; collect all converged solutions and pick the
+        // one with the smallest objective value (minimization).
+        let mut best: Option<(Vec<f64>, f64)> = None;
+        let mut last_err = None;
+
+        for guess in &initial_guesses {
+            let mut point = guess.clone();
+            match newton_raphson_system(&equations, &names, &mut point, total, self.tolerance) {
+                Ok(()) => {
+                    if let Some(obj) = eval_at(objective, &names, &point) {
+                        let dominated = best.as_ref().is_some_and(|(_, best_obj)| obj >= *best_obj);
+                        if !dominated {
+                            best = Some((point, obj));
+                        }
+                    }
+                }
+                Err(e) => {
+                    last_err = Some(e);
+                }
+            }
+        }
+
+        let (point, obj_val) = best.ok_or_else(|| {
+            last_err.unwrap_or_else(|| {
+                SolverError::CannotSolve("All initial guesses failed to converge".to_string())
+            })
+        })?;
 
         // Extract results.
         let var_point: Vec<(String, f64)> = variables
@@ -158,10 +182,6 @@ impl LagrangianSolver {
             .collect();
 
         let multipliers: Vec<f64> = point[n..].to_vec();
-
-        let obj_val = eval_at(objective, &names, &point).ok_or_else(|| {
-            SolverError::CannotSolve("Failed to evaluate objective at solution".to_string())
-        })?;
 
         let classification =
             self.classify_critical_point(objective, constraints, variables, &point, &names);
@@ -319,6 +339,36 @@ pub fn optimize_constrained(
 // Newton-Raphson solver for nonlinear systems
 // ============================================================================
 
+/// Generate a set of diverse initial guesses for the Newton-Raphson solver.
+///
+/// Returns several starting points with different variable signs and magnitudes
+/// to increase the chance of converging to the global minimum rather than a
+/// local maximum or saddle point.
+fn generate_initial_guesses(n: usize, m: usize) -> Vec<Vec<f64>> {
+    let total = n + m;
+    // Seed values for each variable coordinate (multipliers always start at 0).
+    let seeds: &[f64] = &[1.0, -1.0, 0.5, -0.5, 0.1];
+    let mut guesses: Vec<Vec<f64>> = Vec::new();
+
+    // All-same-value guesses.
+    for &s in seeds {
+        let mut g = vec![s; n];
+        g.resize(total, 0.0);
+        guesses.push(g);
+    }
+
+    // Axis-aligned guesses: one variable at ±1, rest at 0.
+    for i in 0..n {
+        for &sign in &[1.0_f64, -1.0] {
+            let mut g = vec![0.0; total];
+            g[i] = sign;
+            guesses.push(g);
+        }
+    }
+
+    guesses
+}
+
 /// Evaluate a single expression at a point given by parallel `names`/`values` slices.
 fn eval_at(expr: &Expression, names: &[String], values: &[f64]) -> Option<f64> {
     let vars: HashMap<String, f64> = names.iter().cloned().zip(values.iter().copied()).collect();
@@ -408,6 +458,18 @@ fn gaussian_elimination(jac: &[Vec<f64>], rhs: &[f64]) -> Option<Vec<f64>> {
     Some(sol)
 }
 
+/// Regularization epsilon added to the Jacobian diagonal when it is near-singular.
+const REGULARIZATION_EPS: f64 = 1e-8;
+
+/// Add a small epsilon to the diagonal of the Jacobian to handle near-singular cases.
+fn regularize_jacobian(jac: &[Vec<f64>], eps: f64) -> Vec<Vec<f64>> {
+    let mut reg = jac.to_vec();
+    for i in 0..reg.len() {
+        reg[i][i] += eps;
+    }
+    reg
+}
+
 /// Perform Newton-Raphson iteration on a system of equations in-place.
 fn newton_raphson_system(
     equations: &[Expression],
@@ -429,9 +491,18 @@ fn newton_raphson_system(
         let jac = finite_diff_jacobian(equations, names, point, n)
             .ok_or_else(|| SolverError::CannotSolve("Jacobian evaluation failed".to_string()))?;
 
-        let delta = gaussian_elimination(&jac, &f).ok_or_else(|| {
-            SolverError::CannotSolve("Singular Jacobian — cannot proceed".to_string())
-        })?;
+        // Try direct solve first; if singular, apply diagonal regularization.
+        let delta = match gaussian_elimination(&jac, &f) {
+            Some(d) => d,
+            None => {
+                let reg_jac = regularize_jacobian(&jac, REGULARIZATION_EPS);
+                gaussian_elimination(&reg_jac, &f).ok_or_else(|| {
+                    SolverError::CannotSolve(
+                        "Singular Jacobian — cannot proceed even with regularization".to_string(),
+                    )
+                })?
+            }
+        };
 
         let step_norm: f64 = delta.iter().map(|v| v * v).sum::<f64>().sqrt();
         for i in 0..n {
@@ -508,7 +579,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "singular Jacobian at default initial guess; needs smarter starting point strategy"]
     fn test_minimize_sum_on_unit_circle() {
         // min x + y  s.t. x² + y² - 1 = 0  → minimum at (-1/√2, -1/√2)
         let x = Expression::Variable(Variable::new("x"));
