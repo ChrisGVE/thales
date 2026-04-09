@@ -38,6 +38,7 @@
 
 mod multi_solver;
 mod nonlinear;
+mod smart_solver;
 pub mod substitution;
 pub mod types;
 
@@ -49,6 +50,7 @@ pub use nonlinear::{
     NonlinearSystemConfig, NonlinearSystemSolver, NonlinearSystemSolverError,
     NonlinearSystemSolverResult, SmartNonlinearSystemSolver,
 };
+pub use smart_solver::{SmartSystemSolver, SystemType};
 pub use substitution::SubstitutionSolver;
 pub use types::{
     Constraint, DependencyGraph, EquationSystem, EquationType, IntegralInfo, MultiEquationSolution,

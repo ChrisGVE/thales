@@ -467,6 +467,7 @@ pub use equation_system::{
     NonlinearSystemSolverResult,
     ODEInfo,
     SmartNonlinearSystemSolver,
+    SmartSystemSolver,
     SolutionStrategy,
     SolutionValue,
     SolveMethod,
@@ -479,6 +480,7 @@ pub use equation_system::{
     SystemOperation,
     SystemResolutionPath,
     SystemStep,
+    SystemType,
 };
 pub use fourier::{fourier_series, FourierSeries, FourierSeriesError, FourierSeriesResult};
 pub use inequality::{
