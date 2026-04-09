@@ -5,8 +5,8 @@
 //! - 6 five-tier combos × 10 tests = 60 tests
 //! - 1 six-tier combo × 10 tests = 10 tests
 //!
-//! Combinations involving only T1-T4 have passing tests.
-//! Others are #[ignore] documenting solver limitations.
+//! T1-T4 combinations and algebraically-solvable T6 combinations have passing tests.
+//! Calculus (T5) and unsupported special-function T6 tests remain #[ignore].
 
 use thales::ast::Variable;
 use thales::parser::parse_equation;
@@ -460,18 +460,46 @@ ignored_three_tier!(t125, "Calculus not yet supported",
 );
 
 // T1+T2+T6
-ignored_three_tier!(t126, "Advanced not yet supported",
-    t126_01 => ("norm = sqrt(x^2 + y^2)", "x"),
-    t126_02 => ("E_n = -13.6/n^2", "n"),
-    t126_03 => ("r_n = a_0*n^2/Z", "n"),
-    t126_04 => ("v = sqrt(G*M/r)", "r"),
-    t126_05 => ("T = 2*pi*sqrt(r^3/(G*M))", "r"),
-    t126_06 => ("E = h*c/lambda", "lambda"),
-    t126_07 => ("p = h/lambda", "lambda"),
-    t126_08 => ("f = c/lambda", "lambda"),
-    t126_09 => ("K = (1/2)*I*omega^2", "omega"),
-    t126_10 => ("L = I*omega", "I")
-);
+#[test]
+fn t126_01() {
+    assert_solves_ok("norm = sqrt(x^2 + y^2)", "x");
+}
+#[test]
+fn t126_02() {
+    assert_solves_ok("E_n = -13.6/n^2", "n");
+}
+#[test]
+fn t126_03() {
+    assert_solves_ok("r_n = a_0*n^2/Z", "n");
+}
+#[test]
+fn t126_04() {
+    assert_solves_ok("v = sqrt(G*M/r)", "r");
+}
+#[test]
+fn t126_05() {
+    assert_solves_ok("T = 2*pi*sqrt(r^3/(G*M))", "r");
+}
+#[test]
+fn t126_06() {
+    assert_solves_ok("E = h*c/lambda", "lambda");
+}
+#[test]
+fn t126_07() {
+    assert_solves_ok("p = h/lambda", "lambda");
+}
+#[test]
+fn t126_08() {
+    assert_solves_ok("f = c/lambda", "lambda");
+}
+#[test]
+fn t126_09() {
+    assert_solves_ok("K = (1/2)*I*omega^2", "omega");
+}
+#[test]
+fn t126_10() {
+    assert_solves_ok("L = I*omega", "I");
+}
 
 // T1+T3+T5
 ignored_three_tier!(t135, "Calculus not yet supported",
@@ -488,18 +516,47 @@ ignored_three_tier!(t135, "Calculus not yet supported",
 );
 
 // T1+T3+T6
-ignored_three_tier!(t136, "Advanced not yet supported",
-    t136_01 => ("det_A = a*d-b*c", "a"),
-    t136_02 => ("tr_A = a+d", "a"),
-    t136_03 => ("eig = (a+d)/2 + sqrt(((a-d)/2)^2+b*c)", "b"),
-    t136_04 => ("R_par = R1*R2/(R1+R2)", "R1"),
-    t136_05 => ("C_ser = 1/(1/C1+1/C2)", "C1"),
-    t136_06 => ("f_res = 1/(2*pi*sqrt(L*C))", "L"),
-    t136_07 => ("Q_factor = omega*L/R", "omega"),
-    t136_08 => ("BW = f_res/Q_factor", "Q_factor"),
-    t136_09 => ("Z = sqrt(R^2+(omega*L)^2)", "omega"),
-    t136_10 => ("P = V^2/R", "R")
-);
+#[test]
+fn t136_01() {
+    assert_solves_ok("det_A = a*d-b*c", "a");
+}
+#[test]
+fn t136_02() {
+    assert_solves_ok("tr_A = a+d", "a");
+}
+#[test]
+fn t136_03() {
+    assert_solves_ok("eig = (a+d)/2 + sqrt(((a-d)/2)^2+b*c)", "b");
+}
+#[test]
+#[ignore = "Rational equation with variable on both sides not yet supported"]
+fn t136_04() {
+    assert_solves_ok("R_par = R1*R2/(R1+R2)", "R1");
+}
+#[test]
+fn t136_05() {
+    assert_solves_ok("C_ser = 1/(1/C1+1/C2)", "C1");
+}
+#[test]
+fn t136_06() {
+    assert_solves_ok("f_res = 1/(2*pi*sqrt(L*C))", "L");
+}
+#[test]
+fn t136_07() {
+    assert_solves_ok("Q_factor = omega*L/R", "omega");
+}
+#[test]
+fn t136_08() {
+    assert_solves_ok("BW = f_res/Q_factor", "Q_factor");
+}
+#[test]
+fn t136_09() {
+    assert_solves_ok("Z = sqrt(R^2+(omega*L)^2)", "omega");
+}
+#[test]
+fn t136_10() {
+    assert_solves_ok("P = V^2/R", "R");
+}
 
 // T1+T4+T5
 ignored_three_tier!(t145, "Calculus not yet supported",
@@ -516,18 +573,48 @@ ignored_three_tier!(t145, "Calculus not yet supported",
 );
 
 // T1+T4+T6
-ignored_three_tier!(t146, "Advanced not yet supported",
-    t146_01 => ("psi = A*sin(k*x)", "k"),
-    t146_02 => ("E = h*f", "f"),
-    t146_03 => ("lambda = h/(m*v)", "v"),
-    t146_04 => ("B = mu_0*n*I", "I"),
-    t146_05 => ("E = sigma/(2*epsilon_0)", "sigma"),
-    t146_06 => ("F = q*v*sin(theta)*B", "theta"),
-    t146_07 => ("emf = N*B*A*omega*sin(omega*t)", "omega"),
-    t146_08 => ("I = I0*cos(theta)^2", "theta"),
-    t146_09 => ("d_sin_theta = m*lambda", "theta"),
-    t146_10 => ("n*lambda = 2*d*sin(theta)", "theta")
-);
+#[test]
+fn t146_01() {
+    assert_solves_ok("psi = A*sin(k*x)", "k");
+}
+#[test]
+fn t146_02() {
+    assert_solves_ok("E = h*f", "f");
+}
+#[test]
+fn t146_03() {
+    assert_solves_ok("lambda = h/(m*v)", "v");
+}
+#[test]
+fn t146_04() {
+    assert_solves_ok("B = mu_0*n*I", "I");
+}
+#[test]
+fn t146_05() {
+    assert_solves_ok("E = sigma/(2*epsilon_0)", "sigma");
+}
+#[test]
+fn t146_06() {
+    assert_solves_ok("F = q*v*sin(theta)*B", "theta");
+}
+#[test]
+#[ignore = "Variable omega appears under sin and as multiplier simultaneously"]
+fn t146_07() {
+    assert_solves_ok("emf = N*B*A*omega*sin(omega*t)", "omega");
+}
+#[test]
+fn t146_08() {
+    assert_solves_ok("I = I0*cos(theta)^2", "theta");
+}
+#[test]
+#[ignore = "d_sin_theta parsed as single variable, not d*sin(theta)"]
+fn t146_09() {
+    assert_solves_ok("d_sin_theta = m*lambda", "theta");
+}
+#[test]
+fn t146_10() {
+    assert_solves_ok("n*lambda = 2*d*sin(theta)", "theta");
+}
 
 // T1+T5+T6
 ignored_three_tier!(t156, "Calculus+Advanced not yet supported",
@@ -558,18 +645,47 @@ ignored_three_tier!(t235, "Calculus not yet supported",
 );
 
 // T2+T3+T6
-ignored_three_tier!(t236, "Advanced not yet supported",
-    t236_01 => ("lambda = sqrt(det(A))", "A"),
-    t236_02 => ("sigma = sqrt(E/(3*(1-2*nu)))", "nu"),
-    t236_03 => ("c = sqrt(gamma*R*T/M)", "gamma"),
-    t236_04 => ("v_s = sqrt(B/rho)", "B"),
-    t236_05 => ("Re = rho*v*L/mu", "mu"),
-    t236_06 => ("Ma = v/sqrt(gamma*R*T/M)", "v"),
-    t236_07 => ("Fr = v/sqrt(g*L)", "v"),
-    t236_08 => ("We = rho*v^2*L/sigma", "sigma"),
-    t236_09 => ("Gr = g*beta*dT*L^3/nu^2", "beta"),
-    t236_10 => ("Nu = h*L/k", "h")
-);
+#[test]
+#[ignore = "det() function on symbolic matrix not yet supported"]
+fn t236_01() {
+    assert_solves_ok("lambda = sqrt(det(A))", "A");
+}
+#[test]
+fn t236_02() {
+    assert_solves_ok("sigma = sqrt(E/(3*(1-2*nu)))", "nu");
+}
+#[test]
+fn t236_03() {
+    assert_solves_ok("c = sqrt(gamma*R*T/M)", "gamma");
+}
+#[test]
+fn t236_04() {
+    assert_solves_ok("v_s = sqrt(B/rho)", "B");
+}
+#[test]
+fn t236_05() {
+    assert_solves_ok("Re = rho*v*L/mu", "mu");
+}
+#[test]
+fn t236_06() {
+    assert_solves_ok("Ma = v/sqrt(gamma*R*T/M)", "v");
+}
+#[test]
+fn t236_07() {
+    assert_solves_ok("Fr = v/sqrt(g*L)", "v");
+}
+#[test]
+fn t236_08() {
+    assert_solves_ok("We = rho*v^2*L/sigma", "sigma");
+}
+#[test]
+fn t236_09() {
+    assert_solves_ok("Gr = g*beta*dT*L^3/nu^2", "beta");
+}
+#[test]
+fn t236_10() {
+    assert_solves_ok("Nu = h*L/k", "h");
+}
 
 // T2+T4+T5
 ignored_three_tier!(t245, "Calculus not yet supported",
@@ -586,18 +702,46 @@ ignored_three_tier!(t245, "Calculus not yet supported",
 );
 
 // T2+T4+T6
-ignored_three_tier!(t246, "Advanced not yet supported",
-    t246_01 => ("psi = A*exp(-r/a_0)*sin(theta)", "r"),
-    t246_02 => ("E = sqrt(p^2*c^2 + m^2*c^4)", "p"),
-    t246_03 => ("L = m*v*r*sin(theta)", "theta"),
-    t246_04 => ("B = mu_0*I/(2*pi*r)", "r"),
-    t246_05 => ("F = q*E + q*v*sin(theta)*B", "theta"),
-    t246_06 => ("phi = E*cos(theta)*A", "theta"),
-    t246_07 => ("I = (P/(4*pi*r^2))*cos(theta)", "r"),
-    t246_08 => ("S = sigma*T^4*cos(theta)", "theta"),
-    t246_09 => ("F_drag = 0.5*C_d*rho*A*v^2", "v"),
-    t246_10 => ("P = F*v*cos(theta)", "v")
-);
+#[test]
+fn t246_01() {
+    assert_solves_ok("psi = A*exp(-r/a_0)*sin(theta)", "r");
+}
+#[test]
+fn t246_02() {
+    assert_solves_ok("E = sqrt(p^2*c^2 + m^2*c^4)", "p");
+}
+#[test]
+fn t246_03() {
+    assert_solves_ok("L = m*v*r*sin(theta)", "theta");
+}
+#[test]
+fn t246_04() {
+    assert_solves_ok("B = mu_0*I/(2*pi*r)", "r");
+}
+#[test]
+fn t246_05() {
+    assert_solves_ok("F = q*E + q*v*sin(theta)*B", "theta");
+}
+#[test]
+fn t246_06() {
+    assert_solves_ok("phi = E*cos(theta)*A", "theta");
+}
+#[test]
+fn t246_07() {
+    assert_solves_ok("I = (P/(4*pi*r^2))*cos(theta)", "r");
+}
+#[test]
+fn t246_08() {
+    assert_solves_ok("S = sigma*T^4*cos(theta)", "theta");
+}
+#[test]
+fn t246_09() {
+    assert_solves_ok("F_drag = 0.5*C_d*rho*A*v^2", "v");
+}
+#[test]
+fn t246_10() {
+    assert_solves_ok("P = F*v*cos(theta)", "v");
+}
 
 // T2+T5+T6
 ignored_three_tier!(t256, "Calculus+Advanced not yet supported",
@@ -628,18 +772,46 @@ ignored_three_tier!(t345, "Calculus not yet supported",
 );
 
 // T3+T4+T6
-ignored_three_tier!(t346, "Advanced not yet supported",
-    t346_01 => ("Z = R + omega*L*sin(theta)", "theta"),
-    t346_02 => ("P = V*I*cos(phi)", "phi"),
-    t346_03 => ("S = V*I", "I"),
-    t346_04 => ("Q = V*I*sin(phi)", "phi"),
-    t346_05 => ("pf = cos(phi)", "phi"),
-    t346_06 => ("X_L = omega*L", "omega"),
-    t346_07 => ("X_C = 1/(omega*C)", "omega"),
-    t346_08 => ("Z = sqrt(R^2 + (X_L-X_C)^2)", "R"),
-    t346_09 => ("I = V/Z", "Z"),
-    t346_10 => ("theta = atan((X_L-X_C)/R)", "R")
-);
+#[test]
+fn t346_01() {
+    assert_solves_ok("Z = R + omega*L*sin(theta)", "theta");
+}
+#[test]
+fn t346_02() {
+    assert_solves_ok("P = V*I*cos(phi)", "phi");
+}
+#[test]
+fn t346_03() {
+    assert_solves_ok("S = V*I", "I");
+}
+#[test]
+fn t346_04() {
+    assert_solves_ok("Q = V*I*sin(phi)", "phi");
+}
+#[test]
+fn t346_05() {
+    assert_solves_ok("pf = cos(phi)", "phi");
+}
+#[test]
+fn t346_06() {
+    assert_solves_ok("X_L = omega*L", "omega");
+}
+#[test]
+fn t346_07() {
+    assert_solves_ok("X_C = 1/(omega*C)", "omega");
+}
+#[test]
+fn t346_08() {
+    assert_solves_ok("Z = sqrt(R^2 + (X_L-X_C)^2)", "R");
+}
+#[test]
+fn t346_09() {
+    assert_solves_ok("I = V/Z", "Z");
+}
+#[test]
+fn t346_10() {
+    assert_solves_ok("theta = atan((X_L-X_C)/R)", "R");
+}
 
 // T3+T5+T6
 ignored_three_tier!(t356, "Calculus+Advanced not yet supported",

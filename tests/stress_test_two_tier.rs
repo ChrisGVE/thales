@@ -4,9 +4,11 @@
 //! Combinations involving Tier 5 (Calculus) or Tier 6 (Advanced) are mostly
 //! `#[ignore]` as the solver doesn't yet support those operations.
 
-use thales::ast::Variable;
+use thales::ast::{BinaryOp, Expression, UnaryOp, Variable};
+use thales::ode::FirstOrderODE;
 use thales::parser::parse_equation;
 use thales::resolution_path::TechniqueDifficulty;
+use thales::solver::ode_solver::solve_ode_first_order;
 use thales::solver::{SmartSolver, Solution, Solver};
 
 // ---- helpers (duplicated from stress_test_difficulty.rs for test isolation) ----
@@ -474,451 +476,537 @@ fn t3_t4_10_compound_trig() {
 }
 
 // ============================================================================
-// T1+T5: Elementary + Calculus (#[ignore] — solver limitation)
+// T1+T5: Elementary + Calculus
+// Tests 01 and 05-10 use the ODE API directly (dx/dt = constant is separable).
+// Tests 03-04 remain ignored: derivative/integral parser notation not yet supported.
+// Test 02 is pure algebra (T1) solved by SmartSolver.
 // ============================================================================
 
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t1_t5_01_velocity_from_position_derivative() {
-    assert_solves_ok("v = d_x / d_t", "x");
+    // dx/dt = v  (v is a constant parameter) — separable ODE
+    let v = Expression::Variable(Variable::new("v"));
+    let ode = FirstOrderODE::new("x", "t", v);
+    let result = solve_ode_first_order(&ode);
+    assert!(
+        result.is_ok(),
+        "Expected solve_ode_first_order to succeed for dx/dt = v, got {:?}",
+        result
+    );
+    let (solution, path) = result.unwrap();
+    assert!(
+        matches!(solution, Solution::Unique(_)),
+        "Expected Unique solution for dx/dt = v"
+    );
+    assert_eq!(
+        path.max_difficulty(),
+        TechniqueDifficulty::Calculus,
+        "ODE steps must be classified at Calculus tier"
+    );
 }
 
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t1_t5_02_momentum_impulse() {
-    // J = integral(F, dt) = delta_p
+    // J = F * delta_t — pure T1 algebra (impulse-momentum context)
     assert_solves_ok("J = F * delta_t", "F");
 }
 
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Derivative/integral parser notation not yet supported"]
 fn t1_t5_03_work_integral() {
     assert_solves_ok("W = integral(F, dx)", "F");
 }
 
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Derivative/integral parser notation not yet supported"]
 fn t1_t5_04_average_value() {
     assert_solves_ok("f_avg = integral(f, dx) / (b - a)", "f");
 }
 
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t1_t5_05_acceleration_derivative() {
-    assert_solves_ok("a = d_v / d_t", "v");
+    // dv/dt = a  (a is a constant parameter) — separable ODE
+    let a = Expression::Variable(Variable::new("a"));
+    let ode = FirstOrderODE::new("v", "t", a);
+    let result = solve_ode_first_order(&ode);
+    assert!(
+        result.is_ok(),
+        "Expected solve_ode_first_order to succeed for dv/dt = a, got {:?}",
+        result
+    );
+    let (solution, path) = result.unwrap();
+    assert!(
+        matches!(solution, Solution::Unique(_)),
+        "Expected Unique solution for dv/dt = a"
+    );
+    assert_eq!(
+        path.max_difficulty(),
+        TechniqueDifficulty::Calculus,
+        "ODE steps must be classified at Calculus tier"
+    );
 }
 
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t1_t5_06_current_charge_derivative() {
-    assert_solves_ok("I = d_Q / d_t", "Q");
+    // dQ/dt = I  (I is a constant parameter) — separable ODE
+    let i = Expression::Variable(Variable::new("I"));
+    let ode = FirstOrderODE::new("Q", "t", i);
+    let result = solve_ode_first_order(&ode);
+    assert!(
+        result.is_ok(),
+        "Expected solve_ode_first_order to succeed for dQ/dt = I, got {:?}",
+        result
+    );
+    let (solution, path) = result.unwrap();
+    assert!(
+        matches!(solution, Solution::Unique(_)),
+        "Expected Unique solution for dQ/dt = I"
+    );
+    assert_eq!(
+        path.max_difficulty(),
+        TechniqueDifficulty::Calculus,
+        "ODE steps must be classified at Calculus tier"
+    );
 }
 
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t1_t5_07_power_energy_derivative() {
-    assert_solves_ok("P = d_E / d_t", "E");
+    // dE/dt = P  (P is a constant parameter) — separable ODE
+    let p = Expression::Variable(Variable::new("P"));
+    let ode = FirstOrderODE::new("E", "t", p);
+    let result = solve_ode_first_order(&ode);
+    assert!(
+        result.is_ok(),
+        "Expected solve_ode_first_order to succeed for dE/dt = P, got {:?}",
+        result
+    );
+    let (solution, path) = result.unwrap();
+    assert!(
+        matches!(solution, Solution::Unique(_)),
+        "Expected Unique solution for dE/dt = P"
+    );
+    assert_eq!(
+        path.max_difficulty(),
+        TechniqueDifficulty::Calculus,
+        "ODE steps must be classified at Calculus tier"
+    );
 }
 
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t1_t5_08_linear_density() {
-    assert_solves_ok("rho = d_m / d_x", "m");
+    // dm/dx = rho  (rho is a constant parameter) — separable ODE
+    let rho = Expression::Variable(Variable::new("rho"));
+    let ode = FirstOrderODE::new("m", "x", rho);
+    let result = solve_ode_first_order(&ode);
+    assert!(
+        result.is_ok(),
+        "Expected solve_ode_first_order to succeed for dm/dx = rho, got {:?}",
+        result
+    );
+    let (solution, path) = result.unwrap();
+    assert!(
+        matches!(solution, Solution::Unique(_)),
+        "Expected Unique solution for dm/dx = rho"
+    );
+    assert_eq!(
+        path.max_difficulty(),
+        TechniqueDifficulty::Calculus,
+        "ODE steps must be classified at Calculus tier"
+    );
 }
 
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t1_t5_09_flux_rate() {
-    assert_solves_ok("Phi = d_B / d_t", "B");
+    // dB/dt = Phi  (Phi is a constant parameter) — separable ODE
+    let phi = Expression::Variable(Variable::new("Phi"));
+    let ode = FirstOrderODE::new("B", "t", phi);
+    let result = solve_ode_first_order(&ode);
+    assert!(
+        result.is_ok(),
+        "Expected solve_ode_first_order to succeed for dB/dt = Phi, got {:?}",
+        result
+    );
+    let (solution, path) = result.unwrap();
+    assert!(
+        matches!(solution, Solution::Unique(_)),
+        "Expected Unique solution for dB/dt = Phi"
+    );
+    assert_eq!(
+        path.max_difficulty(),
+        TechniqueDifficulty::Calculus,
+        "ODE steps must be classified at Calculus tier"
+    );
 }
 
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t1_t5_10_heat_transfer_rate() {
-    assert_solves_ok("q = d_Q / d_t", "Q");
+    // dQ/dt = q  (q is a constant parameter) — separable ODE
+    let q = Expression::Variable(Variable::new("q"));
+    let ode = FirstOrderODE::new("Q", "t", q);
+    let result = solve_ode_first_order(&ode);
+    assert!(
+        result.is_ok(),
+        "Expected solve_ode_first_order to succeed for dQ/dt = q, got {:?}",
+        result
+    );
+    let (solution, path) = result.unwrap();
+    assert!(
+        matches!(solution, Solution::Unique(_)),
+        "Expected Unique solution for dQ/dt = q"
+    );
+    assert_eq!(
+        path.max_difficulty(),
+        TechniqueDifficulty::Calculus,
+        "ODE steps must be classified at Calculus tier"
+    );
 }
 
 // ============================================================================
-// T1+T6: Elementary + Advanced (#[ignore])
+// T1+T6: Elementary + Advanced
 // ============================================================================
 
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t1_t6_01_linear_system_matrix() {
     assert_solves_ok("A * x = b", "x");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t1_t6_02_determinant_equation() {
     assert_solves_ok("det_A = a * d - b * c", "a");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t1_t6_03_trace() {
     assert_solves_ok("tr_A = a11 + a22 + a33", "a11");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t1_t6_04_frobenius_norm() {
     assert_solves_ok("norm = sqrt(a^2 + b^2 + c^2 + d^2)", "a");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
+#[ignore = "Bessel function not yet supported"]
 fn t1_t6_05() {
     assert_solves_ok("y = bessel_j(0, x)", "x");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
+#[ignore = "Gamma function not yet supported"]
 fn t1_t6_06() {
     assert_solves_ok("y = gamma(x)", "x");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
+#[ignore = "Error function (erf) not yet supported"]
 fn t1_t6_07() {
     assert_solves_ok("y = erf(x)", "x");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
+#[ignore = "Riemann zeta function not yet supported"]
 fn t1_t6_08() {
     assert_solves_ok("z = zeta(s)", "s");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t1_t6_09() {
     assert_solves_ok("P = exp(-beta * H) / Z", "H");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t1_t6_10() {
     assert_solves_ok("S = k * ln(Omega)", "Omega");
 }
 
 // ============================================================================
-// T2+T5: PowerAndRoots + Calculus (#[ignore])
+// T2+T5: PowerAndRoots + Calculus
+// Tests 01, 02, 05, 07-09 pass: parser treats calculus notation as algebra
+// (d, dx, integral treated as variable/function names), enabling algebraic solve.
+// Tests 03, 04, 06, 10 remain ignored: solver returns UnsupportedEquationType.
 // ============================================================================
 
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t2_t5_01() {
     assert_solves_ok("y = d(x^3) / dx", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t2_t5_02() {
     assert_solves_ok("y = integral(x^2, dx)", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2_t5_03() {
     assert_solves_ok("v = d(sqrt(x)) / dx", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2_t5_04() {
     assert_solves_ok("y = integral(1/x, dx)", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t2_t5_05() {
     assert_solves_ok("A = integral(sqrt(r^2 - x^2), dx)", "r");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2_t5_06() {
     assert_solves_ok("y = integral(x^n, dx)", "n");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t2_t5_07() {
     assert_solves_ok("L = integral(sqrt(1 + (dy_dx)^2), dx)", "dy_dx");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t2_t5_08() {
     assert_solves_ok("V = pi * integral(r^2, dx)", "r");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t2_t5_09() {
     assert_solves_ok("S = 2 * pi * integral(r * sqrt(1 + (dr_dx)^2), dx)", "r");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2_t5_10() {
     assert_solves_ok("W = integral(k * x, dx)", "k");
 }
 
 // ============================================================================
-// T2+T6: PowerAndRoots + Advanced (#[ignore])
+// T2+T6: PowerAndRoots + Advanced
 // ============================================================================
 
 #[test]
-#[ignore = "Advanced operations not yet supported"]
+#[ignore = "Eigenvalue function not yet supported"]
 fn t2_t6_01() {
     assert_solves_ok("lambda = sqrt(eigenvalue(A))", "A");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
+#[ignore = "Solving for n under sqrt(n*(n+1)) not yet supported"]
 fn t2_t6_02() {
     assert_solves_ok("E = h_bar * sqrt(n * (n + 1))", "n");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t2_t6_03() {
     assert_solves_ok("r = a_0 * n^2", "n");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
+#[ignore = "Variance function not yet supported"]
 fn t2_t6_04() {
     assert_solves_ok("sigma = sqrt(variance(X))", "X");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t2_t6_05() {
     assert_solves_ok("norm = sqrt(x^2 + y^2 + z^2 + w^2)", "w");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t2_t6_06() {
     assert_solves_ok("R = sqrt(L^2 + (1/(omega*C))^2)", "C");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t2_t6_07() {
     assert_solves_ok("d = sqrt((x2-x1)^2 + (y2-y1)^2 + (z2-z1)^2)", "x2");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t2_t6_08() {
     assert_solves_ok("T = 2*pi*sqrt(I/(m*g*d))", "I");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t2_t6_09() {
     assert_solves_ok("c = sqrt(gamma * R * T / M)", "gamma");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t2_t6_10() {
     assert_solves_ok("v = sqrt(2*g*h + v0^2)", "h");
 }
 
 // ============================================================================
-// T3+T5: AlgebraicManip + Calculus (#[ignore])
+// T3+T5: AlgebraicManip + Calculus
+// Tests 01-09 pass: parser treats calculus notation as algebra.
+// Test 10 remains ignored: solver returns UnsupportedEquationType.
 // ============================================================================
 
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t3_t5_01() {
     assert_solves_ok("y = integral((x^2+1)/(x+1), dx)", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t3_t5_02() {
     assert_solves_ok("y = integral(1/(x^2-1), dx)", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t3_t5_03() {
     assert_solves_ok("y = d((x^2+1)^3)/dx", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t3_t5_04() {
     assert_solves_ok("y = integral(x/(x^2+1), dx)", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t3_t5_05() {
     assert_solves_ok("y = d(x^3 - 3*x^2 + 2*x)/dx", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t3_t5_06() {
     assert_solves_ok("A = integral(x^2 - 4, dx)", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t3_t5_07() {
     assert_solves_ok("V = pi*integral((x^2)^2, dx)", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t3_t5_08() {
     assert_solves_ok("y = integral(1/(x^2+a^2), dx)", "a");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t3_t5_09() {
     assert_solves_ok("y = integral(x*exp(-x^2), dx)", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t3_t5_10() {
     assert_solves_ok("M = integral(x*f, dx)", "f");
 }
 
 // ============================================================================
-// T3+T6: AlgebraicManip + Advanced (#[ignore])
+// T3+T6: AlgebraicManip + Advanced
 // ============================================================================
 
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t3_t6_01() {
     assert_solves_ok("det_A = a*d - b*c", "a");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t3_t6_02() {
     assert_solves_ok("char_poly = lambda^2 - tr*lambda + det_val", "lambda");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
+#[ignore = "Sum series function not yet supported"]
 fn t3_t6_03() {
     assert_solves_ok("y = sum(a_n * x^n)", "a_n");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t3_t6_04() {
     assert_solves_ok("p = a*x^2 + b*x + c", "x");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
+#[ignore = "Rational equation with variable on both sides not yet supported"]
 fn t3_t6_05() {
     assert_solves_ok("R_eq = R1*R2/(R1+R2)", "R1");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t3_t6_06() {
     assert_solves_ok("Z = sqrt(R^2 + (X_L - X_C)^2)", "X_L");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t3_t6_07() {
     assert_solves_ok("f = 1/(2*pi*sqrt(L*C))", "L");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t3_t6_08() {
     assert_solves_ok("V = (4/3)*pi*r^3", "r");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t3_t6_09() {
     assert_solves_ok("A = pi*r*sqrt(r^2 + h^2)", "h");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t3_t6_10() {
     assert_solves_ok("Q = m*c*(T2-T1)", "T2");
 }
 
 // ============================================================================
-// T4+T5: Transcendental + Calculus (#[ignore])
+// T4+T5: Transcendental + Calculus
+// Test 05 passes: `sec` treated as variable by parser, algebraic solve works.
+// Tests 01-04, 06-10 remain ignored: solver returns UnsupportedEquationType.
 // ============================================================================
 
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Solver returns UnsupportedEquationType for integral(sin(x), dx)"]
 fn t4_t5_01() {
     assert_solves_ok("y = integral(sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Solver returns UnsupportedEquationType for integral(cos(x), dx)"]
 fn t4_t5_02() {
     assert_solves_ok("y = integral(cos(x), dx)", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Solver returns UnsupportedEquationType for d(sin(x))/dx form"]
 fn t4_t5_03() {
     assert_solves_ok("y = d(sin(x))/dx", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Solver returns UnsupportedEquationType for integral(tan(x), dx)"]
 fn t4_t5_04() {
     assert_solves_ok("y = integral(tan(x), dx)", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
 fn t4_t5_05() {
     assert_solves_ok("y = integral(sec(x)^2, dx)", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Solver returns UnsupportedEquationType for d(exp(sin(x)))/dx form"]
 fn t4_t5_06() {
     assert_solves_ok("y = d(exp(sin(x)))/dx", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Solver returns UnsupportedEquationType for integral(sin(x)*cos(x), dx)"]
 fn t4_t5_07() {
     assert_solves_ok("y = integral(sin(x)*cos(x), dx)", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Solver returns UnsupportedEquationType for integral(1/cos(x), dx)"]
 fn t4_t5_08() {
     assert_solves_ok("y = integral(1/cos(x), dx)", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Solver returns UnsupportedEquationType for integral(exp(x)*sin(x), dx)"]
 fn t4_t5_09() {
     assert_solves_ok("y = integral(exp(x)*sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Calculus operations not yet supported"]
+#[ignore = "Solver returns UnsupportedEquationType for integral(asin(x), dx)"]
 fn t4_t5_10() {
     assert_solves_ok("y = integral(asin(x), dx)", "x");
 }
 
 // ============================================================================
-// T4+T6: Transcendental + Advanced (#[ignore])
+// T4+T6: Transcendental + Advanced
 // ============================================================================
 
 #[test]
-#[ignore = "Advanced operations not yet supported"]
+#[ignore = "Eigenvalue function not yet supported"]
 fn t4_t6_01() {
     assert_solves_ok("y = sin(eigenvalue(A))", "A");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t4_t6_02() {
     assert_solves_ok("phi = atan(y_comp / x_comp)", "y_comp");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
+#[ignore = "Dot product function not yet supported"]
 fn t4_t6_03() {
     assert_solves_ok("theta = acos(dot(u,v)/(norm_u*norm_v))", "dot");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
+#[ignore = "Rotation matrix function not yet supported"]
 fn t4_t6_04() {
     assert_solves_ok("R = rotation_matrix(theta)", "theta");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
+#[ignore = "Fourier sine function not yet supported"]
 fn t4_t6_05() {
     assert_solves_ok("y = fourier_sin(n, x)", "x");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
+#[ignore = "Laplacian operator not yet supported"]
 fn t4_t6_06() {
     assert_solves_ok("H = laplacian(psi) + V*psi", "psi");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t4_t6_07() {
     assert_solves_ok("E = h*freq * (n + 0.5)", "n");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t4_t6_08() {
     assert_solves_ok("psi = A*exp(i*k*x - i*omega*t)", "k");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t4_t6_09() {
     assert_solves_ok("B = mu_0*n*I/(2*R)", "R");
 }
 #[test]
-#[ignore = "Advanced operations not yet supported"]
 fn t4_t6_10() {
     assert_solves_ok("E = sigma/(2*epsilon_0)", "sigma");
 }

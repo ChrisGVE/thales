@@ -639,7 +639,7 @@ fn t5_10_taylor_series() {
 
 // ============================================================================
 // Tier 6: Advanced — matrix, numerical, special functions
-// (All #[ignore] — documenting solver boundaries)
+// (#[ignore] where solver boundary applies; algebraic forms are enabled)
 // ============================================================================
 
 #[test]
