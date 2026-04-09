@@ -4,7 +4,7 @@
 //! Combinations involving Tier 5 (Calculus) or Tier 6 (Advanced) are mostly
 //! `#[ignore]` as the solver doesn't yet support those operations.
 
-use thales::ast::{BinaryOp, Expression, UnaryOp, Variable};
+use thales::ast::{Expression, Variable};
 use thales::ode::FirstOrderODE;
 use thales::parser::parse_equation;
 use thales::resolution_path::TechniqueDifficulty;
