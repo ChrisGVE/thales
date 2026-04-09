@@ -838,32 +838,39 @@ fn test_cubic_complex_roots_x3_plus_1() {
 }
 
 #[test]
-fn test_quadratic_solver_returns_complex_roots_directly() {
-    // QuadraticSolver directly returns complex roots for x² + 1 = 0.
-    // Note: SmartSolver tries symbolic isolation first which returns a single
-    // root; the QuadraticSolver's multi-root handling is tested here directly.
-    use thales::solver::QuadraticSolver;
+fn test_smart_solver_routes_to_quadratic_for_complex_roots() {
+    // SmartSolver must delegate x² + 1 = 0 to QuadraticSolver, returning ±i.
+    // The SmartSolver skips symbolic isolation when the discriminant is negative.
+    use thales::solver::SmartSolver;
 
     let left = add(pow(var("x"), int(2)), int(1));
     let equation = Equation::new("test", left, int(0));
 
-    let solver = QuadraticSolver::new();
+    let solver = SmartSolver::new();
     let result = solver.solve(&equation, &Variable::new("x"));
-    assert!(result.is_ok(), "QuadraticSolver failed: {:?}", result.err());
+    assert!(result.is_ok(), "SmartSolver failed: {:?}", result.err());
 
     let (solution, _path) = result.unwrap();
     match solution {
         Solution::Multiple(roots) => {
-            assert_eq!(roots.len(), 2, "Expected 2 roots");
+            assert_eq!(roots.len(), 2, "Expected 2 complex roots");
             for root in &roots {
                 assert!(
                     matches!(root, Expression::Complex(_)),
                     "Expected complex root, got {:?}",
                     root
                 );
+                if let Expression::Complex(c) = root {
+                    assert!(c.re.abs() < 1e-10, "real part should be 0, got {}", c.re);
+                    assert!(
+                        (c.im.abs() - 1.0).abs() < 1e-10,
+                        "|imag| should be 1, got {}",
+                        c.im.abs()
+                    );
+                }
             }
         }
-        _ => panic!("Expected multiple complex solutions"),
+        _ => panic!("Expected multiple complex solutions, got {:?}", solution),
     }
 }
 

@@ -137,7 +137,9 @@ pub use types::{Constraint, Solution, SolverError, SolverResult, SymbolicFailure
 use crate::ast::{BinaryOp, Equation, Expression, Variable};
 use crate::numerical::SmartNumericalSolver;
 use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder, ResolutionStep};
-use helpers::{evaluate_constants, substitute_values};
+use helpers::{
+    evaluate_constants, get_polynomial_degree, is_polynomial_expression, substitute_values,
+};
 use std::collections::HashMap;
 
 /// Trait for equation solvers.
@@ -327,17 +329,47 @@ impl Solver for SmartSolver {
         equation: &Equation,
         variable: &Variable,
     ) -> SolverResult<(Solution, ResolutionPath)> {
+        // Only skip symbolic isolation for equations that are polynomial of
+        // degree ≥ 2 in the target variable and have a negative discriminant
+        // (complex roots).  For real-root quadratics the symbolic isolation
+        // path gives the expected Unique result; for complex-root cases it
+        // would produce an unevaluable expression like (-1)^(1/2).
+        let combined_deg = crate::ast::Expression::Binary(
+            crate::ast::BinaryOp::Sub,
+            Box::new(equation.left.clone()),
+            Box::new(equation.right.clone()),
+        )
+        .simplify();
+        let var_degree = if is_polynomial_expression(&combined_deg) {
+            get_polynomial_degree(&combined_deg, &variable.name)
+        } else {
+            0
+        };
+
+        // Compute discriminant only for true quadratics in the target variable.
+        let has_complex_roots = if var_degree == 2 {
+            use helpers::extract_quadratic_coefficients;
+            let (a, b, c) = extract_quadratic_coefficients(&combined_deg, &variable.name);
+            a.abs() > 1e-15 && (b * b - 4.0 * a * c) < -1e-15
+        } else {
+            false
+        };
+
         // Try general symbolic isolation first — it handles arbitrary
         // rearrangements that the specialized solvers miss.
-        let path_builder = ResolutionPathBuilder::new(equation.left.clone());
-        if let Ok((result_expr, builder)) = symbolic_isolation::symbolic_isolate(
-            &equation.left,
-            &equation.right,
-            variable,
-            path_builder,
-        ) {
-            let path = builder.finish(result_expr.clone());
-            return Ok((Solution::Unique(result_expr), path));
+        // Skip it when the equation has complex roots: symbolic isolation
+        // returns a single Unique result and cannot represent complex pairs.
+        if !has_complex_roots {
+            let path_builder = ResolutionPathBuilder::new(equation.left.clone());
+            if let Ok((result_expr, builder)) = symbolic_isolation::symbolic_isolate(
+                &equation.left,
+                &equation.right,
+                variable,
+                path_builder,
+            ) {
+                let path = builder.finish(result_expr.clone());
+                return Ok((Solution::Unique(result_expr), path));
+            }
         }
 
         // Fall back: linear -> quadratic -> polynomial -> transcendental
