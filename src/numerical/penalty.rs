@@ -68,30 +68,43 @@ pub fn solve_penalty(
     let n = variables.len();
     let names: Vec<String> = variables.iter().map(|v| v.name.clone()).collect();
 
-    let mut point = vec![0.1_f64; n];
-    let mut mu = MU_INIT;
+    // Try multiple starting points to handle nonconvex feasible sets.
+    let seeds: &[f64] = &[0.1, -0.1, 1.0, -1.0];
+    let mut best: Option<PenaltyResult> = None;
+    let mut best_obj = f64::INFINITY;
 
-    for _ in 0..MAX_OUTER {
-        gradient_descent_inner(objective, constraints, &names, &mut point, mu, tolerance)?;
+    for &seed in seeds {
+        let mut point = vec![seed; n];
+        let mut mu = MU_INIT;
 
-        let residual = constraint_residual(constraints, &names, &point);
-        if residual < tolerance {
-            return Ok(PenaltyResult {
-                point,
-                constraint_residual: residual,
-            });
+        for _ in 0..MAX_OUTER {
+            gradient_descent_inner(objective, constraints, &names, &mut point, mu, tolerance)?;
+
+            let residual = constraint_residual(constraints, &names, &point);
+            if residual < tolerance {
+                break;
+            }
+            mu *= MU_FACTOR;
         }
 
-        mu *= MU_FACTOR;
+        let residual = constraint_residual(constraints, &names, &point);
+        if residual < tolerance * 100.0 {
+            if let Some(obj) = eval_at(objective, &names, &point) {
+                if obj < best_obj {
+                    best_obj = obj;
+                    best = Some(PenaltyResult {
+                        point,
+                        constraint_residual: residual,
+                    });
+                }
+            }
+        }
     }
 
-    // Return best found point even if not fully feasible.
-    let residual = constraint_residual(constraints, &names, &point);
-    if residual < tolerance * 100.0 {
-        return Ok(PenaltyResult {
-            point,
-            constraint_residual: residual,
-        });
+    if let Some(result) = best {
+        if result.constraint_residual < tolerance * 100.0 {
+            return Ok(result);
+        }
     }
 
     Err(SolverError::CannotSolve(
@@ -184,7 +197,7 @@ fn gradient_descent_inner(
             .ok_or_else(|| SolverError::CannotSolve("Gradient evaluation failed".to_string()))?;
 
         let grad_norm: f64 = grad.iter().map(|v| v * v).sum::<f64>().sqrt();
-        if grad_norm < tol * 1e-3 {
+        if grad_norm < tol * 1e-6 {
             break;
         }
 
@@ -192,7 +205,7 @@ fn gradient_descent_inner(
             .ok_or_else(|| SolverError::CannotSolve("Objective evaluation failed".to_string()))?;
 
         // Backtracking line search along steepest descent direction.
-        let mut step = 1.0 / (1.0 + mu).max(1.0);
+        let mut step = 1.0;
         let directional = grad_norm * grad_norm; // ∇f · (-(-∇f)) = ‖∇f‖²
 
         let new_point = backtrack(
@@ -203,6 +216,7 @@ fn gradient_descent_inner(
             &grad,
             f0,
             directional,
+            mu,
             &mut step,
         );
 
@@ -221,6 +235,7 @@ fn backtrack(
     grad: &[f64],
     f0: f64,
     directional: f64,
+    mu: f64,
     step: &mut f64,
 ) -> Vec<f64> {
     for _ in 0..50 {
@@ -230,7 +245,7 @@ fn backtrack(
             .map(|(&x, &g)| x - *step * g)
             .collect();
 
-        if let Some(f_new) = penalized_value(objective, constraints, names, &candidate, 0.0) {
+        if let Some(f_new) = penalized_value(objective, constraints, names, &candidate, mu) {
             // Armijo sufficient-decrease condition
             if f_new <= f0 - LS_ALPHA * *step * directional {
                 return candidate;
@@ -281,7 +296,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "penalty method convergence needs tuning for this problem"]
     fn test_penalty_min_norm_squared_sum_constraint() {
         // min x² + y²  s.t. x + y = 1  → x = y = 0.5
         let objective = norm_squared("x", "y");
@@ -309,7 +323,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "penalty method convergence needs tuning for this problem"]
     fn test_penalty_unit_circle_min_sum() {
         // min x + y  s.t. x² + y² - 1 = 0  → minimum at (-1/√2, -1/√2)
         let x = Expression::Variable(Variable::new("x"));
