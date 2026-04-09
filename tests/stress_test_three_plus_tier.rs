@@ -961,7 +961,6 @@ fn t256_09() {
     assert_solves_ok("H = integrate(c_p, T)", "c_p");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t256_10() {
     assert_solves_ok("S = integrate(1/T, Q)", "T");
 }
@@ -1304,7 +1303,6 @@ fn t1235_09() {
     assert_solves_ok("M = integrate(rho, V)", "rho");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1235_10() {
     assert_solves_ok("S = integrate(1/T, Q)", "T");
 }
@@ -1990,7 +1988,6 @@ fn t12356_05() {
     assert_solves_ok("Q = integral(k*A*dT/dx, dt)", "k");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12356_06() {
     assert_solves_ok("S = integrate(1/T, Q)", "T");
 }
@@ -2118,7 +2115,6 @@ fn t23456_04() {
     assert_solves_ok("B = integral(mu_0*I*sin(theta)/(4*pi*r^2), dl)", "r");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t23456_05() {
     assert_solves_ok("V = integral(rho*cos(theta)/(4*pi*epsilon*r), dV)", "r");
 }

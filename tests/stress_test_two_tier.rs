@@ -512,13 +512,11 @@ fn t1_t5_02_momentum_impulse() {
 }
 
 #[test]
-#[ignore = "Derivative/integral parser notation not yet supported"]
 fn t1_t5_03_work_integral() {
     assert_solves_ok("W = integral(F, dx)", "F");
 }
 
 #[test]
-#[ignore = "Derivative/integral parser notation not yet supported"]
 fn t1_t5_04_average_value() {
     assert_solves_ok("f_avg = integral(f, dx) / (b - a)", "f");
 }
@@ -726,7 +724,6 @@ fn t2_t5_02() {
     assert_solves_ok("y = integral(x^2, dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2_t5_03() {
     assert_solves_ok("v = d(sqrt(x)) / dx", "x");
 }
@@ -757,7 +754,6 @@ fn t2_t5_09() {
     assert_solves_ok("S = 2 * pi * integral(r * sqrt(1 + (dr_dx)^2), dx)", "r");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2_t5_10() {
     assert_solves_ok("W = integral(k * x, dx)", "k");
 }
@@ -853,7 +849,6 @@ fn t3_t5_09() {
     assert_solves_ok("y = integral(x*exp(-x^2), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t3_t5_10() {
     assert_solves_ok("M = integral(x*f, dx)", "f");
 }
@@ -871,7 +866,6 @@ fn t3_t6_02() {
     assert_solves_ok("char_poly = lambda^2 - tr*lambda + det_val", "lambda");
 }
 #[test]
-#[ignore = "Sum series function not yet supported"]
 fn t3_t6_03() {
     assert_solves_ok("y = sum(a * x^n, n, 0, N)", "a");
 }
@@ -922,7 +916,6 @@ fn t4_t5_02() {
     assert_solves_ok("y = integral(cos(x), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for d(sin(x))/dx form"]
 fn t4_t5_03() {
     assert_solves_ok("y = d(sin(x))/dx", "x");
 }
@@ -1036,7 +1029,6 @@ fn t5_t6_04() {
     assert_solves_ok("Z = integral(exp(-beta*E)*g(E), dE)", "beta");
 }
 #[test]
-#[ignore = "Calculus + Advanced not yet supported"]
 fn t5_t6_05() {
     assert_solves_ok("S = integral(p, dq) / (2*pi)", "p");
 }

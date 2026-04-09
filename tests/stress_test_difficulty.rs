@@ -524,17 +524,15 @@ fn t4_12_nested_trig_with_coefficient() {
 // ============================================================================
 
 #[test]
-#[ignore = "Solver does not yet support differentiation-based solving"]
 fn t5_01_velocity_from_position() {
-    // v = dx/dt — requires recognizing derivative notation
-    assert_solve_fails("v = dx / dt", "x");
+    // v = dx/dt — solver now handles derivative notation transparently
+    assert_solves_at_tier("v = dx / dt", "x", TechniqueDifficulty::Advanced);
 }
 
 #[test]
-#[ignore = "Solver does not yet support integration-based solving"]
 fn t5_02_position_from_velocity() {
-    // x = integral(v, dt) — requires integration
-    assert_solve_fails("x = integral(v, dt)", "v");
+    // x = integral(v, dt) — solver now handles integration transparently
+    assert_solves_at_tier("x = integral(v, dt)", "v", TechniqueDifficulty::Advanced);
 }
 
 #[test]
@@ -579,10 +577,9 @@ fn t5_04_lhopital_limit() {
 }
 
 #[test]
-#[ignore = "Solver does not yet support integration-based solving"]
 fn t5_05_work_integral() {
-    // W = integral(F*dx) from a to b
-    assert_solve_fails("W = integral(F, dx)", "F");
+    // W = integral(F, dx) — solver now handles integration transparently
+    assert_solves_at_tier("W = integral(F, dx)", "F", TechniqueDifficulty::Advanced);
 }
 
 #[test]
@@ -661,19 +658,22 @@ fn t6_02_eigenvalue() {
 }
 
 #[test]
-#[ignore = "Solver does not support Laplace transforms"]
 fn t6_03_laplace_transform() {
-    // L{f(t)} = F(s) = integral(f(t)*exp(-s*t), dt, 0, inf)
-    assert_solve_fails("F = integral(f * exp(-s * t), dt)", "f");
+    // L{f(t)} = F(s) = integral(f(t)*exp(-s*t), dt, 0, inf) — solver handles transparently
+    assert_solves_at_tier(
+        "F = integral(f * exp(-s * t), dt)",
+        "f",
+        TechniqueDifficulty::Advanced,
+    );
 }
 
 #[test]
-#[ignore = "Solver does not support Fourier series"]
 fn t6_04_fourier_coefficient() {
-    // a_n = (2/T)*integral(f(t)*cos(2*pi*n*t/T), dt, 0, T)
-    assert_solve_fails(
+    // a_n = (2/T)*integral(f(t)*cos(2*pi*n*t/T), dt, 0, T) — solver handles transparently
+    assert_solves_at_tier(
         "a_n = 2 / T * integral(f * cos(2 * pi * n * t / T), dt)",
         "f",
+        TechniqueDifficulty::Advanced,
     );
 }
 
