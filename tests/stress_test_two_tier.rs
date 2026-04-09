@@ -873,7 +873,7 @@ fn t3_t6_02() {
 #[test]
 #[ignore = "Sum series function not yet supported"]
 fn t3_t6_03() {
-    assert_solves_ok("y = sum(a_n * x^n)", "a_n");
+    assert_solves_ok("y = sum(a * x^n, n, 0, N)", "a");
 }
 #[test]
 fn t3_t6_04() {
