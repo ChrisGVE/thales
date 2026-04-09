@@ -1614,6 +1614,35 @@ pub enum Operation {
     /// Apply Gaussian elimination.
     GaussianElimination,
 
+    /// Compute the matrix inverse A⁻¹ and apply it to the constant vector.
+    ///
+    /// Used in the matrix-inverse method for solving Ax = b as x = A⁻¹b.
+    MatrixInverse,
+
+    /// Decompose the coefficient matrix into lower and upper triangular factors.
+    ///
+    /// The LU decomposition A = LU is used as the first step before forward
+    /// and back substitution to solve the system.
+    LUDecomposition,
+
+    /// Back-substitute to determine the value of a single variable.
+    ///
+    /// Applied after row reduction or LU decomposition, resolving one variable
+    /// at a time from the bottom of the triangular system upward.
+    BackSubstitute {
+        /// The variable whose value is being determined
+        variable: String,
+    },
+
+    /// Substitute a solved variable into the remaining equations of the system.
+    ///
+    /// After one variable in a system is found, it is substituted into the
+    /// other equations to reduce the system size by one.
+    SystemSubstitution {
+        /// The variable being substituted
+        variable: String,
+    },
+
     /// Compute determinant using a specific method.
     ComputeDeterminant {
         /// The method used (e.g., "cofactor expansion", "LU decomposition")
@@ -1764,6 +1793,14 @@ impl Operation {
                 format!("Matrix operation: {}", operation)
             }
             Operation::GaussianElimination => "Apply Gaussian elimination".to_string(),
+            Operation::MatrixInverse => "Compute matrix inverse A⁻¹ and apply to b".to_string(),
+            Operation::LUDecomposition => "Decompose matrix into LU factors".to_string(),
+            Operation::BackSubstitute { variable } => {
+                format!("Back-substitute to find {}", variable)
+            }
+            Operation::SystemSubstitution { variable } => {
+                format!("Substitute {} into remaining equations", variable)
+            }
             Operation::ComputeDeterminant { method } => {
                 format!("Compute determinant ({})", method)
             }
@@ -1930,6 +1967,10 @@ impl Operation {
             // Matrix operations
             Operation::MatrixOperation { .. }
             | Operation::GaussianElimination
+            | Operation::MatrixInverse
+            | Operation::LUDecomposition
+            | Operation::BackSubstitute { .. }
+            | Operation::SystemSubstitution { .. }
             | Operation::ComputeDeterminant { .. } => "matrix".to_string(),
 
             // Approximation
@@ -2019,6 +2060,10 @@ impl Operation {
             // Tier 6 — Advanced
             Operation::MatrixOperation { .. }
             | Operation::GaussianElimination
+            | Operation::MatrixInverse
+            | Operation::LUDecomposition
+            | Operation::BackSubstitute { .. }
+            | Operation::SystemSubstitution { .. }
             | Operation::ComputeDeterminant { .. }
             | Operation::NumericalApproximation
             | Operation::NumericalConverged { .. }

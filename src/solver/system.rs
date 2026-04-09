@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use crate::ast::{Equation, Expression, Variable};
+use crate::resolution_path::{Operation, ResolutionPath, ResolutionStep};
 
 use super::linear_system::LinearSystem;
 use super::types::{Solution, SolverError, SolverResult};
@@ -223,15 +224,56 @@ impl SystemSolver {
         equations: &[Equation],
         variables: &[Variable],
     ) -> SolverResult<SystemSolution> {
+        self.solve_matrix_inverse_with_path(equations, variables)
+            .map(|(sol, _path)| sol)
+    }
+
+    /// Solve using matrix inversion and return both the solution and the
+    /// resolution path recording all steps.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SolverError::CannotSolve`] when the matrix is singular, and
+    /// [`SolverError::Other`] for any other matrix or dimension error.
+    pub fn solve_matrix_inverse_with_path(
+        &self,
+        equations: &[Equation],
+        variables: &[Variable],
+    ) -> SolverResult<(SystemSolution, ResolutionPath)> {
         let system = LinearSystem::from_equations(equations, variables)?;
+        let initial = Expression::Integer(equations.len() as i64);
+        let mut path = ResolutionPath::new(initial);
+
+        path.add_step(ResolutionStep::new(
+            Operation::MatrixInverse,
+            "Compute A⁻¹ from the coefficient matrix".to_string(),
+            Expression::Integer(0),
+        ));
+
         let inv_a = system
             .matrix_a
             .inverse()
             .map_err(|e| SolverError::CannotSolve(e.to_string()))?;
+
         let x = inv_a
             .mul(&system.vector_b)
             .map_err(|e| SolverError::CannotSolve(e.to_string()))?;
-        matrix_to_solution(&x, &system.variables)
+
+        for var in &system.variables {
+            path.add_step(ResolutionStep::new(
+                Operation::BackSubstitute {
+                    variable: var.name.clone(),
+                },
+                format!("Compute value of {} from x = A⁻¹b", var.name),
+                Expression::Integer(0),
+            ));
+        }
+
+        let sol = matrix_to_solution(&x, &system.variables)?;
+        let result_expr = Expression::Integer(system.variables.len() as i64);
+        path.set_result(result_expr);
+
+        Ok((sol, path))
     }
 
     /// Solve using the best available method.
@@ -434,6 +476,60 @@ mod tests {
             }
             _ => panic!("both should be unique"),
         }
+    }
+
+    // ── solve_matrix_inverse_with_path ───────────────────────────────────────
+
+    #[test]
+    fn test_inverse_with_path_contains_matrix_inverse_op() {
+        use crate::resolution_path::Operation;
+
+        let ([eq1, eq2], [x, y]) = make_2x2_system();
+        let solver = SystemSolver::new();
+        let (_sol, path) = solver
+            .solve_matrix_inverse_with_path(&[eq1, eq2], &[x.clone(), y.clone()])
+            .unwrap();
+
+        let has_matrix_inverse = path
+            .steps
+            .iter()
+            .any(|s| matches!(s.operation, Operation::MatrixInverse));
+        assert!(has_matrix_inverse, "path must contain MatrixInverse step");
+    }
+
+    #[test]
+    fn test_inverse_with_path_contains_back_substitute_steps() {
+        use crate::resolution_path::Operation;
+
+        let ([eq1, eq2], [x, y]) = make_2x2_system();
+        let solver = SystemSolver::new();
+        let (_sol, path) = solver
+            .solve_matrix_inverse_with_path(&[eq1, eq2], &[x.clone(), y.clone()])
+            .unwrap();
+
+        let back_subs: Vec<_> = path
+            .steps
+            .iter()
+            .filter(|s| matches!(s.operation, Operation::BackSubstitute { .. }))
+            .collect();
+        assert_eq!(
+            back_subs.len(),
+            2,
+            "expected one BackSubstitute per variable"
+        );
+    }
+
+    #[test]
+    fn test_inverse_with_path_difficulty_is_advanced() {
+        use crate::resolution_path::TechniqueDifficulty;
+
+        let ([eq1, eq2], [x, y]) = make_2x2_system();
+        let solver = SystemSolver::new();
+        let (_sol, path) = solver
+            .solve_matrix_inverse_with_path(&[eq1, eq2], &[x.clone(), y.clone()])
+            .unwrap();
+
+        assert_eq!(path.max_difficulty(), TechniqueDifficulty::Advanced);
     }
 
     // ── solve_best_effort: prefers LU, falls back correctly ───────────────────
