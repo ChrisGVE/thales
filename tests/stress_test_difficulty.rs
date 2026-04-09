@@ -586,10 +586,13 @@ fn t5_05_work_integral() {
 }
 
 #[test]
-#[ignore = "Solver does not yet support chain rule differentiation"]
 fn t5_06_chain_rule() {
-    // y = sin(x^2), dy/dx = 2x*cos(x^2)
-    assert_solve_fails("dy_dx = 2 * x * cos(x^2)", "x");
+    // y = sin(x^2), dy/dx = 2x*cos(x^2) — solver handles algebraically
+    assert_solves_at_tier(
+        "dy_dx = 2 * x * cos(x^2)",
+        "x",
+        TechniqueDifficulty::Advanced,
+    );
 }
 
 #[test]
@@ -600,10 +603,9 @@ fn t5_07_integration_by_parts() {
 }
 
 #[test]
-#[ignore = "Solver does not yet support u-substitution"]
 fn t5_08_u_substitution() {
-    // integral(2x*cos(x^2)) = sin(x^2) + C
-    assert_solve_fails("y = 2 * x * cos(x^2)", "x");
+    // integral(2x*cos(x^2)) = sin(x^2) + C — solver handles algebraically
+    assert_solves_at_tier("y = 2 * x * cos(x^2)", "x", TechniqueDifficulty::Advanced);
 }
 
 #[test]
@@ -631,10 +633,13 @@ fn t5_09_separable_ode() {
 }
 
 #[test]
-#[ignore = "Solver does not yet support power series"]
 fn t5_10_taylor_series() {
-    // sin(x) ≈ x - x^3/6 + x^5/120 for small x
-    assert_solve_fails("y = x - x^3 / 6 + x^5 / 120", "x");
+    // sin(x) ≈ x - x^3/6 + x^5/120 for small x — solver handles as polynomial
+    assert_solves_at_tier(
+        "y = x - x^3 / 6 + x^5 / 120",
+        "x",
+        TechniqueDifficulty::Advanced,
+    );
 }
 
 // ============================================================================
@@ -643,10 +648,9 @@ fn t5_10_taylor_series() {
 // ============================================================================
 
 #[test]
-#[ignore = "Solver does not support matrix equations"]
 fn t6_01_matrix_equation() {
-    // A*x = b — requires matrix inversion
-    assert_solve_fails("A * x = b", "x");
+    // A*x = b — solver handles as algebraic division
+    assert_solves_at_tier("A * x = b", "x", TechniqueDifficulty::Advanced);
 }
 
 #[test]
@@ -674,17 +678,19 @@ fn t6_04_fourier_coefficient() {
 }
 
 #[test]
-#[ignore = "Solver does not support Bessel functions"]
 fn t6_05_bessel_equation() {
-    // x^2*y'' + x*y' + (x^2 - n^2)*y = 0
-    assert_solve_fails("x^2 * y_pp + x * y_p + (x^2 - n^2) * y = 0", "y");
+    // x^2*y'' + x*y' + (x^2 - n^2)*y = 0 — solver handles as polynomial in y
+    assert_solves_at_tier(
+        "x^2 * y_pp + x * y_p + (x^2 - n^2) * y = 0",
+        "y",
+        TechniqueDifficulty::Advanced,
+    );
 }
 
 #[test]
-#[ignore = "Solver does not support tensor operations"]
 fn t6_06_tensor_contraction() {
-    // T^ij * g_jk = T^i_k — tensor index notation
-    assert_solve_fails("T_ij * g_jk = T_ik", "g_jk");
+    // T^ij * g_jk = T^i_k — solver handles as algebraic division
+    assert_solves_at_tier("T_ij * g_jk = T_ik", "g_jk", TechniqueDifficulty::Advanced);
 }
 
 #[test]

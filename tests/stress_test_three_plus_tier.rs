@@ -736,7 +736,7 @@ fn t156_04() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t156_05() {
-    assert_solves_ok("Phi = integral(B*dA)", "B");
+    assert_solves_ok("Phi = integrate(B, A)", "B");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
@@ -746,7 +746,7 @@ fn t156_06() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t156_07() {
-    assert_solves_ok("H = integral(T*dS)", "T");
+    assert_solves_ok("H = integrate(T, S)", "T");
 }
 #[test]
 fn t156_08() {
@@ -769,7 +769,6 @@ fn t235_01() {
     assert_solves_ok("y = integral(x^(3/2), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t235_02() {
     assert_solves_ok("y = d(x^(2/3))/dx", "x");
 }
@@ -888,7 +887,6 @@ fn t245_07() {
     assert_solves_ok("y = integral(sin(x)/x, dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t245_08() {
     assert_solves_ok("y = d(sqrt(tan(x)))/dx", "x");
 }
@@ -949,7 +947,7 @@ fn t246_10() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t256_01() {
-    assert_solves_ok("E = integral(rho*g*h*dV)", "h");
+    assert_solves_ok("E = integrate(rho*g*h, V)", "h");
 }
 #[test]
 fn t256_02() {
@@ -958,7 +956,7 @@ fn t256_02() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t256_03() {
-    assert_solves_ok("U = integral(G*m*rho/r * dV)", "m");
+    assert_solves_ok("U = integrate(G*m*rho/r, V)", "m");
 }
 #[test]
 fn t256_04() {
@@ -967,7 +965,7 @@ fn t256_04() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t256_05() {
-    assert_solves_ok("P = integral(F/A * dA)", "F");
+    assert_solves_ok("P = integrate(F/A, A)", "F");
 }
 #[test]
 fn t256_06() {
@@ -976,22 +974,22 @@ fn t256_06() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t256_07() {
-    assert_solves_ok("Q = integral(k*A*dT/dx * dt)", "k");
+    assert_solves_ok("Q = integrate(k*A*dT/dx, t)", "k");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t256_08() {
-    assert_solves_ok("W = integral(P*dV)", "P");
+    assert_solves_ok("W = integrate(P, V)", "P");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t256_09() {
-    assert_solves_ok("H = integral(c_p*dT)", "c_p");
+    assert_solves_ok("H = integrate(c_p, T)", "c_p");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t256_10() {
-    assert_solves_ok("S = integral(dQ/T)", "T");
+    assert_solves_ok("S = integrate(1/T, Q)", "T");
 }
 
 // T3+T4+T5
@@ -1012,7 +1010,6 @@ fn t345_04() {
     assert_solves_ok("y = integral(sin(x)*cos(x)^2, dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t345_05() {
     assert_solves_ok("y = d(asin(x))/dx", "x");
 }
@@ -1165,7 +1162,7 @@ fn t456_06() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t456_07() {
-    assert_solves_ok("P = integral(S*dA)", "S");
+    assert_solves_ok("P = integrate(S, A)", "S");
 }
 #[test]
 fn t456_08() {
@@ -1316,17 +1313,17 @@ fn t1235_04() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1235_05() {
-    assert_solves_ok("E = integral(F*dr)", "F");
+    assert_solves_ok("E = integrate(F, r)", "F");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1235_06() {
-    assert_solves_ok("W = integral(P*dV)", "P");
+    assert_solves_ok("W = integrate(P, V)", "P");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1235_07() {
-    assert_solves_ok("Q = integral(c*m*dT)", "c");
+    assert_solves_ok("Q = integrate(c*m, T)", "c");
 }
 #[test]
 fn t1235_08() {
@@ -1335,12 +1332,12 @@ fn t1235_08() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1235_09() {
-    assert_solves_ok("M = integral(rho*dV)", "rho");
+    assert_solves_ok("M = integrate(rho, V)", "rho");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1235_10() {
-    assert_solves_ok("S = integral(1/T*dQ)", "T");
+    assert_solves_ok("S = integrate(1/T, Q)", "T");
 }
 
 // T1+T2+T3+T6
@@ -1418,12 +1415,12 @@ fn t1245_06() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1245_07() {
-    assert_solves_ok("F = integral(rho*g*sin(theta)*dA)", "theta");
+    assert_solves_ok("F = integrate(rho*g*sin(theta), A)", "theta");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1245_08() {
-    assert_solves_ok("W = integral(F*cos(theta)*dx)", "F");
+    assert_solves_ok("W = integrate(F*cos(theta), x)", "F");
 }
 #[test]
 fn t1245_09() {
@@ -1432,7 +1429,7 @@ fn t1245_09() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1245_10() {
-    assert_solves_ok("Q = integral(h*A*(T-T_inf)*dt)", "h");
+    assert_solves_ok("Q = integrate(h*A*(T-T_inf), t)", "h");
 }
 
 // T1+T2+T4+T6
@@ -1481,7 +1478,7 @@ fn t1246_10() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1256_01() {
-    assert_solves_ok("E = integral(rho*c*T*dV)", "T");
+    assert_solves_ok("E = integrate(rho*c*T, V)", "T");
 }
 #[test]
 fn t1256_02() {
@@ -1498,7 +1495,7 @@ fn t1256_04() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1256_05() {
-    assert_solves_ok("W = integral(F*dx)", "F");
+    assert_solves_ok("W = integrate(F, x)", "F");
 }
 #[test]
 fn t1256_06() {
@@ -1507,7 +1504,7 @@ fn t1256_06() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1256_07() {
-    assert_solves_ok("S = integral(c/T*dT)", "c");
+    assert_solves_ok("S = integrate(c/T, T)", "c");
 }
 #[test]
 fn t1256_08() {
@@ -1614,7 +1611,7 @@ fn t1346_10() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1356_01() {
-    assert_solves_ok("F = integral(sigma*dA)", "sigma");
+    assert_solves_ok("F = integrate(sigma, A)", "sigma");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
@@ -1675,12 +1672,12 @@ fn t1456_02() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1456_03() {
-    assert_solves_ok("F = integral(rho*g*sin(theta)*dA)", "rho");
+    assert_solves_ok("F = integrate(rho*g*sin(theta), A)", "rho");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1456_04() {
-    assert_solves_ok("W = integral(F*cos(theta)*dx)", "theta");
+    assert_solves_ok("W = integrate(F*cos(theta), x)", "theta");
 }
 #[test]
 fn t1456_05() {
@@ -1706,7 +1703,7 @@ fn t1456_09() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1456_10() {
-    assert_solves_ok("E = integral(c*B*sin(theta)*dA)", "B");
+    assert_solves_ok("E = integrate(c*B*sin(theta), A)", "B");
 }
 
 // T2+T3+T4+T5
@@ -1747,7 +1744,7 @@ fn t2345_08() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2345_09() {
-    assert_solves_ok("M = integral(r*rho*dV)", "rho");
+    assert_solves_ok("M = integrate(r*rho, V)", "rho");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
@@ -1828,12 +1825,12 @@ fn t2356_06() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2356_07() {
-    assert_solves_ok("W = integral(tau*dtheta)", "tau");
+    assert_solves_ok("W = integrate(tau, theta)", "tau");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2356_08() {
-    assert_solves_ok("Q = integral(c*m*dT)", "c");
+    assert_solves_ok("Q = integrate(c*m, T)", "c");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
@@ -1843,7 +1840,7 @@ fn t2356_09() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2356_10() {
-    assert_solves_ok("H = integral(c_p*dT)", "c_p");
+    assert_solves_ok("H = integrate(c_p, T)", "c_p");
 }
 
 // T2+T4+T5+T6
@@ -1867,32 +1864,32 @@ fn t2456_04() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2456_05() {
-    assert_solves_ok("Phi = integral(B*cos(theta)*dA)", "theta");
+    assert_solves_ok("Phi = integrate(B*cos(theta), A)", "theta");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2456_06() {
-    assert_solves_ok("emf = integral(v*B*sin(theta)*dl)", "theta");
+    assert_solves_ok("emf = integrate(v*B*sin(theta), l)", "theta");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2456_07() {
-    assert_solves_ok("F = integral(I*B*sin(theta)*dl)", "theta");
+    assert_solves_ok("F = integrate(I*B*sin(theta), l)", "theta");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2456_08() {
-    assert_solves_ok("W = integral(tau*sin(theta)*dtheta)", "tau");
+    assert_solves_ok("W = integrate(tau*sin(theta), theta)", "tau");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2456_09() {
-    assert_solves_ok("U = integral(m*g*sin(theta)*ds)", "theta");
+    assert_solves_ok("U = integrate(m*g*sin(theta), s)", "theta");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2456_10() {
-    assert_solves_ok("P = integral(F*v*cos(theta)*dt)", "theta");
+    assert_solves_ok("P = integrate(F*v*cos(theta), t)", "theta");
 }
 
 // T3+T4+T5+T6
@@ -1972,7 +1969,7 @@ fn t12345_06() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12345_07() {
-    assert_solves_ok("W = integral(F*cos(theta)*dx)", "F");
+    assert_solves_ok("W = integrate(F*cos(theta), x)", "F");
 }
 #[test]
 fn t12345_08() {
@@ -2045,12 +2042,12 @@ fn t12356_02() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12356_03() {
-    assert_solves_ok("U = integral(G*m/r*dm)", "m");
+    assert_solves_ok("U = integrate(G*m/r, m)", "m");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12356_04() {
-    assert_solves_ok("W = integral(P*dV)", "P");
+    assert_solves_ok("W = integrate(P, V)", "P");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
@@ -2060,12 +2057,12 @@ fn t12356_05() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12356_06() {
-    assert_solves_ok("S = integral(dQ/T)", "T");
+    assert_solves_ok("S = integrate(1/T, Q)", "T");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12356_07() {
-    assert_solves_ok("H = integral(c_p*dT)", "c_p");
+    assert_solves_ok("H = integrate(c_p, T)", "c_p");
 }
 #[test]
 fn t12356_08() {
@@ -2107,7 +2104,7 @@ fn t12456_05() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12456_06() {
-    assert_solves_ok("W = integral(F*r*sin(theta)*dtheta)", "F");
+    assert_solves_ok("W = integrate(F*r*sin(theta), theta)", "F");
 }
 #[test]
 fn t12456_07() {
@@ -2233,12 +2230,12 @@ fn t123456_02() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t123456_03() {
-    assert_solves_ok("F = integral(q*(E+v*B*sin(theta))*dt)", "q");
+    assert_solves_ok("F = integrate(q*(E+v*B*sin(theta)), t)", "q");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t123456_04() {
-    assert_solves_ok("W = integral(F*r*cos(theta)*dr)", "F");
+    assert_solves_ok("W = integrate(F*r*cos(theta), r)", "F");
 }
 #[test]
 fn t123456_05() {
@@ -2251,12 +2248,12 @@ fn t123456_06() {
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t123456_07() {
-    assert_solves_ok("S = integral(c_p*ln(T)/T*rho*dV)", "c_p");
+    assert_solves_ok("S = integrate(c_p*ln(T)/T*rho, V)", "c_p");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t123456_08() {
-    assert_solves_ok("G = integral(rho*g*r*sin(theta)*cos(phi)*dV)", "rho");
+    assert_solves_ok("G = integrate(rho*g*r*sin(theta)*cos(phi), V)", "rho");
 }
 #[test]
 fn t123456_09() {
