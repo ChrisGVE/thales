@@ -680,22 +680,22 @@ fn t1_t6_04_frobenius_norm() {
     assert_solves_ok("norm = sqrt(a^2 + b^2 + c^2 + d^2)", "a");
 }
 #[test]
-#[ignore = "Bessel function not yet supported"]
+#[ignore = "Non-invertible special function — no analytical inverse for bessel_j"]
 fn t1_t6_05() {
     assert_solves_ok("y = bessel_j(0, x)", "x");
 }
 #[test]
-#[ignore = "Gamma function not yet supported"]
+#[ignore = "Non-invertible special function — no analytical inverse for gamma"]
 fn t1_t6_06() {
     assert_solves_ok("y = gamma(x)", "x");
 }
 #[test]
-#[ignore = "Error function (erf) not yet supported"]
+#[ignore = "Non-invertible special function — no analytical inverse for erf"]
 fn t1_t6_07() {
     assert_solves_ok("y = erf(x)", "x");
 }
 #[test]
-#[ignore = "Riemann zeta function not yet supported"]
+#[ignore = "Non-invertible special function — no analytical inverse for zeta"]
 fn t1_t6_08() {
     assert_solves_ok("z = zeta(s)", "s");
 }
@@ -728,7 +728,7 @@ fn t2_t5_03() {
     assert_solves_ok("v = d(sqrt(x)) / dx", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t2_t5_04() {
     assert_solves_ok("y = integral(1/x, dx)", "x");
 }
@@ -737,7 +737,7 @@ fn t2_t5_05() {
     assert_solves_ok("A = integral(sqrt(r^2 - x^2), dx)", "r");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Requires symbolic integration — variable appears as exponent in integrand"]
 fn t2_t5_06() {
     assert_solves_ok("y = integral(x^n, dx)", "n");
 }
@@ -763,12 +763,12 @@ fn t2_t5_10() {
 // ============================================================================
 
 #[test]
-#[ignore = "Eigenvalue function not yet supported"]
+#[ignore = "Domain-specific function not yet implemented — eigenvalue()"]
 fn t2_t6_01() {
     assert_solves_ok("lambda = sqrt(eigenvalue(A))", "A");
 }
 #[test]
-#[ignore = "Solving for n under sqrt(n*(n+1)) not yet supported"]
+#[ignore = "Quadratic equation under square root — requires expanding n*(n+1)"]
 fn t2_t6_02() {
     assert_solves_ok("E = h_bar * sqrt(n * (n + 1))", "n");
 }
@@ -777,7 +777,7 @@ fn t2_t6_03() {
     assert_solves_ok("r = a_0 * n^2", "n");
 }
 #[test]
-#[ignore = "Variance function not yet supported"]
+#[ignore = "Domain-specific function not yet implemented — variance()"]
 fn t2_t6_04() {
     assert_solves_ok("sigma = sqrt(variance(X))", "X");
 }
@@ -874,7 +874,7 @@ fn t3_t6_04() {
     assert_solves_ok("p = a*x^2 + b*x + c", "x");
 }
 #[test]
-#[ignore = "Rational equation with variable on both sides not yet supported"]
+#[ignore = "Rational equation — variable in denominator on both sides"]
 fn t3_t6_05() {
     assert_solves_ok("R_eq = R1*R2/(R1+R2)", "R1");
 }
@@ -906,12 +906,12 @@ fn t3_t6_10() {
 // ============================================================================
 
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for integral(sin(x), dx)"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t4_t5_01() {
     assert_solves_ok("y = integral(sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for integral(cos(x), dx)"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t4_t5_02() {
     assert_solves_ok("y = integral(cos(x), dx)", "x");
 }
@@ -920,7 +920,7 @@ fn t4_t5_03() {
     assert_solves_ok("y = d(sin(x))/dx", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for integral(tan(x), dx)"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t4_t5_04() {
     assert_solves_ok("y = integral(tan(x), dx)", "x");
 }
@@ -929,27 +929,27 @@ fn t4_t5_05() {
     assert_solves_ok("y = integral(sec(x)^2, dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for d(exp(sin(x)))/dx form"]
+#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t4_t5_06() {
     assert_solves_ok("y = d(exp(sin(x)))/dx", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for integral(sin(x)*cos(x), dx)"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t4_t5_07() {
     assert_solves_ok("y = integral(sin(x)*cos(x), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for integral(1/cos(x), dx)"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t4_t5_08() {
     assert_solves_ok("y = integral(1/cos(x), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for integral(exp(x)*sin(x), dx)"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t4_t5_09() {
     assert_solves_ok("y = integral(exp(x)*sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for integral(asin(x), dx)"]
+#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t4_t5_10() {
     assert_solves_ok("y = integral(asin(x), dx)", "x");
 }
@@ -959,7 +959,7 @@ fn t4_t5_10() {
 // ============================================================================
 
 #[test]
-#[ignore = "Eigenvalue function not yet supported"]
+#[ignore = "Domain-specific function not yet implemented — eigenvalue()"]
 fn t4_t6_01() {
     assert_solves_ok("y = sin(eigenvalue(A))", "A");
 }
@@ -968,22 +968,22 @@ fn t4_t6_02() {
     assert_solves_ok("phi = atan(y_comp / x_comp)", "y_comp");
 }
 #[test]
-#[ignore = "Dot product function not yet supported"]
+#[ignore = "Domain-specific function not yet implemented — dot()"]
 fn t4_t6_03() {
     assert_solves_ok("theta = acos(dot(u,v)/(norm_u*norm_v))", "dot");
 }
 #[test]
-#[ignore = "Rotation matrix function not yet supported"]
+#[ignore = "Domain-specific function not yet implemented — rotation_matrix()"]
 fn t4_t6_04() {
     assert_solves_ok("R = rotation_matrix(theta)", "theta");
 }
 #[test]
-#[ignore = "Fourier sine function not yet supported"]
+#[ignore = "Domain-specific function not yet implemented — fourier_sin()"]
 fn t4_t6_05() {
     assert_solves_ok("y = fourier_sin(n, x)", "x");
 }
 #[test]
-#[ignore = "Laplacian operator not yet supported"]
+#[ignore = "Domain-specific function not yet implemented — laplacian()"]
 fn t4_t6_06() {
     assert_solves_ok("H = laplacian(psi) + V*psi", "psi");
 }
@@ -1009,7 +1009,7 @@ fn t4_t6_10() {
 // ============================================================================
 
 #[test]
-#[ignore = "Calculus + Advanced not yet supported"]
+#[ignore = "Non-invertible special function — bessel_j with variable as integration variable"]
 fn t5_t6_01() {
     assert_solves_ok("y = integral(bessel_j(0,x), dx)", "x");
 }
@@ -1018,7 +1018,7 @@ fn t5_t6_02() {
     assert_solves_ok("G = integral(exp(-r/a)/r, dr)", "a");
 }
 #[test]
-#[ignore = "Calculus + Advanced not yet supported"]
+#[ignore = "Parser does not support sum() with closing paren in expression"]
 fn t5_t6_03() {
     assert_solves_ok("psi = sum(c_n * exp(i*E_n*t/h_bar))", "c_n");
 }
@@ -1031,27 +1031,27 @@ fn t5_t6_05() {
     assert_solves_ok("S = integral(p, dq) / (2*pi)", "p");
 }
 #[test]
-#[ignore = "Calculus + Advanced not yet supported"]
+#[ignore = "Parser error — nested derivative d()/d() with underscores"]
 fn t5_t6_06() {
     assert_solves_ok("F = d(lagrangian)/d(q_dot) - d(lagrangian)/d(q)", "q");
 }
 #[test]
-#[ignore = "Calculus + Advanced not yet supported"]
+#[ignore = "Parser error — curl_E identifier with underscore causes parse failure"]
 fn t5_t6_07() {
     assert_solves_ok("curl_E = -d(B)/d(t)", "E");
 }
 #[test]
-#[ignore = "Calculus + Advanced not yet supported"]
+#[ignore = "Parser error — div_B identifier with underscore causes parse failure"]
 fn t5_t6_08() {
     assert_solves_ok("div_B = 0", "B");
 }
 #[test]
-#[ignore = "Calculus + Advanced not yet supported"]
+#[ignore = "Parser error — nabla_sq_phi identifier with underscore causes parse failure"]
 fn t5_t6_09() {
     assert_solves_ok("nabla_sq_phi = -rho/epsilon_0", "phi");
 }
 #[test]
-#[ignore = "Calculus + Advanced not yet supported"]
+#[ignore = "Parser error — G_mu_nu identifier with underscore causes parse failure"]
 fn t5_t6_10() {
     assert_solves_ok("G_mu_nu = 8*pi*G*T_mu_nu", "T_mu_nu");
 }
