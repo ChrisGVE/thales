@@ -344,6 +344,22 @@ fn try_split_product(expr: &Expression, var: &str) -> Option<(Expression, Expres
         }
     }
 
+    // Function containing variable: treat entire function call as the var_factor
+    // e.g., sin(omega*t) → (sin(omega*t), 1)
+    if let Expression::Function(_, _) = expr {
+        if contains_variable(expr, var) {
+            return Some((expr.clone(), Expression::Integer(1)));
+        }
+    }
+
+    // Unary negation: -expr(v) → (-1 * expr(v))
+    if let Expression::Unary(UnaryOp::Neg, inner) = expr {
+        if let Some((factor, rest)) = try_split_product(inner, var) {
+            let neg_rest = Expression::Unary(UnaryOp::Neg, Box::new(rest)).simplify();
+            return Some((factor, neg_rest));
+        }
+    }
+
     // Multiplication: try to split into var-containing and non-var parts
     if let Expression::Binary(BinaryOp::Mul, left, right) = expr {
         let left_has = contains_variable(left, var);
