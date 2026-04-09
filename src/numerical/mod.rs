@@ -44,6 +44,8 @@
 
 mod bisection;
 mod brent;
+/// Lagrangian constrained optimization solver.
+pub mod lagrangian;
 mod least_squares;
 mod newton;
 mod secant;
