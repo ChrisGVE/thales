@@ -577,7 +577,7 @@ fn t136_03() {
     assert_solves_ok("eig = (a+d)/2 + sqrt(((a-d)/2)^2+b*c)", "b");
 }
 #[test]
-#[ignore = "Rational equation with variable on both sides not yet supported"]
+#[ignore = "Rational equation — variable in denominator on both sides"]
 fn t136_04() {
     assert_solves_ok("R_par = R1*R2/(R1+R2)", "R1");
 }
@@ -679,7 +679,7 @@ fn t146_06() {
     assert_solves_ok("F = q*v*sin(theta)*B", "theta");
 }
 #[test]
-#[ignore = "Variable omega appears under sin and as multiplier simultaneously"]
+#[ignore = "Transcendental — variable appears as both linear factor and trigonometric argument"]
 fn t146_07() {
     assert_solves_ok("emf = N*B*A*omega*sin(omega*t)", "omega");
 }
@@ -688,7 +688,7 @@ fn t146_08() {
     assert_solves_ok("I = I0*cos(theta)^2", "theta");
 }
 #[test]
-#[ignore = "d_sin_theta parsed as single variable, not d*sin(theta)"]
+#[ignore = "Parser error — d_sin_theta parsed as single identifier, not d*sin(theta)"]
 fn t146_09() {
     assert_solves_ok("d_sin_theta = m*lambda", "theta");
 }
@@ -786,7 +786,7 @@ fn t235_10() {
 
 // T2+T3+T6
 #[test]
-#[ignore = "det() function on symbolic matrix not yet supported"]
+#[ignore = "Domain-specific function not yet implemented — det() on symbolic matrix"]
 fn t236_01() {
     assert_solves_ok("lambda = sqrt(det(A))", "A");
 }
@@ -1298,7 +1298,7 @@ fn t1235_10() {
 
 // T1+T2+T3+T6
 #[test]
-#[ignore = "eigenvalue() function not yet supported"]
+#[ignore = "Domain-specific function not yet implemented — eigenvalue()"]
 fn t1236_01() {
     assert_solves_ok("lambda = eigenvalue(A)", "A");
 }
@@ -1319,7 +1319,7 @@ fn t1236_05() {
     assert_solves_ok("f = 1/(2*pi*sqrt(L*C))", "C");
 }
 #[test]
-#[ignore = "Complex variable in denominator not yet supported"]
+#[ignore = "Rational equation — variable in denominator on both sides"]
 fn t1236_06() {
     assert_solves_ok("Z = R+i*(w*L-1/(w*C))", "w");
 }
@@ -1776,7 +1776,7 @@ fn t2456_01() {
     assert_solves_ok("y = integral(exp(-x^2)*sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Y() function not yet supported"]
+#[ignore = "Domain-specific function not yet implemented — Y() spherical harmonic"]
 fn t2456_02() {
     assert_solves_ok("psi = A*r^l*exp(-r/na)*Y(theta,phi)", "r");
 }
@@ -2084,7 +2084,7 @@ fn t23456_01() {
     assert_solves_ok("y = integral(x^2*sin(x)*exp(x), dx)", "x");
 }
 #[test]
-#[ignore = "P() function not yet supported"]
+#[ignore = "Domain-specific function not yet implemented — P() Legendre polynomial"]
 fn t23456_02() {
     assert_solves_ok("psi = r^l*exp(-r/na)*P(cos(theta))*exp(i*m*phi)", "r");
 }
@@ -2126,7 +2126,7 @@ fn t23456_10() {
 // ============================================================================
 
 #[test]
-#[ignore = "Y() function not yet supported"]
+#[ignore = "Domain-specific function not yet implemented — Y() spherical harmonic"]
 fn t123456_01() {
     assert_solves_ok("psi = A*r^l*exp(-r/na)*Y(theta,phi)", "r");
 }
