@@ -14,9 +14,11 @@
 //! Tests marked `#[ignore]` document known solver limitations.
 
 use std::time::Instant;
-use thales::ast::Variable;
+use thales::ast::{BinaryOp, Expression, UnaryOp, Variable};
+use thales::ode::FirstOrderODE;
 use thales::parser::parse_equation;
 use thales::resolution_path::TechniqueDifficulty;
+use thales::solver::ode_solver::solve_ode_first_order;
 use thales::solver::{SmartSolver, Solution, Solver};
 
 // ============================================================================
@@ -536,10 +538,37 @@ fn t5_02_position_from_velocity() {
 }
 
 #[test]
-#[ignore = "Solver does not yet support ODE solving"]
 fn t5_03_exponential_decay() {
-    // dN/dt = -lambda*N — first-order ODE
-    assert_solve_fails("dN_dt = -lambda * N", "N");
+    // dN/dt = -lambda*N — first-order separable ODE
+    // Solution via solve_ode_first_order (direct ODE API; SmartSolver cannot
+    // detect ODEs without an Expression::Derivative AST node)
+    let lambda = Expression::Variable(Variable::new("lambda"));
+    let n = Expression::Variable(Variable::new("N"));
+    let rhs = Expression::Unary(
+        UnaryOp::Neg,
+        Box::new(Expression::Binary(
+            BinaryOp::Mul,
+            Box::new(lambda),
+            Box::new(n),
+        )),
+    );
+    let ode = FirstOrderODE::new("N", "t", rhs);
+    let result = solve_ode_first_order(&ode);
+    assert!(
+        result.is_ok(),
+        "Expected solve_ode_first_order to succeed for dN/dt = -lambda*N, got {:?}",
+        result
+    );
+    let (solution, path) = result.unwrap();
+    assert!(
+        matches!(solution, Solution::Unique(_)),
+        "Expected Unique solution for exponential decay ODE"
+    );
+    assert_eq!(
+        path.max_difficulty(),
+        TechniqueDifficulty::Calculus,
+        "ODE steps must be classified at Calculus tier"
+    );
 }
 
 #[test]
@@ -578,10 +607,27 @@ fn t5_08_u_substitution() {
 }
 
 #[test]
-#[ignore = "Solver does not yet support separation of variables"]
 fn t5_09_separable_ode() {
-    // dy/dx = y → y = C*e^x
-    assert_solve_fails("dy_dx = y", "y");
+    // dy/dx = y → y = C·eˣ (canonical separable ODE)
+    // Solution via solve_ode_first_order (direct ODE API; SmartSolver cannot
+    // detect ODEs without an Expression::Derivative AST node)
+    let ode = FirstOrderODE::new("y", "x", Expression::Variable(Variable::new("y")));
+    let result = solve_ode_first_order(&ode);
+    assert!(
+        result.is_ok(),
+        "Expected solve_ode_first_order to succeed for dy/dx = y, got {:?}",
+        result
+    );
+    let (solution, path) = result.unwrap();
+    assert!(
+        matches!(solution, Solution::Unique(_)),
+        "Expected Unique solution for dy/dx = y"
+    );
+    assert_eq!(
+        path.max_difficulty(),
+        TechniqueDifficulty::Calculus,
+        "ODE steps must be classified at Calculus tier"
+    );
 }
 
 #[test]
