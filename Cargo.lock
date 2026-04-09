@@ -654,9 +654,9 @@ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
 name = "mathlex"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c83c8e26a6f3390fd0116c2448c93ca47b250ff599a25dd4f9dc2dd58a7c531"
+checksum = "65dec4d172c3949b003113290f9833cc1b107b9134858e4a0d8e9e567157a063"
 dependencies = [
  "ordered-float",
  "serde",
