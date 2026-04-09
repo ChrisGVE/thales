@@ -138,7 +138,7 @@
 //! For LaTeX input, see the [`latex`](crate::latex) module.
 
 use crate::ast::{Equation, Expression};
-use crate::mathlex_bridge;
+use crate::mathlex_bridge::{self, ExtractedODE};
 
 /// Parse error type with detailed position information.
 ///
@@ -595,4 +595,43 @@ pub fn parse_equation_system(input: &str) -> Result<Vec<Equation>, Vec<ParseErro
     } else {
         Err(all_errors)
     }
+}
+
+/// Parse an equation string and attempt to extract an ODE from it.
+///
+/// Recognizes equations containing derivative notation (Leibniz `dy/dx`, prime `y'`,
+/// functional `diff(y, x)`) and extracts the corresponding first or second-order ODE.
+///
+/// # Arguments
+///
+/// * `input` - A string containing an ODE equation (e.g. `"dy/dx = x*y"`)
+///
+/// # Returns
+///
+/// * `Ok(ExtractedODE)` - The extracted ODE (first or second order)
+/// * `Err(Vec<ParseError>)` - Parse errors or the equation is not an ODE
+///
+/// # Examples
+///
+/// ```
+/// use thales::parser::parse_ode;
+/// use thales::mathlex_bridge::ExtractedODE;
+///
+/// // First-order: dy/dx = y
+/// let ode = parse_ode("dy/dx = y").unwrap();
+/// assert!(matches!(ode, ExtractedODE::First(_)));
+///
+/// // Second-order: d2y/dx2 + 3*dy/dx + 2*y = 0
+/// let ode = parse_ode("d2y/dx2 + 3*dy/dx + 2*y = 0").unwrap();
+/// assert!(matches!(ode, ExtractedODE::Second(_)));
+/// ```
+#[must_use = "parsing returns a result that should be used"]
+pub fn parse_ode(input: &str) -> Result<ExtractedODE, Vec<ParseError>> {
+    let ml_expr = mathlex::parse(input).map_err(|e| vec![convert_mathlex_error(&e)])?;
+    mathlex_bridge::try_extract_ode(&ml_expr).ok_or_else(|| {
+        vec![ParseError::InvalidExpression {
+            pos: 0,
+            message: "equation does not contain recognizable ODE derivative terms".to_string(),
+        }]
+    })
 }

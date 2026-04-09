@@ -6,17 +6,30 @@
 //! not need to go through the [`SmartSolver`](crate::solver::SmartSolver) dispatch
 //! path.
 //!
-//! # Limitations
+//! # Parsing-based ODE solving
 //!
-//! The AST does not have an `Expression::Derivative` variant, so ODEs cannot be
-//! parsed from a plain [`Equation`].  Consequently:
+//! The [`solve_ode_from_text`] function accepts a string containing an ODE in
+//! derivative notation (Leibniz, prime, or functional) and automatically extracts
+//! and solves it:
 //!
-//! - [`OdeSolver::can_solve`] always returns `false`.
-//! - [`OdeSolver::solve`] always returns
-//!   [`SolverError::UnsupportedEquationType`].
+//! ```rust
+//! use thales::solver::ode_solver::solve_ode_from_text;
+//! use thales::solver::Solution;
+//!
+//! let (solution, _path) = solve_ode_from_text("dy/dx = y").unwrap();
+//! assert!(matches!(solution, Solution::Unique(_)));
+//! ```
+//!
+//! # Direct ODE solving
 //!
 //! Use [`solve_ode_first_order`] or [`solve_ode_second_order`] when you already
-//! have an [`FirstOrderODE`] or [`SecondOrderODE`] struct.
+//! have a [`FirstOrderODE`] or [`SecondOrderODE`] struct.
+//!
+//! # Trait-based solving
+//!
+//! The [`OdeSolver`] struct implements the [`Solver`] trait but always returns
+//! `false` from `can_solve` because the thales AST does not carry derivative
+//! nodes. For text-based ODE detection, use [`solve_ode_from_text`] instead.
 //!
 //! # Examples
 //!
@@ -224,6 +237,53 @@ pub fn solve_ode_second_order(ode: &SecondOrderODE) -> SolverResult<(Solution, R
     Ok((Solution::Unique(result.general_solution), path))
 }
 
+/// Parse an ODE from text and solve it, returning a [`Solution`] and
+/// [`ResolutionPath`].
+///
+/// Accepts any derivative notation supported by mathlex: Leibniz (`dy/dx`),
+/// prime (`y'`), or functional (`diff(y, x)`). Both first and second-order
+/// constant-coefficient ODEs are supported.
+///
+/// # Errors
+///
+/// Returns [`SolverError::CannotSolve`] when:
+/// - The input cannot be parsed as an equation.
+/// - The equation does not contain recognizable ODE derivative terms.
+/// - The extracted ODE type is not yet supported by the solver.
+///
+/// # Examples
+///
+/// ```rust
+/// use thales::solver::ode_solver::solve_ode_from_text;
+/// use thales::solver::Solution;
+///
+/// // First-order separable: dy/dx = y
+/// let (solution, path) = solve_ode_from_text("dy/dx = y").unwrap();
+/// assert!(matches!(solution, Solution::Unique(_)));
+/// assert!(!path.steps.is_empty());
+///
+/// // Second-order homogeneous: y'' - y = 0
+/// let (solution, _) = solve_ode_from_text("d2y/dx2 - y = 0").unwrap();
+/// assert!(matches!(solution, Solution::Unique(_)));
+/// ```
+pub fn solve_ode_from_text(input: &str) -> SolverResult<(Solution, ResolutionPath)> {
+    use crate::mathlex_bridge::{try_extract_ode, ExtractedODE};
+
+    let ml_expr = mathlex::parse(input)
+        .map_err(|e| SolverError::CannotSolve(format!("failed to parse ODE: {}", e)))?;
+
+    let extracted = try_extract_ode(&ml_expr).ok_or_else(|| {
+        SolverError::CannotSolve(
+            "equation does not contain recognizable ODE derivative terms".to_string(),
+        )
+    })?;
+
+    match extracted {
+        ExtractedODE::First(ode) => solve_ode_first_order(&ode),
+        ExtractedODE::Second(ode) => solve_ode_second_order(&ode),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -370,5 +430,68 @@ mod tests {
             TechniqueDifficulty::Calculus,
             "ClassifyODE should be Calculus tier"
         );
+    }
+
+    // ------------------------------------------------------------------
+    // Text-based ODE solving (solve_ode_from_text)
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn solve_from_text_first_order_separable() {
+        // dy/dx = y → separable, y = C·eˣ
+        let result = solve_ode_from_text("dy/dx = y");
+        assert!(result.is_ok(), "Expected Ok, got {result:?}");
+        let (solution, path) = result.unwrap();
+        assert!(matches!(solution, Solution::Unique(_)));
+        assert!(!path.steps.is_empty());
+    }
+
+    #[test]
+    fn solve_from_text_first_order_linear() {
+        // dy/dx = -y → linear, y = C·e^(-x)
+        let result = solve_ode_from_text("dy/dx = -y");
+        assert!(result.is_ok(), "Expected Ok, got {result:?}");
+        let (solution, _) = result.unwrap();
+        assert!(matches!(solution, Solution::Unique(_)));
+    }
+
+    #[test]
+    fn solve_from_text_second_order_homogeneous() {
+        // d2y/dx2 - y = 0 → y = C₁·eˣ + C₂·e^(-x)
+        let result = solve_ode_from_text("d2y/dx2 - y = 0");
+        assert!(result.is_ok(), "Expected Ok, got {result:?}");
+        let (solution, path) = result.unwrap();
+        assert!(matches!(solution, Solution::Unique(_)));
+        assert!(!path.steps.is_empty());
+    }
+
+    #[test]
+    fn solve_from_text_second_order_with_first_deriv() {
+        // d2y/dx2 + 2*dy/dx + y = 0 → repeated root, y = (C₁ + C₂·x)·e^(-x)
+        let result = solve_ode_from_text("d2y/dx2 + 2*dy/dx + y = 0");
+        assert!(result.is_ok(), "Expected Ok, got {result:?}");
+        let (solution, _) = result.unwrap();
+        assert!(matches!(solution, Solution::Unique(_)));
+    }
+
+    #[test]
+    fn solve_from_text_not_an_ode() {
+        let result = solve_ode_from_text("x + y = 0");
+        assert!(matches!(result, Err(SolverError::CannotSolve(_))));
+    }
+
+    #[test]
+    fn solve_from_text_invalid_input() {
+        let result = solve_ode_from_text("not valid math @@@");
+        assert!(matches!(result, Err(SolverError::CannotSolve(_))));
+    }
+
+    #[test]
+    fn solve_from_text_diff_notation() {
+        // diff(y, x) = y → same as dy/dx = y
+        let result = solve_ode_from_text("diff(y, x) = y");
+        assert!(result.is_ok(), "Expected Ok, got {result:?}");
+        let (solution, _) = result.unwrap();
+        assert!(matches!(solution, Solution::Unique(_)));
     }
 }

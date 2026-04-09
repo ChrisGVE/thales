@@ -133,7 +133,9 @@ pub use linear_system::LinearSystem;
 pub use ode_classifier::{
     classify_first_order, classify_second_order, ODEClassification, ODELinearity, ODEOrder, ODEType,
 };
-pub use ode_solver::{solve_ode_first_order, solve_ode_second_order, OdeSolver};
+pub use ode_solver::{
+    solve_ode_first_order, solve_ode_from_text, solve_ode_second_order, OdeSolver,
+};
 pub use polynomial::PolynomialSolver;
 pub use quadratic::QuadraticSolver;
 pub use system::{SystemSolution, SystemSolver};
