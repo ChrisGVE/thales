@@ -113,6 +113,8 @@
 //! # assert_eq!(path.result.evaluate(&HashMap::new()), Some(4.0));
 //! ```
 
+mod coeff;
+mod gauss;
 mod helpers;
 pub mod linear;
 pub mod linear_system;

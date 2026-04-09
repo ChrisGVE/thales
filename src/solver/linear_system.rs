@@ -2,9 +2,11 @@
 
 use std::collections::HashMap;
 
-use crate::ast::{BinaryOp, Equation, Expression, UnaryOp, Variable};
+use crate::ast::{BinaryOp, Equation, Expression, Variable};
 use crate::matrix::{MatrixError, MatrixExpr};
 
+use super::coeff::extract_linear_coefficients;
+use super::gauss::{det_2x2, det_3x3, f64_to_expr, solve_gaussian};
 use super::system::SystemSolution;
 use super::types::{SolverError, SolverResult};
 
@@ -99,7 +101,7 @@ impl LinearSystem {
             )
             .simplify();
 
-            let (row, constant) = Self::extract_linear_coefficients(&combined, variables)?;
+            let (row, constant) = extract_linear_coefficients(&combined, variables)?;
             coeff_rows.push(row.into_iter().map(Expression::Float).collect());
             const_rows.push(vec![Expression::Float(-constant)]);
         }
@@ -133,124 +135,6 @@ impl LinearSystem {
             .into_iter()
             .map(|row| row.into_iter().next().unwrap_or(0.0))
             .collect()
-    }
-
-    // ── coefficient extraction ─────────────────────────────────────────────────
-
-    fn extract_linear_coefficients(
-        expr: &Expression,
-        variables: &[Variable],
-    ) -> SolverResult<(Vec<f64>, f64)> {
-        let mut coeffs = vec![0.0; variables.len()];
-        let mut constant = 0.0;
-
-        let terms = Self::collect_additive_terms(expr);
-
-        for term in terms {
-            let mut found_var = false;
-            for (i, var) in variables.iter().enumerate() {
-                if term.contains_variable(&var.name) {
-                    let coeff = Self::extract_coefficient(&term, var)?;
-                    coeffs[i] += coeff;
-                    found_var = true;
-                    break;
-                }
-            }
-
-            if !found_var {
-                let empty: HashMap<String, f64> = HashMap::new();
-                match term.evaluate(&empty) {
-                    Some(val) => constant += val,
-                    None => {
-                        return Err(SolverError::Other(format!(
-                            "Cannot evaluate constant term: {}",
-                            term
-                        )));
-                    }
-                }
-            }
-        }
-
-        Ok((coeffs, constant))
-    }
-
-    fn collect_additive_terms(expr: &Expression) -> Vec<Expression> {
-        match expr {
-            Expression::Binary(BinaryOp::Add, left, right) => {
-                let mut terms = Self::collect_additive_terms(left);
-                terms.extend(Self::collect_additive_terms(right));
-                terms
-            }
-            Expression::Binary(BinaryOp::Sub, left, right) => {
-                let mut terms = Self::collect_additive_terms(left);
-                for term in Self::collect_additive_terms(right) {
-                    terms.push(Expression::Unary(UnaryOp::Neg, Box::new(term)));
-                }
-                terms
-            }
-            _ => vec![expr.clone()],
-        }
-    }
-
-    fn extract_coefficient(term: &Expression, var: &Variable) -> SolverResult<f64> {
-        match term {
-            Expression::Variable(v) if v.name == var.name => Ok(1.0),
-
-            Expression::Unary(UnaryOp::Neg, inner) => Ok(-Self::extract_coefficient(inner, var)?),
-
-            Expression::Binary(BinaryOp::Mul, left, right) => {
-                let left_has_var = left.contains_variable(&var.name);
-                let right_has_var = right.contains_variable(&var.name);
-
-                if left_has_var && right_has_var {
-                    return Err(SolverError::Other(format!(
-                        "Non-linear term: {} * {} both contain {}",
-                        left, right, var.name
-                    )));
-                }
-
-                let empty: HashMap<String, f64> = HashMap::new();
-                if left_has_var {
-                    let coeff = right.evaluate(&empty).ok_or_else(|| {
-                        SolverError::Other(format!("Cannot evaluate coefficient: {}", right))
-                    })?;
-                    Ok(coeff * Self::extract_coefficient(left, var)?)
-                } else {
-                    let coeff = left.evaluate(&empty).ok_or_else(|| {
-                        SolverError::Other(format!("Cannot evaluate coefficient: {}", left))
-                    })?;
-                    Ok(coeff * Self::extract_coefficient(right, var)?)
-                }
-            }
-
-            Expression::Binary(BinaryOp::Div, left, right) => {
-                if right.contains_variable(&var.name) {
-                    return Err(SolverError::Other(format!(
-                        "Non-linear: variable {} in denominator",
-                        var.name
-                    )));
-                }
-                let empty: HashMap<String, f64> = HashMap::new();
-                let divisor = right.evaluate(&empty).ok_or_else(|| {
-                    SolverError::Other(format!("Cannot evaluate divisor: {}", right))
-                })?;
-                if divisor.abs() < 1e-15 {
-                    return Err(SolverError::DivisionByZero);
-                }
-                Ok(Self::extract_coefficient(left, var)? / divisor)
-            }
-
-            _ => {
-                if term.contains_variable(&var.name) {
-                    Err(SolverError::Other(format!(
-                        "Cannot extract coefficient from: {}",
-                        term
-                    )))
-                } else {
-                    Ok(0.0)
-                }
-            }
-        }
     }
 
     // ── solvers ───────────────────────────────────────────────────────────────
@@ -387,224 +271,170 @@ impl LinearSystem {
     }
 }
 
-// ── free numeric helpers ──────────────────────────────────────────────────────
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::{BinaryOp, Equation, Expression, Variable};
+    use crate::matrix::MatrixExpr;
+    use std::collections::HashMap;
 
-fn det_2x2(m: &[Vec<f64>]) -> f64 {
-    m[0][0] * m[1][1] - m[0][1] * m[1][0]
-}
-
-fn det_3x3(m: &[Vec<f64>]) -> f64 {
-    let minor1 = m[1][1] * m[2][2] - m[1][2] * m[2][1];
-    let minor2 = m[1][0] * m[2][2] - m[1][2] * m[2][0];
-    let minor3 = m[1][0] * m[2][1] - m[1][1] * m[2][0];
-    m[0][0] * minor1 - m[0][1] * minor2 + m[0][2] * minor3
-}
-
-/// Gaussian elimination with partial pivoting.
-///
-/// Returns a `SystemSolution` from coefficient rows, constant vector and
-/// variable list.
-fn solve_gaussian(
-    coefficients: &[Vec<f64>],
-    constants: &[f64],
-    variables: &[Variable],
-) -> SolverResult<SystemSolution> {
-    let n_eqs = coefficients.len();
-    let n_vars = variables.len();
-
-    let mut augmented: Vec<Vec<f64>> = coefficients
-        .iter()
-        .zip(constants.iter())
-        .map(|(row, &c)| {
-            let mut new_row = row.clone();
-            new_row.push(c);
-            new_row
-        })
-        .collect();
-
-    let mut pivot_row = 0;
-    let mut pivot_cols: Vec<usize> = Vec::new();
-
-    for col in 0..n_vars {
-        if pivot_row >= n_eqs {
-            break;
-        }
-        let (max_row, max_val) = find_pivot(&augmented, pivot_row, n_eqs, col);
-        if max_val < 1e-15 {
-            continue;
-        }
-        if max_row != pivot_row {
-            augmented.swap(pivot_row, max_row);
-        }
-        pivot_cols.push(col);
-        eliminate_below(&mut augmented, pivot_row, col, n_eqs, n_vars);
-        pivot_row += 1;
+    fn int(n: i64) -> Expression {
+        Expression::Integer(n)
     }
 
-    let rank = pivot_cols.len();
-
-    for row in rank..n_eqs {
-        let rhs = augmented[row][n_vars];
-        if augmented[row][0..n_vars].iter().all(|&x| x.abs() < 1e-15) && rhs.abs() > 1e-15 {
-            return Ok(SystemSolution::NoSolution);
-        }
+    fn var(name: &str) -> Expression {
+        Expression::Variable(Variable::new(name))
     }
 
-    if rank == n_vars {
-        Ok(back_substitute_unique(&augmented, &pivot_cols, variables))
-    } else {
-        Ok(build_infinite_solution(
-            &augmented,
-            &pivot_cols,
-            n_vars,
-            variables,
-        ))
-    }
-}
-
-fn find_pivot(augmented: &[Vec<f64>], start_row: usize, n_eqs: usize, col: usize) -> (usize, f64) {
-    let mut max_row = start_row;
-    let mut max_val = augmented[start_row][col].abs();
-    for row in (start_row + 1)..n_eqs {
-        if augmented[row][col].abs() > max_val {
-            max_val = augmented[row][col].abs();
-            max_row = row;
-        }
-    }
-    (max_row, max_val)
-}
-
-fn eliminate_below(
-    augmented: &mut Vec<Vec<f64>>,
-    pivot_row: usize,
-    col: usize,
-    n_eqs: usize,
-    n_vars: usize,
-) {
-    let pivot_val = augmented[pivot_row][col];
-    for row in (pivot_row + 1)..n_eqs {
-        let factor = augmented[row][col] / pivot_val;
-        augmented[row][col] = 0.0;
-        for c in (col + 1)..=n_vars {
-            augmented[row][c] -= factor * augmented[pivot_row][c];
-        }
-    }
-}
-
-fn f64_to_expr(val: f64) -> Expression {
-    if (val - val.round()).abs() < 1e-10 {
-        Expression::Integer(val.round() as i64)
-    } else {
-        Expression::Float(val)
-    }
-}
-
-fn back_substitute_unique(
-    augmented: &[Vec<f64>],
-    pivot_cols: &[usize],
-    variables: &[Variable],
-) -> SystemSolution {
-    let rank = pivot_cols.len();
-    let n_vars = variables.len();
-    let mut solution_values = vec![0.0_f64; n_vars];
-
-    for i in (0..rank).rev() {
-        let col = pivot_cols[i];
-        let mut sum = augmented[i][n_vars];
-        for j in (col + 1)..n_vars {
-            sum -= augmented[i][j] * solution_values[j];
-        }
-        solution_values[col] = sum / augmented[i][col];
+    fn add(l: Expression, r: Expression) -> Expression {
+        Expression::Binary(BinaryOp::Add, Box::new(l), Box::new(r))
     }
 
-    let mut result = HashMap::new();
-    for (i, var) in variables.iter().enumerate() {
-        result.insert(var.clone(), f64_to_expr(solution_values[i]));
+    fn sub(l: Expression, r: Expression) -> Expression {
+        Expression::Binary(BinaryOp::Sub, Box::new(l), Box::new(r))
     }
-    SystemSolution::Unique(result)
-}
 
-fn build_infinite_solution(
-    augmented: &[Vec<f64>],
-    pivot_cols: &[usize],
-    n_vars: usize,
-    variables: &[Variable],
-) -> SystemSolution {
-    let rank = pivot_cols.len();
-    let pivot_set: std::collections::HashSet<_> = pivot_cols.iter().cloned().collect();
-    let free_cols: Vec<_> = (0..n_vars).filter(|c| !pivot_set.contains(c)).collect();
-    let free_vars: Vec<_> = free_cols.iter().map(|&c| variables[c].clone()).collect();
+    fn mul(l: Expression, r: Expression) -> Expression {
+        Expression::Binary(BinaryOp::Mul, Box::new(l), Box::new(r))
+    }
 
-    let mut bound = HashMap::new();
+    fn make_vars(names: &[&str]) -> Vec<Variable> {
+        names.iter().map(|n| Variable::new(*n)).collect()
+    }
 
-    for i in (0..rank).rev() {
-        let col = pivot_cols[i];
-        let rhs = augmented[i][n_vars];
-        let pivot_coeff = augmented[i][col];
+    fn eval_empty(expr: &Expression) -> f64 {
+        let empty: HashMap<String, f64> = HashMap::new();
+        expr.evaluate(&empty).expect("evaluate should succeed")
+    }
 
-        let mut terms: Vec<Expression> = Vec::new();
-        if rhs.abs() > 1e-15 {
-            terms.push(f64_to_expr(rhs));
-        }
+    // ── from_matrix constructor ───────────────────────────────────────────────
 
-        for &free_col in &free_cols {
-            let coeff = -augmented[i][free_col] / pivot_coeff;
-            if coeff.abs() > 1e-15 {
-                let free_var = Expression::Variable(variables[free_col].clone());
-                terms.push(build_coeff_term(coeff, free_var));
+    #[test]
+    fn test_from_matrix_valid() {
+        let a =
+            MatrixExpr::from_elements(vec![vec![int(2), int(1)], vec![int(1), int(3)]]).unwrap();
+        let b = MatrixExpr::from_elements(vec![vec![int(5)], vec![int(10)]]).unwrap();
+        let vars = make_vars(&["x", "y"]);
+        let sys = LinearSystem::from_matrix(a, b, vars).unwrap();
+        assert_eq!(sys.matrix_a.rows(), 2);
+        assert_eq!(sys.matrix_a.cols(), 2);
+        assert_eq!(sys.vector_b.rows(), 2);
+        assert_eq!(sys.vector_b.cols(), 1);
+    }
+
+    #[test]
+    fn test_from_matrix_rejects_non_column_b() {
+        let a =
+            MatrixExpr::from_elements(vec![vec![int(1), int(0)], vec![int(0), int(1)]]).unwrap();
+        let b =
+            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(3), int(4)]]).unwrap();
+        let vars = make_vars(&["x", "y"]);
+        assert!(LinearSystem::from_matrix(a, b, vars).is_err());
+    }
+
+    #[test]
+    fn test_from_matrix_rejects_dimension_mismatch() {
+        let a =
+            MatrixExpr::from_elements(vec![vec![int(1), int(0)], vec![int(0), int(1)]]).unwrap();
+        let b = MatrixExpr::from_elements(vec![vec![int(1)]]).unwrap();
+        let vars = make_vars(&["x", "y"]);
+        assert!(LinearSystem::from_matrix(a, b, vars).is_err());
+    }
+
+    // ── solve_via_lu: 2x2 ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_solve_via_lu_2x2() {
+        // [[2,1],[1,3]] x = [5, 10]  =>  x=1, y=3
+        let a =
+            MatrixExpr::from_elements(vec![vec![int(2), int(1)], vec![int(1), int(3)]]).unwrap();
+        let b = MatrixExpr::from_elements(vec![vec![int(5)], vec![int(10)]]).unwrap();
+        let vars = make_vars(&["x", "y"]);
+        let sys = LinearSystem::from_matrix(a, b, vars.clone()).unwrap();
+        let sol = sys.solve_via_lu().unwrap();
+
+        match sol {
+            SystemSolution::Unique(map) => {
+                let x_val = eval_empty(map.get(&vars[0]).unwrap());
+                let y_val = eval_empty(map.get(&vars[1]).unwrap());
+                assert!((x_val - 1.0).abs() < 1e-9, "x={}", x_val);
+                assert!((y_val - 3.0).abs() < 1e-9, "y={}", y_val);
             }
+            _ => panic!("expected unique solution"),
         }
-
-        let expr = combine_terms(terms);
-        let final_expr = if (pivot_coeff - 1.0).abs() < 1e-15 {
-            expr
-        } else {
-            Expression::Binary(
-                BinaryOp::Div,
-                Box::new(expr),
-                Box::new(f64_to_expr(pivot_coeff)),
-            )
-        };
-        bound.insert(variables[col].clone(), final_expr);
     }
 
-    SystemSolution::Infinite {
-        bound,
-        free: free_vars,
-    }
-}
+    // ── solve_via_lu: 3x3 ─────────────────────────────────────────────────────
 
-fn build_coeff_term(coeff: f64, free_var: Expression) -> Expression {
-    if (coeff - coeff.round()).abs() < 1e-10 {
-        let int_coeff = coeff.round() as i64;
-        match int_coeff {
-            1 => free_var,
-            -1 => Expression::Unary(UnaryOp::Neg, Box::new(free_var)),
-            _ => Expression::Binary(
-                BinaryOp::Mul,
-                Box::new(Expression::Integer(int_coeff)),
-                Box::new(free_var),
-            ),
+    #[test]
+    fn test_solve_via_lu_3x3() {
+        // x + y + z = 6
+        // 2y + 5z = -4
+        // 2x + 5y - z = 27
+        // Solution: x=5, y=3, z=-2
+        let a = MatrixExpr::from_elements(vec![
+            vec![int(1), int(1), int(1)],
+            vec![int(0), int(2), int(5)],
+            vec![int(2), int(5), int(-1)],
+        ])
+        .unwrap();
+        let b =
+            MatrixExpr::from_elements(vec![vec![int(6)], vec![int(-4)], vec![int(27)]]).unwrap();
+        let vars = make_vars(&["x", "y", "z"]);
+        let sys = LinearSystem::from_matrix(a, b, vars.clone()).unwrap();
+        let sol = sys.solve_via_lu().unwrap();
+
+        match sol {
+            SystemSolution::Unique(map) => {
+                let x = eval_empty(map.get(&vars[0]).unwrap());
+                let y = eval_empty(map.get(&vars[1]).unwrap());
+                let z = eval_empty(map.get(&vars[2]).unwrap());
+                assert!((x - 5.0).abs() < 1e-9, "x={}", x);
+                assert!((y - 3.0).abs() < 1e-9, "y={}", y);
+                assert!((z - (-2.0)).abs() < 1e-9, "z={}", z);
+            }
+            _ => panic!("expected unique solution"),
         }
-    } else {
-        Expression::Binary(
-            BinaryOp::Mul,
-            Box::new(Expression::Float(coeff)),
-            Box::new(free_var),
-        )
     }
-}
 
-fn combine_terms(mut terms: Vec<Expression>) -> Expression {
-    if terms.is_empty() {
-        return Expression::Integer(0);
+    // ── singular system detection ─────────────────────────────────────────────
+
+    #[test]
+    fn test_solve_via_lu_singular_system() {
+        // [[1, 2], [2, 4]] is singular (rows are proportional)
+        let a =
+            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(2), int(4)]]).unwrap();
+        let b = MatrixExpr::from_elements(vec![vec![int(3)], vec![int(6)]]).unwrap();
+        let vars = make_vars(&["x", "y"]);
+        let sys = LinearSystem::from_matrix(a, b, vars).unwrap();
+        let result = sys.solve_via_lu();
+        assert!(result.is_err(), "expected error for singular matrix");
     }
-    if terms.len() == 1 {
-        return terms.remove(0);
+
+    // ── solve_via_lu result matches solve() ───────────────────────────────────
+
+    #[test]
+    fn test_solve_via_lu_matches_gaussian() {
+        let x = Variable::new("x");
+        let y = Variable::new("y");
+        let eq1 = Equation::new("eq1", add(var("x"), var("y")), int(5));
+        let eq2 = Equation::new("eq2", sub(var("x"), var("y")), int(1));
+        let sys = LinearSystem::from_equations(&[eq1, eq2], &[x.clone(), y.clone()]).unwrap();
+
+        let lu_sol = sys.solve_via_lu().unwrap();
+        let gauss_sol = sys.solve().unwrap();
+
+        let empty: HashMap<String, f64> = HashMap::new();
+        match (lu_sol, gauss_sol) {
+            (SystemSolution::Unique(lu_map), SystemSolution::Unique(g_map)) => {
+                for (var, lu_expr) in &lu_map {
+                    let g_expr = g_map.get(var).unwrap();
+                    let lu_val = lu_expr.evaluate(&empty).unwrap();
+                    let g_val = g_expr.evaluate(&empty).unwrap();
+                    assert!((lu_val - g_val).abs() < 1e-9);
+                }
+            }
+            _ => panic!("both should be unique"),
+        }
     }
-    let mut result = terms.remove(0);
-    for term in terms {
-        result = Expression::Binary(BinaryOp::Add, Box::new(result), Box::new(term));
-    }
-    result
 }
