@@ -115,7 +115,9 @@
 
 mod helpers;
 pub mod linear;
+pub mod linear_system;
 pub mod ode_classifier;
+pub mod ode_solver;
 pub mod polynomial;
 pub mod quadratic;
 pub mod symbolic_isolation;
@@ -125,12 +127,14 @@ pub mod types;
 
 // Re-export all public types for backward compatibility
 pub use linear::LinearSolver;
+pub use linear_system::LinearSystem;
 pub use ode_classifier::{
     classify_first_order, classify_second_order, ODEClassification, ODELinearity, ODEOrder, ODEType,
 };
+pub use ode_solver::{solve_ode_first_order, solve_ode_second_order, OdeSolver};
 pub use polynomial::PolynomialSolver;
 pub use quadratic::QuadraticSolver;
-pub use system::{LinearSystem, SystemSolution, SystemSolver};
+pub use system::{SystemSolution, SystemSolver};
 pub use transcendental::TranscendentalSolver;
 pub use types::{Constraint, Solution, SolverError, SolverResult, SymbolicFailureReason};
 
@@ -1076,9 +1080,9 @@ mod system_solver_tests {
 
         let system = LinearSystem::from_equations(&[eq1, eq2], &[x.clone(), y.clone()]).unwrap();
 
-        // Verify coefficients: x + y = 5 -> [1, 1 | 5], x - y = 1 -> [1, -1 | 1]
-        assert_eq!(system.coefficients.len(), 2);
-        assert_eq!(system.constants.len(), 2);
+        // Verify matrix dimensions: 2 equations × 2 variables
+        assert_eq!(system.matrix_a.rows(), 2);
+        assert_eq!(system.variables.len(), 2);
     }
 
     #[test]
