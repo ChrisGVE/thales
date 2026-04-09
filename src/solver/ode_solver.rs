@@ -41,7 +41,7 @@ use crate::ode::{
     solve_linear, solve_second_order_homogeneous, solve_separable, FirstOrderODE, SecondOrderODE,
 };
 use crate::resolution_path::{Operation, ResolutionPath, ResolutionStep};
-use crate::solver::ode_classifier::{classify_first_order, ODEType};
+use crate::solver::ode_classifier::{classify_first_order, classify_second_order, ODEType};
 use crate::solver::types::{Solution, SolverError, SolverResult};
 use crate::solver::Solver;
 
@@ -89,16 +89,35 @@ impl Solver for OdeSolver {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/// Build a [`ResolutionPath`] from an ordered list of textual ODE steps.
-fn build_ode_path(steps: &[String], solution_expr: &crate::ast::Expression) -> ResolutionPath {
+/// Build a [`ResolutionPath`] from an ordered list of textual ODE steps,
+/// prepending a classification step when `classify_step` is `Some`.
+fn build_ode_path(
+    classify_step: Option<(String, String)>,
+    steps: &[String],
+    solution_expr: &crate::ast::Expression,
+) -> ResolutionPath {
+    use crate::resolution_path::StepAnnotation;
+
     let mut path = ResolutionPath::new(solution_expr.clone());
+
+    if let Some((order, ode_type)) = classify_step {
+        let explanation = format!("Classify ODE: {}-order, type = {}", order, ode_type);
+        path.add_step(ResolutionStep::with_annotation(
+            Operation::ClassifyODE { order, ode_type },
+            explanation,
+            solution_expr.clone(),
+            StepAnnotation::calculus("ODE classification"),
+        ));
+    }
+
     for step_desc in steps {
-        path.add_step(ResolutionStep::new(
+        path.add_step(ResolutionStep::with_annotation(
             Operation::SolveODE {
                 method: step_desc.clone(),
             },
             step_desc.clone(),
             solution_expr.clone(),
+            StepAnnotation::calculus("ODE solving step"),
         ));
     }
     path.set_result(solution_expr.clone());
@@ -149,7 +168,15 @@ pub fn solve_ode_first_order(ode: &FirstOrderODE) -> SolverResult<(Solution, Res
         )),
     }?;
 
-    let path = build_ode_path(&ode_result.steps, &ode_result.general_solution);
+    let ode_type_str = match classification.ode_type {
+        ODEType::Separable => "separable",
+        ODEType::Linear => "linear",
+        ODEType::Bernoulli => "Bernoulli",
+        ODEType::Unknown => "unknown",
+        _ => "other",
+    };
+    let classify = Some(("first".to_string(), ode_type_str.to_string()));
+    let path = build_ode_path(classify, &ode_result.steps, &ode_result.general_solution);
     Ok((Solution::Unique(ode_result.general_solution), path))
 }
 
@@ -186,7 +213,14 @@ pub fn solve_ode_second_order(ode: &SecondOrderODE) -> SolverResult<(Solution, R
     let result =
         solve_second_order_homogeneous(ode).map_err(|e| SolverError::CannotSolve(e.to_string()))?;
 
-    let path = build_ode_path(&result.steps, &result.general_solution);
+    let cls = classify_second_order(ode);
+    let ode_type_str = match cls.ode_type {
+        ODEType::ConstantCoefficient => "homogeneous constant-coefficient",
+        ODEType::NonHomogeneousConstantCoefficient => "non-homogeneous constant-coefficient",
+        _ => "other",
+    };
+    let classify = Some(("second".to_string(), ode_type_str.to_string()));
+    let path = build_ode_path(classify, &result.steps, &result.general_solution);
     Ok((Solution::Unique(result.general_solution), path))
 }
 
@@ -279,6 +313,62 @@ mod tests {
         assert!(
             matches!(result, Err(SolverError::CannotSolve(_))),
             "Expected CannotSolve, got {result:?}"
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // Resolution path content tests
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn first_order_path_starts_with_classify_step() {
+        // dy/dx = y → separable; first step must be ClassifyODE
+        let ode = FirstOrderODE::new("y", "x", var("y"));
+        let (_solution, path) = solve_ode_first_order(&ode).unwrap();
+        let first = path.steps.first().expect("path must have steps");
+        assert!(
+            matches!(
+                &first.operation,
+                Operation::ClassifyODE { order, ode_type }
+                    if order == "first" && ode_type == "separable"
+            ),
+            "Expected ClassifyODE(first, separable), got {:?}",
+            first.operation
+        );
+    }
+
+    #[test]
+    fn second_order_path_starts_with_classify_and_contains_solve_steps() {
+        // y'' - y = 0 → second-order homogeneous; first step ClassifyODE, rest SolveODE
+        let ode = SecondOrderODE::homogeneous("y", "x", 1.0, 0.0, -1.0);
+        let (_solution, path) = solve_ode_second_order(&ode).unwrap();
+        let first = path.steps.first().expect("path must have steps");
+        assert!(
+            matches!(
+                &first.operation,
+                Operation::ClassifyODE { order, .. } if order == "second"
+            ),
+            "Expected ClassifyODE(second, …), got {:?}",
+            first.operation
+        );
+        let has_solve_step = path
+            .steps
+            .iter()
+            .any(|s| matches!(&s.operation, Operation::SolveODE { .. }));
+        assert!(has_solve_step, "Expected at least one SolveODE step");
+    }
+
+    #[test]
+    fn classify_ode_difficulty_is_calculus_tier() {
+        use crate::resolution_path::TechniqueDifficulty;
+        let op = Operation::ClassifyODE {
+            order: "first".to_string(),
+            ode_type: "separable".to_string(),
+        };
+        assert_eq!(
+            op.difficulty(),
+            TechniqueDifficulty::Calculus,
+            "ClassifyODE should be Calculus tier"
         );
     }
 }

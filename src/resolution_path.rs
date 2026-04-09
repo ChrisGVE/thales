@@ -1592,6 +1592,18 @@ pub enum Operation {
         method: String,
     },
 
+    /// Classify an ODE by order and structural type.
+    ///
+    /// # Example
+    ///
+    /// dy/dx = y classified as: order = "first", ode_type = "separable"
+    ClassifyODE {
+        /// The order of the ODE (e.g., "first", "second")
+        order: String,
+        /// The structural type (e.g., "separable", "linear", "homogeneous")
+        ode_type: String,
+    },
+
     // ===== Matrix Operations =====
     /// Perform a matrix operation.
     MatrixOperation {
@@ -1744,6 +1756,9 @@ impl Operation {
                 format!("U-substitution: u = {:?}", substitution)
             }
             Operation::SolveODE { method } => format!("Solve ODE ({})", method),
+            Operation::ClassifyODE { order, ode_type } => {
+                format!("Classify ODE: {}-order, type = {}", order, ode_type)
+            }
             // Matrix operations
             Operation::MatrixOperation { operation } => {
                 format!("Matrix operation: {}", operation)
@@ -1909,7 +1924,8 @@ impl Operation {
             | Operation::EvaluateLimit { .. }
             | Operation::IntegrationByParts { .. }
             | Operation::USubstitution { .. }
-            | Operation::SolveODE { .. } => "calculus".to_string(),
+            | Operation::SolveODE { .. }
+            | Operation::ClassifyODE { .. } => "calculus".to_string(),
 
             // Matrix operations
             Operation::MatrixOperation { .. }
@@ -1997,7 +2013,8 @@ impl Operation {
             | Operation::EvaluateLimit { .. }
             | Operation::IntegrationByParts { .. }
             | Operation::USubstitution { .. }
-            | Operation::SolveODE { .. } => TechniqueDifficulty::Calculus,
+            | Operation::SolveODE { .. }
+            | Operation::ClassifyODE { .. } => TechniqueDifficulty::Calculus,
 
             // Tier 6 — Advanced
             Operation::MatrixOperation { .. }
