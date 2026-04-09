@@ -1004,3 +1004,69 @@ fn test_symbolic_isolation_annotations() {
         "Expected at least one annotated step from symbolic isolation, got 0"
     );
 }
+
+#[test]
+fn test_quadratic_complex_root_path_contains_decomposition() {
+    use thales::resolution_path::Operation;
+    use thales::solver::QuadraticSolver;
+    // x² + 1 = 0 => x = ±i; the resolution path must contain a ComplexDecomposition step.
+    let lhs = add(pow(var("x"), int(2)), int(1));
+    let eq = Equation::new("cplx", lhs, int(0));
+    let solver = QuadraticSolver::new();
+    let (_sol, path) = solver.solve(&eq, &Variable::new("x")).unwrap();
+
+    let decomp_step = path.steps.iter().find(|s| {
+        matches!(
+            &s.operation,
+            Operation::ComplexDecomposition { original_var, .. }
+            if original_var == "x"
+        )
+    });
+    assert!(
+        decomp_step.is_some(),
+        "Resolution path for x²+1=0 must contain a ComplexDecomposition step"
+    );
+
+    let ann = decomp_step.unwrap().annotation.as_ref().unwrap();
+    assert_eq!(
+        ann.technique.as_deref(),
+        Some("Complex Roots"),
+        "ComplexDecomposition step must be annotated with 'Complex Roots'"
+    );
+}
+
+#[test]
+fn test_complex_operation_difficulty_tiers() {
+    use thales::resolution_path::{Operation, TechniqueDifficulty};
+    // ComplexDecomposition should be AlgebraicManip (Tier 3).
+    let decomp = Operation::ComplexDecomposition {
+        original_var: "x".to_string(),
+        real_var: "x_re".to_string(),
+        imag_var: "x_im".to_string(),
+    };
+    assert_eq!(
+        decomp.difficulty(),
+        TechniqueDifficulty::AlgebraicManip,
+        "ComplexDecomposition should be AlgebraicManip difficulty"
+    );
+    assert_eq!(
+        decomp.category(),
+        "complex",
+        "ComplexDecomposition should be in the 'complex' category"
+    );
+
+    // EulerFormula should be Transcendental (Tier 4).
+    let euler = Operation::EulerFormula {
+        direction: "polar_to_rectangular".to_string(),
+    };
+    assert_eq!(
+        euler.difficulty(),
+        TechniqueDifficulty::Transcendental,
+        "EulerFormula should be Transcendental difficulty"
+    );
+    assert_eq!(
+        euler.category(),
+        "complex",
+        "EulerFormula should be in the 'complex' category"
+    );
+}

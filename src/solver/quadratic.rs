@@ -174,6 +174,20 @@ impl Solver for QuadraticSolver {
                 StepAnnotation::algebraic("Quadratic Formula"),
             );
 
+            path = path.annotated_step(
+                Operation::ComplexDecomposition {
+                    original_var: var_name.clone(),
+                    real_var: format!("{}_re", var_name),
+                    imag_var: format!("{}_im", var_name),
+                },
+                format!(
+                    "Complex Roots: real part = {}, imaginary part = ±{}",
+                    real_part, imag_part
+                ),
+                root1.clone(),
+                StepAnnotation::algebraic("Complex Roots"),
+            );
+
             let resolution_path = path.finish(root1.clone());
             Ok((Solution::Multiple(vec![root1, root2]), resolution_path))
         }

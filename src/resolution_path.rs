@@ -1678,6 +1678,37 @@ pub enum Operation {
         recommended_method: String,
     },
 
+    // ===== Complex Number Operations =====
+    /// Decompose a complex root into its real and imaginary parts.
+    ///
+    /// Applied when solving equations whose discriminant is negative, splitting
+    /// the result into a real part variable and an imaginary part variable.
+    ///
+    /// # Example
+    ///
+    /// When x² + 1 = 0 yields x = ±i:
+    /// - `ComplexDecomposition { original_var: "x", real_var: "x_re", imag_var: "x_im" }`
+    ComplexDecomposition {
+        /// The original variable being solved for
+        original_var: String,
+        /// Name for the real part component
+        real_var: String,
+        /// Name for the imaginary part component
+        imag_var: String,
+    },
+
+    /// Apply Euler's formula to convert between rectangular and polar form.
+    ///
+    /// Euler's formula: e^(iθ) = cos(θ) + i·sin(θ).
+    ///
+    /// # Example
+    ///
+    /// Converting from polar to rectangular: `direction: "polar_to_rectangular"`
+    EulerFormula {
+        /// Direction of conversion, e.g. `"polar_to_rectangular"` or `"rectangular_to_polar"`
+        direction: String,
+    },
+
     /// Custom operation with a free-form description.
     ///
     /// Use this for operations not covered by the other variants
@@ -1822,6 +1853,19 @@ impl Operation {
                     "Symbolic-to-numerical handoff: {} (recommended: {})",
                     reason, recommended_method
                 )
+            }
+            Operation::ComplexDecomposition {
+                original_var,
+                real_var,
+                imag_var,
+            } => {
+                format!(
+                    "Decompose {} into real part {} and imaginary part {}",
+                    original_var, real_var, imag_var
+                )
+            }
+            Operation::EulerFormula { direction } => {
+                format!("Apply Euler's formula ({})", direction)
             }
             Operation::Custom(desc) => desc.clone(),
         }
@@ -1979,6 +2023,11 @@ impl Operation {
             // Handoff
             Operation::SymbolicToNumericalHandoff { .. } => "handoff".to_string(),
 
+            // Complex operations
+            Operation::ComplexDecomposition { .. } | Operation::EulerFormula { .. } => {
+                "complex".to_string()
+            }
+
             // Custom
             Operation::Custom(_) => "custom".to_string(),
         }
@@ -2069,6 +2118,12 @@ impl Operation {
             | Operation::NumericalConverged { .. }
             | Operation::ApproximationSubstitution { .. }
             | Operation::SymbolicToNumericalHandoff { .. } => TechniqueDifficulty::Advanced,
+
+            // Complex operations
+            // ComplexDecomposition is an algebraic split of a complex value — pre-calculus level.
+            Operation::ComplexDecomposition { .. } => TechniqueDifficulty::AlgebraicManip,
+            // EulerFormula involves trigonometric/exponential form — transcendental level.
+            Operation::EulerFormula { .. } => TechniqueDifficulty::Transcendental,
 
             // Custom: default to elementary, callers should annotate explicitly
             Operation::Custom(_) => TechniqueDifficulty::Elementary,
