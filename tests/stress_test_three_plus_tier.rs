@@ -442,47 +442,38 @@ fn t125_01() {
     assert_solves_ok("v = d(x)/dt", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t125_02() {
     assert_solves_ok("a = d(v)/dt", "v");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t125_03() {
     assert_solves_ok("E = integral(F*v, dt)", "v");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t125_04() {
     assert_solves_ok("W = integral(m*a, dx)", "a");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t125_05() {
     assert_solves_ok("P = d(E)/dt", "E");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t125_06() {
     assert_solves_ok("I = d(Q)/dt", "Q");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t125_07() {
     assert_solves_ok("rho = d(m)/d(V)", "m");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t125_08() {
     assert_solves_ok("sigma = d(F)/d(A)", "F");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t125_09() {
     assert_solves_ok("epsilon = d(L)/d(L0)", "L");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t125_10() {
     assert_solves_ok("mu = d(p)/d(V)", "p");
 }
@@ -552,7 +543,6 @@ fn t135_05() {
     assert_solves_ok("S = integral(2*pi*x, dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t135_06() {
     assert_solves_ok("M = integral(x*rho, dx)", "rho");
 }
@@ -561,17 +551,14 @@ fn t135_07() {
     assert_solves_ok("I = integral(r^2*dm, dr)", "r");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t135_08() {
     assert_solves_ok("W = integral(k*x, dx)", "k");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t135_09() {
     assert_solves_ok("U = integral(m*g, dh)", "m");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t135_10() {
     assert_solves_ok("Q = integral(rho*c*T, dV)", "T");
 }
@@ -730,22 +717,18 @@ fn t156_03() {
     assert_solves_ok("rho = integral(f(E)*g(E), dE)", "f");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t156_04() {
     assert_solves_ok("J = integral(rho*v, dA)", "rho");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t156_05() {
     assert_solves_ok("Phi = integrate(B, A)", "B");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t156_06() {
     assert_solves_ok("emf = -d(Phi)/dt", "Phi");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t156_07() {
     assert_solves_ok("H = integrate(T, S)", "T");
 }
@@ -754,7 +737,6 @@ fn t156_08() {
     assert_solves_ok("G = H - T*S", "T");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t156_09() {
     assert_solves_ok("F = -d(U)/dx", "U");
 }
@@ -795,17 +777,14 @@ fn t235_07() {
     assert_solves_ok("E = integral(k*q/r^2, dr)", "q");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t235_08() {
     assert_solves_ok("V = integral(E, dr)", "E");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t235_09() {
     assert_solves_ok("W = integral(P, dV)", "P");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t235_10() {
     assert_solves_ok("Q = integral(k*A*dT/dx, dt)", "k");
 }
@@ -946,7 +925,6 @@ fn t246_10() {
 
 // T2+T5+T6
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t256_01() {
     assert_solves_ok("E = integrate(rho*g*h, V)", "h");
 }
@@ -955,7 +933,6 @@ fn t256_02() {
     assert_solves_ok("M = integrate(r^2*rho, V)", "rho");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t256_03() {
     assert_solves_ok("U = integrate(G*m*rho/r, V)", "m");
 }
@@ -964,7 +941,6 @@ fn t256_04() {
     assert_solves_ok("T = integrate(0.5*rho*v^2, V)", "rho");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t256_05() {
     assert_solves_ok("P = integrate(F/A, A)", "F");
 }
@@ -973,17 +949,14 @@ fn t256_06() {
     assert_solves_ok("E = integrate(sigma*T^4, A)", "T");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t256_07() {
     assert_solves_ok("Q = integrate(k*A*dT/dx, t)", "k");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t256_08() {
     assert_solves_ok("W = integrate(P, V)", "P");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t256_09() {
     assert_solves_ok("H = integrate(c_p, T)", "c_p");
 }
@@ -1161,7 +1134,6 @@ fn t456_06() {
     assert_solves_ok("W = integral(J*dot(E), dV)", "J");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t456_07() {
     assert_solves_ok("P = integrate(S, A)", "S");
 }
@@ -1312,17 +1284,14 @@ fn t1235_04() {
     assert_solves_ok("V = integral(4*pi*r^2, dr)", "r");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1235_05() {
     assert_solves_ok("E = integrate(F, r)", "F");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1235_06() {
     assert_solves_ok("W = integrate(P, V)", "P");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1235_07() {
     assert_solves_ok("Q = integrate(c*m, T)", "c");
 }
@@ -1331,7 +1300,6 @@ fn t1235_08() {
     assert_solves_ok("I = integrate(r^2, m)", "r");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1235_09() {
     assert_solves_ok("M = integrate(rho, V)", "rho");
 }
@@ -1397,7 +1365,6 @@ fn t1245_02() {
     assert_solves_ok("y = d(exp(sin(x)))/dx", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1245_03() {
     assert_solves_ok("A = integral(r*sin(theta), dtheta)", "r");
 }
@@ -1419,7 +1386,6 @@ fn t1245_07() {
     assert_solves_ok("F = integrate(rho*g*sin(theta), A)", "theta");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1245_08() {
     assert_solves_ok("W = integrate(F*cos(theta), x)", "F");
 }
@@ -1428,7 +1394,6 @@ fn t1245_09() {
     assert_solves_ok("P = integrate(sigma*T^4*cos(theta), A)", "T");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1245_10() {
     assert_solves_ok("Q = integrate(h*A*(T-T_inf), t)", "h");
 }
@@ -1477,7 +1442,6 @@ fn t1246_10() {
 
 // T1+T2+T5+T6
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1256_01() {
     assert_solves_ok("E = integrate(rho*c*T, V)", "T");
 }
@@ -1494,7 +1458,6 @@ fn t1256_04() {
     assert_solves_ok("KE = integrate(0.5*m*v^2, t)", "m");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1256_05() {
     assert_solves_ok("W = integrate(F, x)", "F");
 }
@@ -1503,7 +1466,6 @@ fn t1256_06() {
     assert_solves_ok("Q = integrate(sigma*T^4, A)", "sigma");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1256_07() {
     assert_solves_ok("S = integrate(c/T, T)", "c");
 }
@@ -1512,12 +1474,10 @@ fn t1256_08() {
     assert_solves_ok("G = H-T*S", "S");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1256_09() {
     assert_solves_ok("F = -d(U)/dx", "U");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1256_10() {
     assert_solves_ok("P = d(W)/dt", "W");
 }
@@ -1545,7 +1505,6 @@ fn t1345_05() {
     assert_solves_ok("E = integral(k*cos(theta)/r^2, dr)", "k");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1345_06() {
     assert_solves_ok("W = integral(F*cos(theta), dx)", "F");
 }
@@ -1610,12 +1569,10 @@ fn t1346_10() {
 
 // T1+T3+T5+T6
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1356_01() {
     assert_solves_ok("F = integrate(sigma, A)", "sigma");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1356_02() {
     assert_solves_ok("M = integral(x*f, dx)", "f");
 }
@@ -1624,37 +1581,30 @@ fn t1356_03() {
     assert_solves_ok("I = integral(r^2*f, dx)", "f");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1356_04() {
     assert_solves_ok("W = integral(F, dx)", "F");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1356_05() {
     assert_solves_ok("Q = integral(rho, dV)", "rho");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1356_06() {
     assert_solves_ok("E = integral(D, dA)", "D");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1356_07() {
     assert_solves_ok("B = integral(H, dl)", "H");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1356_08() {
     assert_solves_ok("V = integral(E, dr)", "E");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1356_09() {
     assert_solves_ok("A = integral(B, dA)", "B");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1356_10() {
     assert_solves_ok("Phi = integral(B, dA)", "B");
 }
@@ -1671,7 +1621,6 @@ fn t1456_02() {
     assert_solves_ok("y = integral(cos(x)/x, dx)", "x");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1456_03() {
     assert_solves_ok("F = integrate(rho*g*sin(theta), A)", "rho");
 }
@@ -1689,7 +1638,6 @@ fn t1456_06() {
     assert_solves_ok("E = integral(k*sin(theta)/r^2, dr)", "k");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1456_07() {
     assert_solves_ok("V = integral(rho*cos(theta)/r, dr)", "rho");
 }
@@ -1702,7 +1650,6 @@ fn t1456_09() {
     assert_solves_ok("P = integrate(I^2*R, t)", "I");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t1456_10() {
     assert_solves_ok("E = integrate(c*B*sin(theta), A)", "B");
 }
@@ -1734,7 +1681,6 @@ fn t2345_06() {
     assert_solves_ok("E = integral(k*q/r^2, dr)", "q");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2345_07() {
     assert_solves_ok("V = integral(k*q/r, dr)", "q");
 }
@@ -1743,12 +1689,10 @@ fn t2345_08() {
     assert_solves_ok("I = integral(r^2*rho, dr)", "rho");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2345_09() {
     assert_solves_ok("M = integrate(r*rho, V)", "rho");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2345_10() {
     assert_solves_ok("Q = integral(rho*c*T, dV)", "T");
 }
@@ -1824,12 +1768,10 @@ fn t2356_06() {
     assert_solves_ok("KE = integral(0.5*I*w^2, dw)", "I");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2356_07() {
     assert_solves_ok("W = integrate(tau, theta)", "tau");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2356_08() {
     assert_solves_ok("Q = integrate(c*m, T)", "c");
 }
@@ -1839,7 +1781,6 @@ fn t2356_09() {
     assert_solves_ok("S = integral(c/T, dT)", "T");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2356_10() {
     assert_solves_ok("H = integrate(c_p, T)", "c_p");
 }
@@ -1878,7 +1819,6 @@ fn t2456_07() {
     assert_solves_ok("F = integrate(I*B*sin(theta), l)", "theta");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t2456_08() {
     assert_solves_ok("W = integrate(tau*sin(theta), theta)", "tau");
 }
@@ -1968,7 +1908,6 @@ fn t12345_06() {
     assert_solves_ok("B = integral(mu_0*I*sin(theta)/(4*pi*r^2), dl)", "I");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12345_07() {
     assert_solves_ok("W = integrate(F*cos(theta), x)", "F");
 }
@@ -1981,21 +1920,19 @@ fn t12345_09() {
     assert_solves_ok("M = integral(r^2*rho*sin(theta), dV)", "rho");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12345_10() {
     assert_solves_ok("S = integral(c_p/T, dT)", "c_p");
 }
 
 // T1+T2+T3+T4+T6
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12346_01() {
-    assert_solves_ok("Z = sqrt(R^2+(wL-1/(wC))^2)", "w");
+    assert_solves_ok("Z = sqrt(R^2+(w*L-1/(w*C))^2)", "w");
 }
 #[test]
 #[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12346_02() {
-    assert_solves_ok("phi = atan((wL-1/(wC))/R)", "w");
+    assert_solves_ok("phi = atan((w*L-1/(w*C))/R)", "w");
 }
 #[test]
 fn t12346_03() {
@@ -2014,9 +1951,8 @@ fn t12346_06() {
     assert_solves_ok("f_0 = 1/(2*pi*sqrt(L*C))", "L");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12346_07() {
-    assert_solves_ok("I = V/sqrt(R^2+(wL-1/(wC))^2)", "w");
+    assert_solves_ok("I = V/sqrt(R^2+(w*L-1/(w*C))^2)", "w");
 }
 #[test]
 fn t12346_08() {
@@ -2041,17 +1977,15 @@ fn t12356_02() {
     assert_solves_ok("I_mom = integrate(r^2*rho, V)", "rho");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
+#[ignore = "Target variable is the integration variable — requires symbolic integration"]
 fn t12356_03() {
     assert_solves_ok("U = integrate(G*m/r, m)", "m");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12356_04() {
     assert_solves_ok("W = integrate(P, V)", "P");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12356_05() {
     assert_solves_ok("Q = integral(k*A*dT/dx, dt)", "k");
 }
@@ -2061,7 +1995,6 @@ fn t12356_06() {
     assert_solves_ok("S = integrate(1/T, Q)", "T");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12356_07() {
     assert_solves_ok("H = integrate(c_p, T)", "c_p");
 }
@@ -2070,7 +2003,6 @@ fn t12356_08() {
     assert_solves_ok("G = H-T*S", "H");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12356_09() {
     assert_solves_ok("F = -d(U)/dx", "U");
 }
@@ -2103,7 +2035,6 @@ fn t12456_05() {
     assert_solves_ok("F = integral(q*E + q*v*B*sin(theta), dt)", "q");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t12456_06() {
     assert_solves_ok("W = integrate(F*r*sin(theta), theta)", "F");
 }
@@ -2192,12 +2123,10 @@ fn t23456_05() {
     assert_solves_ok("V = integral(rho*cos(theta)/(4*pi*epsilon*r), dV)", "r");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t23456_06() {
     assert_solves_ok("F = integral(J*B*sin(theta)*r, dV)", "r");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t23456_07() {
     assert_solves_ok("W = integral(tau*sin(theta)*r, dtheta)", "r");
 }
@@ -2210,7 +2139,6 @@ fn t23456_09() {
     assert_solves_ok("Q = integral(sigma*T^4*cos(theta)*r^2, dOmega)", "T");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t23456_10() {
     assert_solves_ok("S = integral(c*ln(T)*rho, dV)", "c");
 }
@@ -2229,12 +2157,10 @@ fn t123456_02() {
     assert_solves_ok("E = integrate(rho*c*T*r^2*sin(theta), V)", "T");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t123456_03() {
     assert_solves_ok("F = integrate(q*(E+v*B*sin(theta)), t)", "q");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t123456_04() {
     assert_solves_ok("W = integrate(F*r*cos(theta), r)", "F");
 }
@@ -2247,12 +2173,10 @@ fn t123456_06() {
     assert_solves_ok("H = integrate(J*E*r^2*sin(theta), V)", "J");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t123456_07() {
     assert_solves_ok("S = integrate(c_p*ln(T)/T*rho, V)", "c_p");
 }
 #[test]
-#[ignore = "Solver returns UnsupportedEquationType for this form"]
 fn t123456_08() {
     assert_solves_ok("G = integrate(rho*g*r*sin(theta)*cos(phi), V)", "rho");
 }

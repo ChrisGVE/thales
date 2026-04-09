@@ -375,7 +375,7 @@ fn try_split_product(expr: &Expression, var: &str) -> Option<(Expression, Expres
         // Both have var → can't factor cleanly
     }
 
-    // Division: var_factor / something
+    // Division: var_factor / something  OR  something / var_factor
     if let Expression::Binary(BinaryOp::Div, left, right) = expr {
         let left_has = contains_variable(left, var);
         let right_has = contains_variable(right, var);
@@ -389,6 +389,25 @@ fn try_split_product(expr: &Expression, var: &str) -> Option<(Expression, Expres
                 )
                 .simplify();
                 return Some((factor, rest));
+            }
+        } else if right_has && !left_has {
+            // something / var_expr → treat as (1/var_expr) * something
+            // Factor is 1/var_expr (or var^(-1) if var_expr is just the variable)
+            if let Some((factor, inner_rest)) = try_split_product(right, var) {
+                // Original: left / (factor * inner_rest) = (1/factor) * (left/inner_rest)
+                let inv_factor = Expression::Binary(
+                    BinaryOp::Div,
+                    Box::new(Expression::Integer(1)),
+                    Box::new(factor),
+                )
+                .simplify();
+                let rest = Expression::Binary(
+                    BinaryOp::Div,
+                    Box::new(left.as_ref().clone()),
+                    Box::new(inner_rest),
+                )
+                .simplify();
+                return Some((inv_factor, rest));
             }
         }
     }
