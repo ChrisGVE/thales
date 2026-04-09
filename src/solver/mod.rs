@@ -215,6 +215,7 @@ pub trait Solver {
 /// 2. **Quadratic** ([`QuadraticSolver`]): Equations with x² terms
 /// 3. **Polynomial** ([`PolynomialSolver`]): General polynomial equations
 /// 4. **Transcendental** ([`TranscendentalSolver`]): Equations with sin, cos, exp, ln, log
+/// 5. **ODE** ([`OdeSolver`]): Ordinary differential equations (future: when parser supports derivatives)
 ///
 /// # Examples
 ///
@@ -309,6 +310,7 @@ pub struct SmartSolver {
     quadratic: QuadraticSolver,
     polynomial: PolynomialSolver,
     transcendental: TranscendentalSolver,
+    ode: OdeSolver,
 }
 
 impl SmartSolver {
@@ -319,6 +321,7 @@ impl SmartSolver {
             quadratic: QuadraticSolver::new(),
             polynomial: PolynomialSolver::new(),
             transcendental: TranscendentalSolver::new(),
+            ode: OdeSolver::new(),
         }
     }
 }
@@ -387,6 +390,8 @@ impl Solver for SmartSolver {
             Some(self.polynomial.solve(equation, variable))
         } else if self.transcendental.can_solve(equation) {
             Some(self.transcendental.solve(equation, variable))
+        } else if self.ode.can_solve(equation) {
+            Some(self.ode.solve(equation, variable))
         } else {
             None
         };
@@ -449,6 +454,7 @@ impl Solver for SmartSolver {
             || self.quadratic.can_solve(equation)
             || self.polynomial.can_solve(equation)
             || self.transcendental.can_solve(equation)
+            || self.ode.can_solve(equation)
     }
 }
 
