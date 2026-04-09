@@ -59,6 +59,7 @@ mod types;
 // Re-export all public types
 pub use bisection::BisectionMethod;
 pub use brent::BrentsMethod;
+pub use lagrangian::{optimize_constrained, LagrangianResult, LagrangianSolver, OptimizationType};
 pub use least_squares::{GradientDescent, LevenbergMarquardt};
 pub use newton::NewtonRaphson;
 pub use secant::SecantMethod;

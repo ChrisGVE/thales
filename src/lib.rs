@@ -495,8 +495,9 @@ pub use integration::{
 pub use latex::{parse_latex, parse_latex_equation};
 pub use matrix::{BracketStyle, MatrixError, MatrixExpr};
 pub use numerical::{
-    BisectionMethod, BrentsMethod, NewtonRaphson, NumericalConfig, NumericalError, NumericalResult,
-    NumericalSolution, SmartNumericalSolver,
+    optimize_constrained, BisectionMethod, BrentsMethod, LagrangianResult, LagrangianSolver,
+    NewtonRaphson, NumericalConfig, NumericalError, NumericalResult, NumericalSolution,
+    OptimizationType, SmartNumericalSolver,
 };
 pub use ode::{
     builder::{first_order_ode, second_order_homogeneous, ODEBuilder},

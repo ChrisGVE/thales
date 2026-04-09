@@ -42,6 +42,7 @@
 
 use crate::ast::{BinaryOp, Expression, Variable};
 use crate::numerical::bordered_hessian;
+use crate::numerical::penalty;
 use crate::solver::SolverError;
 use std::collections::HashMap;
 
@@ -236,6 +237,81 @@ impl LagrangianSolver {
         }
 
         equations
+    }
+}
+
+// ============================================================================
+// Unified public API
+// ============================================================================
+
+/// Solve a constrained optimization problem with automatic method selection.
+///
+/// Tries the Lagrange multiplier method first.  If that fails (e.g. singular
+/// Jacobian or non-convergence), the quadratic penalty method is used as a
+/// fallback and the result is wrapped in a [`LagrangianResult`] with
+/// [`OptimizationType::Inconclusive`] classification.
+///
+/// # Arguments
+///
+/// * `objective`   – The function f to optimize.
+/// * `constraints` – Constraint expressions gⱼ; the solver enforces gⱼ = 0.
+/// * `variables`   – The decision variables.
+///
+/// # Errors
+///
+/// Returns [`SolverError::CannotSolve`] when both methods fail.
+///
+/// # Example
+///
+/// ```
+/// use thales::ast::{Expression, Variable, BinaryOp};
+/// use thales::numerical::lagrangian::optimize_constrained;
+///
+/// // Minimize x² + y² subject to x + y - 1 = 0
+/// let x = Expression::Variable(Variable::new("x"));
+/// let y = Expression::Variable(Variable::new("y"));
+/// let objective = Expression::Binary(
+///     BinaryOp::Add,
+///     Box::new(Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(2)))),
+///     Box::new(Expression::Power(Box::new(y.clone()), Box::new(Expression::Integer(2)))),
+/// );
+/// let constraint = Expression::Binary(
+///     BinaryOp::Sub,
+///     Box::new(Expression::Binary(BinaryOp::Add, Box::new(x), Box::new(y))),
+///     Box::new(Expression::Integer(1)),
+/// );
+/// let vars = vec![Variable::new("x"), Variable::new("y")];
+/// let result = optimize_constrained(&objective, &[constraint], &vars).unwrap();
+/// assert!((result.objective_value - 0.5).abs() < 1e-5);
+/// ```
+pub fn optimize_constrained(
+    objective: &Expression,
+    constraints: &[Expression],
+    variables: &[Variable],
+) -> Result<LagrangianResult, SolverError> {
+    let solver = LagrangianSolver::new();
+    match solver.solve(objective, constraints, variables) {
+        Ok(result) => Ok(result),
+        Err(_) => {
+            let penalty_result = penalty::solve_penalty(objective, constraints, variables, 1e-6)?;
+            let point: Vec<(String, f64)> = variables
+                .iter()
+                .zip(penalty_result.point.iter())
+                .map(|(v, &val)| (v.name.clone(), val))
+                .collect();
+            let names: Vec<String> = variables.iter().map(|v| v.name.clone()).collect();
+            let obj_val = eval_at(objective, &names, &penalty_result.point).ok_or_else(|| {
+                SolverError::CannotSolve(
+                    "Failed to evaluate objective at penalty solution".to_string(),
+                )
+            })?;
+            Ok(LagrangianResult {
+                point,
+                multipliers: vec![0.0; constraints.len()],
+                objective_value: obj_val,
+                classification: OptimizationType::Inconclusive,
+            })
+        }
     }
 }
 
@@ -534,6 +610,61 @@ mod tests {
             "expected LocalMaximum, got {:?}",
             classification
         );
+    }
+
+    #[test]
+    fn test_optimize_constrained_uses_lagrangian() {
+        // Verify the unified API succeeds via the Lagrange path when possible.
+        let objective = norm_squared("x", "y");
+        let constraint = linear_sum_constraint("x", "y", 1);
+        let vars = vec![Variable::new("x"), Variable::new("y")];
+
+        let result =
+            optimize_constrained(&objective, &[constraint], &vars).expect("should succeed");
+
+        let x_val = result.point.iter().find(|(n, _)| n == "x").unwrap().1;
+        let y_val = result.point.iter().find(|(n, _)| n == "y").unwrap().1;
+        assert!((x_val - 0.5).abs() < 1e-6, "x should be 0.5, got {}", x_val);
+        assert!((y_val - 0.5).abs() < 1e-6, "y should be 0.5, got {}", y_val);
+        assert!(
+            (result.objective_value - 0.5).abs() < 1e-6,
+            "f should be 0.5, got {}",
+            result.objective_value
+        );
+        // Lagrange path gives a proper classification.
+        assert_eq!(result.classification, OptimizationType::LocalMinimum);
+    }
+
+    #[test]
+    fn test_optimize_constrained_no_constraints() {
+        // With no constraints the Lagrangian reduces to ∇f = 0.
+        let objective = norm_squared("x", "y");
+        let vars = vec![Variable::new("x"), Variable::new("y")];
+
+        let result = optimize_constrained(&objective, &[], &vars).expect("should succeed");
+
+        let x_val = result.point.iter().find(|(n, _)| n == "x").unwrap().1;
+        let y_val = result.point.iter().find(|(n, _)| n == "y").unwrap().1;
+        assert!(x_val.abs() < 1e-5, "x should be ~0, got {}", x_val);
+        assert!(y_val.abs() < 1e-5, "y should be ~0, got {}", y_val);
+    }
+
+    #[test]
+    fn test_optimize_constrained_result_fields() {
+        // Verify all fields of LagrangianResult are populated correctly.
+        let objective = norm_squared("x", "y");
+        let constraint = linear_sum_constraint("x", "y", 1);
+        let vars = vec![Variable::new("x"), Variable::new("y")];
+
+        let result =
+            optimize_constrained(&objective, &[constraint], &vars).expect("should succeed");
+
+        // Point has correct variable names and count.
+        assert_eq!(result.point.len(), 2);
+        assert!(result.point.iter().any(|(n, _)| n == "x"));
+        assert!(result.point.iter().any(|(n, _)| n == "y"));
+        // One multiplier per constraint.
+        assert_eq!(result.multipliers.len(), 1);
     }
 
     #[test]
