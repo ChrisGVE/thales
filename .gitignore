@@ -76,3 +76,6 @@ tmp/
 .serena/
 CLAUDE.md
 CLAUDE.local.md
+
+# Research and reverse engineering artifacts (indexed by workspace-qdrant)
+reference/

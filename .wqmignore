@@ -1,0 +1,4 @@
+# workspace-qdrant ignore file
+# Inverse of .gitignore: ensure reference/ is indexed even though git ignores it
+!reference/
+!reference/**
