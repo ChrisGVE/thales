@@ -244,6 +244,17 @@ pub(super) fn try_cross_multiply(
     )
     .simplify();
 
+    // Check for extraneous solutions: substitute the result back into the
+    // original denominator. If it simplifies to zero, the solution makes
+    // the original equation undefined.
+    let denom_at_solution = substitute_var(denominator, var, &result).simplify();
+    if is_zero(&denom_at_solution) {
+        return Err(SolverError::CannotSolve(format!(
+            "Extraneous solution: {} = {} makes denominator {} equal to zero",
+            var, result, denominator
+        )));
+    }
+
     let p = p.annotated_step(
         Operation::DivideBothSides(coeff_sum),
         format!("Collect terms and divide to isolate {}", var),
@@ -394,5 +405,46 @@ fn expand_product(left: &Expression, right: &Expression) -> Expression {
             Box::new(left.clone()),
             Box::new(right.clone()),
         ),
+    }
+}
+
+/// Substitute a variable with an expression throughout an expression tree.
+fn substitute_var(expr: &Expression, var: &str, replacement: &Expression) -> Expression {
+    match expr {
+        Expression::Variable(v) if v.name == var => replacement.clone(),
+        Expression::Variable(_)
+        | Expression::Integer(_)
+        | Expression::Float(_)
+        | Expression::Rational(_)
+        | Expression::Complex(_)
+        | Expression::Constant(_) => expr.clone(),
+        Expression::Binary(op, left, right) => Expression::Binary(
+            *op,
+            Box::new(substitute_var(left, var, replacement)),
+            Box::new(substitute_var(right, var, replacement)),
+        ),
+        Expression::Unary(op, inner) => {
+            Expression::Unary(*op, Box::new(substitute_var(inner, var, replacement)))
+        }
+        Expression::Power(base, exp) => Expression::Power(
+            Box::new(substitute_var(base, var, replacement)),
+            Box::new(substitute_var(exp, var, replacement)),
+        ),
+        Expression::Function(func, args) => Expression::Function(
+            func.clone(),
+            args.iter()
+                .map(|arg| substitute_var(arg, var, replacement))
+                .collect(),
+        ),
+    }
+}
+
+/// Check if an expression is definitively zero (integer 0, float 0.0, etc.).
+fn is_zero(expr: &Expression) -> bool {
+    match expr {
+        Expression::Integer(0) => true,
+        Expression::Float(f) => f.abs() < 1e-15,
+        Expression::Rational(r) => *r.numer() == 0,
+        _ => false,
     }
 }

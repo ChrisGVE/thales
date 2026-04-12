@@ -284,6 +284,22 @@ fn cross_multiply_with_different_values() {
 }
 
 #[test]
+fn extraneous_solution_detected() {
+    // x/(x-1) = 1/(x-1), solving for x
+    // Cross-multiply: x = 1, but x=1 makes denominator (x-1) = 0
+    // The solver should reject this as extraneous.
+    let lhs = div(v("x"), sub(v("x"), int(1)));
+    let rhs = div(int(1), sub(v("x"), int(1)));
+    let variable = Variable::new("x");
+    let path = ResolutionPathBuilder::new(lhs.clone());
+    let result = symbolic_isolate(&lhs, &rhs, &variable, path);
+    assert!(
+        result.is_err(),
+        "Expected error for extraneous solution, but isolation succeeded"
+    );
+}
+
+#[test]
 fn variable_not_found() {
     let variable = Variable::new("z");
     let path = ResolutionPathBuilder::new(v("x"));
