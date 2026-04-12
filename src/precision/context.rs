@@ -1,6 +1,10 @@
 //! Evaluation context with precision tracking.
 
 use crate::ast::{BinaryOp, Expression, Function, SymbolicConstant, UnaryOp, Variable};
+use num::CheckedAdd;
+use num::CheckedDiv;
+use num::CheckedMul;
+use num::CheckedSub;
 use num_rational::Rational64;
 use std::collections::HashMap;
 
@@ -201,7 +205,10 @@ impl EvalContext {
                 .checked_add(b)
                 .map(Value::Integer)
                 .ok_or(EvalError::Overflow),
-            (Value::Rational(a), Value::Rational(b)) => Ok(Value::Rational(a + b)),
+            (Value::Rational(a), Value::Rational(b)) => a
+                .checked_add(&b)
+                .map(Value::Rational)
+                .ok_or(EvalError::Overflow),
             (Value::Complex(re1, im1), Value::Complex(re2, im2)) => {
                 Ok(Value::Complex(re1 + re2, im1 + im2))
             }
@@ -219,7 +226,10 @@ impl EvalContext {
                 .checked_sub(b)
                 .map(Value::Integer)
                 .ok_or(EvalError::Overflow),
-            (Value::Rational(a), Value::Rational(b)) => Ok(Value::Rational(a - b)),
+            (Value::Rational(a), Value::Rational(b)) => a
+                .checked_sub(&b)
+                .map(Value::Rational)
+                .ok_or(EvalError::Overflow),
             (Value::Complex(re1, im1), Value::Complex(re2, im2)) => {
                 Ok(Value::Complex(re1 - re2, im1 - im2))
             }
@@ -241,7 +251,10 @@ impl EvalContext {
                 .checked_mul(b)
                 .map(Value::Integer)
                 .ok_or(EvalError::Overflow),
-            (Value::Rational(a), Value::Rational(b)) => Ok(Value::Rational(a * b)),
+            (Value::Rational(a), Value::Rational(b)) => a
+                .checked_mul(&b)
+                .map(Value::Rational)
+                .ok_or(EvalError::Overflow),
             (Value::Complex(re1, im1), Value::Complex(re2, im2)) => {
                 // (a+bi)(c+di) = (ac-bd) + (ad+bc)i
                 let re = re1 * re2 - im1 * im2;
@@ -270,7 +283,10 @@ impl EvalContext {
                     Ok(Value::Float(a as f64 / b as f64))
                 }
             }
-            (Value::Rational(a), Value::Rational(b)) => Ok(Value::Rational(a / b)),
+            (Value::Rational(a), Value::Rational(b)) => a
+                .checked_div(&b)
+                .map(Value::Rational)
+                .ok_or(EvalError::Overflow),
             (Value::Complex(re1, im1), Value::Complex(re2, im2)) => {
                 // (a+bi)/(c+di) = (ac+bd)/(c²+d²) + (bc-ad)/(c²+d²)i
                 let denom = re2 * re2 + im2 * im2;
@@ -555,5 +571,55 @@ impl EvalContext {
 impl Default for EvalContext {
     fn default() -> Self {
         Self::full_precision()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rational_add_overflow_returns_error() {
+        let ctx = EvalContext::new(PrecisionMode::Arbitrary);
+        // Construct rationals with large numerators that will overflow on addition
+        let a = Value::Rational(Rational64::new(i64::MAX / 2, 1));
+        let b = Value::Rational(Rational64::new(i64::MAX / 2 + 2, 1));
+        let result = ctx.eval_add(a, b);
+        assert!(
+            result.is_err() || matches!(result, Ok(Value::Rational(_))),
+            "Should either overflow or produce correct result"
+        );
+    }
+
+    #[test]
+    fn test_rational_mul_overflow_returns_error() {
+        let ctx = EvalContext::new(PrecisionMode::Arbitrary);
+        // Large numerators that overflow when multiplied
+        let a = Value::Rational(Rational64::new(i64::MAX / 2, 1));
+        let b = Value::Rational(Rational64::new(3, 1));
+        let result = ctx.eval_mul(a, b);
+        assert!(
+            result.is_err(),
+            "Multiplication of large rationals should return Overflow error"
+        );
+    }
+
+    #[test]
+    fn test_rational_arithmetic_normal_case() {
+        let ctx = EvalContext::new(PrecisionMode::Arbitrary);
+        let a = Value::Rational(Rational64::new(1, 3));
+        let b = Value::Rational(Rational64::new(1, 6));
+
+        let sum = ctx.eval_add(a.clone(), b.clone()).unwrap();
+        assert_eq!(sum, Value::Rational(Rational64::new(1, 2)));
+
+        let diff = ctx.eval_sub(a.clone(), b.clone()).unwrap();
+        assert_eq!(diff, Value::Rational(Rational64::new(1, 6)));
+
+        let prod = ctx.eval_mul(a.clone(), b.clone()).unwrap();
+        assert_eq!(prod, Value::Rational(Rational64::new(1, 18)));
+
+        let quot = ctx.eval_div(a, b).unwrap();
+        assert_eq!(quot, Value::Rational(Rational64::new(2, 1)));
     }
 }

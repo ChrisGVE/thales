@@ -562,7 +562,15 @@ fn divide_series(
                         Expression::Rational(num_rational::Rational64::new(*n, *d))
                     }
                     Expression::Rational(r) => {
-                        Expression::Rational(*r / num_rational::Rational64::from(*d))
+                        use num::CheckedDiv;
+                        match r.checked_div(&num_rational::Rational64::from(*d)) {
+                            Some(result) => Expression::Rational(result),
+                            None => Expression::Binary(
+                                BinaryOp::Div,
+                                Box::new(Expression::Rational(*r)),
+                                Box::new(Expression::Integer(*d)),
+                            ),
+                        }
                     }
                     other => Expression::Binary(
                         BinaryOp::Div,
