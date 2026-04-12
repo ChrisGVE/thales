@@ -68,8 +68,13 @@ fn unwrap_binary(
     let left_has = contains_variable(left, var);
     let right_has = contains_variable(right, var);
 
-    // Variable in both children — try to collect linear terms
+    // Variable in both children
     if left_has && right_has {
+        // For division with var in both numerator and denominator,
+        // cross-multiply: f(v)/g(v) = other → f(v) - other*g(v) = 0
+        if op == BinaryOp::Div {
+            return super::rational::try_cross_multiply(left, right, other, var, path);
+        }
         return collect_linear_terms(op, left, right, other, var, path);
     }
 

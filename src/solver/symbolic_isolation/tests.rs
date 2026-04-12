@@ -235,6 +235,23 @@ fn ideal_gas_solve_for_t() {
 }
 
 #[test]
+fn parallel_resistance_solve_for_r1() {
+    // R_par = R1*R2/(R1+R2), solve for R1
+    // R1 appears in both numerator and denominator (cross-multiply case)
+    let lhs = v("R_par");
+    let rhs = div(mul(v("R1"), v("R2")), add(v("R1"), v("R2")));
+    let result = isolate(lhs, rhs, "R1");
+    // R_par=6, R2=12 => R1 = 6*12/(12-6) = 72/6 = 12... wait:
+    // R_par = R1*R2/(R1+R2) => R_par*(R1+R2) = R1*R2
+    // => R_par*R1 + R_par*R2 = R1*R2
+    // => R1*(R_par - R2) = -R_par*R2
+    // => R1 = R_par*R2/(R2 - R_par)
+    // R_par=6, R2=12 => R1 = 6*12/(12-6) = 72/6 = 12
+    let val = eval(&result, &[("R_par", 6.0), ("R2", 12.0)]);
+    assert!((val - 12.0).abs() < 1e-10, "Expected 12.0, got {}", val);
+}
+
+#[test]
 fn variable_not_found() {
     let variable = Variable::new("z");
     let path = ResolutionPathBuilder::new(v("x"));
