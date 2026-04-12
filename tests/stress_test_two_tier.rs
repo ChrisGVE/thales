@@ -874,7 +874,6 @@ fn t3_t6_04() {
     assert_solves_ok("p = a*x^2 + b*x + c", "x");
 }
 #[test]
-#[ignore = "Rational equation — variable in denominator on both sides"]
 fn t3_t6_05() {
     assert_solves_ok("R_eq = R1*R2/(R1+R2)", "R1");
 }

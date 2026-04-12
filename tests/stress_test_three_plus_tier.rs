@@ -577,7 +577,6 @@ fn t136_03() {
     assert_solves_ok("eig = (a+d)/2 + sqrt(((a-d)/2)^2+b*c)", "b");
 }
 #[test]
-#[ignore = "Rational equation — variable in denominator on both sides"]
 fn t136_04() {
     assert_solves_ok("R_par = R1*R2/(R1+R2)", "R1");
 }
@@ -1319,7 +1318,7 @@ fn t1236_05() {
     assert_solves_ok("f = 1/(2*pi*sqrt(L*C))", "C");
 }
 #[test]
-#[ignore = "Rational equation — variable in denominator on both sides"]
+#[ignore = "Rational equation with imaginary unit — needs nested denominator clearing within product"]
 fn t1236_06() {
     assert_solves_ok("Z = R+i*(w*L-1/(w*C))", "w");
 }
@@ -1910,7 +1909,7 @@ fn t12346_01() {
     assert_solves_ok("Z = sqrt(R^2+(w*L-1/(w*C))^2)", "w");
 }
 #[test]
-#[ignore = "Rational equation — variable in denominator on both sides"]
+#[ignore = "Rational equation inside atan — needs nested denominator clearing within function argument"]
 fn t12346_02() {
     assert_solves_ok("phi = atan((w*L-1/(w*C))/R)", "w");
 }
