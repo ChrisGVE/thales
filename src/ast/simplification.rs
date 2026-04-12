@@ -421,14 +421,18 @@ impl Expression {
                     return base_simplified;
                 }
                 // (x^a)^b → x^(a*b) - power of power law
+                // Only safe when inner exponent `a` is an integer; for non-integer `a`,
+                // the identity can produce incorrect results (e.g., ((-1)^2)^(1/2) ≠ -1).
                 if let Expression::Power(inner_base, inner_exp) = &base_simplified {
-                    let new_exp = Expression::Binary(
-                        BinaryOp::Mul,
-                        inner_exp.clone(),
-                        Box::new(exp_simplified.clone()),
-                    )
-                    .simplify();
-                    return Expression::Power(inner_base.clone(), Box::new(new_exp));
+                    if Self::is_integer_expr(inner_exp) {
+                        let new_exp = Expression::Binary(
+                            BinaryOp::Mul,
+                            inner_exp.clone(),
+                            Box::new(exp_simplified.clone()),
+                        )
+                        .simplify();
+                        return Expression::Power(inner_base.clone(), Box::new(new_exp));
+                    }
                 }
 
                 // Constant folding: if both base and exponent are numeric constants, evaluate
@@ -552,6 +556,20 @@ impl Expression {
     /// assert!(!Expression::is_numeric_constant(&Expression::Variable(Variable::new("x"))));
     /// assert!(!Expression::is_numeric_constant(&Expression::Complex(Complex64::new(1.0, 0.0))));
     /// ```
+    /// Check whether an expression is an integer value.
+    ///
+    /// Returns `true` for `Integer(_)`, negated integers, and `Float` values
+    /// that are exact integers. Used to guard simplification rules that are only
+    /// valid for integer exponents (e.g., the power-of-power rule).
+    pub(crate) fn is_integer_expr(expr: &Expression) -> bool {
+        match expr {
+            Expression::Integer(_) => true,
+            Expression::Unary(UnaryOp::Neg, inner) => Self::is_integer_expr(inner),
+            Expression::Float(f) => f.is_finite() && *f == f.trunc() && *f != 0.0,
+            _ => false,
+        }
+    }
+
     pub(crate) fn is_numeric_constant(expr: &Expression) -> bool {
         matches!(
             expr,
