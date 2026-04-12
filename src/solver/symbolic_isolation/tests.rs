@@ -252,6 +252,38 @@ fn parallel_resistance_solve_for_r1() {
 }
 
 #[test]
+fn cross_multiply_simple_a_over_x_eq_b() {
+    // a/x = b, solve for x → x = a/b
+    let lhs = div(v("a"), v("x"));
+    let rhs = v("b");
+    let result = isolate(lhs, rhs, "x");
+    let val = eval(&result, &[("a", 10.0), ("b", 2.0)]);
+    assert!((val - 5.0).abs() < 1e-10, "Expected 5.0, got {}", val);
+}
+
+#[test]
+fn cross_multiply_x_over_x_plus_1_eq_c() {
+    // x/(x+1) = c, solve for x → x = c/(1-c)
+    let lhs = div(v("x"), add(v("x"), int(1)));
+    let rhs = v("c");
+    let result = isolate(lhs, rhs, "x");
+    // c=0.5 → x = 0.5/0.5 = 1
+    let val = eval(&result, &[("c", 0.5)]);
+    assert!((val - 1.0).abs() < 1e-10, "Expected 1.0, got {}", val);
+}
+
+#[test]
+fn cross_multiply_with_different_values() {
+    // R_par = R1*R2/(R1+R2), solve for R1 with different values
+    let lhs = v("R_par");
+    let rhs = div(mul(v("R1"), v("R2")), add(v("R1"), v("R2")));
+    let result = isolate(lhs, rhs, "R1");
+    // R_par=4, R2=12 → R1 = 4*12/(12-4) = 48/8 = 6
+    let val = eval(&result, &[("R_par", 4.0), ("R2", 12.0)]);
+    assert!((val - 6.0).abs() < 1e-10, "Expected 6.0, got {}", val);
+}
+
+#[test]
 fn variable_not_found() {
     let variable = Variable::new("z");
     let path = ResolutionPathBuilder::new(v("x"));
