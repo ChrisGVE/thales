@@ -5,7 +5,7 @@
 //! zero coefficients (e.g., `x^1000 + 1`).
 
 use super::dense_poly::DensePolynomial;
-use super::ring::Ring;
+use super::ring::{Field, Ring};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::{Add, Mul, Neg, Sub};
@@ -177,6 +177,27 @@ impl<R: Ring> SparsePolynomial<R> {
                 1.0 - (nonzero as f64 / total as f64)
             }
         }
+    }
+}
+
+// ── Euclidean division (requires Field) ──────────────────────────────────────
+
+impl<R: Field> SparsePolynomial<R> {
+    /// Euclidean division via dense delegation.
+    ///
+    /// Converts to dense, performs division, converts back.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `divisor` is zero.
+    pub fn div_rem(&self, divisor: &Self) -> (Self, Self) {
+        let (q, r) = self.to_dense().div_rem(&divisor.to_dense());
+        (SparsePolynomial::from(q), SparsePolynomial::from(r))
+    }
+
+    /// Make the polynomial monic (leading coefficient = 1).
+    pub fn make_monic(&self) -> Self {
+        SparsePolynomial::from(self.to_dense().make_monic())
     }
 }
 
@@ -446,5 +467,48 @@ mod tests {
         let a = sp(&[(0, 1), (2, 3)]);
         let b = sp(&[(0, 1), (2, 3)]);
         assert_eq!(a, b);
+    }
+
+    // ── Euclidean division tests ─────────────────────────────────────────────
+
+    mod div_rem_tests {
+        use super::*;
+        use crate::numeric::BigRational;
+        type RPoly = SparsePolynomial<BigRational>;
+
+        fn rsp(pairs: &[(usize, i64)]) -> RPoly {
+            let terms = pairs
+                .iter()
+                .map(|&(d, c)| (d, BigRational::from(c)))
+                .collect();
+            RPoly::from_terms(terms)
+        }
+
+        #[test]
+        fn test_div_rem_exact() {
+            // (x^3 + 1) / (x + 1) = x^2 - x + 1
+            let f = rsp(&[(0, 1), (3, 1)]);
+            let g = rsp(&[(0, 1), (1, 1)]);
+            let (q, r) = f.div_rem(&g);
+            assert_eq!(q, rsp(&[(0, 1), (1, -1), (2, 1)]));
+            assert!(r.is_zero());
+        }
+
+        #[test]
+        fn test_div_rem_identity() {
+            let f = rsp(&[(0, 3), (1, 2), (3, 1)]);
+            let g = rsp(&[(0, 1), (1, 1)]);
+            let (q, r) = f.div_rem(&g);
+            let reconstructed = q.to_dense() * g.to_dense() + r.to_dense();
+            assert_eq!(reconstructed, f.to_dense());
+        }
+
+        #[test]
+        #[should_panic(expected = "polynomial division by zero")]
+        fn test_div_rem_zero_divisor() {
+            let f = rsp(&[(0, 1)]);
+            let g = RPoly::zero();
+            let _ = f.div_rem(&g);
+        }
     }
 }
