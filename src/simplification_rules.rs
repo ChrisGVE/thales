@@ -78,8 +78,12 @@ pub fn log_exp_rules() -> Vec<Rule> {
 ///
 /// Matches `Function::Ln` applied to `e^x` (where `e` is
 /// `Expression::Constant(SymbolicConstant::E)`).
+///
+/// Only applies when `x` is a real numeric constant. For symbolic `x`,
+/// the identity requires knowing `x` is real (not complex), which needs
+/// domain assumptions not yet available.
 fn ln_of_exp_rule() -> Rule {
-    Rule::new(
+    Rule::with_condition(
         Pattern::function(
             Function::Ln,
             vec![Pattern::power(
@@ -88,18 +92,31 @@ fn ln_of_exp_rule() -> Rule {
             )],
         ),
         Pattern::wildcard("x"),
+        |bindings| {
+            bindings
+                .get("x")
+                .is_some_and(Expression::is_numeric_constant)
+        },
     )
     .named("ln_of_exp")
 }
 
 /// e^(ln(x)) → x
+///
+/// Only applies when `x` is a positive numeric constant. For symbolic `x`,
+/// requires knowing `x > 0`, which needs domain assumptions.
 fn exp_of_ln_rule() -> Rule {
-    Rule::new(
+    Rule::with_condition(
         Pattern::power(
             Pattern::exact(Expression::Constant(SymbolicConstant::E)),
             Pattern::function(Function::Ln, vec![Pattern::wildcard("x")]),
         ),
         Pattern::wildcard("x"),
+        |bindings| {
+            bindings
+                .get("x")
+                .is_some_and(|x| Expression::extract_numeric_value(x).is_some_and(|v| v > 0.0))
+        },
     )
     .named("exp_of_ln")
 }
@@ -263,14 +280,27 @@ mod tests {
     // ── ln_of_exp ─────────────────────────────────────────────────────────────
 
     #[test]
-    fn test_ln_of_exp() {
+    fn test_ln_of_exp_numeric() {
+        // ln(e^3) → 3 — numeric exponent, safe to simplify
+        let rule = ln_of_exp_rule();
+        let e = Expression::Constant(SymbolicConstant::E);
+        let expr = Expression::Function(
+            Function::Ln,
+            vec![Expression::Power(Box::new(e), Box::new(int(3)))],
+        );
+        assert_eq!(apply_rule(&expr, &rule), Some(int(3)));
+    }
+
+    #[test]
+    fn test_ln_of_exp_symbolic_blocked() {
+        // ln(e^x) must NOT simplify when x is symbolic (could be complex)
         let rule = ln_of_exp_rule();
         let e = Expression::Constant(SymbolicConstant::E);
         let expr = Expression::Function(
             Function::Ln,
             vec![Expression::Power(Box::new(e), Box::new(var("x")))],
         );
-        assert_eq!(apply_rule(&expr, &rule), Some(var("x")));
+        assert_eq!(apply_rule(&expr, &rule), None);
     }
 
     #[test]
@@ -287,14 +317,42 @@ mod tests {
     // ── exp_of_ln ─────────────────────────────────────────────────────────────
 
     #[test]
-    fn test_exp_of_ln() {
+    fn test_exp_of_ln_positive_numeric() {
+        // e^(ln(5)) → 5 — positive constant, safe to simplify
+        let rule = exp_of_ln_rule();
+        let e = Expression::Constant(SymbolicConstant::E);
+        let expr = Expression::Power(
+            Box::new(e),
+            Box::new(Expression::Function(Function::Ln, vec![int(5)])),
+        );
+        assert_eq!(apply_rule(&expr, &rule), Some(int(5)));
+    }
+
+    #[test]
+    fn test_exp_of_ln_symbolic_blocked() {
+        // e^(ln(x)) must NOT simplify when x is symbolic (could be ≤ 0)
         let rule = exp_of_ln_rule();
         let e = Expression::Constant(SymbolicConstant::E);
         let expr = Expression::Power(
             Box::new(e),
             Box::new(Expression::Function(Function::Ln, vec![var("x")])),
         );
-        assert_eq!(apply_rule(&expr, &rule), Some(var("x")));
+        assert_eq!(apply_rule(&expr, &rule), None);
+    }
+
+    #[test]
+    fn test_exp_of_ln_negative_blocked() {
+        // e^(ln(-3)) must NOT simplify — ln(-3) is undefined for reals
+        let rule = exp_of_ln_rule();
+        let e = Expression::Constant(SymbolicConstant::E);
+        let expr = Expression::Power(
+            Box::new(e),
+            Box::new(Expression::Function(
+                Function::Ln,
+                vec![Expression::Integer(-3)],
+            )),
+        );
+        assert_eq!(apply_rule(&expr, &rule), None);
     }
 
     #[test]
