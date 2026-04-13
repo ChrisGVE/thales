@@ -4,8 +4,10 @@
 //! the expression tree and polynomial arithmetic.
 //!
 //! - [`SmallInt`] — tagged union: inline `i64` or heap-allocated `BigInt`
-//! - [`BigRational`] — exact rational with `SmallInt` components (future)
+//! - [`BigRational`] — exact rational with `SmallInt` components
 
+mod big_rational;
 mod small_int;
 
+pub use big_rational::BigRational;
 pub use small_int::SmallInt;
