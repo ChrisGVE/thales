@@ -20,6 +20,7 @@ mod symbol;
 mod add_node;
 mod dense_poly;
 mod mul_node;
+mod sparse_poly;
 
 pub use add_node::AddNode;
 pub use big_rational::BigRational;
@@ -27,4 +28,5 @@ pub use dense_poly::DensePolynomial;
 pub use expr::{Expr, ExprPool};
 pub use mul_node::MulNode;
 pub use small_int::SmallInt;
+pub use sparse_poly::SparsePolynomial;
 pub use symbol::SymbolId;
