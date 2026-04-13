@@ -7,6 +7,7 @@
 //! - [`BigRational`] — exact rational with `SmallInt` components
 
 mod big_rational;
+pub mod ring;
 mod small_int;
 mod symbol;
 
