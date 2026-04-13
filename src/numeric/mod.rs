@@ -6,11 +6,13 @@
 //! - [`SmallInt`] — tagged union: inline `i64` or heap-allocated `BigInt`
 //! - [`BigRational`] — exact rational with `SmallInt` components
 
+mod add_node;
 mod big_rational;
 pub mod ring;
 mod small_int;
 mod symbol;
 
+pub use add_node::AddNode;
 pub use big_rational::BigRational;
 pub use small_int::SmallInt;
 pub use symbol::SymbolId;
