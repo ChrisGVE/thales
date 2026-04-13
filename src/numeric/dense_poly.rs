@@ -199,6 +199,21 @@ impl<R: Field> DensePolynomial<R> {
             }
         }
     }
+
+    /// Euclidean GCD of two polynomials, normalized to monic.
+    ///
+    /// Uses the Euclidean algorithm (repeated `div_rem`).
+    /// Returns the zero polynomial if both inputs are zero.
+    pub fn gcd(&self, other: &Self) -> Self {
+        let mut a = self.clone();
+        let mut b = other.clone();
+        while !b.is_zero() {
+            let (_, r) = a.div_rem(&b);
+            a = b;
+            b = r;
+        }
+        a.make_monic()
+    }
 }
 
 // ── Equality ─────────────────────────────────────────────────────────────────
@@ -691,6 +706,85 @@ mod tests {
             let reconstructed = &(&q * &g) + &r;
             assert_eq!(reconstructed, f);
             assert!(r.degree().unwrap_or(0) < g.degree().unwrap());
+        }
+    }
+
+    // ── GCD tests ────────────────────────────────────────────────────────────
+
+    mod gcd_tests {
+        use super::*;
+        use crate::numeric::BigRational;
+        type RPoly = DensePolynomial<BigRational>;
+
+        fn ri(coeffs: &[i64]) -> RPoly {
+            RPoly::from_coeffs(coeffs.iter().map(|&c| BigRational::from(c)).collect())
+        }
+
+        #[test]
+        fn test_gcd_basic() {
+            // gcd(x^2-1, x-1) = x-1 (monic)
+            let f = ri(&[-1, 0, 1]); // x^2 - 1
+            let g = ri(&[-1, 1]); // x - 1
+            let d = f.gcd(&g);
+            assert_eq!(d, ri(&[-1, 1]));
+        }
+
+        #[test]
+        fn test_gcd_coprime() {
+            // gcd(x^2+1, x+1) = 1
+            let f = ri(&[1, 0, 1]);
+            let g = ri(&[1, 1]);
+            let d = f.gcd(&g);
+            assert_eq!(d.degree(), Some(0));
+            assert!(d.coeff(0).is_one());
+        }
+
+        #[test]
+        fn test_gcd_with_zero() {
+            let f = ri(&[-1, 0, 1]);
+            let z = RPoly::zero();
+            // gcd(f, 0) = monic(f)
+            let d = f.gcd(&z);
+            assert_eq!(d, f.make_monic());
+            // gcd(0, f) = monic(f)
+            let d2 = z.gcd(&f);
+            assert_eq!(d2, f.make_monic());
+        }
+
+        #[test]
+        fn test_gcd_both_zero() {
+            let z = RPoly::zero();
+            let d = z.gcd(&z);
+            assert!(d.is_zero());
+        }
+
+        #[test]
+        fn test_gcd_x3_minus_x_and_x2_minus_1() {
+            // gcd(x^3-x, x^2-1) = x^2-1 (both divisible by (x-1)(x+1))
+            let f = ri(&[0, -1, 0, 1]); // x^3 - x = x(x^2-1)
+            let g = ri(&[-1, 0, 1]); // x^2 - 1
+            let d = f.gcd(&g);
+            assert_eq!(d, ri(&[-1, 0, 1]));
+        }
+
+        #[test]
+        fn test_gcd_result_is_monic() {
+            // gcd of 2x+2 and 3x+3 should be x+1 (monic)
+            let f = ri(&[2, 2]);
+            let g = ri(&[3, 3]);
+            let d = f.gcd(&g);
+            assert_eq!(d, ri(&[1, 1]));
+        }
+
+        #[test]
+        fn test_gcd_divides_both() {
+            let f = ri(&[-1, 0, 0, 1]); // x^3 - 1
+            let g = ri(&[-1, 0, 1]); // x^2 - 1
+            let d = f.gcd(&g);
+            let (_, r1) = f.div_rem(&d);
+            let (_, r2) = g.div_rem(&d);
+            assert!(r1.is_zero());
+            assert!(r2.is_zero());
         }
     }
 }

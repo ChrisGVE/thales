@@ -199,6 +199,11 @@ impl<R: Field> SparsePolynomial<R> {
     pub fn make_monic(&self) -> Self {
         SparsePolynomial::from(self.to_dense().make_monic())
     }
+
+    /// Euclidean GCD, normalized to monic. Delegates to dense.
+    pub fn gcd(&self, other: &Self) -> Self {
+        SparsePolynomial::from(self.to_dense().gcd(&other.to_dense()))
+    }
 }
 
 /// Convert a DensePolynomial to sparse.
