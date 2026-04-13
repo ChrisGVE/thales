@@ -5,26 +5,30 @@
 //! combines like bases, removes exponent-0 factors, extracts numeric coefficient.
 
 use super::BigRational;
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
+
+use super::expr::{add_exponents, negate_exponent, Expr};
 
 /// A canonical multiplicative node: `coeff · Π(base ^ exponent)`.
 ///
-/// Bases are keyed by a string representation for now (will be replaced
-/// by `Arc<Expr>` once the new expression type is available in task 12).
-/// Exponents are stored as strings too (representing arbitrary expressions).
+/// Bases and exponents are `Arc<Expr>`, enabling structural sharing
+/// and O(1) clone of sub-expressions.
 ///
 /// # Invariants
 ///
 /// - No factor has a zero exponent
-/// - Factors are sorted by the `BTreeMap` key ordering
+/// - Factors are sorted by the `BTreeMap` key ordering (structural `Ord` on `Expr`)
 /// - Numeric coefficient is always extracted
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct MulNode {
     /// The numeric coefficient.
     pub coeff: BigRational,
-    /// Map from base representation to its exponent representation.
-    pub factors: BTreeMap<String, String>,
+    /// Map from base expression to its exponent expression.
+    pub factors: BTreeMap<Arc<Expr>, Arc<Expr>>,
 }
 
 impl MulNode {
@@ -53,35 +57,32 @@ impl MulNode {
     }
 
     /// Create a MulNode representing `base^exp`.
-    pub fn from_factor(base: String, exp: String) -> Self {
+    pub fn from_factor(base: Arc<Expr>, exp: Arc<Expr>) -> Self {
         let mut node = Self::one();
-        if exp != "0" {
+        if !exp.is_zero() {
             node.factors.insert(base, exp);
         }
         node
     }
 
     /// Create a MulNode representing `coeff * base^1`.
-    pub fn from_coeff_and_base(coeff: BigRational, base: String) -> Self {
+    pub fn from_coeff_and_base(coeff: BigRational, base: Arc<Expr>) -> Self {
         let mut node = MulNode {
             coeff,
             factors: BTreeMap::new(),
         };
-        node.factors.insert(base, "1".to_string());
+        node.factors.insert(base, Expr::int(1));
         node
     }
 
     /// Add a factor `base^exp`. If base already exists, adds exponents.
-    ///
-    /// Note: exponent addition is string-based placeholder. Will use
-    /// proper expression addition once integrated with Expr type.
-    pub fn add_factor(&mut self, base: String, exp: String) {
-        if exp == "0" {
+    pub fn add_factor(&mut self, base: Arc<Expr>, exp: Arc<Expr>) {
+        if exp.is_zero() {
             return;
         }
         if let Some(existing) = self.factors.get(&base) {
-            let new_exp = add_exponent_strings(existing, &exp);
-            if new_exp == "0" {
+            let new_exp = add_exponents(existing, &exp);
+            if new_exp.is_zero() {
                 self.factors.remove(&base);
             } else {
                 self.factors.insert(base, new_exp);
@@ -132,34 +133,67 @@ impl MulNode {
             factors: BTreeMap::new(),
         };
         for (base, exp) in &self.factors {
-            result
-                .factors
-                .insert(base.clone(), negate_exponent_string(exp));
+            result.factors.insert(base.clone(), negate_exponent(exp));
         }
         result
     }
 }
 
-/// Placeholder exponent addition for string-based exponents.
-/// Handles simple integer cases; complex expressions left as-is.
-fn add_exponent_strings(a: &str, b: &str) -> String {
-    if let (Ok(ai), Ok(bi)) = (a.parse::<i64>(), b.parse::<i64>()) {
-        (ai + bi).to_string()
-    } else {
-        format!("({a}) + ({b})")
-    }
-}
-
-/// Placeholder exponent negation for string-based exponents.
-fn negate_exponent_string(s: &str) -> String {
-    if let Ok(v) = s.parse::<i64>() {
-        (-v).to_string()
-    } else {
-        format!("-({s})")
-    }
-}
-
 use num::traits::{One, Zero};
+
+// ── Equality ─────────────────────────────────────────────────────────────────
+
+impl PartialEq for MulNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.coeff == other.coeff && self.factors == other.factors
+    }
+}
+
+impl Eq for MulNode {}
+
+// ── Hashing ──────────────────────────────────────────────────────────────────
+
+impl Hash for MulNode {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.coeff.hash(state);
+        for (base, exp) in &self.factors {
+            base.hash(state);
+            exp.hash(state);
+        }
+    }
+}
+
+// ── Ordering ─────────────────────────────────────────────────────────────────
+
+impl PartialOrd for MulNode {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for MulNode {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.coeff.cmp(&other.coeff).then_with(|| {
+            let mut a_iter = self.factors.iter();
+            let mut b_iter = other.factors.iter();
+            loop {
+                match (a_iter.next(), b_iter.next()) {
+                    (None, None) => return Ordering::Equal,
+                    (None, Some(_)) => return Ordering::Less,
+                    (Some(_), None) => return Ordering::Greater,
+                    (Some((ak, av)), Some((bk, bv))) => {
+                        let c = ak.cmp(bk).then_with(|| av.cmp(bv));
+                        if c != Ordering::Equal {
+                            return c;
+                        }
+                    }
+                }
+            }
+        })
+    }
+}
+
+// ── Display ──────────────────────────────────────────────────────────────────
 
 impl fmt::Display for MulNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -178,7 +212,7 @@ impl fmt::Display for MulNode {
             if !first {
                 write!(f, "*")?;
             }
-            if exp == "1" {
+            if exp.is_one() {
                 write!(f, "{base}")?;
             } else {
                 write!(f, "{base}^{exp}")?;
@@ -190,11 +224,20 @@ impl fmt::Display for MulNode {
     }
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+// ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::numeric::SmallInt;
+
+    fn sym(name: &str) -> Arc<Expr> {
+        Expr::symbol(name)
+    }
+
+    fn int_exp(n: i64) -> Arc<Expr> {
+        Expr::int(n)
+    }
 
     #[test]
     fn test_one() {
@@ -212,53 +255,55 @@ mod tests {
 
     #[test]
     fn test_combine_like_bases() {
-        // x * x = x^2
-        let mut node = MulNode::from_factor("x".to_string(), "1".to_string());
-        node.add_factor("x".to_string(), "1".to_string());
+        let x = sym("mul_clb_x");
+        let mut node = MulNode::from_factor(x.clone(), int_exp(1));
+        node.add_factor(x.clone(), int_exp(1));
         assert_eq!(node.factor_count(), 1);
-        assert_eq!(node.factors["x"], "2");
+        assert_eq!(*node.factors[&x], Expr::Integer(SmallInt::from(2i64)));
     }
 
     #[test]
     fn test_cancellation() {
-        // x * x^(-1) = 1
-        let mut node = MulNode::from_factor("x".to_string(), "1".to_string());
-        node.add_factor("x".to_string(), "-1".to_string());
+        let x = sym("mul_cancel_x");
+        let mut node = MulNode::from_factor(x.clone(), int_exp(1));
+        node.add_factor(x, int_exp(-1));
         assert!(node.is_one());
         assert_eq!(node.factor_count(), 0);
     }
 
     #[test]
     fn test_merge() {
-        // (2*x) * (3*x*y) = 6*x^2*y
-        let mut a = MulNode::from_coeff_and_base(BigRational::from(2i64), "x".to_string());
-        let mut b = MulNode::from_coeff_and_base(BigRational::from(3i64), "x".to_string());
-        b.add_factor("y".to_string(), "1".to_string());
+        let x = sym("mul_merge_x");
+        let y = sym("mul_merge_y");
+
+        let mut a = MulNode::from_coeff_and_base(BigRational::from(2i64), x.clone());
+        let mut b = MulNode::from_coeff_and_base(BigRational::from(3i64), x.clone());
+        b.add_factor(y.clone(), int_exp(1));
 
         a.merge(&b);
         assert_eq!(a.coeff, BigRational::from(6i64));
-        assert_eq!(a.factors["x"], "2");
-        assert_eq!(a.factors["y"], "1");
+        assert_eq!(*a.factors[&x], Expr::Integer(SmallInt::from(2i64)));
+        assert_eq!(*a.factors[&y], Expr::Integer(SmallInt::from(1i64)));
     }
 
     #[test]
     fn test_reciprocal() {
-        // 1/(2*x^3) = (1/2)*x^(-3)
+        let x = sym("mul_recip_x");
         let mut node = MulNode::from_coeff(BigRational::from(2i64));
-        node.add_factor("x".to_string(), "3".to_string());
+        node.add_factor(x.clone(), int_exp(3));
         let recip = node.reciprocal();
         assert_eq!(recip.coeff, BigRational::from_i64(1, 2));
-        assert_eq!(recip.factors["x"], "-3");
+        assert_eq!(*recip.factors[&x], Expr::Integer(SmallInt::from(-3i64)));
     }
 
     #[test]
     fn test_display() {
-        let mut node = MulNode::from_coeff_and_base(BigRational::from(2i64), "x".to_string());
-        node.add_factor("y".to_string(), "3".to_string());
+        let x = sym("mul_disp_x");
+        let y = sym("mul_disp_y");
+        let mut node = MulNode::from_coeff_and_base(BigRational::from(2i64), x);
+        node.add_factor(y, int_exp(3));
         let s = node.to_string();
         assert!(s.contains("2"));
-        assert!(s.contains("x"));
-        assert!(s.contains("y"));
     }
 
     #[test]
@@ -273,8 +318,24 @@ mod tests {
 
     #[test]
     fn test_zero_exponent_not_stored() {
-        let node = MulNode::from_factor("x".to_string(), "0".to_string());
+        let x = sym("mul_ze_x");
+        let node = MulNode::from_factor(x, int_exp(0));
         assert!(node.is_one());
         assert_eq!(node.factor_count(), 0);
+    }
+
+    #[test]
+    fn test_equality() {
+        let x = sym("mul_eq_x");
+        let a = MulNode::from_factor(x.clone(), int_exp(2));
+        let b = MulNode::from_factor(x, int_exp(2));
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_ordering() {
+        let a = MulNode::from_coeff(BigRational::from(1i64));
+        let b = MulNode::from_coeff(BigRational::from(2i64));
+        assert!(a < b);
     }
 }

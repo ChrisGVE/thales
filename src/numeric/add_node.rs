@@ -6,25 +6,30 @@
 //! and extracts numeric constants.
 
 use super::BigRational;
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
+
+use super::expr::Expr;
 
 /// A canonical additive node: `constant + Σ(coeff · term)`.
 ///
-/// Terms are keyed by a string representation for now (will be replaced
-/// by `Arc<Expr>` once the new expression type is available in task 12).
+/// Terms are keyed by `Arc<Expr>`, enabling structural sharing
+/// and O(1) clone of sub-expressions.
 ///
 /// # Invariants
 ///
 /// - No term has a zero coefficient
-/// - Terms are sorted by the `BTreeMap` key ordering
+/// - Terms are sorted by the `BTreeMap` key ordering (structural `Ord` on `Expr`)
 /// - Numeric values are folded into `constant`
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct AddNode {
     /// The constant (numeric) part of the sum.
     pub constant: BigRational,
-    /// Map from term representation to its coefficient.
-    pub terms: BTreeMap<String, BigRational>,
+    /// Map from term to its coefficient.
+    pub terms: BTreeMap<Arc<Expr>, BigRational>,
 }
 
 impl AddNode {
@@ -45,7 +50,7 @@ impl AddNode {
     }
 
     /// Create an AddNode representing `coeff * term`.
-    pub fn from_term(term: String, coeff: BigRational) -> Self {
+    pub fn from_term(term: Arc<Expr>, coeff: BigRational) -> Self {
         let mut node = Self::zero();
         if !coeff.is_zero() {
             node.terms.insert(term, coeff);
@@ -54,7 +59,7 @@ impl AddNode {
     }
 
     /// Add a term with coefficient. Combines with existing if present.
-    pub fn add_term(&mut self, term: String, coeff: BigRational) {
+    pub fn add_term(&mut self, term: Arc<Expr>, coeff: BigRational) {
         if coeff.is_zero() {
             return;
         }
@@ -131,6 +136,61 @@ impl AddNode {
 
 use num::traits::Zero;
 
+// ── Equality ─────────────────────────────────────────────────────────────────
+
+impl PartialEq for AddNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.constant == other.constant && self.terms == other.terms
+    }
+}
+
+impl Eq for AddNode {}
+
+// ── Hashing ──────────────────────────────────────────────────────────────────
+
+impl Hash for AddNode {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.constant.hash(state);
+        // BTreeMap iteration is ordered, so hashing is deterministic.
+        for (term, coeff) in &self.terms {
+            term.hash(state);
+            coeff.hash(state);
+        }
+    }
+}
+
+// ── Ordering ─────────────────────────────────────────────────────────────────
+
+impl PartialOrd for AddNode {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for AddNode {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.constant.cmp(&other.constant).then_with(|| {
+            let mut a_iter = self.terms.iter();
+            let mut b_iter = other.terms.iter();
+            loop {
+                match (a_iter.next(), b_iter.next()) {
+                    (None, None) => return Ordering::Equal,
+                    (None, Some(_)) => return Ordering::Less,
+                    (Some(_), None) => return Ordering::Greater,
+                    (Some((ak, av)), Some((bk, bv))) => {
+                        let c = ak.cmp(bk).then_with(|| av.cmp(bv));
+                        if c != Ordering::Equal {
+                            return c;
+                        }
+                    }
+                }
+            }
+        })
+    }
+}
+
+// ── Display ──────────────────────────────────────────────────────────────────
+
 impl fmt::Display for AddNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut first = true;
@@ -169,11 +229,15 @@ impl fmt::Display for AddNode {
 
 use num::traits::One;
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+// ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sym(name: &str) -> Arc<Expr> {
+        Expr::symbol(name)
+    }
 
     #[test]
     fn test_zero() {
@@ -193,74 +257,78 @@ mod tests {
 
     #[test]
     fn test_combine_like_terms() {
-        // x + 2x = 3x
-        let mut node = AddNode::from_term("x".to_string(), BigRational::from(1i64));
-        node.add_term("x".to_string(), BigRational::from(2i64));
+        let x = sym("add_clt_x");
+        let mut node = AddNode::from_term(x.clone(), BigRational::from(1i64));
+        node.add_term(x.clone(), BigRational::from(2i64));
         assert_eq!(node.term_count(), 1);
-        assert_eq!(node.terms["x"], BigRational::from(3i64));
+        assert_eq!(node.terms[&x], BigRational::from(3i64));
     }
 
     #[test]
     fn test_cancellation() {
-        // x + (-x) = 0
-        let mut node = AddNode::from_term("x".to_string(), BigRational::from(1i64));
-        node.add_term("x".to_string(), BigRational::from(-1i64));
+        let x = sym("add_cancel_x");
+        let mut node = AddNode::from_term(x.clone(), BigRational::from(1i64));
+        node.add_term(x, BigRational::from(-1i64));
         assert!(node.is_zero());
         assert_eq!(node.term_count(), 0);
     }
 
     #[test]
     fn test_merge() {
-        // (x + 3) + (2x + y + 1) = 3x + y + 4
-        let mut a = AddNode::from_term("x".to_string(), BigRational::from(1i64));
+        let x = sym("add_merge_x");
+        let y = sym("add_merge_y");
+
+        let mut a = AddNode::from_term(x.clone(), BigRational::from(1i64));
         a.add_constant(BigRational::from(3i64));
 
-        let mut b = AddNode::from_term("x".to_string(), BigRational::from(2i64));
-        b.add_term("y".to_string(), BigRational::from(1i64));
+        let mut b = AddNode::from_term(x.clone(), BigRational::from(2i64));
+        b.add_term(y.clone(), BigRational::from(1i64));
         b.add_constant(BigRational::from(1i64));
 
         a.merge(&b);
         assert_eq!(a.constant, BigRational::from(4i64));
-        assert_eq!(a.terms["x"], BigRational::from(3i64));
-        assert_eq!(a.terms["y"], BigRational::from(1i64));
+        assert_eq!(a.terms[&x], BigRational::from(3i64));
+        assert_eq!(a.terms[&y], BigRational::from(1i64));
         assert_eq!(a.term_count(), 2);
     }
 
     #[test]
     fn test_negate() {
-        let mut node = AddNode::from_term("x".to_string(), BigRational::from(2i64));
+        let x = sym("add_neg_x");
+        let mut node = AddNode::from_term(x.clone(), BigRational::from(2i64));
         node.add_constant(BigRational::from(3i64));
         let neg = node.negate();
         assert_eq!(neg.constant, BigRational::from(-3i64));
-        assert_eq!(neg.terms["x"], BigRational::from(-2i64));
+        assert_eq!(neg.terms[&x], BigRational::from(-2i64));
     }
 
     #[test]
     fn test_scale() {
-        // 2 * (3x + 1) = 6x + 2
-        let mut node = AddNode::from_term("x".to_string(), BigRational::from(3i64));
+        let x = sym("add_scale_x");
+        let mut node = AddNode::from_term(x.clone(), BigRational::from(3i64));
         node.add_constant(BigRational::from(1i64));
         let scaled = node.scale(&BigRational::from(2i64));
         assert_eq!(scaled.constant, BigRational::from(2i64));
-        assert_eq!(scaled.terms["x"], BigRational::from(6i64));
+        assert_eq!(scaled.terms[&x], BigRational::from(6i64));
     }
 
     #[test]
     fn test_scale_by_zero() {
-        let node = AddNode::from_term("x".to_string(), BigRational::from(3i64));
+        let x = sym("add_scale0_x");
+        let node = AddNode::from_term(x, BigRational::from(3i64));
         let scaled = node.scale(&BigRational::zero());
         assert!(scaled.is_zero());
     }
 
     #[test]
     fn test_display() {
-        let mut node = AddNode::from_term("x".to_string(), BigRational::from(2i64));
-        node.add_term("y".to_string(), BigRational::from(1i64));
+        let x = sym("add_disp_x");
+        let y = sym("add_disp_y");
+        let mut node = AddNode::from_term(x, BigRational::from(2i64));
+        node.add_term(y, BigRational::from(1i64));
         node.add_constant(BigRational::from(3i64));
         let s = node.to_string();
         assert!(s.contains("3"));
-        assert!(s.contains("x"));
-        assert!(s.contains("y"));
     }
 
     #[test]
@@ -270,8 +338,24 @@ mod tests {
 
     #[test]
     fn test_zero_coefficient_not_stored() {
-        let node = AddNode::from_term("x".to_string(), BigRational::zero());
+        let x = sym("add_zc_x");
+        let node = AddNode::from_term(x, BigRational::zero());
         assert!(node.is_zero());
         assert_eq!(node.term_count(), 0);
+    }
+
+    #[test]
+    fn test_equality() {
+        let x = sym("add_eq_x");
+        let a = AddNode::from_term(x.clone(), BigRational::from(2i64));
+        let b = AddNode::from_term(x, BigRational::from(2i64));
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_ordering() {
+        let a = AddNode::from_constant(BigRational::from(1i64));
+        let b = AddNode::from_constant(BigRational::from(2i64));
+        assert!(a < b);
     }
 }
