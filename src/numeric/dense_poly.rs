@@ -3,7 +3,7 @@
 //! [`DensePolynomial<R>`] stores coefficients in a `Vec<R>` where
 //! index = degree. Trailing zeros are trimmed automatically.
 
-use super::ring::{Field, Ring};
+use super::ring::Ring;
 use std::fmt;
 use std::ops::{Add, Mul, Neg, Sub};
 
@@ -127,92 +127,23 @@ impl<R: Ring> DensePolynomial<R> {
         DensePolynomial::from_coeffs(coeffs)
     }
 
+    /// Mutable access to coefficients (crate-internal).
+    pub(crate) fn coeffs_mut(&mut self) -> &mut Vec<R> {
+        &mut self.coeffs
+    }
+
+    /// Remove trailing zero coefficients (crate-internal).
+    pub(crate) fn trim_zeros(&mut self) {
+        while self.coeffs.last().is_some_and(|c| c.is_zero()) {
+            self.coeffs.pop();
+        }
+    }
+
     /// Remove trailing zero coefficients.
     fn trim(&mut self) {
         while self.coeffs.last().is_some_and(|c| c.is_zero()) {
             self.coeffs.pop();
         }
-    }
-}
-
-// ── Euclidean division (requires Field) ──────────────────────────────────────
-
-impl<R: Field> DensePolynomial<R> {
-    /// Euclidean division: returns `(quotient, remainder)` such that
-    /// `self = quotient * divisor + remainder` and
-    /// `deg(remainder) < deg(divisor)`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `divisor` is zero.
-    pub fn div_rem(&self, divisor: &Self) -> (Self, Self) {
-        assert!(!divisor.is_zero(), "polynomial division by zero");
-
-        if self.is_zero() {
-            return (Self::zero(), Self::zero());
-        }
-
-        let d_deg = divisor.degree().unwrap();
-        let mut remainder = self.clone();
-
-        match remainder.degree() {
-            None => return (Self::zero(), Self::zero()),
-            Some(r_deg) if r_deg < d_deg => {
-                return (Self::zero(), remainder);
-            }
-            _ => {}
-        }
-
-        let r_deg = remainder.degree().unwrap();
-        let lc_inv = divisor.leading_coeff().unwrap().inv();
-
-        let mut q_coeffs = vec![R::zero(); r_deg - d_deg + 1];
-
-        while let Some(rem_deg) = remainder.degree() {
-            if rem_deg < d_deg {
-                break;
-            }
-            let shift = rem_deg - d_deg;
-            let factor = remainder.leading_coeff().unwrap().clone() * lc_inv.clone();
-
-            q_coeffs[shift] = factor.clone();
-
-            // remainder -= factor * x^shift * divisor
-            for (i, dc) in divisor.coeffs.iter().enumerate() {
-                let idx = i + shift;
-                remainder.coeffs[idx] = remainder.coeffs[idx].clone() - factor.clone() * dc.clone();
-            }
-            remainder.trim();
-        }
-
-        (DensePolynomial::from_coeffs(q_coeffs), remainder)
-    }
-
-    /// Make the polynomial monic (leading coefficient = 1).
-    /// Returns zero polynomial unchanged.
-    pub fn make_monic(&self) -> Self {
-        match self.leading_coeff() {
-            None => Self::zero(),
-            Some(lc) => {
-                let inv = lc.inv();
-                self.scale(&inv)
-            }
-        }
-    }
-
-    /// Euclidean GCD of two polynomials, normalized to monic.
-    ///
-    /// Uses the Euclidean algorithm (repeated `div_rem`).
-    /// Returns the zero polynomial if both inputs are zero.
-    pub fn gcd(&self, other: &Self) -> Self {
-        let mut a = self.clone();
-        let mut b = other.clone();
-        while !b.is_zero() {
-            let (_, r) = a.div_rem(&b);
-            a = b;
-            b = r;
-        }
-        a.make_monic()
     }
 }
 
@@ -600,191 +531,5 @@ mod tests {
         // 1/2 + 1/3 = 5/6
         assert_eq!(sum.coeff(0), BigRational::from_i64(5, 6));
         assert_eq!(sum.coeff(1), BigRational::from(2i64));
-    }
-
-    // ── Euclidean division tests ─────────────────────────────────────────────
-
-    mod div_rem_tests {
-        use super::*;
-        use crate::numeric::BigRational;
-        type RPoly = DensePolynomial<BigRational>;
-
-        fn rp(coeffs: &[(i64, i64)]) -> RPoly {
-            RPoly::from_coeffs(
-                coeffs
-                    .iter()
-                    .map(|&(n, d)| BigRational::from_i64(n, d))
-                    .collect(),
-            )
-        }
-
-        fn ri(coeffs: &[i64]) -> RPoly {
-            RPoly::from_coeffs(coeffs.iter().map(|&c| BigRational::from(c)).collect())
-        }
-
-        #[test]
-        fn test_div_rem_exact() {
-            // (x^3 + 1) / (x + 1) = x^2 - x + 1, remainder 0
-            let f = ri(&[1, 0, 0, 1]);
-            let g = ri(&[1, 1]);
-            let (q, r) = f.div_rem(&g);
-            assert_eq!(q, ri(&[1, -1, 1]));
-            assert!(r.is_zero());
-        }
-
-        #[test]
-        fn test_div_rem_with_remainder() {
-            // (x^2 + 1) / (x + 1) = x - 1, remainder 2
-            let f = ri(&[1, 0, 1]);
-            let g = ri(&[1, 1]);
-            let (q, r) = f.div_rem(&g);
-            assert_eq!(q, ri(&[-1, 1]));
-            assert_eq!(r, ri(&[2]));
-        }
-
-        #[test]
-        fn test_div_rem_identity() {
-            // f = q * g + r
-            let f = ri(&[3, 2, 5, 1]);
-            let g = ri(&[1, 1]);
-            let (q, r) = f.div_rem(&g);
-            let reconstructed = &(&q * &g) + &r;
-            assert_eq!(reconstructed, f);
-        }
-
-        #[test]
-        fn test_div_rem_degree_smaller() {
-            // deg(f) < deg(g) → q = 0, r = f
-            let f = ri(&[1, 1]);
-            let g = ri(&[1, 0, 1]);
-            let (q, r) = f.div_rem(&g);
-            assert!(q.is_zero());
-            assert_eq!(r, f);
-        }
-
-        #[test]
-        fn test_div_rem_zero_dividend() {
-            let f = RPoly::zero();
-            let g = ri(&[1, 1]);
-            let (q, r) = f.div_rem(&g);
-            assert!(q.is_zero());
-            assert!(r.is_zero());
-        }
-
-        #[test]
-        #[should_panic(expected = "polynomial division by zero")]
-        fn test_div_rem_zero_divisor() {
-            let f = ri(&[1, 1]);
-            let g = RPoly::zero();
-            let _ = f.div_rem(&g);
-        }
-
-        #[test]
-        fn test_div_rem_rational_coefficients() {
-            // (x^2 - 1/4) / (x - 1/2) = x + 1/2, remainder 0
-            let f = rp(&[(-1, 4), (0, 1), (1, 1)]);
-            let g = rp(&[(-1, 2), (1, 1)]);
-            let (q, r) = f.div_rem(&g);
-            assert_eq!(q, rp(&[(1, 2), (1, 1)]));
-            assert!(r.is_zero());
-        }
-
-        #[test]
-        fn test_make_monic() {
-            let f = ri(&[2, 4, 2]);
-            let m = f.make_monic();
-            assert_eq!(m.leading_coeff(), Some(&BigRational::one()));
-            assert_eq!(m, ri(&[1, 2, 1]));
-        }
-
-        #[test]
-        fn test_div_rem_random_identity() {
-            // For random-ish polynomials, verify f = q*g + r
-            let f = ri(&[1, -3, 0, 2, 5]);
-            let g = ri(&[2, 0, 1]);
-            let (q, r) = f.div_rem(&g);
-            let reconstructed = &(&q * &g) + &r;
-            assert_eq!(reconstructed, f);
-            assert!(r.degree().unwrap_or(0) < g.degree().unwrap());
-        }
-    }
-
-    // ── GCD tests ────────────────────────────────────────────────────────────
-
-    mod gcd_tests {
-        use super::*;
-        use crate::numeric::BigRational;
-        type RPoly = DensePolynomial<BigRational>;
-
-        fn ri(coeffs: &[i64]) -> RPoly {
-            RPoly::from_coeffs(coeffs.iter().map(|&c| BigRational::from(c)).collect())
-        }
-
-        #[test]
-        fn test_gcd_basic() {
-            // gcd(x^2-1, x-1) = x-1 (monic)
-            let f = ri(&[-1, 0, 1]); // x^2 - 1
-            let g = ri(&[-1, 1]); // x - 1
-            let d = f.gcd(&g);
-            assert_eq!(d, ri(&[-1, 1]));
-        }
-
-        #[test]
-        fn test_gcd_coprime() {
-            // gcd(x^2+1, x+1) = 1
-            let f = ri(&[1, 0, 1]);
-            let g = ri(&[1, 1]);
-            let d = f.gcd(&g);
-            assert_eq!(d.degree(), Some(0));
-            assert!(d.coeff(0).is_one());
-        }
-
-        #[test]
-        fn test_gcd_with_zero() {
-            let f = ri(&[-1, 0, 1]);
-            let z = RPoly::zero();
-            // gcd(f, 0) = monic(f)
-            let d = f.gcd(&z);
-            assert_eq!(d, f.make_monic());
-            // gcd(0, f) = monic(f)
-            let d2 = z.gcd(&f);
-            assert_eq!(d2, f.make_monic());
-        }
-
-        #[test]
-        fn test_gcd_both_zero() {
-            let z = RPoly::zero();
-            let d = z.gcd(&z);
-            assert!(d.is_zero());
-        }
-
-        #[test]
-        fn test_gcd_x3_minus_x_and_x2_minus_1() {
-            // gcd(x^3-x, x^2-1) = x^2-1 (both divisible by (x-1)(x+1))
-            let f = ri(&[0, -1, 0, 1]); // x^3 - x = x(x^2-1)
-            let g = ri(&[-1, 0, 1]); // x^2 - 1
-            let d = f.gcd(&g);
-            assert_eq!(d, ri(&[-1, 0, 1]));
-        }
-
-        #[test]
-        fn test_gcd_result_is_monic() {
-            // gcd of 2x+2 and 3x+3 should be x+1 (monic)
-            let f = ri(&[2, 2]);
-            let g = ri(&[3, 3]);
-            let d = f.gcd(&g);
-            assert_eq!(d, ri(&[1, 1]));
-        }
-
-        #[test]
-        fn test_gcd_divides_both() {
-            let f = ri(&[-1, 0, 0, 1]); // x^3 - 1
-            let g = ri(&[-1, 0, 1]); // x^2 - 1
-            let d = f.gcd(&g);
-            let (_, r1) = f.div_rem(&d);
-            let (_, r2) = g.div_rem(&d);
-            assert!(r1.is_zero());
-            assert!(r2.is_zero());
-        }
     }
 }

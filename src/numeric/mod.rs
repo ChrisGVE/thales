@@ -20,6 +20,7 @@ mod symbol;
 mod add_node;
 mod dense_poly;
 mod mul_node;
+mod poly_ops;
 mod sparse_poly;
 
 pub use add_node::AddNode;
