@@ -400,6 +400,7 @@ pub mod latex;
 pub mod limits;
 pub mod mathlex_bridge;
 pub mod matrix;
+pub mod numeric;
 pub mod numerical;
 pub mod ode;
 pub mod ode_higher;
