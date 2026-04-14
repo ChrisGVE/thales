@@ -76,6 +76,16 @@ tmp/
 .serena/
 CLAUDE.md
 CLAUDE.local.md
+handover.md
+code_audit.md
+luaswift_requirements.md
+
+# Build artifacts from other toolchains
+.build/
+*.rlib
+
+# Reference PDFs
+*.pdf
 
 # Local reference materials
 reference/
