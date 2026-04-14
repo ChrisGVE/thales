@@ -36,6 +36,7 @@ mod rational_fn;
 mod solution_set;
 mod sparse_poly;
 mod term_order;
+mod zassenhaus;
 
 pub use add_node::AddNode;
 pub use big_rational::BigRational;
@@ -58,3 +59,4 @@ pub use solution_set::{Constraint, IntervalBound, SolutionSet};
 pub use sparse_poly::SparsePolynomial;
 pub use symbol::SymbolId;
 pub use term_order::{DegLex, GrevLex, Lex, MonomialOrder, OrderedMonomial};
+pub use zassenhaus::factor_integer_poly;
