@@ -297,6 +297,14 @@ impl Rem for SmallInt {
     }
 }
 
+impl Rem for &SmallInt {
+    type Output = SmallInt;
+
+    fn rem(self, rhs: Self) -> Self::Output {
+        self.clone() % rhs.clone()
+    }
+}
+
 // ── Arithmetic: Neg ───────────────────────────────────────────────────────────
 
 impl Neg for SmallInt {
