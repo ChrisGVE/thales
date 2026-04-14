@@ -25,6 +25,7 @@
 mod by_parts;
 mod definite;
 pub(crate) mod helpers;
+mod rational;
 mod substitution;
 
 use crate::ast::{BinaryOp, Expression, UnaryOp, Variable};
@@ -883,6 +884,75 @@ mod tests {
         let empty = std::collections::HashMap::new();
         let numeric = value.evaluate(&empty).unwrap();
         assert!((numeric - 1.0).abs() < 1e-10);
+    }
+
+    // =========================================================================
+    // Partial Fraction Integration Tests
+    // =========================================================================
+
+    #[test]
+    fn test_integrate_rational_two_linear_factors() {
+        // ∫ 1/(x²-1) dx  =  ½·ln|x-1| - ½·ln|x+1|
+        // Denominator: x² - 1
+        let denom = add(
+            pow(var("x"), int(2)),
+            Expression::Unary(UnaryOp::Neg, Box::new(int(1))),
+        );
+        let expr = div(int(1), denom);
+        let result = integrate(&expr, "x");
+        assert!(
+            result.is_ok(),
+            "∫1/(x²-1) dx should succeed via partial fractions, got: {:?}",
+            result.err()
+        );
+        // The result must involve ln (from the two linear terms)
+        let s = format!("{:?}", result.unwrap());
+        assert!(s.contains("Ln"), "Result should contain Ln, got: {s}");
+    }
+
+    #[test]
+    fn test_integrate_rational_linear_times_x() {
+        // ∫ (2x+3)/(x²+x) dx  =  ∫ (2x+3)/(x(x+1)) dx
+        // Denominator: x² + x
+        let x = var("x");
+        let denom = add(pow(x.clone(), int(2)), x.clone());
+        let num = add(mul(int(2), x.clone()), int(3));
+        let expr = div(num, denom);
+        let result = integrate(&expr, "x");
+        assert!(
+            result.is_ok(),
+            "∫(2x+3)/(x²+x) dx should succeed via partial fractions, got: {:?}",
+            result.err()
+        );
+        let s = format!("{:?}", result.unwrap());
+        assert!(s.contains("Ln"), "Result should contain Ln, got: {s}");
+    }
+
+    #[test]
+    fn test_integrate_rational_three_linear_factors() {
+        // ∫ 1/((x-1)(x-2)(x-3)) dx
+        // Build denominator as expanded form via (x-1)(x-2)(x-3) = x³ - 6x² + 11x - 6
+        // Coefficients: x³ - 6x² + 11x - 6
+        let x = var("x");
+        // x³ - 6x²
+        let x3_minus_6x2 = add(
+            pow(x.clone(), int(3)),
+            Expression::Unary(UnaryOp::Neg, Box::new(mul(int(6), pow(x.clone(), int(2))))),
+        );
+        // + 11x - 6
+        let denom = add(
+            add(x3_minus_6x2, mul(int(11), x.clone())),
+            Expression::Unary(UnaryOp::Neg, Box::new(int(6))),
+        );
+        let expr = div(int(1), denom);
+        let result = integrate(&expr, "x");
+        assert!(
+            result.is_ok(),
+            "∫1/((x-1)(x-2)(x-3)) dx should succeed via partial fractions, got: {:?}",
+            result.err()
+        );
+        let s = format!("{:?}", result.unwrap());
+        assert!(s.contains("Ln"), "Result should contain Ln, got: {s}");
     }
 
     #[test]

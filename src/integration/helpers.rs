@@ -148,6 +148,11 @@ pub(super) fn integrate_quotient(
             return Ok(result);
         }
 
+        // Try partial fraction decomposition for c/q(x) where q is a polynomial
+        if let Some(result) = super::rational::try_partial_fraction_integration(num, denom, var) {
+            return result;
+        }
+
         Err(super::IntegrationError::CannotIntegrate(format!(
             "Cannot integrate {}/{}",
             num, denom
@@ -172,6 +177,11 @@ pub(super) fn integrate_quotient(
                     );
                 }
             }
+        }
+
+        // Try partial fraction decomposition for rational functions p(x)/q(x)
+        if let Some(result) = super::rational::try_partial_fraction_integration(num, denom, var) {
+            return result;
         }
 
         // Convert to negative power: f/g = f * g^(-1)
