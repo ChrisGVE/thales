@@ -49,9 +49,10 @@
 //! assert!(!path.steps.is_empty());
 //! ```
 
-use crate::ast::{Equation, Variable};
+use crate::ast::{BinaryOp, Equation, Variable};
 use crate::ode::{
-    solve_linear, solve_second_order_homogeneous, solve_separable, FirstOrderODE, SecondOrderODE,
+    particular_solution_undetermined, solve_linear, solve_second_order_homogeneous,
+    solve_separable, FirstOrderODE, SecondOrderODE,
 };
 use crate::resolution_path::{Operation, ResolutionPath, ResolutionStep};
 use crate::solver::ode_classifier::{classify_first_order, classify_second_order, ODEType};
@@ -193,16 +194,18 @@ pub fn solve_ode_first_order(ode: &FirstOrderODE) -> SolverResult<(Solution, Res
     Ok((Solution::Unique(ode_result.general_solution), path))
 }
 
-/// Solve a second-order homogeneous ODE with constant coefficients directly.
+/// Solve a second-order linear ODE with constant coefficients directly.
 ///
-/// Uses the characteristic equation method.  Non-homogeneous forcing terms are
-/// not yet supported and will return [`SolverError::CannotSolve`].
+/// Uses the characteristic equation method for the homogeneous part.  For
+/// non-homogeneous ODEs with polynomial, exponential, or trigonometric forcing
+/// the method of undetermined coefficients is applied to find a particular
+/// solution; the general solution is then `y_h + y_p`.
 ///
 /// # Errors
 ///
 /// Returns [`SolverError::CannotSolve`] when:
-/// - The ODE is non-homogeneous (forcing term ≠ 0).
 /// - The characteristic equation solver fails.
+/// - The forcing function is not a supported type for undetermined coefficients.
 ///
 /// # Examples
 ///
@@ -215,15 +218,15 @@ pub fn solve_ode_first_order(ode: &FirstOrderODE) -> SolverResult<(Solution, Res
 /// let ode = SecondOrderODE::homogeneous("y", "x", 1.0, 0.0, -1.0);
 /// let (solution, _path) = solve_ode_second_order(&ode).unwrap();
 /// assert!(matches!(solution, Solution::Unique(_)));
+///
+/// // y'' + y = 1  →  y = C₁·cos(x) + C₂·sin(x) + 1
+/// use thales::ast::Expression;
+/// let ode2 = SecondOrderODE::new("y", "x", 1.0, 0.0, 1.0, Expression::Integer(1));
+/// let (solution2, _path2) = solve_ode_second_order(&ode2).unwrap();
+/// assert!(matches!(solution2, Solution::Unique(_)));
 /// ```
 pub fn solve_ode_second_order(ode: &SecondOrderODE) -> SolverResult<(Solution, ResolutionPath)> {
-    if !ode.is_homogeneous() {
-        return Err(SolverError::CannotSolve(
-            "Non-homogeneous second-order ODEs are not yet supported".to_string(),
-        ));
-    }
-
-    let result =
+    let hom_result =
         solve_second_order_homogeneous(ode).map_err(|e| SolverError::CannotSolve(e.to_string()))?;
 
     let cls = classify_second_order(ode);
@@ -233,8 +236,28 @@ pub fn solve_ode_second_order(ode: &SecondOrderODE) -> SolverResult<(Solution, R
         _ => "other",
     };
     let classify = Some(("second".to_string(), ode_type_str.to_string()));
-    let path = build_ode_path(classify, &result.steps, &result.general_solution);
-    Ok((Solution::Unique(result.general_solution), path))
+
+    if ode.is_homogeneous() {
+        let path = build_ode_path(classify, &hom_result.steps, &hom_result.general_solution);
+        return Ok((Solution::Unique(hom_result.general_solution), path));
+    }
+
+    // Non-homogeneous: find particular solution then combine.
+    let (yp, yp_steps) = particular_solution_undetermined(ode)
+        .map_err(|e| SolverError::CannotSolve(e.to_string()))?;
+
+    let general = crate::ast::Expression::Binary(
+        BinaryOp::Add,
+        Box::new(hom_result.general_solution),
+        Box::new(yp),
+    );
+
+    let mut all_steps = hom_result.steps;
+    all_steps.extend(yp_steps);
+    all_steps.push(format!("General solution: y = y_h + y_p"));
+
+    let path = build_ode_path(classify, &all_steps, &general);
+    Ok((Solution::Unique(general), path))
 }
 
 /// Parse an ODE from text and solve it, returning a [`Solution`] and
@@ -407,9 +430,51 @@ mod tests {
     }
 
     #[test]
-    fn solve_second_order_non_homogeneous_returns_error() {
-        // y'' + y = x  →  non-homogeneous, not yet supported
+    fn solve_second_order_non_homogeneous_polynomial_forcing() {
+        // y'' + y = x  →  particular solution y_p = x
         let ode = SecondOrderODE::new("y", "x", 1.0, 0.0, 1.0, var("x"));
+        let result = solve_ode_second_order(&ode);
+        assert!(result.is_ok(), "Expected Ok, got {result:?}");
+        let (solution, path) = result.unwrap();
+        assert!(matches!(solution, Solution::Unique(_)));
+        assert!(!path.steps.is_empty());
+    }
+
+    #[test]
+    fn solve_second_order_non_homogeneous_exp_forcing() {
+        // y'' - y = e^(2x)  →  particular solution y_p = (1/3)·e^(2x)
+        use crate::ast::{BinaryOp, Expression, Function};
+        let kx = Expression::Binary(
+            BinaryOp::Mul,
+            Box::new(Expression::Float(2.0)),
+            Box::new(var("x")),
+        );
+        let forcing = Expression::Function(Function::Exp, vec![kx]);
+        let ode = SecondOrderODE::new("y", "x", 1.0, 0.0, -1.0, forcing);
+        let result = solve_ode_second_order(&ode);
+        assert!(result.is_ok(), "Expected Ok, got {result:?}");
+        let (solution, _path) = result.unwrap();
+        assert!(matches!(solution, Solution::Unique(_)));
+    }
+
+    #[test]
+    fn solve_second_order_non_homogeneous_trig_resonance() {
+        // y'' + y = sin(x)  →  resonant (k=1, char roots ±i)
+        use crate::ast::{Expression, Function};
+        let forcing = Expression::Function(Function::Sin, vec![var("x")]);
+        let ode = SecondOrderODE::new("y", "x", 1.0, 0.0, 1.0, forcing);
+        let result = solve_ode_second_order(&ode);
+        assert!(result.is_ok(), "Expected Ok, got {result:?}");
+        let (solution, _path) = result.unwrap();
+        assert!(matches!(solution, Solution::Unique(_)));
+    }
+
+    #[test]
+    fn solve_second_order_non_homogeneous_unsupported_returns_error() {
+        // y'' + y = tan(x)  →  unsupported forcing type
+        use crate::ast::{Expression, Function};
+        let forcing = Expression::Function(Function::Tan, vec![var("x")]);
+        let ode = SecondOrderODE::new("y", "x", 1.0, 0.0, 1.0, forcing);
         let result = solve_ode_second_order(&ode);
         assert!(
             matches!(result, Err(SolverError::CannotSolve(_))),

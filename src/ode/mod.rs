@@ -24,11 +24,15 @@
 
 pub mod builder;
 mod first_order;
+pub mod non_homogeneous;
 mod second_order;
 mod types;
 
 pub use builder::{first_order_ode, second_order_homogeneous, ODEBuilder};
 pub use first_order::{solve_ivp, solve_linear, solve_separable};
+pub use non_homogeneous::{
+    identify_forcing_function, particular_solution_undetermined, ForcingType,
+};
 pub use second_order::{
     solve_characteristic_equation, solve_second_order_homogeneous, solve_second_order_ivp,
     CharacteristicRoots, RootType, SecondOrderODE, SecondOrderSolution,
