@@ -21,6 +21,7 @@ mod add_node;
 mod compute_ctx;
 mod dense_poly;
 mod finite_field_factor;
+mod hensel;
 mod hermite;
 mod matrix;
 mod modular_gcd;
@@ -42,6 +43,7 @@ pub use compute_ctx::{CancelHandle, ComputeContext, ComputeError, ComputeResult,
 pub use dense_poly::DensePolynomial;
 pub use expr::{Expr, ExprPool};
 pub use finite_field_factor::factor_over_gfp;
+pub use hensel::{hensel_lift, HenselLift};
 pub use hermite::{hermite_reduce, HermiteReduction};
 pub use matrix::{Matrix, MatrixError};
 pub use modular_gcd::modular_gcd;
