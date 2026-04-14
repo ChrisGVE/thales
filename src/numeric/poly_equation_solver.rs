@@ -52,9 +52,8 @@ pub struct RootWithMultiplicity {
 /// # Examples
 ///
 /// ```
-/// use thales::numeric::{DensePolynomial, BigRational};
-/// use thales::numeric::poly_equation_solver::solve_polynomial;
-/// use thales::numeric::SolutionSet;
+/// use thales::numeric::{DensePolynomial, BigRational, solve_polynomial, SolutionSet};
+/// use num::traits::One;
 ///
 /// // x - 2 = 0  →  {2}
 /// let p = DensePolynomial::from_coeffs(vec![
@@ -244,7 +243,6 @@ fn rational_sqrt(r: &BigRational) -> Option<BigRational> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use num::traits::One;
 
     type P = DensePolynomial<BigRational>;
 

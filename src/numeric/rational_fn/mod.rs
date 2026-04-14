@@ -5,7 +5,7 @@
 //! to lowest terms via GCD on construction.
 
 pub(super) mod advanced;
-mod core;
+pub(super) mod core;
 
 pub use core::{PartialFractionTerm, RationalFunction};
 
