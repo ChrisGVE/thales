@@ -21,6 +21,7 @@ mod add_node;
 mod compute_ctx;
 mod dense_poly;
 mod hermite;
+mod matrix;
 mod mul_node;
 mod multivariate_poly;
 pub mod normalize;
@@ -38,6 +39,7 @@ pub use compute_ctx::{CancelHandle, ComputeContext, ComputeError, ComputeResult,
 pub use dense_poly::DensePolynomial;
 pub use expr::{Expr, ExprPool};
 pub use hermite::{hermite_reduce, HermiteReduction};
+pub use matrix::{Matrix, MatrixError};
 pub use mul_node::MulNode;
 pub use multivariate_poly::{Monomial, MultivariatePolynomial};
 pub use number_theory::{crt, ext_gcd, mod_inverse, mod_pow, ExtGcdResult};
