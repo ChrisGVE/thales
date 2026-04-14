@@ -24,6 +24,7 @@ pub mod normalize;
 mod poly_factoring;
 mod poly_ops;
 mod rational_fn;
+mod solution_set;
 mod sparse_poly;
 
 pub use add_node::AddNode;
@@ -34,5 +35,6 @@ pub use mul_node::MulNode;
 pub use poly_factoring::SqfFactor;
 pub use rational_fn::RationalFunction;
 pub use small_int::SmallInt;
+pub use solution_set::{Constraint, IntervalBound, SolutionSet};
 pub use sparse_poly::SparsePolynomial;
 pub use symbol::SymbolId;
