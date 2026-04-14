@@ -19,6 +19,7 @@ mod symbol;
 
 mod add_node;
 mod dense_poly;
+mod hermite;
 mod mul_node;
 pub mod normalize;
 mod poly_factoring;
@@ -31,6 +32,7 @@ pub use add_node::AddNode;
 pub use big_rational::BigRational;
 pub use dense_poly::DensePolynomial;
 pub use expr::{Expr, ExprPool};
+pub use hermite::{hermite_reduce, HermiteReduction};
 pub use mul_node::MulNode;
 pub use poly_factoring::SqfFactor;
 pub use rational_fn::RationalFunction;
