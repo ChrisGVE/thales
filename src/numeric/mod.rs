@@ -20,6 +20,7 @@ mod symbol;
 mod add_node;
 mod dense_poly;
 mod mul_node;
+pub mod normalize;
 mod poly_factoring;
 mod poly_ops;
 mod rational_fn;

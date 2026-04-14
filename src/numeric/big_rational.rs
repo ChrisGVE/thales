@@ -108,6 +108,11 @@ impl BigRational {
         assert!(!self.is_zero(), "reciprocal of zero");
         BigRational::new(self.denom.clone(), self.num.clone())
     }
+
+    /// Raise to a non-negative integer power.
+    pub fn pow_u32(&self, exp: u32) -> Self {
+        BigRational::new(self.num.pow(exp), self.denom.pow(exp))
+    }
 }
 
 // ── Zero / One ────────────────────────────────────────────────────────────────

@@ -421,6 +421,25 @@ impl SmallInt {
     }
 }
 
+impl SmallInt {
+    /// Raise to a non-negative integer power via repeated squaring.
+    pub fn pow(&self, mut exp: u32) -> Self {
+        if exp == 0 {
+            return SmallInt::Inline(1);
+        }
+        let mut base = self.clone();
+        let mut result = SmallInt::Inline(1);
+        while exp > 1 {
+            if exp % 2 == 1 {
+                result = &result * &base;
+            }
+            base = &base * &base;
+            exp /= 2;
+        }
+        &result * &base
+    }
+}
+
 /// GCD for i64 using the Euclidean algorithm. Returns non-negative result.
 fn gcd_i64(mut a: i64, mut b: i64) -> i64 {
     a = a.wrapping_abs();
