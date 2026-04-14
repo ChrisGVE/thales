@@ -18,6 +18,7 @@ mod small_int;
 mod symbol;
 
 mod add_node;
+mod compute_ctx;
 mod dense_poly;
 mod hermite;
 mod mul_node;
@@ -30,6 +31,7 @@ mod sparse_poly;
 
 pub use add_node::AddNode;
 pub use big_rational::BigRational;
+pub use compute_ctx::{CancelHandle, ComputeContext, ComputeError, ComputeResult, FeatureFlags};
 pub use dense_poly::DensePolynomial;
 pub use expr::{Expr, ExprPool};
 pub use hermite::{hermite_reduce, HermiteReduction};
