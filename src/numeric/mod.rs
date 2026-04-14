@@ -29,6 +29,7 @@ mod poly_ops;
 mod rational_fn;
 mod solution_set;
 mod sparse_poly;
+mod term_order;
 
 pub use add_node::AddNode;
 pub use big_rational::BigRational;
@@ -44,3 +45,4 @@ pub use small_int::SmallInt;
 pub use solution_set::{Constraint, IntervalBound, SolutionSet};
 pub use sparse_poly::SparsePolynomial;
 pub use symbol::SymbolId;
+pub use term_order::{DegLex, GrevLex, Lex, MonomialOrder, OrderedMonomial};
