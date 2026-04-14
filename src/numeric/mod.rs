@@ -36,6 +36,7 @@ mod poly_ops;
 mod primality;
 mod rational_fn;
 pub mod rewrite;
+mod rothstein_trager;
 mod solution_set;
 mod sparse_poly;
 mod term_order;
@@ -59,6 +60,9 @@ pub use poly_equation_solver::{roots_with_multiplicity, solve_polynomial, RootWi
 pub use poly_factoring::SqfFactor;
 pub use primality::{factor, is_prime, PrimeFactor};
 pub use rational_fn::RationalFunction;
+pub use rothstein_trager::{
+    integrate_rational_log, rothstein_trager, rothstein_trager_from_hermite, LogIntegral, LogTerm,
+};
 pub use small_int::SmallInt;
 pub use solution_set::{Constraint, IntervalBound, SolutionSet};
 pub use sparse_poly::SparsePolynomial;
