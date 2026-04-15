@@ -43,6 +43,7 @@ mod rothstein_trager;
 mod solution_set;
 mod sparse_poly;
 mod term_order;
+pub mod trig_rules;
 mod zassenhaus;
 
 pub use add_node::AddNode;
