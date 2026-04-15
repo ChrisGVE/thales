@@ -33,7 +33,7 @@
 //! let expr = normalize::add(x.clone(), Expr::int(0));
 //! ```
 
-use crate::numeric::expr::Expr;
+use crate::numeric::expr::{Expr, FuncId};
 use crate::numeric::{AddNode, MulNode};
 use std::sync::Arc;
 
@@ -153,6 +153,14 @@ fn apply_to_pow_children(base: &Arc<Expr>, exp: &Arc<Expr>, s: &Strategy) -> Opt
 
 // ── Traversal combinators ─────────────────────────────────────────────────────
 
+/// Apply a strategy to all arguments of a `Func` node, rebuilding if any changed.
+///
+/// Returns `None` if any argument application fails; `Some(rebuilt)` on success.
+fn apply_to_func_children(id: FuncId, args: &[Arc<Expr>], s: &Strategy) -> Option<Arc<Expr>> {
+    let new_args: Option<Vec<_>> = args.iter().map(|a| s(a)).collect();
+    Some(Arc::new(Expr::Func(id, new_args?)))
+}
+
 /// Apply `s` to all children of a compound expression.
 ///
 /// Returns `None` if `s` fails on any child.
@@ -162,9 +170,22 @@ pub fn all(s: Strategy) -> Strategy {
         Expr::Add(node) => apply_to_add_children(node, &s),
         Expr::Mul(node) => apply_to_mul_children(node, &s),
         Expr::Pow(base, exp) => apply_to_pow_children(base, exp, &s),
+        Expr::Func(id, args) => apply_to_func_children(*id, args, &s),
         // Leaves: no children — vacuously succeed, return input unchanged
         _ => Some(Arc::clone(e)),
     })
+}
+
+/// Try `s` on each argument of a `Func` node, replacing the first success.
+fn one_func(id: FuncId, args: &[Arc<Expr>], s: &Strategy) -> Option<Arc<Expr>> {
+    for (idx, arg) in args.iter().enumerate() {
+        if let Some(new_arg) = s(arg) {
+            let mut new_args = args.to_vec();
+            new_args[idx] = new_arg;
+            return Some(Arc::new(Expr::Func(id, new_args)));
+        }
+    }
+    None
 }
 
 /// Apply `s` to the first child for which it succeeds.
@@ -176,6 +197,7 @@ pub fn one(s: Strategy) -> Strategy {
         Expr::Add(node) => one_add(node, &s),
         Expr::Mul(node) => one_mul(node, &s),
         Expr::Pow(base, exp) => one_pow(base, exp, &s),
+        Expr::Func(id, args) => one_func(*id, args, &s),
         // Leaves: no children to apply to
         _ => None,
     })
@@ -321,6 +343,17 @@ fn apply_all_recursive(e: &Arc<Expr>, s: &Strategy) -> Option<Arc<Expr>> {
                 s(&c).unwrap_or(c)
             };
             Some(Arc::new(Expr::Pow(new_base, new_exp)))
+        }
+        Expr::Func(id, args) => {
+            let new_args: Vec<_> = args
+                .iter()
+                .map(|arg| {
+                    let r = apply_all_recursive(arg, s);
+                    let c = r.unwrap_or_else(|| Arc::clone(arg));
+                    s(&c).unwrap_or(c)
+                })
+                .collect();
+            Some(Arc::new(Expr::Func(*id, new_args)))
         }
         // Leaves return unchanged
         _ => Some(Arc::clone(e)),

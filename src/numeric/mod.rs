@@ -18,9 +18,11 @@ mod small_int;
 mod symbol;
 
 mod add_node;
+pub mod algebraic_rules;
 mod compute_ctx;
 mod dense_poly;
 mod finite_field_factor;
+mod groebner;
 mod hensel;
 mod hermite;
 mod matrix;
@@ -34,6 +36,7 @@ mod poly_equation_solver;
 mod poly_factoring;
 mod poly_ops;
 mod primality;
+mod rational_equation_solver;
 mod rational_fn;
 pub mod rewrite;
 mod rothstein_trager;
@@ -46,8 +49,9 @@ pub use add_node::AddNode;
 pub use big_rational::BigRational;
 pub use compute_ctx::{CancelHandle, ComputeContext, ComputeError, ComputeResult, FeatureFlags};
 pub use dense_poly::DensePolynomial;
-pub use expr::{Expr, ExprPool};
+pub use expr::{Expr, ExprPool, FuncId};
 pub use finite_field_factor::factor_over_gfp;
+pub use groebner::buchberger;
 pub use hensel::{hensel_lift, HenselLift};
 pub use hermite::{hermite_reduce, HermiteReduction};
 pub use matrix::{Matrix, MatrixError};
@@ -59,6 +63,7 @@ pub use number_theory::{crt, ext_gcd, mod_inverse, mod_pow, ExtGcdResult};
 pub use poly_equation_solver::{roots_with_multiplicity, solve_polynomial, RootWithMultiplicity};
 pub use poly_factoring::SqfFactor;
 pub use primality::{factor, is_prime, PrimeFactor};
+pub use rational_equation_solver::{solve_rational, solve_rational_equation};
 pub use rational_fn::RationalFunction;
 pub use rothstein_trager::{
     integrate_rational_log, rothstein_trager, rothstein_trager_from_hermite, LogIntegral, LogTerm,

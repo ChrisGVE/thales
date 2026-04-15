@@ -14,6 +14,80 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Weak};
 
+// ── FuncId ────────────────────────────────────────────────────────────────────
+
+/// Identifier for built-in and user-defined functions.
+///
+/// Covers the standard transcendental functions used throughout the CAS.
+/// [`FuncId::Other`] holds a [`SymbolId`] for user-defined or less common
+/// functions, keeping the enum open for extension without breaking changes.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum FuncId {
+    /// Sine function.
+    Sin,
+    /// Cosine function.
+    Cos,
+    /// Tangent function.
+    Tan,
+    /// Natural logarithm.
+    Ln,
+    /// Natural exponential.
+    Exp,
+    /// Square root.
+    Sqrt,
+    /// Absolute value.
+    Abs,
+    /// User-defined or extension function identified by a [`SymbolId`].
+    Other(SymbolId),
+}
+
+impl PartialOrd for FuncId {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for FuncId {
+    fn cmp(&self, other: &Self) -> Ordering {
+        func_id_rank(self)
+            .cmp(&func_id_rank(other))
+            .then_with(|| match (self, other) {
+                (FuncId::Other(a), FuncId::Other(b)) => a.cmp(b),
+                _ => Ordering::Equal,
+            })
+    }
+}
+
+fn func_id_rank(f: &FuncId) -> u8 {
+    match f {
+        FuncId::Sin => 0,
+        FuncId::Cos => 1,
+        FuncId::Tan => 2,
+        FuncId::Ln => 3,
+        FuncId::Exp => 4,
+        FuncId::Sqrt => 5,
+        FuncId::Abs => 6,
+        FuncId::Other(_) => 7,
+    }
+}
+
+impl fmt::Display for FuncId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FuncId::Sin => write!(f, "sin"),
+            FuncId::Cos => write!(f, "cos"),
+            FuncId::Tan => write!(f, "tan"),
+            FuncId::Ln => write!(f, "ln"),
+            FuncId::Exp => write!(f, "exp"),
+            FuncId::Sqrt => write!(f, "sqrt"),
+            FuncId::Abs => write!(f, "abs"),
+            FuncId::Other(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+// ── Expr ──────────────────────────────────────────────────────────────────────
+
 /// Core expression type for the computer algebra system.
 ///
 /// All compound expressions hold children via `Arc<Expr>`, enabling
@@ -23,7 +97,7 @@ use std::sync::{Arc, Weak};
 ///
 /// Expressions have a total structural ordering used by `BTreeMap`
 /// keys in [`AddNode`] and [`MulNode`]. Variant order:
-/// Integer < Rational < Float < Symbol < Add < Mul < Pow.
+/// Integer < Rational < Float < Symbol < Add < Mul < Pow < Func.
 #[derive(Clone, Debug)]
 pub enum Expr {
     /// Exact integer.
@@ -40,6 +114,8 @@ pub enum Expr {
     Mul(MulNode),
     /// Power: `base ^ exponent`.
     Pow(Arc<Expr>, Arc<Expr>),
+    /// Function application: `f(arg1, arg2, ...)`.
+    Func(FuncId, Vec<Arc<Expr>>),
 }
 
 /// Returns a numeric rank for deterministic variant ordering.
@@ -52,6 +128,7 @@ fn variant_rank(e: &Expr) -> u8 {
         Expr::Add(_) => 4,
         Expr::Mul(_) => 5,
         Expr::Pow(_, _) => 6,
+        Expr::Func(_, _) => 7,
     }
 }
 
@@ -67,6 +144,7 @@ impl PartialEq for Expr {
             (Expr::Add(a), Expr::Add(b)) => a == b,
             (Expr::Mul(a), Expr::Mul(b)) => a == b,
             (Expr::Pow(ab, ae), Expr::Pow(bb, be)) => ab == bb && ae == be,
+            (Expr::Func(fa, aa), Expr::Func(fb, ab)) => fa == fb && aa == ab,
             _ => false,
         }
     }
@@ -89,6 +167,12 @@ impl Hash for Expr {
             Expr::Pow(b, e) => {
                 b.hash(state);
                 e.hash(state);
+            }
+            Expr::Func(id, args) => {
+                id.hash(state);
+                for arg in args {
+                    arg.hash(state);
+                }
             }
         }
     }
@@ -114,6 +198,9 @@ impl Ord for Expr {
                 (Expr::Add(a), Expr::Add(b)) => a.cmp(b),
                 (Expr::Mul(a), Expr::Mul(b)) => a.cmp(b),
                 (Expr::Pow(ab, ae), Expr::Pow(bb, be)) => ab.cmp(bb).then_with(|| ae.cmp(be)),
+                (Expr::Func(fa, aa), Expr::Func(fb, ab)) => {
+                    fa.cmp(fb).then_with(|| aa.iter().cmp(ab.iter()))
+                }
                 // Unreachable: variant_rank equality implies same variant.
                 _ => Ordering::Equal,
             })
@@ -153,6 +240,20 @@ impl Expr {
         Arc::new(Expr::Pow(base, exp))
     }
 
+    /// Function-application expression wrapped in `Arc`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use thales::numeric::expr::{Expr, FuncId};
+    ///
+    /// let x = Expr::symbol("x");
+    /// let sin_x = Expr::func(FuncId::Sin, vec![x]);
+    /// ```
+    pub fn func(id: FuncId, args: Vec<Arc<Expr>>) -> Arc<Expr> {
+        Arc::new(Expr::Func(id, args))
+    }
+
     /// Returns `true` if this is a numeric zero.
     pub fn is_zero(&self) -> bool {
         match self {
@@ -188,6 +289,16 @@ impl fmt::Display for Expr {
             Expr::Add(a) => write!(f, "({a})"),
             Expr::Mul(m) => write!(f, "({m})"),
             Expr::Pow(b, e) => write!(f, "({b})^({e})"),
+            Expr::Func(id, args) => {
+                write!(f, "{id}(")?;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{arg}")?;
+                }
+                write!(f, ")")
+            }
         }
     }
 }
@@ -326,7 +437,7 @@ mod tests {
     fn test_float_nan_equality() {
         let a = Expr::Float(f64::NAN);
         let b = Expr::Float(f64::NAN);
-        // NaN bits are equal → structural equality holds
+        // NaN bits are equal -> structural equality holds
         assert_eq!(a, b);
     }
 
@@ -334,7 +445,7 @@ mod tests {
     fn test_float_neg_zero() {
         let a = Expr::Float(0.0);
         let b = Expr::Float(-0.0);
-        // 0.0 and -0.0 have different bits → structurally different
+        // 0.0 and -0.0 have different bits -> structurally different
         assert_ne!(a, b);
     }
 
@@ -578,5 +689,120 @@ mod tests {
         let e = Expr::rational(1, 2);
         let result = negate_exponent(&e);
         assert_eq!(*result, Expr::Rational(BigRational::from_i64(-1, 2)));
+    }
+
+    // ── FuncId tests ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_func_id_equality() {
+        assert_eq!(FuncId::Sin, FuncId::Sin);
+        assert_ne!(FuncId::Sin, FuncId::Cos);
+    }
+
+    #[test]
+    fn test_func_id_ordering() {
+        assert!(FuncId::Sin < FuncId::Cos);
+        assert!(FuncId::Cos < FuncId::Tan);
+        assert!(FuncId::Tan < FuncId::Ln);
+    }
+
+    #[test]
+    fn test_func_id_display() {
+        assert_eq!(FuncId::Sin.to_string(), "sin");
+        assert_eq!(FuncId::Cos.to_string(), "cos");
+        assert_eq!(FuncId::Tan.to_string(), "tan");
+        assert_eq!(FuncId::Ln.to_string(), "ln");
+        assert_eq!(FuncId::Exp.to_string(), "exp");
+        assert_eq!(FuncId::Sqrt.to_string(), "sqrt");
+        assert_eq!(FuncId::Abs.to_string(), "abs");
+    }
+
+    #[test]
+    fn test_func_id_other_display() {
+        let id = FuncId::Other(SymbolId::intern("my_func"));
+        assert_eq!(id.to_string(), "my_func");
+    }
+
+    #[test]
+    fn test_func_constructor() {
+        let x = Expr::symbol("fx");
+        let sin_x = Expr::func(FuncId::Sin, vec![x.clone()]);
+        match sin_x.as_ref() {
+            Expr::Func(FuncId::Sin, args) => {
+                assert_eq!(args.len(), 1);
+                assert_eq!(*args[0], *x);
+            }
+            _ => panic!("expected Func(Sin, ...)"),
+        }
+    }
+
+    #[test]
+    fn test_func_display() {
+        let x = Expr::symbol("disp_fx");
+        let sin_x = Expr::func(FuncId::Sin, vec![x]);
+        assert_eq!(sin_x.to_string(), "sin(disp_fx)");
+    }
+
+    #[test]
+    fn test_func_display_two_args() {
+        let x = Expr::symbol("disp_fx2");
+        let y = Expr::symbol("disp_fy2");
+        let f = Expr::func(FuncId::Other(SymbolId::intern("pow2")), vec![x, y]);
+        assert_eq!(f.to_string(), "pow2(disp_fx2, disp_fy2)");
+    }
+
+    #[test]
+    fn test_func_equality() {
+        let x = Expr::symbol("feq_x");
+        let a = Expr::func(FuncId::Sin, vec![x.clone()]);
+        let b = Expr::func(FuncId::Sin, vec![x.clone()]);
+        let c = Expr::func(FuncId::Cos, vec![x]);
+        assert_eq!(*a, *b);
+        assert_ne!(*a, *c);
+    }
+
+    #[test]
+    fn test_func_ordering_by_id() {
+        let x = Expr::symbol("ford_x");
+        let sin_x = Expr::Func(FuncId::Sin, vec![x.clone()]);
+        let cos_x = Expr::Func(FuncId::Cos, vec![x]);
+        // Sin (rank 0) < Cos (rank 1)
+        assert!(sin_x < cos_x);
+    }
+
+    #[test]
+    fn test_func_ordering_above_pow() {
+        let x = Expr::symbol("ford2_x");
+        let pow_x = Expr::Pow(x.clone(), Expr::int(2));
+        let sin_x = Expr::Func(FuncId::Sin, vec![x]);
+        // Pow (rank 6) < Func (rank 7)
+        assert!(pow_x < sin_x);
+    }
+
+    #[test]
+    fn test_func_hash_consistency() {
+        use std::collections::hash_map::DefaultHasher;
+        let x = Expr::symbol("fhash_x");
+        let a = Expr::Func(FuncId::Sin, vec![x.clone()]);
+        let b = Expr::Func(FuncId::Sin, vec![x]);
+        let ha = {
+            let mut h = DefaultHasher::new();
+            a.hash(&mut h);
+            h.finish()
+        };
+        let hb = {
+            let mut h = DefaultHasher::new();
+            b.hash(&mut h);
+            h.finish()
+        };
+        assert_eq!(ha, hb);
+    }
+
+    #[test]
+    fn test_func_is_not_zero_or_one() {
+        let x = Expr::symbol("fnz_x");
+        let f = Expr::Func(FuncId::Sin, vec![x]);
+        assert!(!f.is_zero());
+        assert!(!f.is_one());
     }
 }
