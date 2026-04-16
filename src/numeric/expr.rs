@@ -25,20 +25,61 @@ use std::sync::{Arc, Weak};
 /// functions, keeping the enum open for extension without breaking changes.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum FuncId {
+    // ── Trigonometric ────────────────────────────────────────────────────────
     /// Sine function.
     Sin,
     /// Cosine function.
     Cos,
     /// Tangent function.
     Tan,
+    // ── Inverse trigonometric ────────────────────────────────────────────────
+    /// Arcsine function.
+    Asin,
+    /// Arccosine function.
+    Acos,
+    /// Arctangent function (single argument).
+    Atan,
+    /// Two-argument arctangent: atan2(y, x).
+    Atan2,
+    // ── Hyperbolic ───────────────────────────────────────────────────────────
+    /// Hyperbolic sine.
+    Sinh,
+    /// Hyperbolic cosine.
+    Cosh,
+    /// Hyperbolic tangent.
+    Tanh,
+    // ── Logarithmic ─────────────────────────────────────────────────────────
     /// Natural logarithm.
     Ln,
     /// Natural exponential.
     Exp,
+    /// Logarithm with arbitrary base: log(base, x).
+    Log,
+    /// Base-2 logarithm.
+    Log2,
+    /// Base-10 logarithm.
+    Log10,
+    // ── Power / root ─────────────────────────────────────────────────────────
     /// Square root.
     Sqrt,
+    /// Cube root.
+    Cbrt,
+    // ── Rounding ─────────────────────────────────────────────────────────────
+    /// Floor function.
+    Floor,
+    /// Ceiling function.
+    Ceil,
+    /// Round to nearest integer.
+    Round,
+    // ── Utility ──────────────────────────────────────────────────────────────
     /// Absolute value.
     Abs,
+    /// Sign (signum) function.
+    Sign,
+    /// Minimum of two arguments.
+    Min,
+    /// Maximum of two arguments.
+    Max,
     /// User-defined or extension function identified by a [`SymbolId`].
     Other(SymbolId),
 }
@@ -65,11 +106,28 @@ fn func_id_rank(f: &FuncId) -> u8 {
         FuncId::Sin => 0,
         FuncId::Cos => 1,
         FuncId::Tan => 2,
-        FuncId::Ln => 3,
-        FuncId::Exp => 4,
-        FuncId::Sqrt => 5,
-        FuncId::Abs => 6,
-        FuncId::Other(_) => 7,
+        FuncId::Asin => 3,
+        FuncId::Acos => 4,
+        FuncId::Atan => 5,
+        FuncId::Atan2 => 6,
+        FuncId::Sinh => 7,
+        FuncId::Cosh => 8,
+        FuncId::Tanh => 9,
+        FuncId::Ln => 10,
+        FuncId::Exp => 11,
+        FuncId::Log => 12,
+        FuncId::Log2 => 13,
+        FuncId::Log10 => 14,
+        FuncId::Sqrt => 15,
+        FuncId::Cbrt => 16,
+        FuncId::Floor => 17,
+        FuncId::Ceil => 18,
+        FuncId::Round => 19,
+        FuncId::Abs => 20,
+        FuncId::Sign => 21,
+        FuncId::Min => 22,
+        FuncId::Max => 23,
+        FuncId::Other(_) => 24,
     }
 }
 
@@ -79,10 +137,27 @@ impl fmt::Display for FuncId {
             FuncId::Sin => write!(f, "sin"),
             FuncId::Cos => write!(f, "cos"),
             FuncId::Tan => write!(f, "tan"),
+            FuncId::Asin => write!(f, "asin"),
+            FuncId::Acos => write!(f, "acos"),
+            FuncId::Atan => write!(f, "atan"),
+            FuncId::Atan2 => write!(f, "atan2"),
+            FuncId::Sinh => write!(f, "sinh"),
+            FuncId::Cosh => write!(f, "cosh"),
+            FuncId::Tanh => write!(f, "tanh"),
             FuncId::Ln => write!(f, "ln"),
             FuncId::Exp => write!(f, "exp"),
+            FuncId::Log => write!(f, "log"),
+            FuncId::Log2 => write!(f, "log2"),
+            FuncId::Log10 => write!(f, "log10"),
             FuncId::Sqrt => write!(f, "sqrt"),
+            FuncId::Cbrt => write!(f, "cbrt"),
+            FuncId::Floor => write!(f, "floor"),
+            FuncId::Ceil => write!(f, "ceil"),
+            FuncId::Round => write!(f, "round"),
             FuncId::Abs => write!(f, "abs"),
+            FuncId::Sign => write!(f, "sign"),
+            FuncId::Min => write!(f, "min"),
+            FuncId::Max => write!(f, "max"),
             FuncId::Other(s) => write!(f, "{s}"),
         }
     }
@@ -776,6 +851,53 @@ mod tests {
     }
 
     #[test]
+    fn test_func_id_new_variants_equality() {
+        assert_eq!(FuncId::Asin, FuncId::Asin);
+        assert_ne!(FuncId::Asin, FuncId::Acos);
+        assert_eq!(FuncId::Sinh, FuncId::Sinh);
+        assert_ne!(FuncId::Sinh, FuncId::Cosh);
+        assert_eq!(FuncId::Log, FuncId::Log);
+        assert_eq!(FuncId::Log2, FuncId::Log2);
+        assert_eq!(FuncId::Log10, FuncId::Log10);
+        assert_eq!(FuncId::Cbrt, FuncId::Cbrt);
+        assert_eq!(FuncId::Floor, FuncId::Floor);
+        assert_eq!(FuncId::Ceil, FuncId::Ceil);
+        assert_eq!(FuncId::Round, FuncId::Round);
+        assert_eq!(FuncId::Sign, FuncId::Sign);
+        assert_eq!(FuncId::Min, FuncId::Min);
+        assert_eq!(FuncId::Max, FuncId::Max);
+    }
+
+    #[test]
+    fn test_func_id_full_ordering() {
+        // Verify the complete rank ordering is monotonically increasing
+        assert!(FuncId::Sin < FuncId::Cos);
+        assert!(FuncId::Cos < FuncId::Tan);
+        assert!(FuncId::Tan < FuncId::Asin);
+        assert!(FuncId::Asin < FuncId::Acos);
+        assert!(FuncId::Acos < FuncId::Atan);
+        assert!(FuncId::Atan < FuncId::Atan2);
+        assert!(FuncId::Atan2 < FuncId::Sinh);
+        assert!(FuncId::Sinh < FuncId::Cosh);
+        assert!(FuncId::Cosh < FuncId::Tanh);
+        assert!(FuncId::Tanh < FuncId::Ln);
+        assert!(FuncId::Ln < FuncId::Exp);
+        assert!(FuncId::Exp < FuncId::Log);
+        assert!(FuncId::Log < FuncId::Log2);
+        assert!(FuncId::Log2 < FuncId::Log10);
+        assert!(FuncId::Log10 < FuncId::Sqrt);
+        assert!(FuncId::Sqrt < FuncId::Cbrt);
+        assert!(FuncId::Cbrt < FuncId::Floor);
+        assert!(FuncId::Floor < FuncId::Ceil);
+        assert!(FuncId::Ceil < FuncId::Round);
+        assert!(FuncId::Round < FuncId::Abs);
+        assert!(FuncId::Abs < FuncId::Sign);
+        assert!(FuncId::Sign < FuncId::Min);
+        assert!(FuncId::Min < FuncId::Max);
+        assert!(FuncId::Max < FuncId::Other(SymbolId::intern("ord_z")));
+    }
+
+    #[test]
     fn test_func_id_display() {
         assert_eq!(FuncId::Sin.to_string(), "sin");
         assert_eq!(FuncId::Cos.to_string(), "cos");
@@ -784,6 +906,27 @@ mod tests {
         assert_eq!(FuncId::Exp.to_string(), "exp");
         assert_eq!(FuncId::Sqrt.to_string(), "sqrt");
         assert_eq!(FuncId::Abs.to_string(), "abs");
+    }
+
+    #[test]
+    fn test_func_id_new_variants_display() {
+        assert_eq!(FuncId::Asin.to_string(), "asin");
+        assert_eq!(FuncId::Acos.to_string(), "acos");
+        assert_eq!(FuncId::Atan.to_string(), "atan");
+        assert_eq!(FuncId::Atan2.to_string(), "atan2");
+        assert_eq!(FuncId::Sinh.to_string(), "sinh");
+        assert_eq!(FuncId::Cosh.to_string(), "cosh");
+        assert_eq!(FuncId::Tanh.to_string(), "tanh");
+        assert_eq!(FuncId::Log.to_string(), "log");
+        assert_eq!(FuncId::Log2.to_string(), "log2");
+        assert_eq!(FuncId::Log10.to_string(), "log10");
+        assert_eq!(FuncId::Cbrt.to_string(), "cbrt");
+        assert_eq!(FuncId::Floor.to_string(), "floor");
+        assert_eq!(FuncId::Ceil.to_string(), "ceil");
+        assert_eq!(FuncId::Round.to_string(), "round");
+        assert_eq!(FuncId::Sign.to_string(), "sign");
+        assert_eq!(FuncId::Min.to_string(), "min");
+        assert_eq!(FuncId::Max.to_string(), "max");
     }
 
     #[test]

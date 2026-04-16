@@ -187,6 +187,12 @@ fn try_eval_func(id: FuncId, arg: &Arc<Expr>) -> Option<Arc<Expr>> {
         FuncId::Sin => v.sin(),
         FuncId::Cos => v.cos(),
         FuncId::Tan => v.tan(),
+        FuncId::Asin => v.asin(),
+        FuncId::Acos => v.acos(),
+        FuncId::Atan => v.atan(),
+        FuncId::Sinh => v.sinh(),
+        FuncId::Cosh => v.cosh(),
+        FuncId::Tanh => v.tanh(),
         FuncId::Ln => {
             if v <= 0.0 {
                 return None;
@@ -194,13 +200,32 @@ fn try_eval_func(id: FuncId, arg: &Arc<Expr>) -> Option<Arc<Expr>> {
             v.ln()
         }
         FuncId::Exp => v.exp(),
+        FuncId::Log2 => {
+            if v <= 0.0 {
+                return None;
+            }
+            v.log2()
+        }
+        FuncId::Log10 => {
+            if v <= 0.0 {
+                return None;
+            }
+            v.log10()
+        }
         FuncId::Sqrt => {
             if v < 0.0 {
                 return None;
             }
             v.sqrt()
         }
+        FuncId::Cbrt => v.cbrt(),
+        FuncId::Floor => v.floor(),
+        FuncId::Ceil => v.ceil(),
+        FuncId::Round => v.round(),
         FuncId::Abs => v.abs(),
+        FuncId::Sign => v.signum(),
+        // multi-arg functions not evaluable with a single numeric argument
+        FuncId::Atan2 | FuncId::Log | FuncId::Min | FuncId::Max => return None,
         FuncId::Other(_) => return None,
     };
 

@@ -106,30 +106,177 @@ fn limit_at_finite(
     point: &Arc<Expr>,
     original_point: &LimitPoint,
 ) -> LimitResult {
-    // Step 1: direct substitution.
+    // Step 1: Direct symbolic substitution for clean finite cases.
+    // Note: symbolic substitution collapses 0^(-1) to 0 (the normalizer
+    // absorbs singularities), so we must NOT use it as the sole detector.
     let subst = substitute(expr, var, point);
-    match classify_expr(&subst) {
-        ExprClass::Finite => return LimitResult::Value(subst),
-        ExprClass::PosInf => return LimitResult::PosInfinity,
-        ExprClass::NegInf => return LimitResult::NegInfinity,
-        ExprClass::DivByZero => {
-            // One-sided limit: determine sign.
-            return one_sided_limit(expr, var, point, original_point);
+    if let Some(v) = expr_to_f64(&subst) {
+        if !v.is_nan() && !v.is_infinite() {
+            // Clean finite symbolic result — but verify via float probe to
+            // rule out a collapsed singularity disguised as 0.
+            if !float_probe_near_singularity(expr, var, point) {
+                return LimitResult::Value(subst);
+            }
         }
-        ExprClass::Indeterminate => {}
     }
 
-    // Step 2: L'Hôpital on 0/0 or ∞/∞ rational forms.
+    // Step 2: Float probe to detect signed infinities (e.g. 1/x near 0).
+    // Symbolic substitution normalizes 0^(-1) → 0, so we use actual f64
+    // arithmetic which preserves infinity.
+    if let Some(f_point) = expr_to_f64(point) {
+        let probe_r = eval_float(expr, var, f_point + 1e-7);
+        let probe_l = eval_float(expr, var, f_point - 1e-7);
+
+        match (probe_l, probe_r) {
+            (Some(l), Some(r)) if l.is_infinite() || r.is_infinite() => {
+                return one_sided_limit_float(l, r, original_point);
+            }
+            (Some(l), Some(r)) if !l.is_nan() && !r.is_nan() => {
+                // Both probes finite and equal within tolerance → clean limit.
+                if (l - r).abs() < 1e-4 * (l.abs().max(1.0)) {
+                    let avg = (l + r) / 2.0;
+                    if !avg.is_nan() {
+                        // Return as float only if symbolic failed.
+                        if expr_to_f64(&subst).map_or(true, |v| v.is_nan()) {
+                            return LimitResult::Value(Expr::float(avg));
+                        }
+                        return LimitResult::Value(subst);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Step 3: L'Hôpital on 0/0 or ∞/∞ rational forms.
     if let Some(result) = try_lhopital(expr, var, point) {
         return result;
     }
 
-    // Step 3: Taylor series leading-term analysis.
+    // Step 4: Taylor series leading-term analysis.
     if let Some(result) = try_series_limit(expr, var, point) {
         return result;
     }
 
     LimitResult::Indeterminate
+}
+
+/// Returns true if float evaluation near `point` reveals a large spike
+/// (magnitude > 1e6), indicating a collapsed singularity in symbolic form.
+fn float_probe_near_singularity(expr: &Arc<Expr>, var: SymbolId, point: &Arc<Expr>) -> bool {
+    if let Some(f_point) = expr_to_f64(point) {
+        let p1 = eval_float(expr, var, f_point + 1e-6);
+        let p2 = eval_float(expr, var, f_point - 1e-6);
+        match (p1, p2) {
+            (Some(a), Some(b)) => {
+                a.abs() > 1e6 || b.abs() > 1e6 || a.is_infinite() || b.is_infinite()
+            }
+            _ => false,
+        }
+    } else {
+        false
+    }
+}
+
+/// Evaluate `expr` at a float value for `var` using f64 arithmetic via substitute.
+fn eval_float(expr: &Arc<Expr>, var: SymbolId, val: f64) -> Option<f64> {
+    let probe = Expr::float(val);
+    let result = substitute(expr, var, &probe);
+    eval_f64(&result)
+}
+
+/// Recursively evaluate an expression tree to f64, handling infinities properly.
+/// Unlike `expr_to_f64`, this handles Pow/Func/Mul/Add nodes.
+fn eval_f64(expr: &Arc<Expr>) -> Option<f64> {
+    match expr.as_ref() {
+        Expr::Integer(n) => n.to_i64().map(|v| v as f64),
+        Expr::Rational(r) => Some(r.to_f64()),
+        Expr::Float(f) => Some(*f),
+        Expr::Pow(base, exp) => {
+            let b = eval_f64(base)?;
+            let e = eval_f64(exp)?;
+            Some(b.powf(e))
+        }
+        Expr::Mul(node) => {
+            let mut acc = node.coeff.to_f64();
+            for (base, exp) in &node.factors {
+                let b = eval_f64(base)?;
+                let e = eval_f64(exp)?;
+                acc *= b.powf(e);
+            }
+            Some(acc)
+        }
+        Expr::Add(node) => {
+            let mut acc = node.constant.to_f64();
+            for (term, coeff) in &node.terms {
+                let t = eval_f64(term)?;
+                acc += coeff.to_f64() * t;
+            }
+            Some(acc)
+        }
+        Expr::Func(id, args) => {
+            if args.len() != 1 {
+                return None;
+            }
+            let a = eval_f64(&args[0])?;
+            Some(match id {
+                FuncId::Sin => a.sin(),
+                FuncId::Cos => a.cos(),
+                FuncId::Tan => a.tan(),
+                FuncId::Asin => a.asin(),
+                FuncId::Acos => a.acos(),
+                FuncId::Atan => a.atan(),
+                FuncId::Sinh => a.sinh(),
+                FuncId::Cosh => a.cosh(),
+                FuncId::Tanh => a.tanh(),
+                FuncId::Ln => a.ln(),
+                FuncId::Exp => a.exp(),
+                FuncId::Log2 => a.log2(),
+                FuncId::Log10 => a.log10(),
+                FuncId::Sqrt => a.sqrt(),
+                FuncId::Cbrt => a.cbrt(),
+                FuncId::Floor => a.floor(),
+                FuncId::Ceil => a.ceil(),
+                FuncId::Round => a.round(),
+                FuncId::Abs => a.abs(),
+                FuncId::Sign => a.signum(),
+                // multi-arg functions not handled by the single-arg path above
+                FuncId::Atan2 | FuncId::Log | FuncId::Min | FuncId::Max => return None,
+                FuncId::Other(_) => return None,
+            })
+        }
+        _ => None,
+    }
+}
+
+fn one_sided_limit_float(left: f64, right: f64, original_point: &LimitPoint) -> LimitResult {
+    let left_sign = if left > 0.0 {
+        1i32
+    } else if left < 0.0 {
+        -1
+    } else {
+        0
+    };
+    let right_sign = if right > 0.0 {
+        1i32
+    } else if right < 0.0 {
+        -1
+    } else {
+        0
+    };
+
+    match original_point {
+        LimitPoint::FromRight(_) => sign_to_result(right_sign),
+        LimitPoint::FromLeft(_) => sign_to_result(left_sign),
+        LimitPoint::Value(_) => {
+            if left_sign == right_sign {
+                sign_to_result(left_sign)
+            } else {
+                LimitResult::DoesNotExist
+            }
+        }
+        _ => LimitResult::Indeterminate,
+    }
 }
 
 // ── Infinity limits ───────────────────────────────────────────────────────────
@@ -212,23 +359,36 @@ fn sign_to_result(sign: i32) -> LimitResult {
 // ── L'Hôpital's rule ─────────────────────────────────────────────────────────
 
 fn try_lhopital(expr: &Arc<Expr>, var: SymbolId, point: &Arc<Expr>) -> Option<LimitResult> {
+    let f_point = expr_to_f64(point)?;
     let (mut num, mut den) = extract_ratio(expr)?;
 
     for _ in 0..LHOPITAL_MAX_ITER {
-        let num_val = substitute(&num, var, point);
-        let den_val = substitute(&den, var, point);
+        // Use float evaluation to detect indeterminate forms reliably.
+        // Symbolic substitution normalizes 0^(-1) → 0, hiding singularities.
+        let num_f = eval_float(&num, var, f_point);
+        let den_f = eval_float(&den, var, f_point);
 
-        let num_cls = classify_expr(&num_val);
-        let den_cls = classify_expr(&den_val);
+        let is_zero_over_zero = matches!(
+            (num_f, den_f),
+            (Some(n), Some(d)) if n.abs() < 1e-10 && d.abs() < 1e-10
+        );
+        let is_inf_over_inf = matches!(
+            (num_f, den_f),
+            (Some(n), Some(d)) if (n.is_infinite() || n.abs() > 1e10)
+                                && (d.is_infinite() || d.abs() > 1e10)
+        );
 
-        // Check we have an indeterminate form (0/0 or ∞/∞).
-        let is_indeterminate = match (&num_cls, &den_cls) {
-            (ExprClass::Finite, ExprClass::Finite) => num_val.is_zero() && den_val.is_zero(),
-            (ExprClass::PosInf | ExprClass::NegInf, ExprClass::PosInf | ExprClass::NegInf) => true,
-            _ => false,
-        };
-
-        if !is_indeterminate {
+        if !is_zero_over_zero && !is_inf_over_inf {
+            // Not an indeterminate form — evaluate directly if possible.
+            if let (Some(n), Some(d)) = (num_f, den_f) {
+                if d.abs() > 1e-10 && !d.is_nan() {
+                    // Confirmed finite ratio: return symbolic or float value.
+                    let sym_num = substitute(&num, var, point);
+                    let sym_den = substitute(&den, var, point);
+                    let result = normalize::div(sym_num, sym_den);
+                    return Some(LimitResult::Value(result));
+                }
+            }
             break;
         }
 
@@ -236,29 +396,30 @@ fn try_lhopital(expr: &Arc<Expr>, var: SymbolId, point: &Arc<Expr>) -> Option<Li
         num = diff_arc(&num, var);
         den = diff_arc(&den, var);
 
-        // Evaluate after differentiation.
-        let new_num = substitute(&num, var, point);
-        let new_den = substitute(&den, var, point);
-        let new_num_cls = classify_expr(&new_num);
-        let new_den_cls = classify_expr(&new_den);
+        // Check the new ratio after differentiation.
+        let new_num_f = eval_float(&num, var, f_point);
+        let new_den_f = eval_float(&den, var, f_point);
 
-        match (&new_num_cls, &new_den_cls) {
-            (ExprClass::Finite, ExprClass::Finite) if !new_den.is_zero() => {
-                let result = normalize::div(new_num, new_den);
+        match (new_num_f, new_den_f) {
+            (Some(n), Some(d)) if !d.is_nan() && d.abs() > 1e-10 => {
+                // Non-zero denominator: compute symbolic result.
+                let sym_num = substitute(&num, var, point);
+                let sym_den = substitute(&den, var, point);
+                let result = normalize::div(sym_num, sym_den);
                 return Some(LimitResult::Value(result));
             }
-            (ExprClass::Finite, ExprClass::Finite) if new_den.is_zero() && new_num.is_zero() => {
-                // Still 0/0 — continue loop.
+            (Some(n), Some(d)) if n.abs() < 1e-10 && d.abs() < 1e-10 => {
+                // Still 0/0 — iterate again.
                 continue;
             }
-            (ExprClass::PosInf | ExprClass::NegInf, ExprClass::Finite) => {
-                if matches!(new_num_cls, ExprClass::PosInf) {
-                    return Some(LimitResult::PosInfinity);
+            (Some(n), Some(d)) if (n.is_infinite() || n.abs() > 1e10) && d.abs() < 1e-6 => {
+                return Some(if n > 0.0 {
+                    LimitResult::PosInfinity
                 } else {
-                    return Some(LimitResult::NegInfinity);
-                }
+                    LimitResult::NegInfinity
+                });
             }
-            (ExprClass::Finite, ExprClass::PosInf | ExprClass::NegInf) => {
+            (Some(n), Some(d)) if n.abs() < 1e-6 && (d.is_infinite() || d.abs() > 1e10) => {
                 return Some(LimitResult::Value(Expr::int(0)));
             }
             _ => break,
