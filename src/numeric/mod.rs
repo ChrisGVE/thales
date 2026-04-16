@@ -83,5 +83,6 @@ pub use small_int::SmallInt;
 pub use solution_set::{Constraint, IntervalBound, SolutionSet};
 pub use sparse_poly::SparsePolynomial;
 pub use symbol::SymbolId;
+pub use system_solver::{solve_system, SolutionPoint};
 pub use term_order::{DegLex, GrevLex, Lex, MonomialOrder, OrderedMonomial};
 pub use zassenhaus::factor_integer_poly;
