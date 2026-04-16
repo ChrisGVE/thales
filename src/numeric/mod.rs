@@ -23,6 +23,7 @@ mod compute_ctx;
 mod dense_poly;
 pub mod differentiation;
 mod eigenvalue;
+mod f4;
 mod finite_field_factor;
 mod groebner;
 mod hensel;
@@ -43,7 +44,9 @@ mod primality;
 mod rational_equation_solver;
 mod rational_fn;
 pub mod rewrite;
+pub mod risch;
 mod rothstein_trager;
+pub mod series;
 mod solution_set;
 mod sparse_poly;
 pub mod system_solver;
@@ -60,6 +63,7 @@ pub use eigenvalue::{
     characteristic_polynomial, eigenvalues, EigenError, EigenvalueResult, ExprMatrix,
 };
 pub use expr::{Expr, ExprPool, FuncId};
+pub use f4::f4;
 pub use finite_field_factor::factor_over_gfp;
 pub use groebner::buchberger;
 pub use hensel::{hensel_lift, HenselLift};
@@ -76,9 +80,11 @@ pub use poly_factoring::SqfFactor;
 pub use primality::{factor, is_prime, PrimeFactor};
 pub use rational_equation_solver::{solve_rational, solve_rational_equation};
 pub use rational_fn::RationalFunction;
+pub use risch::{risch_integrate, IntegrationResult};
 pub use rothstein_trager::{
     integrate_rational_log, rothstein_trager, rothstein_trager_from_hermite, LogIntegral, LogTerm,
 };
+pub use series::{taylor, TaylorSeries};
 pub use small_int::SmallInt;
 pub use solution_set::{Constraint, IntervalBound, SolutionSet};
 pub use sparse_poly::SparsePolynomial;
