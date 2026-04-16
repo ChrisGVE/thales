@@ -117,7 +117,11 @@ pub fn implicit_diff(equation: &Expr, x: SymbolId, y: SymbolId) -> Arc<Expr> {
 pub(crate) fn diff_arc(expr: &Arc<Expr>, var: SymbolId) -> Arc<Expr> {
     match expr.as_ref() {
         // Constants → 0
-        Expr::Integer(_) | Expr::Rational(_) | Expr::Float(_) => Expr::int(0),
+        Expr::Integer(_)
+        | Expr::Rational(_)
+        | Expr::Float(_)
+        | Expr::Complex(_)
+        | Expr::Constant(_) => Expr::int(0),
 
         // Variable match → 1, otherwise 0
         Expr::Symbol(s) => {

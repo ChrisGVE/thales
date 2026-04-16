@@ -12,7 +12,12 @@ use std::sync::Arc;
 /// polynomial coefficient extraction.
 pub(super) fn expand_expr(expr: &Arc<Expr>) -> Arc<Expr> {
     match expr.as_ref() {
-        Expr::Integer(_) | Expr::Rational(_) | Expr::Float(_) | Expr::Symbol(_) => expr.clone(),
+        Expr::Integer(_)
+        | Expr::Rational(_)
+        | Expr::Float(_)
+        | Expr::Complex(_)
+        | Expr::Constant(_)
+        | Expr::Symbol(_) => expr.clone(),
         Expr::Pow(base, exp) => {
             let base_exp = expand_expr(base);
             let exp_exp = expand_expr(exp);

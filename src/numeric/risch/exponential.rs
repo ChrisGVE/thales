@@ -287,7 +287,11 @@ fn extract_xn_times_exp(expr: &Arc<Expr>, var: SymbolId) -> Option<(i64, Arc<Exp
 fn expr_contains_var(expr: &Arc<Expr>, var: SymbolId) -> bool {
     match expr.as_ref() {
         Expr::Symbol(s) => *s == var,
-        Expr::Integer(_) | Expr::Rational(_) | Expr::Float(_) => false,
+        Expr::Integer(_)
+        | Expr::Rational(_)
+        | Expr::Float(_)
+        | Expr::Complex(_)
+        | Expr::Constant(_) => false,
         Expr::Add(node) => node.terms.keys().any(|t| expr_contains_var(t, var)),
         Expr::Mul(node) => node
             .factors

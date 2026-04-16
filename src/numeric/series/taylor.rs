@@ -82,7 +82,11 @@ pub fn taylor(expr: &Arc<Expr>, var: SymbolId, center: &Arc<Expr>, order: usize)
 pub(crate) fn substitute(expr: &Arc<Expr>, var: SymbolId, value: &Arc<Expr>) -> Arc<Expr> {
     match expr.as_ref() {
         // Numeric leaves are unchanged.
-        Expr::Integer(_) | Expr::Rational(_) | Expr::Float(_) => expr.clone(),
+        Expr::Integer(_)
+        | Expr::Rational(_)
+        | Expr::Float(_)
+        | Expr::Complex(_)
+        | Expr::Constant(_) => expr.clone(),
 
         // Symbol: replace if it matches, otherwise keep.
         Expr::Symbol(s) => {

@@ -53,7 +53,7 @@ pub fn expr_to_multipoly(e: &Arc<Expr>, vars: &[SymbolId]) -> Option<MP> {
             Some(MP::constant(BigRational::from(i)))
         }
         Expr::Rational(r) => Some(MP::constant(r.clone())),
-        Expr::Float(_) => None,
+        Expr::Float(_) | Expr::Complex(_) | Expr::Constant(_) => None,
         Expr::Symbol(v) => {
             if vars.contains(v) {
                 Some(MP::var(*v))

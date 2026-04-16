@@ -310,7 +310,12 @@ fn build_signed_trig(func: FuncId, negated: bool, x: &Arc<Expr>) -> Arc<Expr> {
 fn substitute(expr: &Arc<Expr>, var: SymbolId, replacement: &Arc<Expr>) -> Arc<Expr> {
     match expr.as_ref() {
         Expr::Symbol(s) if *s == var => replacement.clone(),
-        Expr::Symbol(_) | Expr::Integer(_) | Expr::Rational(_) | Expr::Float(_) => expr.clone(),
+        Expr::Symbol(_)
+        | Expr::Integer(_)
+        | Expr::Rational(_)
+        | Expr::Float(_)
+        | Expr::Complex(_)
+        | Expr::Constant(_) => expr.clone(),
         Expr::Add(node) => {
             let mut acc = normalize::mul(Expr::int(0), Expr::int(1)); // 0
             acc = if node.constant.is_zero() {
@@ -376,7 +381,11 @@ fn as_integer(expr: &Arc<Expr>) -> Option<i64> {
 fn contains_var(expr: &Arc<Expr>, var: SymbolId) -> bool {
     match expr.as_ref() {
         Expr::Symbol(s) => *s == var,
-        Expr::Integer(_) | Expr::Rational(_) | Expr::Float(_) => false,
+        Expr::Integer(_)
+        | Expr::Rational(_)
+        | Expr::Float(_)
+        | Expr::Complex(_)
+        | Expr::Constant(_) => false,
         Expr::Add(node) => node.terms.keys().any(|t| contains_var(t, var)),
         Expr::Mul(node) => node
             .factors
@@ -579,18 +588,24 @@ mod tests {
 
     #[test]
     fn test_tabular_x_sin_x() {
-        // ∫ x sin(x) dx = sin(x) - x cos(x)
+        // ∫ x sin(x) dx = sin(x) - x·cos(x)
         let x = sym("pt_xsin_x");
         let sin_x = Expr::func(FuncId::Sin, vec![x.clone()]);
-        let integrand = normalize::mul(x.clone(), sin_x);
+        let cos_x = Expr::func(FuncId::Cos, vec![x.clone()]);
+        let integrand = normalize::mul(x.clone(), sin_x.clone());
         let r = pattern_integrate(&integrand, xid("pt_xsin_x"));
         assert!(
             matches!(r, IntegrationResult::Elementary(_)),
             "tabular x·sin(x) should give Elementary"
         );
         if let IntegrationResult::Elementary(antideriv) = r {
-            let d = diff_arc(&antideriv, xid("pt_xsin_x"));
-            assert_eq!(d.as_ref(), integrand.as_ref());
+            // Expected: sin(x) - x·cos(x)
+            let expected = normalize::sub(sin_x, normalize::mul(x.clone(), cos_x));
+            assert_eq!(
+                antideriv.as_ref(),
+                expected.as_ref(),
+                "∫x·sin(x)dx = sin(x) - x·cos(x)"
+            );
         }
     }
 
@@ -598,18 +613,24 @@ mod tests {
 
     #[test]
     fn test_tabular_x_cos_x() {
-        // ∫ x cos(x) dx = cos(x) + x sin(x)
+        // ∫ x cos(x) dx = cos(x) + x·sin(x)
         let x = sym("pt_xcos_x");
+        let sin_x = Expr::func(FuncId::Sin, vec![x.clone()]);
         let cos_x = Expr::func(FuncId::Cos, vec![x.clone()]);
-        let integrand = normalize::mul(x.clone(), cos_x);
+        let integrand = normalize::mul(x.clone(), cos_x.clone());
         let r = pattern_integrate(&integrand, xid("pt_xcos_x"));
         assert!(
             matches!(r, IntegrationResult::Elementary(_)),
             "tabular x·cos(x) should give Elementary"
         );
         if let IntegrationResult::Elementary(antideriv) = r {
-            let d = diff_arc(&antideriv, xid("pt_xcos_x"));
-            assert_eq!(d.as_ref(), integrand.as_ref());
+            // Expected: cos(x) + x·sin(x)
+            let expected = normalize::add(cos_x, normalize::mul(x.clone(), sin_x));
+            assert_eq!(
+                antideriv.as_ref(),
+                expected.as_ref(),
+                "∫x·cos(x)dx = cos(x) + x·sin(x)"
+            );
         }
     }
 
@@ -617,18 +638,32 @@ mod tests {
 
     #[test]
     fn test_tabular_x2_sin_x() {
+        // ∫ x²·sin(x) dx = (2-x²)·cos(x) + 2x·sin(x)
         let x = sym("pt_x2sin_x");
         let x2 = normalize::pow(x.clone(), Expr::int(2));
         let sin_x = Expr::func(FuncId::Sin, vec![x.clone()]);
-        let integrand = normalize::mul(x2, sin_x);
+        let cos_x = Expr::func(FuncId::Cos, vec![x.clone()]);
+        let integrand = normalize::mul(x2, sin_x.clone());
         let r = pattern_integrate(&integrand, xid("pt_x2sin_x"));
         assert!(
             matches!(r, IntegrationResult::Elementary(_)),
             "tabular x²·sin(x) should give Elementary"
         );
         if let IntegrationResult::Elementary(antideriv) = r {
-            let d = diff_arc(&antideriv, xid("pt_x2sin_x"));
-            assert_eq!(d.as_ref(), integrand.as_ref());
+            // Algorithm normalizes to: 2·cos(x) - x²·cos(x) + 2x·sin(x)
+            // (canonical expanded form rather than factored (2-x²)·cos(x) + 2x·sin(x))
+            let x2e = normalize::pow(x.clone(), Expr::int(2));
+            let two_x = normalize::mul(Expr::int(2), x.clone());
+            let expected = normalize::add_many(vec![
+                normalize::mul(Expr::int(2), cos_x.clone()),
+                normalize::neg(normalize::mul(x2e, cos_x)),
+                normalize::mul(two_x, sin_x),
+            ]);
+            assert_eq!(
+                antideriv.as_ref(),
+                expected.as_ref(),
+                "∫x²·sin(x)dx = 2·cos(x) - x²·cos(x) + 2x·sin(x)"
+            );
         }
     }
 

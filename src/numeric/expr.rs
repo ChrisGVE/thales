@@ -8,6 +8,8 @@
 //! during construction: identical sub-expressions return the same `Arc`.
 
 use super::{AddNode, BigRational, MulNode, SmallInt, SymbolId};
+use crate::ast::SymbolicConstant;
+use num_complex::Complex64;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
@@ -97,7 +99,7 @@ impl fmt::Display for FuncId {
 ///
 /// Expressions have a total structural ordering used by `BTreeMap`
 /// keys in [`AddNode`] and [`MulNode`]. Variant order:
-/// Integer < Rational < Float < Symbol < Add < Mul < Pow < Func.
+/// Integer < Rational < Float < Complex < Constant < Symbol < Add < Mul < Pow < Func.
 #[derive(Clone, Debug)]
 pub enum Expr {
     /// Exact integer.
@@ -106,6 +108,10 @@ pub enum Expr {
     Rational(BigRational),
     /// Floating-point approximation.
     Float(f64),
+    /// Complex number (a + bi).
+    Complex(Complex64),
+    /// Symbolic constant (Pi, E, I).
+    Constant(SymbolicConstant),
     /// Named variable (interned).
     Symbol(SymbolId),
     /// Sum: `constant + Σ(coeff · term)`.
@@ -124,11 +130,13 @@ fn variant_rank(e: &Expr) -> u8 {
         Expr::Integer(_) => 0,
         Expr::Rational(_) => 1,
         Expr::Float(_) => 2,
-        Expr::Symbol(_) => 3,
-        Expr::Add(_) => 4,
-        Expr::Mul(_) => 5,
-        Expr::Pow(_, _) => 6,
-        Expr::Func(_, _) => 7,
+        Expr::Complex(_) => 3,
+        Expr::Constant(_) => 4,
+        Expr::Symbol(_) => 5,
+        Expr::Add(_) => 6,
+        Expr::Mul(_) => 7,
+        Expr::Pow(_, _) => 8,
+        Expr::Func(_, _) => 9,
     }
 }
 
@@ -140,6 +148,10 @@ impl PartialEq for Expr {
             (Expr::Integer(a), Expr::Integer(b)) => a == b,
             (Expr::Rational(a), Expr::Rational(b)) => a == b,
             (Expr::Float(a), Expr::Float(b)) => a.to_bits() == b.to_bits(),
+            (Expr::Complex(a), Expr::Complex(b)) => {
+                a.re.to_bits() == b.re.to_bits() && a.im.to_bits() == b.im.to_bits()
+            }
+            (Expr::Constant(a), Expr::Constant(b)) => a == b,
             (Expr::Symbol(a), Expr::Symbol(b)) => a == b,
             (Expr::Add(a), Expr::Add(b)) => a == b,
             (Expr::Mul(a), Expr::Mul(b)) => a == b,
@@ -161,6 +173,11 @@ impl Hash for Expr {
             Expr::Integer(n) => n.hash(state),
             Expr::Rational(r) => r.hash(state),
             Expr::Float(f) => f.to_bits().hash(state),
+            Expr::Complex(c) => {
+                c.re.to_bits().hash(state);
+                c.im.to_bits().hash(state);
+            }
+            Expr::Constant(c) => c.hash(state),
             Expr::Symbol(s) => s.hash(state),
             Expr::Add(a) => a.hash(state),
             Expr::Mul(m) => m.hash(state),
@@ -194,6 +211,19 @@ impl Ord for Expr {
                 (Expr::Integer(a), Expr::Integer(b)) => a.cmp(b),
                 (Expr::Rational(a), Expr::Rational(b)) => a.cmp(b),
                 (Expr::Float(a), Expr::Float(b)) => a.total_cmp(b),
+                (Expr::Complex(a), Expr::Complex(b)) => {
+                    a.re.total_cmp(&b.re).then_with(|| a.im.total_cmp(&b.im))
+                }
+                (Expr::Constant(a), Expr::Constant(b)) => {
+                    fn const_rank(c: &SymbolicConstant) -> u8 {
+                        match c {
+                            SymbolicConstant::Pi => 0,
+                            SymbolicConstant::E => 1,
+                            SymbolicConstant::I => 2,
+                        }
+                    }
+                    const_rank(a).cmp(&const_rank(b))
+                }
                 (Expr::Symbol(a), Expr::Symbol(b)) => a.cmp(b),
                 (Expr::Add(a), Expr::Add(b)) => a.cmp(b),
                 (Expr::Mul(a), Expr::Mul(b)) => a.cmp(b),
@@ -254,12 +284,38 @@ impl Expr {
         Arc::new(Expr::Func(id, args))
     }
 
+    /// Complex number expression wrapped in `Arc`.
+    pub fn complex(re: f64, im: f64) -> Arc<Expr> {
+        Arc::new(Expr::Complex(Complex64::new(re, im)))
+    }
+
+    /// Symbolic constant expression wrapped in `Arc`.
+    pub fn constant(c: SymbolicConstant) -> Arc<Expr> {
+        Arc::new(Expr::Constant(c))
+    }
+
+    /// Pi (π) constant wrapped in `Arc`.
+    pub fn pi() -> Arc<Expr> {
+        Arc::new(Expr::Constant(SymbolicConstant::Pi))
+    }
+
+    /// Euler's number (e) constant wrapped in `Arc`.
+    pub fn e() -> Arc<Expr> {
+        Arc::new(Expr::Constant(SymbolicConstant::E))
+    }
+
+    /// Imaginary unit (i) constant wrapped in `Arc`.
+    pub fn i_unit() -> Arc<Expr> {
+        Arc::new(Expr::Constant(SymbolicConstant::I))
+    }
+
     /// Returns `true` if this is a numeric zero.
     pub fn is_zero(&self) -> bool {
         match self {
             Expr::Integer(n) => n.is_zero(),
             Expr::Rational(r) => r.is_zero(),
             Expr::Float(f) => *f == 0.0,
+            Expr::Complex(c) => c.re == 0.0 && c.im == 0.0,
             _ => false,
         }
     }
@@ -270,6 +326,7 @@ impl Expr {
             Expr::Integer(n) => n.is_one(),
             Expr::Rational(r) => r.is_one(),
             Expr::Float(f) => *f == 1.0,
+            Expr::Complex(c) => c.re == 1.0 && c.im == 0.0,
             _ => false,
         }
     }
@@ -285,6 +342,18 @@ impl fmt::Display for Expr {
             Expr::Integer(n) => write!(f, "{n}"),
             Expr::Rational(r) => write!(f, "{r}"),
             Expr::Float(v) => write!(f, "{v}"),
+            Expr::Complex(c) => {
+                if c.im == 0.0 {
+                    write!(f, "{}", c.re)
+                } else if c.re == 0.0 {
+                    write!(f, "{}i", c.im)
+                } else if c.im < 0.0 {
+                    write!(f, "{}{}i", c.re, c.im)
+                } else {
+                    write!(f, "{}+{}i", c.re, c.im)
+                }
+            }
+            Expr::Constant(c) => write!(f, "{c}"),
             Expr::Symbol(s) => write!(f, "{s}"),
             Expr::Add(a) => write!(f, "({a})"),
             Expr::Mul(m) => write!(f, "({m})"),
@@ -804,5 +873,221 @@ mod tests {
         let f = Expr::Func(FuncId::Sin, vec![x]);
         assert!(!f.is_zero());
         assert!(!f.is_one());
+    }
+
+    // ── Complex tests ────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_complex_equality() {
+        let a = Expr::Complex(Complex64::new(1.0, 2.0));
+        let b = Expr::Complex(Complex64::new(1.0, 2.0));
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_complex_inequality() {
+        let a = Expr::Complex(Complex64::new(1.0, 2.0));
+        let b = Expr::Complex(Complex64::new(1.0, 3.0));
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn test_complex_nan_equality() {
+        let a = Expr::Complex(Complex64::new(f64::NAN, 0.0));
+        let b = Expr::Complex(Complex64::new(f64::NAN, 0.0));
+        // NaN bits are identical -> structural equality holds
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_complex_neg_zero() {
+        let a = Expr::Complex(Complex64::new(0.0, 0.0));
+        let b = Expr::Complex(Complex64::new(-0.0, 0.0));
+        // 0.0 and -0.0 have different bits -> structurally different
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn test_complex_hash_consistency() {
+        use std::collections::hash_map::DefaultHasher;
+        let a = Expr::Complex(Complex64::new(3.0, 4.0));
+        let b = Expr::Complex(Complex64::new(3.0, 4.0));
+        let ha = {
+            let mut h = DefaultHasher::new();
+            a.hash(&mut h);
+            h.finish()
+        };
+        let hb = {
+            let mut h = DefaultHasher::new();
+            b.hash(&mut h);
+            h.finish()
+        };
+        assert_eq!(ha, hb);
+    }
+
+    #[test]
+    fn test_complex_ordering_by_real() {
+        let a = Expr::Complex(Complex64::new(1.0, 5.0));
+        let b = Expr::Complex(Complex64::new(2.0, 0.0));
+        assert!(a < b);
+    }
+
+    #[test]
+    fn test_complex_ordering_by_imag_when_real_equal() {
+        let a = Expr::Complex(Complex64::new(1.0, 2.0));
+        let b = Expr::Complex(Complex64::new(1.0, 3.0));
+        assert!(a < b);
+    }
+
+    #[test]
+    fn test_complex_display_full() {
+        let e = Expr::Complex(Complex64::new(3.0, 4.0));
+        assert_eq!(e.to_string(), "3+4i");
+    }
+
+    #[test]
+    fn test_complex_display_negative_imag() {
+        let e = Expr::Complex(Complex64::new(3.0, -4.0));
+        assert_eq!(e.to_string(), "3-4i");
+    }
+
+    #[test]
+    fn test_complex_display_pure_real() {
+        let e = Expr::Complex(Complex64::new(5.0, 0.0));
+        assert_eq!(e.to_string(), "5");
+    }
+
+    #[test]
+    fn test_complex_display_pure_imaginary() {
+        let e = Expr::Complex(Complex64::new(0.0, 2.0));
+        assert_eq!(e.to_string(), "2i");
+    }
+
+    #[test]
+    fn test_complex_is_zero() {
+        assert!(Expr::Complex(Complex64::new(0.0, 0.0)).is_zero());
+        assert!(!Expr::Complex(Complex64::new(0.0, 1.0)).is_zero());
+        assert!(!Expr::Complex(Complex64::new(1.0, 0.0)).is_zero());
+    }
+
+    #[test]
+    fn test_complex_is_one() {
+        assert!(Expr::Complex(Complex64::new(1.0, 0.0)).is_one());
+        assert!(!Expr::Complex(Complex64::new(1.0, 1.0)).is_one());
+        assert!(!Expr::Complex(Complex64::new(0.0, 0.0)).is_one());
+    }
+
+    #[test]
+    fn test_complex_constructor() {
+        let c = Expr::complex(3.0, -1.0);
+        match c.as_ref() {
+            Expr::Complex(v) => {
+                assert_eq!(v.re, 3.0);
+                assert_eq!(v.im, -1.0);
+            }
+            _ => panic!("expected Complex"),
+        }
+    }
+
+    // ── Constant tests ───────────────────────────────────────────────────────
+
+    #[test]
+    fn test_constant_equality() {
+        let a = Expr::Constant(SymbolicConstant::Pi);
+        let b = Expr::Constant(SymbolicConstant::Pi);
+        assert_eq!(a, b);
+        let c = Expr::Constant(SymbolicConstant::E);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn test_constant_ordering() {
+        let pi = Expr::Constant(SymbolicConstant::Pi);
+        let e = Expr::Constant(SymbolicConstant::E);
+        let i = Expr::Constant(SymbolicConstant::I);
+        // Pi (0) < E (1) < I (2)
+        assert!(pi < e);
+        assert!(e < i);
+        assert!(pi < i);
+    }
+
+    #[test]
+    fn test_constant_display() {
+        assert_eq!(Expr::Constant(SymbolicConstant::Pi).to_string(), "π");
+        assert_eq!(Expr::Constant(SymbolicConstant::E).to_string(), "e");
+        assert_eq!(Expr::Constant(SymbolicConstant::I).to_string(), "i");
+    }
+
+    #[test]
+    fn test_constant_constructors() {
+        match Expr::pi().as_ref() {
+            Expr::Constant(SymbolicConstant::Pi) => {}
+            _ => panic!("expected Constant(Pi)"),
+        }
+        match Expr::e().as_ref() {
+            Expr::Constant(SymbolicConstant::E) => {}
+            _ => panic!("expected Constant(E)"),
+        }
+        match Expr::i_unit().as_ref() {
+            Expr::Constant(SymbolicConstant::I) => {}
+            _ => panic!("expected Constant(I)"),
+        }
+    }
+
+    #[test]
+    fn test_constant_is_not_zero_or_one() {
+        assert!(!Expr::pi().is_zero());
+        assert!(!Expr::pi().is_one());
+        assert!(!Expr::e().is_zero());
+        assert!(!Expr::e().is_one());
+    }
+
+    // ── ExprPool interning for new variants ──────────────────────────────────
+
+    #[test]
+    fn test_pool_complex_interning() {
+        let mut pool = ExprPool::new();
+        let a = pool.intern(Expr::Complex(Complex64::new(1.0, 2.0)));
+        let b = pool.intern(Expr::Complex(Complex64::new(1.0, 2.0)));
+        assert!(Arc::ptr_eq(&a, &b));
+    }
+
+    #[test]
+    fn test_pool_constant_interning() {
+        let mut pool = ExprPool::new();
+        let a = pool.intern(Expr::Constant(SymbolicConstant::Pi));
+        let b = pool.intern(Expr::Constant(SymbolicConstant::Pi));
+        assert!(Arc::ptr_eq(&a, &b));
+    }
+
+    #[test]
+    fn test_pool_different_constants_different_arcs() {
+        let mut pool = ExprPool::new();
+        let pi = pool.intern(Expr::Constant(SymbolicConstant::Pi));
+        let e = pool.intern(Expr::Constant(SymbolicConstant::E));
+        assert!(!Arc::ptr_eq(&pi, &e));
+    }
+
+    // ── Cross-variant ordering: Float < Complex < Constant < Symbol ──────────
+
+    #[test]
+    fn test_cross_variant_float_lt_complex() {
+        let f = Expr::Float(999.0);
+        let c = Expr::Complex(Complex64::new(0.0, 0.0));
+        assert!(f < c);
+    }
+
+    #[test]
+    fn test_cross_variant_complex_lt_constant() {
+        let c = Expr::Complex(Complex64::new(100.0, 100.0));
+        let k = Expr::Constant(SymbolicConstant::Pi);
+        assert!(c < k);
+    }
+
+    #[test]
+    fn test_cross_variant_constant_lt_symbol() {
+        let k = Expr::Constant(SymbolicConstant::I);
+        let s = Expr::Symbol(SymbolId::intern("cross_sym"));
+        assert!(k < s);
     }
 }

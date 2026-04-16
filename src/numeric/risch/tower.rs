@@ -152,7 +152,12 @@ pub fn build_tower(expr: &Arc<Expr>, var: SymbolId) -> Tower {
 /// transcendental generator appears at most once.
 fn collect_extensions(expr: &Arc<Expr>, logs: &mut Vec<Arc<Expr>>, exps: &mut Vec<Arc<Expr>>) {
     match expr.as_ref() {
-        Expr::Integer(_) | Expr::Rational(_) | Expr::Float(_) | Expr::Symbol(_) => {}
+        Expr::Integer(_)
+        | Expr::Rational(_)
+        | Expr::Float(_)
+        | Expr::Complex(_)
+        | Expr::Constant(_)
+        | Expr::Symbol(_) => {}
 
         Expr::Add(node) => {
             for (term, _) in &node.terms {
