@@ -3,11 +3,17 @@
 //! [`compile`] performs a structural translation, mapping each `Expression`
 //! variant to its `Expr` equivalent and using the smart constructors in
 //! [`normalize`] so the output is already in canonical form.
+//!
+//! [`decompile`] performs the inverse translation, mapping each `Expr` variant
+//! back to its `Expression` equivalent. Because `compile` normalizes expressions,
+//! the round-trip is semantically equivalent but may differ structurally.
 
-use crate::ast::{BinaryOp, Expression, Function, UnaryOp};
+use crate::ast::{BinaryOp, Expression, Function, UnaryOp, Variable};
 use crate::numeric::expr::{Expr, FuncId};
 use crate::numeric::normalize;
-use crate::numeric::{BigRational, SmallInt, SymbolId};
+use crate::numeric::{AddNode, BigRational, MulNode, SmallInt, SymbolId};
+use num::traits::{One, Zero};
+use num_rational::Rational64;
 use std::sync::Arc;
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -133,8 +139,236 @@ pub fn map_func_id(f: &Function) -> FuncId {
         // Pow → sentinel so compile() can route to normalize::pow
         Function::Pow => FuncId::Other(SymbolId::intern("__pow__")),
         Function::Custom(name) => FuncId::Other(SymbolId::intern(name)),
-        // Non-exhaustive guard: map any future variants to Other
+        // Non-exhaustive guard: map any future variants to Other.
+        #[allow(unreachable_patterns)]
         _ => FuncId::Other(SymbolId::intern("__unknown__")),
+    }
+}
+
+// ── Decompiler ────────────────────────────────────────────────────────────────
+
+/// Decompile a [`Expr`] back into a legacy [`Expression`].
+///
+/// This is the inverse of [`compile`]. It maps each `Expr` variant back to
+/// its `Expression` equivalent. Because `compile` normalizes expressions (e.g.
+/// folding constants, combining like terms), the round-trip is not guaranteed to
+/// be structurally identical, but will be semantically equivalent.
+///
+/// # Overflow handling
+///
+/// - `Integer`: if the [`SmallInt`] value exceeds `i64` range, falls back to 0.
+/// - `Rational`: if numerator or denominator exceeds `i64` range, falls back to
+///   `Expression::Float` using the rational's `to_f64()` approximation.
+/// - `Rational` with denominator 1 is returned as `Expression::Integer`.
+///
+/// # Examples
+///
+/// ```rust
+/// use thales::ast::{Expression, Variable, BinaryOp};
+/// use thales::numeric::compile::{compile, decompile};
+///
+/// let x = Expression::Variable(Variable::new("x"));
+/// let two = Expression::Integer(2);
+/// let sum = Expression::Binary(BinaryOp::Add, Box::new(x), Box::new(two));
+///
+/// let compiled = compile(&sum);
+/// let decompiled = decompile(&compiled);
+/// // decompiled is semantically equivalent to sum
+/// ```
+pub fn decompile(expr: &Expr) -> Expression {
+    match expr {
+        // ── Numeric literals ─────────────────────────────────────────────────
+        Expr::Integer(n) => Expression::Integer(n.to_i64().unwrap_or(0)),
+
+        Expr::Rational(r) => big_rational_to_expr(r),
+
+        Expr::Float(f) => Expression::Float(*f),
+
+        Expr::Complex(c) => Expression::Complex(*c),
+
+        // ── Symbolic constant ────────────────────────────────────────────────
+        Expr::Constant(c) => Expression::Constant(*c),
+
+        // ── Variable ─────────────────────────────────────────────────────────
+        Expr::Symbol(s) => Expression::Variable(Variable::new(s.as_str())),
+
+        // ── AddNode ──────────────────────────────────────────────────────────
+        Expr::Add(node) => decompile_add_node(node),
+
+        // ── MulNode ──────────────────────────────────────────────────────────
+        Expr::Mul(node) => decompile_mul_node(node),
+
+        // ── Power ────────────────────────────────────────────────────────────
+        Expr::Pow(base, exp) => {
+            Expression::Power(Box::new(decompile(base)), Box::new(decompile(exp)))
+        }
+
+        // ── Function ─────────────────────────────────────────────────────────
+        Expr::Func(id, args) => {
+            let f = reverse_map_func_id(id);
+            let decompiled_args: Vec<Expression> = args.iter().map(|a| decompile(a)).collect();
+            Expression::Function(f, decompiled_args)
+        }
+    }
+}
+
+/// Reverse-map a [`FuncId`] back to the corresponding [`Function`] variant.
+///
+/// [`FuncId::Other`] with name `"__pow__"` maps back to [`Function::Pow`].
+/// Any other [`FuncId::Other`] maps to [`Function::Custom`].
+pub fn reverse_map_func_id(id: &FuncId) -> Function {
+    match id {
+        FuncId::Sin => Function::Sin,
+        FuncId::Cos => Function::Cos,
+        FuncId::Tan => Function::Tan,
+        FuncId::Asin => Function::Asin,
+        FuncId::Acos => Function::Acos,
+        FuncId::Atan => Function::Atan,
+        FuncId::Atan2 => Function::Atan2,
+        FuncId::Sinh => Function::Sinh,
+        FuncId::Cosh => Function::Cosh,
+        FuncId::Tanh => Function::Tanh,
+        FuncId::Exp => Function::Exp,
+        FuncId::Ln => Function::Ln,
+        FuncId::Log => Function::Log,
+        FuncId::Log2 => Function::Log2,
+        FuncId::Log10 => Function::Log10,
+        FuncId::Sqrt => Function::Sqrt,
+        FuncId::Cbrt => Function::Cbrt,
+        FuncId::Floor => Function::Floor,
+        FuncId::Ceil => Function::Ceil,
+        FuncId::Round => Function::Round,
+        FuncId::Abs => Function::Abs,
+        FuncId::Sign => Function::Sign,
+        FuncId::Min => Function::Min,
+        FuncId::Max => Function::Max,
+        FuncId::Other(sym) => {
+            let name = sym.as_str();
+            if name == "__pow__" {
+                Function::Pow
+            } else {
+                Function::Custom(name)
+            }
+        }
+    }
+}
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+/// Convert a [`BigRational`] to an [`Expression`] literal.
+///
+/// Produces `Integer` for whole-number rationals (denom == 1), `Rational`
+/// when numerator and denominator both fit in `i64`, and `Float` as a last
+/// resort for values that overflow `i64`.
+fn big_rational_to_expr(r: &BigRational) -> Expression {
+    if r.is_integer() {
+        Expression::Integer(r.numer().to_i64().unwrap_or(0))
+    } else {
+        match (r.numer().to_i64(), r.denom().to_i64()) {
+            (Some(n), Some(d)) => Expression::Rational(Rational64::new(n, d)),
+            _ => Expression::Float(r.to_f64()),
+        }
+    }
+}
+
+/// Reconstruct an [`Expression`] from an [`AddNode`].
+///
+/// Layout: `constant + Σ(coeff_i · term_i)`.
+/// Zero-coefficient terms are excluded by invariant. The accumulator starts
+/// with the constant (if non-zero) or the first term, and additional terms
+/// are folded in as `Binary(Add, …)` / `Binary(Sub, …)` depending on sign.
+fn decompile_add_node(node: &AddNode) -> Expression {
+    let mut acc: Option<Expression> = None;
+
+    // Start with the constant part if it is non-zero.
+    if !node.constant.is_zero() {
+        acc = Some(big_rational_to_expr(&node.constant));
+    }
+
+    for (term, coeff) in &node.terms {
+        let term_expr = decompile(term);
+
+        // Build `coeff * term`, or just `term` / `-term` for ±1.
+        let scaled = if coeff.is_one() {
+            term_expr
+        } else if *coeff == BigRational::from(-1i64) {
+            Expression::Unary(UnaryOp::Neg, Box::new(term_expr))
+        } else {
+            let coeff_expr = big_rational_to_expr(coeff);
+            Expression::Binary(BinaryOp::Mul, Box::new(coeff_expr), Box::new(term_expr))
+        };
+
+        acc = Some(match acc {
+            None => scaled,
+            Some(prev) => {
+                // When `scaled` is a negation we can emit `prev - inner`
+                // instead of `prev + (-inner)` for readability.
+                if let Expression::Unary(UnaryOp::Neg, inner) = scaled {
+                    Expression::Binary(BinaryOp::Sub, Box::new(prev), inner)
+                } else {
+                    Expression::Binary(BinaryOp::Add, Box::new(prev), Box::new(scaled))
+                }
+            }
+        });
+    }
+
+    // Empty AddNode (all terms cancelled, constant also zero) → 0.
+    acc.unwrap_or(Expression::Integer(0))
+}
+
+/// Reconstruct an [`Expression`] from a [`MulNode`].
+///
+/// Layout: `coeff · Π(base_i ^ exp_i)`.
+/// The coefficient is prepended when it is not 1. Special-case: coeff == -1
+/// wraps the result in `Unary(Neg, …)`. Factors with exp == 1 contribute the
+/// base directly; exp == -1 produces `Binary(Div, acc, base)`; otherwise a
+/// `Power(base, exp)` node is inserted.
+fn decompile_mul_node(node: &MulNode) -> Expression {
+    let neg_one = BigRational::from(-1i64);
+
+    let mut acc: Option<Expression> = None;
+
+    // Fold in the coefficient, but handle -1 specially (applied at the end).
+    let coeff_is_neg_one = node.coeff == neg_one;
+    if !node.coeff.is_one() && !coeff_is_neg_one {
+        acc = Some(big_rational_to_expr(&node.coeff));
+    }
+
+    for (base, exp) in &node.factors {
+        let base_expr = decompile(base);
+        let exp_expr = decompile(exp);
+
+        if exp.is_one() {
+            // base^1 → just base
+            let factor = base_expr;
+            acc = Some(match acc {
+                None => factor,
+                Some(prev) => Expression::Binary(BinaryOp::Mul, Box::new(prev), Box::new(factor)),
+            });
+        } else if *exp.as_ref() == Expr::Integer(SmallInt::from(-1i64)) {
+            // base^(-1) → Division
+            let current = acc.take().unwrap_or(Expression::Integer(1));
+            acc = Some(Expression::Binary(
+                BinaryOp::Div,
+                Box::new(current),
+                Box::new(base_expr),
+            ));
+        } else {
+            let factor = Expression::Power(Box::new(base_expr), Box::new(exp_expr));
+            acc = Some(match acc {
+                None => factor,
+                Some(prev) => Expression::Binary(BinaryOp::Mul, Box::new(prev), Box::new(factor)),
+            });
+        }
+    }
+
+    let result = acc.unwrap_or(Expression::Integer(1));
+
+    // Apply the -1 coefficient as a wrapping negation.
+    if coeff_is_neg_one {
+        Expression::Unary(UnaryOp::Neg, Box::new(result))
+    } else {
+        result
     }
 }
 
@@ -641,5 +875,452 @@ mod tests {
         );
         let result = compile(&e);
         assert_eq!(*result, Expr::Symbol(SymbolId::intern("xi")));
+    }
+
+    // ── decompile: basic literals ─────────────────────────────────────────────
+
+    #[test]
+    fn decompile_integer() {
+        let expr = Expr::Integer(SmallInt::from(7i64));
+        assert_eq!(decompile(&expr), Expression::Integer(7));
+    }
+
+    #[test]
+    fn decompile_integer_negative() {
+        let expr = Expr::Integer(SmallInt::from(-42i64));
+        assert_eq!(decompile(&expr), Expression::Integer(-42));
+    }
+
+    #[test]
+    fn decompile_rational() {
+        let expr = Expr::Rational(BigRational::from_i64(3, 4));
+        assert_eq!(
+            decompile(&expr),
+            Expression::Rational(Rational64::new(3, 4))
+        );
+    }
+
+    #[test]
+    fn decompile_rational_integer_valued() {
+        // 6/3 normalizes to 2/1 inside BigRational; decompile should return Integer(2)
+        let expr = Expr::Rational(BigRational::from_i64(6, 3));
+        assert_eq!(decompile(&expr), Expression::Integer(2));
+    }
+
+    #[test]
+    fn decompile_float() {
+        let expr = Expr::Float(2.718);
+        assert_eq!(decompile(&expr), Expression::Float(2.718));
+    }
+
+    #[test]
+    fn decompile_complex() {
+        let c = Complex64::new(1.0, -2.0);
+        let expr = Expr::Complex(c);
+        assert_eq!(decompile(&expr), Expression::Complex(c));
+    }
+
+    #[test]
+    fn decompile_constant_pi() {
+        let expr = Expr::Constant(SymbolicConstant::Pi);
+        assert_eq!(decompile(&expr), Expression::Constant(SymbolicConstant::Pi));
+    }
+
+    #[test]
+    fn decompile_constant_e() {
+        let expr = Expr::Constant(SymbolicConstant::E);
+        assert_eq!(decompile(&expr), Expression::Constant(SymbolicConstant::E));
+    }
+
+    #[test]
+    fn decompile_symbol() {
+        let expr = Expr::Symbol(SymbolId::intern("alpha"));
+        assert_eq!(
+            decompile(&expr),
+            Expression::Variable(Variable::new("alpha"))
+        );
+    }
+
+    // ── decompile: Pow ────────────────────────────────────────────────────────
+
+    #[test]
+    fn decompile_pow() {
+        let base = Arc::new(Expr::Symbol(SymbolId::intern("xpow")));
+        let exp = Arc::new(Expr::Integer(SmallInt::from(3i64)));
+        let expr = Expr::Pow(base, exp);
+        match decompile(&expr) {
+            Expression::Power(b, e) => {
+                assert_eq!(*b, Expression::Variable(Variable::new("xpow")));
+                assert_eq!(*e, Expression::Integer(3));
+            }
+            other => panic!("expected Power, got {other:?}"),
+        }
+    }
+
+    // ── decompile: Func ───────────────────────────────────────────────────────
+
+    #[test]
+    fn decompile_func_sin() {
+        let arg = Arc::new(Expr::Symbol(SymbolId::intern("xsin")));
+        let expr = Expr::Func(FuncId::Sin, vec![arg]);
+        match decompile(&expr) {
+            Expression::Function(Function::Sin, args) => assert_eq!(args.len(), 1),
+            other => panic!("expected Function(Sin, ...), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decompile_func_ln() {
+        let arg = Arc::new(Expr::Symbol(SymbolId::intern("xln")));
+        let expr = Expr::Func(FuncId::Ln, vec![arg]);
+        match decompile(&expr) {
+            Expression::Function(Function::Ln, _) => {}
+            other => panic!("expected Function(Ln, ...), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decompile_func_abs() {
+        let arg = Arc::new(Expr::Integer(SmallInt::from(-5i64)));
+        let expr = Expr::Func(FuncId::Abs, vec![arg]);
+        match decompile(&expr) {
+            Expression::Function(Function::Abs, args) => assert_eq!(args.len(), 1),
+            other => panic!("expected Function(Abs, ...), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decompile_func_custom() {
+        let arg = Arc::new(Expr::Integer(SmallInt::from(1i64)));
+        let expr = Expr::Func(FuncId::Other(SymbolId::intern("my_fn")), vec![arg]);
+        match decompile(&expr) {
+            Expression::Function(Function::Custom(name), _) => {
+                assert_eq!(name, "my_fn");
+            }
+            other => panic!("expected Function(Custom(my_fn), ...), got {other:?}"),
+        }
+    }
+
+    // ── decompile: AddNode ────────────────────────────────────────────────────
+
+    #[test]
+    fn decompile_add_constant_only() {
+        let node = AddNode::from_constant(BigRational::from(5i64));
+        let expr = Expr::Add(node);
+        assert_eq!(decompile(&expr), Expression::Integer(5));
+    }
+
+    #[test]
+    fn decompile_add_single_term_coeff_one() {
+        // AddNode: 0 + 1*x → x
+        let x = Arc::new(Expr::Symbol(SymbolId::intern("xadd1")));
+        let node = AddNode::from_term(x, BigRational::from(1i64));
+        let expr = Expr::Add(node);
+        match decompile(&expr) {
+            Expression::Variable(v) => assert_eq!(v.name, "xadd1"),
+            other => panic!("expected Variable, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decompile_add_single_term_coeff_neg_one() {
+        // AddNode: 0 + (-1)*x → -x (Unary Neg)
+        let x = Arc::new(Expr::Symbol(SymbolId::intern("xaddneg")));
+        let node = AddNode::from_term(x, BigRational::from(-1i64));
+        let expr = Expr::Add(node);
+        match decompile(&expr) {
+            Expression::Unary(UnaryOp::Neg, _) => {}
+            other => panic!("expected Unary(Neg, ...), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decompile_add_two_terms() {
+        // AddNode: x + y — result contains both variable names
+        let x = Arc::new(Expr::Symbol(SymbolId::intern("xadd2a")));
+        let y = Arc::new(Expr::Symbol(SymbolId::intern("xadd2b")));
+        let mut node = AddNode::from_term(x, BigRational::from(1i64));
+        node.add_term(y, BigRational::from(1i64));
+        let expr = Expr::Add(node);
+        let result = decompile(&expr);
+        let s = format!("{result:?}");
+        assert!(s.contains("xadd2a"), "missing xadd2a in {s}");
+        assert!(s.contains("xadd2b"), "missing xadd2b in {s}");
+    }
+
+    #[test]
+    fn decompile_add_with_negative_coeff_gives_sub() {
+        // AddNode: 3 + (-1)*x → Sub(3, x)
+        let x = Arc::new(Expr::Symbol(SymbolId::intern("xaddsub")));
+        let mut node = AddNode::from_constant(BigRational::from(3i64));
+        node.add_term(x, BigRational::from(-1i64));
+        let expr = Expr::Add(node);
+        match decompile(&expr) {
+            Expression::Binary(BinaryOp::Sub, lhs, _) => {
+                assert_eq!(*lhs, Expression::Integer(3));
+            }
+            other => panic!("expected Binary(Sub, ...), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decompile_add_with_coeff_two() {
+        // AddNode: 2*x → Binary(Mul, 2, x)
+        let x = Arc::new(Expr::Symbol(SymbolId::intern("xaddmul")));
+        let node = AddNode::from_term(x, BigRational::from(2i64));
+        let expr = Expr::Add(node);
+        match decompile(&expr) {
+            Expression::Binary(BinaryOp::Mul, coeff, var) => {
+                assert_eq!(*coeff, Expression::Integer(2));
+                assert_eq!(*var, Expression::Variable(Variable::new("xaddmul")));
+            }
+            other => panic!("expected Binary(Mul, 2, x), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decompile_add_empty_node_is_zero() {
+        let expr = Expr::Add(AddNode::zero());
+        assert_eq!(decompile(&expr), Expression::Integer(0));
+    }
+
+    // ── decompile: MulNode ────────────────────────────────────────────────────
+
+    #[test]
+    fn decompile_mul_coeff_only() {
+        // MulNode with only coeff 7 (no factors) → Integer(7)
+        let node = MulNode::from_coeff(BigRational::from(7i64));
+        let expr = Expr::Mul(node);
+        assert_eq!(decompile(&expr), Expression::Integer(7));
+    }
+
+    #[test]
+    fn decompile_mul_single_factor_exp_one() {
+        // MulNode: 1 * x^1 → x
+        let x = Arc::new(Expr::Symbol(SymbolId::intern("xmul1")));
+        let node = MulNode::from_factor(x, Arc::new(Expr::Integer(SmallInt::from(1i64))));
+        let expr = Expr::Mul(node);
+        match decompile(&expr) {
+            Expression::Variable(v) => assert_eq!(v.name, "xmul1"),
+            other => panic!("expected Variable, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decompile_mul_single_factor_exp_neg_one_gives_div() {
+        // MulNode: 1 * x^(-1) → Div(1, x)
+        let x = Arc::new(Expr::Symbol(SymbolId::intern("xdiv")));
+        let node = MulNode::from_factor(x, Arc::new(Expr::Integer(SmallInt::from(-1i64))));
+        let expr = Expr::Mul(node);
+        match decompile(&expr) {
+            Expression::Binary(BinaryOp::Div, lhs, rhs) => {
+                assert_eq!(*lhs, Expression::Integer(1));
+                assert_eq!(*rhs, Expression::Variable(Variable::new("xdiv")));
+            }
+            other => panic!("expected Binary(Div, 1, x), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decompile_mul_neg_one_coeff_gives_neg() {
+        // MulNode: -1 * x → Unary(Neg, x)
+        let x = Arc::new(Expr::Symbol(SymbolId::intern("xmulneg")));
+        let node = MulNode::from_coeff_and_base(BigRational::from(-1i64), x);
+        let expr = Expr::Mul(node);
+        match decompile(&expr) {
+            Expression::Unary(UnaryOp::Neg, _) => {}
+            other => panic!("expected Unary(Neg, ...), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decompile_mul_two_factors() {
+        // MulNode: x * y
+        let x = Arc::new(Expr::Symbol(SymbolId::intern("xmul2a")));
+        let y = Arc::new(Expr::Symbol(SymbolId::intern("xmul2b")));
+        let mut node = MulNode::from_factor(x, Arc::new(Expr::Integer(SmallInt::from(1i64))));
+        node.add_factor(y, Arc::new(Expr::Integer(SmallInt::from(1i64))));
+        let expr = Expr::Mul(node);
+        let result = decompile(&expr);
+        let s = format!("{result:?}");
+        assert!(s.contains("xmul2a"), "missing xmul2a in {s}");
+        assert!(s.contains("xmul2b"), "missing xmul2b in {s}");
+    }
+
+    #[test]
+    fn decompile_mul_factor_with_exp_two_gives_power() {
+        // MulNode: x^2 → Power(x, 2)
+        let x = Arc::new(Expr::Symbol(SymbolId::intern("xpow2")));
+        let node = MulNode::from_factor(x, Arc::new(Expr::Integer(SmallInt::from(2i64))));
+        let expr = Expr::Mul(node);
+        match decompile(&expr) {
+            Expression::Power(base, exp) => {
+                assert_eq!(*base, Expression::Variable(Variable::new("xpow2")));
+                assert_eq!(*exp, Expression::Integer(2));
+            }
+            other => panic!("expected Power, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decompile_mul_empty_node_is_one() {
+        let expr = Expr::Mul(MulNode::one());
+        assert_eq!(decompile(&expr), Expression::Integer(1));
+    }
+
+    // ── decompile: reverse_map_func_id ───────────────────────────────────────
+
+    #[test]
+    fn reverse_map_func_id_all_direct() {
+        assert_eq!(reverse_map_func_id(&FuncId::Sin), Function::Sin);
+        assert_eq!(reverse_map_func_id(&FuncId::Cos), Function::Cos);
+        assert_eq!(reverse_map_func_id(&FuncId::Tan), Function::Tan);
+        assert_eq!(reverse_map_func_id(&FuncId::Asin), Function::Asin);
+        assert_eq!(reverse_map_func_id(&FuncId::Acos), Function::Acos);
+        assert_eq!(reverse_map_func_id(&FuncId::Atan), Function::Atan);
+        assert_eq!(reverse_map_func_id(&FuncId::Atan2), Function::Atan2);
+        assert_eq!(reverse_map_func_id(&FuncId::Sinh), Function::Sinh);
+        assert_eq!(reverse_map_func_id(&FuncId::Cosh), Function::Cosh);
+        assert_eq!(reverse_map_func_id(&FuncId::Tanh), Function::Tanh);
+        assert_eq!(reverse_map_func_id(&FuncId::Exp), Function::Exp);
+        assert_eq!(reverse_map_func_id(&FuncId::Ln), Function::Ln);
+        assert_eq!(reverse_map_func_id(&FuncId::Log), Function::Log);
+        assert_eq!(reverse_map_func_id(&FuncId::Log2), Function::Log2);
+        assert_eq!(reverse_map_func_id(&FuncId::Log10), Function::Log10);
+        assert_eq!(reverse_map_func_id(&FuncId::Sqrt), Function::Sqrt);
+        assert_eq!(reverse_map_func_id(&FuncId::Cbrt), Function::Cbrt);
+        assert_eq!(reverse_map_func_id(&FuncId::Floor), Function::Floor);
+        assert_eq!(reverse_map_func_id(&FuncId::Ceil), Function::Ceil);
+        assert_eq!(reverse_map_func_id(&FuncId::Round), Function::Round);
+        assert_eq!(reverse_map_func_id(&FuncId::Abs), Function::Abs);
+        assert_eq!(reverse_map_func_id(&FuncId::Sign), Function::Sign);
+        assert_eq!(reverse_map_func_id(&FuncId::Min), Function::Min);
+        assert_eq!(reverse_map_func_id(&FuncId::Max), Function::Max);
+    }
+
+    #[test]
+    fn reverse_map_func_id_pow_sentinel() {
+        assert_eq!(
+            reverse_map_func_id(&FuncId::Other(SymbolId::intern("__pow__"))),
+            Function::Pow
+        );
+    }
+
+    #[test]
+    fn reverse_map_func_id_custom() {
+        assert_eq!(
+            reverse_map_func_id(&FuncId::Other(SymbolId::intern("foo_bar"))),
+            Function::Custom("foo_bar".to_string())
+        );
+    }
+
+    // ── round-trip tests (compile → decompile) ────────────────────────────────
+
+    fn eval(e: &Expression) -> Option<f64> {
+        use std::collections::HashMap;
+        e.evaluate(&HashMap::new())
+    }
+
+    #[test]
+    fn roundtrip_integer() {
+        let original = Expression::Integer(13);
+        let compiled = compile(&original);
+        let back = decompile(&compiled);
+        assert_eq!(eval(&back), eval(&original));
+    }
+
+    #[test]
+    fn roundtrip_rational() {
+        let original = Expression::Rational(Rational64::new(1, 4));
+        let compiled = compile(&original);
+        let back = decompile(&compiled);
+        let orig_val = eval(&original).unwrap();
+        let back_val = eval(&back).unwrap();
+        assert!(
+            (orig_val - back_val).abs() < 1e-14,
+            "{orig_val} vs {back_val}"
+        );
+    }
+
+    #[test]
+    fn roundtrip_float() {
+        let original = Expression::Float(1.5);
+        let compiled = compile(&original);
+        let back = decompile(&compiled);
+        assert_eq!(eval(&back), eval(&original));
+    }
+
+    #[test]
+    fn roundtrip_constant_pi() {
+        let original = Expression::Constant(SymbolicConstant::Pi);
+        let compiled = compile(&original);
+        let back = decompile(&compiled);
+        assert_eq!(eval(&back), eval(&original));
+    }
+
+    #[test]
+    fn roundtrip_power_two_cubed() {
+        // 2^3 normalizes to Integer(8) in compile; decompile gives Integer(8)
+        let original = Expression::Power(
+            Box::new(Expression::Integer(2)),
+            Box::new(Expression::Integer(3)),
+        );
+        let compiled = compile(&original);
+        let back = decompile(&compiled);
+        assert_eq!(eval(&back), Some(8.0));
+    }
+
+    #[test]
+    fn roundtrip_add_two_constants() {
+        // 3 + 4 = 7
+        let original = Expression::Binary(
+            BinaryOp::Add,
+            Box::new(Expression::Integer(3)),
+            Box::new(Expression::Integer(4)),
+        );
+        let compiled = compile(&original);
+        let back = decompile(&compiled);
+        assert_eq!(eval(&back), Some(7.0));
+    }
+
+    #[test]
+    fn roundtrip_mul_two_constants() {
+        // 3 * 4 = 12
+        let original = Expression::Binary(
+            BinaryOp::Mul,
+            Box::new(Expression::Integer(3)),
+            Box::new(Expression::Integer(4)),
+        );
+        let compiled = compile(&original);
+        let back = decompile(&compiled);
+        assert_eq!(eval(&back), Some(12.0));
+    }
+
+    #[test]
+    fn roundtrip_sin_of_constant() {
+        // sin(0) = 0
+        let original = Expression::Function(Function::Sin, vec![Expression::Integer(0)]);
+        let compiled = compile(&original);
+        let back = decompile(&compiled);
+        let v = eval(&back).unwrap();
+        assert!(v.abs() < 1e-14, "sin(0) should be 0, got {v}");
+    }
+
+    #[test]
+    fn roundtrip_nested_expr() {
+        // (2 + 3) * 4 = 20
+        let sum = Expression::Binary(
+            BinaryOp::Add,
+            Box::new(Expression::Integer(2)),
+            Box::new(Expression::Integer(3)),
+        );
+        let original = Expression::Binary(
+            BinaryOp::Mul,
+            Box::new(sum),
+            Box::new(Expression::Integer(4)),
+        );
+        let compiled = compile(&original);
+        let back = decompile(&compiled);
+        assert_eq!(eval(&back), Some(20.0));
     }
 }
