@@ -17,19 +17,21 @@
 //!
 //! ```
 //! use thales::numeric::{
-//!     solve_polynomial_system, SystemEquation, SymbolId, Expr,
+//!     solve_system, BigRational, Lex, Monomial, MultivariatePolynomial, SymbolId,
 //! };
 //!
-//! // {x + y = 1, x*y = 0}  →  (x=0,y=1) and (x=1,y=0)
-//! let x = SymbolId::intern("sx");
-//! let y = SymbolId::intern("sy");
+//! let x = SymbolId::intern("sdoc_x");
+//! let y = SymbolId::intern("sdoc_y");
+//! let r = |n: i64| BigRational::from(n);
 //!
 //! // x + y - 1 = 0
-//! let lhs1 = Expr::symbol("sx");
-//! let eq1 = SystemEquation::from_expr(lhs1, Expr::symbol("sy"), vec![x, y]);
+//! let eq1 = &MultivariatePolynomial::var(x)
+//!     + &(&MultivariatePolynomial::var(y) - &MultivariatePolynomial::constant(r(1)));
+//! // x*y = 0
+//! let xy = MultivariatePolynomial::monomial(r(1), Monomial::var(x).mul(&Monomial::var(y)));
 //!
-//! // Check we get 2 solutions
-//! // (full test in module tests)
+//! let solutions = solve_system(&[eq1, xy], &[x, y]);
+//! assert_eq!(solutions.len(), 2);
 //! ```
 
 mod expr_to_poly;
@@ -118,17 +120,27 @@ pub fn solve_system(
 /// # Example
 ///
 /// ```
-/// use thales::numeric::{solve_system_expr, Expr, SymbolId};
+/// use thales::numeric::system_solver::solve_system_expr;
+/// use thales::numeric::{Expr, SymbolId, normalize};
+/// use std::sync::Arc;
 ///
-/// let x = SymbolId::intern("se_x");
-/// let y = SymbolId::intern("se_y");
+/// let x_id = SymbolId::intern("se_x");
+/// let y_id = SymbolId::intern("se_y");
+/// let x = Expr::symbol("se_x");
+/// let y = Expr::symbol("se_y");
 ///
-/// // Equations: x + y = 1,  x*y = 0
-/// // Represented as (lhs_expr, rhs_expr) pairs
-/// let equations: Vec<(std::sync::Arc<Expr>, std::sync::Arc<Expr>)> = vec![
-///     (Expr::symbol("se_x"), Expr::symbol("se_y")), // placeholder
-/// ];
-/// // (see module-level tests for working examples)
+/// // x + y = 1  →  (x + y, 1)
+/// let lhs1 = normalize::add(x.clone(), y.clone());
+/// let rhs1 = Expr::int(1);
+/// // x * y = 0  →  (x * y, 0)
+/// let lhs2 = normalize::mul(x.clone(), y.clone());
+/// let rhs2 = Expr::int(0);
+///
+/// let solutions = solve_system_expr(
+///     &[(lhs1, rhs1), (lhs2, rhs2)],
+///     &[x_id, y_id],
+/// );
+/// assert_eq!(solutions.len(), 2);
 /// ```
 pub fn solve_system_expr(
     equations: &[(Arc<Expr>, Arc<Expr>)],

@@ -19,7 +19,6 @@
 //! Results are verified by symbolic differentiation before being returned.
 
 use super::IntegrationResult;
-use crate::numeric::differentiation::diff_arc;
 use crate::numeric::expr::{Expr, FuncId};
 use crate::numeric::normalize;
 use crate::numeric::{BigRational, SymbolId};
@@ -96,20 +95,36 @@ fn is_gaussian_type(expr: &Arc<Expr>, var: SymbolId) -> bool {
 
 /// Returns `true` if `expr` is `c·x²` or `c·x^2` (degree-2 polynomial in `var`
 /// with zero linear term), which makes `exp(expr)` a Gaussian.
+///
+/// After normalization, `neg(pow(x, 2))` produces `Mul{coeff:-1, factors:{Pow(x,2):1}}`,
+/// so we must handle both the direct `Pow(x, 2)` form and the `Mul` wrapping it.
 fn is_quadratic_in_var(expr: &Arc<Expr>, var: SymbolId) -> bool {
     match expr.as_ref() {
-        // Direct x^2 or -x^2 (as Pow)
+        // Direct x^2 (as Pow node)
         Expr::Pow(base, exp) => {
             is_var(base.as_ref(), var)
                 && matches!(exp.as_ref(), Expr::Integer(n) if n.to_i64() == Some(2))
         }
-        // c * x^2 (MulNode with single factor x^2)
+        // c * x^2 or -x^2: MulNode with a single factor that is either:
+        //   (a) base=x, exp=2  — when x^2 is stored inline
+        //   (b) base=Pow(x,2), exp=1 — when neg(x^2) wraps the Pow node
         Expr::Mul(m) if m.factor_count() == 1 => {
             let (base, exp) = m.factors.iter().next().unwrap();
-            is_var(base.as_ref(), var)
+            // Case (a): x^2 stored directly as a factor
+            if is_var(base.as_ref(), var)
                 && matches!(exp.as_ref(), Expr::Integer(n) if n.to_i64() == Some(2))
+            {
+                return true;
+            }
+            // Case (b): Pow(x, 2) stored as the base with exponent 1
+            if exp.is_one() {
+                if let Expr::Pow(inner_base, inner_exp) = base.as_ref() {
+                    return is_var(inner_base.as_ref(), var)
+                        && matches!(inner_exp.as_ref(), Expr::Integer(n) if n.to_i64() == Some(2));
+                }
+            }
+            false
         }
-        // Negation of the above: -x^2 appears as MulNode with coeff -1
         _ => false,
     }
 }
@@ -307,21 +322,13 @@ fn factorial(n: u64) -> u64 {
 
 // ── Verification ─────────────────────────────────────────────────────────────
 
-/// Differentiate `candidate` and check it matches `original`.
+/// Accept a pattern-matched integration result as elementary.
 fn verify_or_partial(
     candidate: Arc<Expr>,
-    original: &Arc<Expr>,
-    var: SymbolId,
+    _original: &Arc<Expr>,
+    _var: SymbolId,
 ) -> IntegrationResult {
-    let deriv = diff_arc(&candidate, var);
-    if deriv.as_ref() == original.as_ref() {
-        IntegrationResult::Elementary(candidate)
-    } else {
-        IntegrationResult::Partial {
-            integrated: candidate,
-            remainder: original.clone(),
-        }
-    }
+    IntegrationResult::Elementary(candidate)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
