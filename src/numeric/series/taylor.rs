@@ -18,9 +18,7 @@ use num::traits::{One, Zero};
 use super::super::{
     differentiation::diff_arc,
     expr::{Expr, FuncId},
-    normalize,
-    ring::Ring,
-    SymbolId,
+    normalize, SymbolId,
 };
 use super::TaylorSeries;
 
