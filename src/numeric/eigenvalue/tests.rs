@@ -3,6 +3,7 @@ mod tests {
     use super::super::extract::collect_poly_coeffs;
     use super::super::*;
     use crate::numeric::expr::Expr;
+    use num::traits::{One, Zero};
 
     fn int_entry(n: i64) -> Arc<Expr> {
         Expr::int(n)
