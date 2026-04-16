@@ -12,6 +12,7 @@
 //! - [`ExprPool`] — hash-consing pool for common sub-expression elimination
 
 mod big_rational;
+pub mod compile;
 pub mod expr;
 pub mod ring;
 mod small_int;
@@ -23,6 +24,7 @@ mod compute_ctx;
 mod dense_poly;
 pub mod differentiation;
 pub mod eigenvalue;
+pub mod evaluation;
 mod f4;
 mod finite_field_factor;
 mod groebner;
@@ -49,6 +51,7 @@ pub mod rewrite;
 pub mod risch;
 mod rothstein_trager;
 pub mod series;
+pub mod simplify;
 mod solution_set;
 mod sparse_poly;
 pub mod system_solver;
@@ -89,6 +92,7 @@ pub use rothstein_trager::{
     integrate_rational_log, rothstein_trager, rothstein_trager_from_hermite, LogIntegral, LogTerm,
 };
 pub use series::{taylor, TaylorSeries};
+pub use simplify::simplify;
 pub use small_int::SmallInt;
 pub use solution_set::{Constraint, IntervalBound, SolutionSet};
 pub use sparse_poly::SparsePolynomial;
