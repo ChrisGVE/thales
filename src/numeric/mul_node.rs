@@ -197,27 +197,75 @@ impl Ord for MulNode {
 
 impl fmt::Display for MulNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use super::expr::{fmt_maybe_paren, needs_parens_as_mul_factor, needs_parens_as_pow_base};
+
         if self.is_zero() {
             return write!(f, "0");
         }
 
-        let mut first = true;
-
-        if !self.coeff.is_one() || self.factors.is_empty() {
-            write!(f, "{}", self.coeff)?;
-            first = false;
-        }
+        // Split factors into numerator (exponent != -1) and denominator
+        // (integer exponent == -1, rendered after "/").
+        let mut numer_parts: Vec<(&Arc<Expr>, &Arc<Expr>)> = Vec::new();
+        let mut denom_parts: Vec<&Arc<Expr>> = Vec::new();
 
         for (base, exp) in &self.factors {
-            if !first {
+            if matches!(exp.as_ref(), Expr::Integer(n) if *n == super::SmallInt::from(-1i64)) {
+                denom_parts.push(base);
+            } else {
+                numer_parts.push((base, exp));
+            }
+        }
+
+        let neg_one = BigRational::from(-1i64);
+        let coeff_is_one = self.coeff.is_one();
+        let coeff_is_neg_one = self.coeff == neg_one;
+        let has_any_factors = !numer_parts.is_empty() || !denom_parts.is_empty();
+
+        // `printed_something` tracks whether a token requiring "*" before the
+        // next factor has been written.  A bare "-" does NOT count — it fuses
+        // directly with the following factor.
+        let mut printed_something = false;
+
+        if coeff_is_neg_one && !numer_parts.is_empty() {
+            write!(f, "-")?;
+        } else if !coeff_is_one || !has_any_factors {
+            write!(f, "{}", self.coeff)?;
+            printed_something = true;
+        }
+
+        for (base, exp) in &numer_parts {
+            if printed_something {
                 write!(f, "*")?;
             }
             if exp.is_one() {
-                write!(f, "{base}")?;
+                let wrap = needs_parens_as_mul_factor(base);
+                fmt_maybe_paren(base, wrap, f)?;
             } else {
-                write!(f, "{base}^{exp}")?;
+                let wrap_base = needs_parens_as_pow_base(base);
+                let wrap_exp =
+                    matches!(exp.as_ref(), Expr::Add(_) | Expr::Mul(_) | Expr::Pow(_, _));
+                fmt_maybe_paren(base, wrap_base, f)?;
+                write!(f, "^")?;
+                fmt_maybe_paren(exp, wrap_exp, f)?;
             }
-            first = false;
+            printed_something = true;
+        }
+
+        if !denom_parts.is_empty() {
+            write!(f, "/")?;
+            if denom_parts.len() == 1 {
+                let base = denom_parts[0];
+                fmt_maybe_paren(base, needs_parens_as_mul_factor(base), f)?;
+            } else {
+                write!(f, "(")?;
+                for (i, base) in denom_parts.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, "*")?;
+                    }
+                    fmt_maybe_paren(base, needs_parens_as_mul_factor(base), f)?;
+                }
+                write!(f, ")")?;
+            }
         }
 
         Ok(())
@@ -337,5 +385,70 @@ mod tests {
         let a = MulNode::from_coeff(BigRational::from(1i64));
         let b = MulNode::from_coeff(BigRational::from(2i64));
         assert!(a < b);
+    }
+
+    // ── Display improvement tests ────────────────────────────────────────────
+
+    /// `2*x` should display as `2x` (no explicit `*` between coeff and symbol).
+    #[test]
+    fn test_display_coeff_times_symbol() {
+        let x = sym("mul_disp2_x");
+        let node = MulNode::from_coeff_and_base(BigRational::from(2i64), x);
+        assert_eq!(node.to_string(), "2x");
+    }
+
+    /// `(-1)*x` should display as `-x`.
+    #[test]
+    fn test_display_neg_one_coeff() {
+        let x = sym("mul_disp_neg1_x");
+        let node = MulNode::from_coeff_and_base(BigRational::from(-1i64), x);
+        assert_eq!(node.to_string(), "-x");
+    }
+
+    /// `(-2)*x` should display as `-2x`.
+    #[test]
+    fn test_display_neg_coeff() {
+        let x = sym("mul_disp_neg2_x");
+        let node = MulNode::from_coeff_and_base(BigRational::from(-2i64), x);
+        assert_eq!(node.to_string(), "-2x");
+    }
+
+    /// `x * y^(-1)` should display as `x/y`.
+    #[test]
+    fn test_display_division() {
+        let x = sym("mul_div_x");
+        let y = sym("mul_div_y");
+        let mut node = MulNode::from_factor(x, int_exp(1));
+        node.add_factor(y, int_exp(-1));
+        assert_eq!(node.to_string(), "x/y");
+    }
+
+    /// `x^2` (coeff=1, single factor with exp=2) should display as `x^2`.
+    #[test]
+    fn test_display_power() {
+        let x = sym("mul_pow_x");
+        let node = MulNode::from_factor(x, int_exp(2));
+        assert_eq!(node.to_string(), "x^2");
+    }
+
+    /// `1/x` (coeff=1, x^-1) should display as `1/x`.
+    #[test]
+    fn test_display_reciprocal_only() {
+        let x = sym("mul_recip_disp_x");
+        let node = MulNode::from_factor(x, int_exp(-1));
+        assert_eq!(node.to_string(), "1/x");
+    }
+
+    /// `x / (y*z)` should display as `x/(y*z)`.
+    #[test]
+    fn test_display_multi_denom() {
+        let x = sym("mul_md_x");
+        let y = sym("mul_md_y");
+        let z = sym("mul_md_z");
+        let mut node = MulNode::from_factor(x, int_exp(1));
+        node.add_factor(y, int_exp(-1));
+        node.add_factor(z, int_exp(-1));
+        let s = node.to_string();
+        assert!(s.contains("/("), "expected grouped denominator, got: {s}");
     }
 }

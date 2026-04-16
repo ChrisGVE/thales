@@ -1323,4 +1323,422 @@ mod tests {
         let back = decompile(&compiled);
         assert_eq!(eval(&back), Some(20.0));
     }
+
+    // ── compile_then_eval_matches ─────────────────────────────────────────────
+
+    /// Evaluate `expr` with both evaluators using identical variable bindings and
+    /// assert the results agree within `epsilon`.
+    fn assert_eval_match(expr: &Expression, str_bindings: &[(&str, f64)], epsilon: f64) {
+        use crate::numeric::evaluation::evaluate as eval_new;
+        use std::collections::HashMap;
+
+        // Build string-keyed map for old evaluator.
+        let mut old_map: HashMap<String, f64> = HashMap::new();
+        // Build SymbolId-keyed map for new evaluator.
+        let mut new_map: HashMap<SymbolId, f64> = HashMap::new();
+        for (name, val) in str_bindings {
+            old_map.insert(name.to_string(), *val);
+            new_map.insert(SymbolId::intern(name), *val);
+        }
+
+        let old_val = expr
+            .evaluate(&old_map)
+            .expect("old evaluator returned None");
+        let compiled = compile(expr);
+        let new_val = eval_new(&compiled, &new_map).expect("new evaluator returned None");
+
+        assert!(
+            (old_val - new_val).abs() < epsilon,
+            "compile_then_eval mismatch: old={old_val} new={new_val} (expr={expr:?})"
+        );
+    }
+
+    #[test]
+    fn compile_then_eval_simple_sum() {
+        // x + 2 with x=3 → 5.0
+        let x = Expression::Variable(Variable::new("rt_x"));
+        let expr = Expression::Binary(BinaryOp::Add, Box::new(x), Box::new(Expression::Integer(2)));
+        assert_eval_match(&expr, &[("rt_x", 3.0)], 1e-10);
+    }
+
+    #[test]
+    fn compile_then_eval_polynomial() {
+        // x^2 - 3*x + 2 with x=5 → 12.0
+        let x = Expression::Variable(Variable::new("rt_p"));
+        let x_sq = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(2)));
+        let three_x = Expression::Binary(
+            BinaryOp::Mul,
+            Box::new(Expression::Integer(3)),
+            Box::new(x.clone()),
+        );
+        let minus_three_x = Expression::Binary(BinaryOp::Sub, Box::new(x_sq), Box::new(three_x));
+        let expr = Expression::Binary(
+            BinaryOp::Add,
+            Box::new(minus_three_x),
+            Box::new(Expression::Integer(2)),
+        );
+        assert_eval_match(&expr, &[("rt_p", 5.0)], 1e-10);
+    }
+
+    #[test]
+    fn compile_then_eval_transcendental() {
+        // sin(x) + cos(x) with x = π/4
+        let x = Expression::Variable(Variable::new("rt_t"));
+        let sin_x = Expression::Function(Function::Sin, vec![x.clone()]);
+        let cos_x = Expression::Function(Function::Cos, vec![x]);
+        let expr = Expression::Binary(BinaryOp::Add, Box::new(sin_x), Box::new(cos_x));
+        assert_eval_match(&expr, &[("rt_t", std::f64::consts::FRAC_PI_4)], 1e-10);
+    }
+
+    #[test]
+    fn compile_then_eval_ln_exp_nested() {
+        // ln(exp(x)) with x=2 → 2.0
+        let x = Expression::Variable(Variable::new("rt_le"));
+        let exp_x = Expression::Function(Function::Exp, vec![x]);
+        let expr = Expression::Function(Function::Ln, vec![exp_x]);
+        assert_eval_match(&expr, &[("rt_le", 2.0)], 1e-10);
+    }
+
+    #[test]
+    fn compile_then_eval_division() {
+        // (x + 1) / (x - 1) with x=3 → 2.0
+        let x = Expression::Variable(Variable::new("rt_div"));
+        let numer = Expression::Binary(
+            BinaryOp::Add,
+            Box::new(x.clone()),
+            Box::new(Expression::Integer(1)),
+        );
+        let denom =
+            Expression::Binary(BinaryOp::Sub, Box::new(x), Box::new(Expression::Integer(1)));
+        let expr = Expression::Binary(BinaryOp::Div, Box::new(numer), Box::new(denom));
+        assert_eval_match(&expr, &[("rt_div", 3.0)], 1e-10);
+    }
+
+    #[test]
+    fn compile_then_eval_multi_variable() {
+        // 2*x + 3*y - z with x=1, y=2, z=3 → 4.0
+        let x = Expression::Variable(Variable::new("rt_mx"));
+        let y = Expression::Variable(Variable::new("rt_my"));
+        let z = Expression::Variable(Variable::new("rt_mz"));
+        let two_x =
+            Expression::Binary(BinaryOp::Mul, Box::new(Expression::Integer(2)), Box::new(x));
+        let three_y =
+            Expression::Binary(BinaryOp::Mul, Box::new(Expression::Integer(3)), Box::new(y));
+        let sum = Expression::Binary(BinaryOp::Add, Box::new(two_x), Box::new(three_y));
+        let expr = Expression::Binary(BinaryOp::Sub, Box::new(sum), Box::new(z));
+        assert_eval_match(
+            &expr,
+            &[("rt_mx", 1.0), ("rt_my", 2.0), ("rt_mz", 3.0)],
+            1e-10,
+        );
+    }
+
+    // ── decompile_then_eval_matches ───────────────────────────────────────────
+
+    /// Build an Expr, decompile it to Expression, evaluate both with the same
+    /// bindings and assert agreement within epsilon.
+    fn assert_decompile_eval_match(
+        new_expr: &crate::numeric::expr::Expr,
+        str_bindings: &[(&str, f64)],
+        epsilon: f64,
+    ) {
+        use crate::numeric::evaluation::evaluate as eval_new;
+        use std::collections::HashMap;
+
+        let mut old_map: HashMap<String, f64> = HashMap::new();
+        let mut new_map: HashMap<SymbolId, f64> = HashMap::new();
+        for (name, val) in str_bindings {
+            old_map.insert(name.to_string(), *val);
+            new_map.insert(SymbolId::intern(name), *val);
+        }
+
+        let new_val = eval_new(new_expr, &new_map).expect("new evaluator returned None");
+        let old_expr = decompile(new_expr);
+        let old_val = old_expr
+            .evaluate(&old_map)
+            .expect("old evaluator returned None");
+
+        assert!(
+            (old_val - new_val).abs() < epsilon,
+            "decompile_then_eval mismatch: new={new_val} old={old_val}"
+        );
+    }
+
+    #[test]
+    fn decompile_then_eval_add_node_multiple_terms() {
+        // AddNode: 1 + 2*x + 3*y, with x=4, y=5 → 1 + 8 + 15 = 24
+        let x = Expr::symbol("rt_ax");
+        let y = Expr::symbol("rt_ay");
+        let mut node = AddNode::from_constant(BigRational::from(1i64));
+        node.add_term(x, BigRational::from(2i64));
+        node.add_term(y, BigRational::from(3i64));
+        let expr = Expr::Add(node);
+        assert_decompile_eval_match(&expr, &[("rt_ax", 4.0), ("rt_ay", 5.0)], 1e-10);
+    }
+
+    #[test]
+    fn decompile_then_eval_mul_node_multiple_factors() {
+        // MulNode: 2 * x^2 * y^1, with x=3, y=4 → 2 * 9 * 4 = 72
+        let x = Expr::symbol("rt_mx2");
+        let y = Expr::symbol("rt_my2");
+        let mut node = MulNode::from_coeff(BigRational::from(2i64));
+        node.add_factor(x, Expr::int(2));
+        node.add_factor(y, Expr::int(1));
+        let expr = Expr::Mul(node);
+        assert_decompile_eval_match(&expr, &[("rt_mx2", 3.0), ("rt_my2", 4.0)], 1e-10);
+    }
+
+    #[test]
+    fn decompile_then_eval_pow_and_func() {
+        // sqrt(x^2) with x=5 → 5.0
+        let x = Expr::symbol("rt_pf");
+        let pow_expr = Arc::new(Expr::Pow(x, Expr::int(2)));
+        let expr = Expr::Func(crate::numeric::expr::FuncId::Sqrt, vec![pow_expr]);
+        assert_decompile_eval_match(&expr, &[("rt_pf", 5.0)], 1e-10);
+    }
+
+    // ── round_trip_compile_decompile ─────────────────────────────────────────
+
+    /// compile(expr) → decompile → evaluate old; compare with evaluate old on
+    /// original. Tests that the full forward trip preserves semantics.
+    fn assert_compile_decompile_match(
+        expr: &Expression,
+        str_bindings: &[(&str, f64)],
+        epsilon: f64,
+    ) {
+        use std::collections::HashMap;
+        let mut old_map: HashMap<String, f64> = HashMap::new();
+        for (name, val) in str_bindings {
+            old_map.insert(name.to_string(), *val);
+        }
+        let orig_val = expr
+            .evaluate(&old_map)
+            .expect("original evaluate returned None");
+        let back = decompile(&compile(expr));
+        let back_val = back
+            .evaluate(&old_map)
+            .expect("roundtrip evaluate returned None");
+        assert!(
+            (orig_val - back_val).abs() < epsilon,
+            "compile→decompile mismatch: orig={orig_val} back={back_val} (expr={expr:?})"
+        );
+    }
+
+    #[test]
+    fn round_trip_integer() {
+        assert_compile_decompile_match(&Expression::Integer(42), &[], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_rational_literal() {
+        assert_compile_decompile_match(&Expression::Rational(Rational64::new(3, 7)), &[], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_float_literal() {
+        assert_compile_decompile_match(&Expression::Float(2.71828), &[], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_constant_pi_e() {
+        assert_compile_decompile_match(
+            &Expression::Constant(crate::ast::SymbolicConstant::Pi),
+            &[],
+            1e-10,
+        );
+        assert_compile_decompile_match(
+            &Expression::Constant(crate::ast::SymbolicConstant::E),
+            &[],
+            1e-10,
+        );
+    }
+
+    #[test]
+    fn round_trip_variable() {
+        let expr = Expression::Variable(Variable::new("rt_var"));
+        assert_compile_decompile_match(&expr, &[("rt_var", 7.0)], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_binop_add() {
+        let x = Expression::Variable(Variable::new("rt_ba"));
+        let expr = Expression::Binary(BinaryOp::Add, Box::new(x), Box::new(Expression::Integer(5)));
+        assert_compile_decompile_match(&expr, &[("rt_ba", 3.0)], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_binop_sub() {
+        let x = Expression::Variable(Variable::new("rt_bs"));
+        let expr = Expression::Binary(BinaryOp::Sub, Box::new(x), Box::new(Expression::Integer(2)));
+        assert_compile_decompile_match(&expr, &[("rt_bs", 10.0)], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_binop_mul() {
+        let x = Expression::Variable(Variable::new("rt_bm"));
+        let expr = Expression::Binary(BinaryOp::Mul, Box::new(x), Box::new(Expression::Integer(4)));
+        assert_compile_decompile_match(&expr, &[("rt_bm", 3.0)], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_binop_div() {
+        let x = Expression::Variable(Variable::new("rt_bd"));
+        let expr = Expression::Binary(BinaryOp::Div, Box::new(x), Box::new(Expression::Integer(4)));
+        assert_compile_decompile_match(&expr, &[("rt_bd", 8.0)], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_binop_mod_structural() {
+        // Mod compiles to Func(Other("mod"), ...) which neither evaluator handles
+        // numerically, so we verify the structural round-trip preserves the operator.
+        let x = Expression::Variable(Variable::new("rt_bmod"));
+        let expr = Expression::Binary(BinaryOp::Mod, Box::new(x), Box::new(Expression::Integer(3)));
+        let back = decompile(&compile(&expr));
+        let debug = format!("{back:?}");
+        assert!(
+            debug.contains("mod") || debug.contains("Mod"),
+            "expected mod/Mod in round-tripped expression, got: {debug}"
+        );
+    }
+
+    #[test]
+    fn round_trip_unary_neg() {
+        let x = Expression::Variable(Variable::new("rt_uneg"));
+        let expr = Expression::Unary(UnaryOp::Neg, Box::new(x));
+        assert_compile_decompile_match(&expr, &[("rt_uneg", 5.0)], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_unary_abs() {
+        let x = Expression::Variable(Variable::new("rt_uabs"));
+        let expr = Expression::Unary(UnaryOp::Abs, Box::new(x));
+        assert_compile_decompile_match(&expr, &[("rt_uabs", -3.0)], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_func_sin() {
+        let x = Expression::Variable(Variable::new("rt_fsin"));
+        let expr = Expression::Function(Function::Sin, vec![x]);
+        assert_compile_decompile_match(&expr, &[("rt_fsin", std::f64::consts::FRAC_PI_2)], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_func_cos() {
+        let x = Expression::Variable(Variable::new("rt_fcos"));
+        let expr = Expression::Function(Function::Cos, vec![x]);
+        assert_compile_decompile_match(&expr, &[("rt_fcos", 0.0)], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_func_exp() {
+        let x = Expression::Variable(Variable::new("rt_fexp"));
+        let expr = Expression::Function(Function::Exp, vec![x]);
+        assert_compile_decompile_match(&expr, &[("rt_fexp", 1.0)], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_func_ln() {
+        let x = Expression::Variable(Variable::new("rt_fln"));
+        let expr = Expression::Function(Function::Ln, vec![x]);
+        assert_compile_decompile_match(&expr, &[("rt_fln", std::f64::consts::E)], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_func_sqrt() {
+        let x = Expression::Variable(Variable::new("rt_fsqrt"));
+        let expr = Expression::Function(Function::Sqrt, vec![x]);
+        assert_compile_decompile_match(&expr, &[("rt_fsqrt", 9.0)], 1e-10);
+    }
+
+    // ── round_trip_decompile_compile ─────────────────────────────────────────
+
+    /// decompile(expr) → compile → evaluate new; compare with evaluate new on
+    /// original. Tests that the reverse trip preserves semantics.
+    fn assert_decompile_compile_match(
+        new_expr: &crate::numeric::expr::Expr,
+        str_bindings: &[(&str, f64)],
+        epsilon: f64,
+    ) {
+        use crate::numeric::evaluation::evaluate as eval_new;
+        use std::collections::HashMap;
+
+        let mut new_map: HashMap<SymbolId, f64> = HashMap::new();
+        for (name, val) in str_bindings {
+            new_map.insert(SymbolId::intern(name), *val);
+        }
+
+        let orig_val = eval_new(new_expr, &new_map).expect("original new evaluator returned None");
+        let recompiled = compile(&decompile(new_expr));
+        let back_val =
+            eval_new(&recompiled, &new_map).expect("recompiled new evaluator returned None");
+
+        assert!(
+            (orig_val - back_val).abs() < epsilon,
+            "decompile→compile mismatch: orig={orig_val} back={back_val}"
+        );
+    }
+
+    #[test]
+    fn round_trip_dc_integer() {
+        let expr = Expr::Integer(SmallInt::from(99i64));
+        assert_decompile_compile_match(&expr, &[], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_dc_rational() {
+        let expr = Expr::Rational(BigRational::from_i64(5, 8));
+        assert_decompile_compile_match(&expr, &[], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_dc_float() {
+        let expr = Expr::Float(1.23456);
+        assert_decompile_compile_match(&expr, &[], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_dc_symbol() {
+        let expr = Expr::Symbol(SymbolId::intern("rt_dc_sym"));
+        assert_decompile_compile_match(&expr, &[("rt_dc_sym", 4.0)], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_dc_pow_node() {
+        // Expr::Pow(x, 3) with x=2 → 8
+        let x = Arc::new(Expr::Symbol(SymbolId::intern("rt_dc_pow")));
+        let expr = Expr::Pow(x, Expr::int(3));
+        assert_decompile_compile_match(&expr, &[("rt_dc_pow", 2.0)], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_dc_add_node() {
+        // AddNode: 5 + 2*x with x=3 → 11
+        let x = Expr::symbol("rt_dc_add");
+        let mut node = AddNode::from_constant(BigRational::from(5i64));
+        node.add_term(x, BigRational::from(2i64));
+        let expr = Expr::Add(node);
+        assert_decompile_compile_match(&expr, &[("rt_dc_add", 3.0)], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_dc_mul_node() {
+        // MulNode: 3 * x^2 with x=4 → 48
+        let x = Expr::symbol("rt_dc_mul");
+        let mut node = MulNode::from_coeff(BigRational::from(3i64));
+        node.add_factor(x, Expr::int(2));
+        let expr = Expr::Mul(node);
+        assert_decompile_compile_match(&expr, &[("rt_dc_mul", 4.0)], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_dc_func_exp() {
+        let expr = Expr::Func(crate::numeric::expr::FuncId::Exp, vec![Expr::float(1.0)]);
+        assert_decompile_compile_match(&expr, &[], 1e-10);
+    }
+
+    #[test]
+    fn round_trip_dc_func_sqrt() {
+        let expr = Expr::Func(crate::numeric::expr::FuncId::Sqrt, vec![Expr::float(16.0)]);
+        assert_decompile_compile_match(&expr, &[], 1e-10);
+    }
 }
