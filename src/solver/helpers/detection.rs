@@ -6,9 +6,11 @@
 //! modules already migrated to `Arc<Expr>`.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::ast::{BinaryOp, Expression};
 use crate::numeric::{Expr, SymbolId};
+use num::ToPrimitive;
 
 /// Check if expression contains the given variable.
 ///
@@ -154,5 +156,155 @@ pub(crate) fn is_linear_in_variable(expr: &Expression, var: &str) -> bool {
         }
 
         Expression::Function(_, _) => false,
+    }
+}
+
+// ── Arc<Expr> ports ───────────────────────────────────────────────────────
+
+/// `true` if `expr` references any symbol. Expr counterpart of
+/// [`has_any_variable`].
+pub(crate) fn has_any_symbol(expr: &Expr) -> bool {
+    match expr {
+        Expr::Symbol(_) => true,
+        Expr::Integer(_)
+        | Expr::Rational(_)
+        | Expr::Float(_)
+        | Expr::Complex(_)
+        | Expr::Constant(_) => false,
+        Expr::Add(node) => node.terms.keys().any(|t| has_any_symbol(t)),
+        Expr::Mul(node) => node
+            .factors
+            .iter()
+            .any(|(b, e)| has_any_symbol(b) || has_any_symbol(e)),
+        Expr::Pow(base, exp) => has_any_symbol(base) || has_any_symbol(exp),
+        Expr::Func(_, args) => args.iter().any(|a| has_any_symbol(a)),
+    }
+}
+
+/// Expr counterpart of [`has_obvious_nonlinearity`]: detects
+/// `Pow(base, exp)` where `base` contains any symbol and `exp` is a
+/// numeric value greater than 1, or a canonical `Mul` factor `var^n`
+/// with numeric `n > 1`.
+pub(crate) fn has_obvious_nonlinearity_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::Pow(base, exp) => {
+            if has_any_symbol(base) && numeric_gt_one(exp) {
+                return true;
+            }
+            has_obvious_nonlinearity_expr(base) || has_obvious_nonlinearity_expr(exp)
+        }
+        Expr::Mul(node) => node.factors.iter().any(|(b, e)| {
+            if has_any_symbol(b) && numeric_gt_one(e) {
+                return true;
+            }
+            has_obvious_nonlinearity_expr(b) || has_obvious_nonlinearity_expr(e)
+        }),
+        Expr::Add(node) => node.terms.keys().any(|t| has_obvious_nonlinearity_expr(t)),
+        Expr::Func(_, args) => args.iter().any(|a| has_obvious_nonlinearity_expr(a)),
+        _ => false,
+    }
+}
+
+/// `true` if `exp` is a numeric literal strictly greater than 1.
+fn numeric_gt_one(exp: &Arc<Expr>) -> bool {
+    match exp.as_ref() {
+        Expr::Integer(n) => n.to_i64().map(|v| v > 1).unwrap_or(false),
+        Expr::Rational(r) => r.to_f64().map(|v| v > 1.0).unwrap_or(false),
+        Expr::Float(f) => *f > 1.0,
+        _ => false,
+    }
+}
+
+/// Expr counterpart of [`is_polynomial_expression`]: `true` when the
+/// expression contains only algebraic structure (no `Func` nodes) and
+/// every `Pow` has a non-negative integer exponent (or numeric value
+/// equivalent).
+pub(crate) fn is_polynomial_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::Integer(_)
+        | Expr::Rational(_)
+        | Expr::Float(_)
+        | Expr::Complex(_)
+        | Expr::Constant(_)
+        | Expr::Symbol(_) => true,
+        Expr::Add(node) => node.terms.keys().all(|t| is_polynomial_expr(t)),
+        Expr::Mul(node) => node
+            .factors
+            .iter()
+            .all(|(b, e)| is_polynomial_expr(b) && is_polynomial_expr_exp(e)),
+        Expr::Pow(base, exp) => is_polynomial_expr(base) && is_polynomial_expr_exp(exp),
+        Expr::Func(_, _) => false,
+    }
+}
+
+/// Exponent predicate: non-negative integer (exact), or numeric value
+/// equivalent to a non-negative integer.
+fn is_polynomial_expr_exp(exp: &Arc<Expr>) -> bool {
+    match exp.as_ref() {
+        Expr::Integer(n) => n.to_i64().map(|v| v >= 0).unwrap_or(false),
+        Expr::Rational(r) => r
+            .to_f64()
+            .map(|v| v >= 0.0 && (v - v.round()).abs() < 1e-10)
+            .unwrap_or(false),
+        Expr::Float(f) => *f >= 0.0 && (*f - f.round()).abs() < 1e-10,
+        // Symbolic exponent: treat as polynomial if exponent itself is
+        // purely algebraic (matches legacy behaviour where a polynomial
+        // exponent is recursively validated).
+        _ => is_polynomial_expr(exp),
+    }
+}
+
+/// Expr counterpart of [`is_linear_in_variable`]: `true` if `var`
+/// appears at most to degree 1, not in a denominator, not multiplied by
+/// itself, and not inside any function.
+pub(crate) fn is_linear_in_variable_expr(expr: &Expr, var: SymbolId) -> bool {
+    match expr {
+        Expr::Integer(_)
+        | Expr::Rational(_)
+        | Expr::Float(_)
+        | Expr::Complex(_)
+        | Expr::Constant(_)
+        | Expr::Symbol(_) => true,
+        Expr::Add(node) => node
+            .terms
+            .keys()
+            .all(|t| is_linear_in_variable_expr(t, var)),
+        Expr::Mul(node) => {
+            let mut var_count = 0usize;
+            for (base, exp) in &node.factors {
+                let base_has = contains_symbol(base, var);
+                let exp_has = contains_symbol(exp, var);
+                if !base_has && !exp_has {
+                    continue;
+                }
+                if exp_has {
+                    return false;
+                }
+                if let Expr::Symbol(s) = base.as_ref() {
+                    if *s == var {
+                        if !matches!(
+                            exp.as_ref(),
+                            Expr::Integer(n) if n.to_i64() == Some(1)
+                        ) {
+                            return false;
+                        }
+                        var_count += 1;
+                        if var_count > 1 {
+                            return false;
+                        }
+                        continue;
+                    }
+                }
+                return false;
+            }
+            true
+        }
+        Expr::Pow(base, exp) => {
+            if contains_symbol(base, var) {
+                return false;
+            }
+            is_linear_in_variable_expr(exp, var)
+        }
+        Expr::Func(_, _) => false,
     }
 }

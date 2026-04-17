@@ -20,7 +20,8 @@ pub(crate) use coefficients::{
     extract_quadratic_coefficients, get_polynomial_degree, simplify_numeric_expression,
 };
 pub(crate) use detection::{
-    contains_symbol, contains_variable, has_any_variable, has_obvious_nonlinearity,
-    is_linear_in_variable, is_polynomial_expression,
+    contains_symbol, contains_variable, has_any_symbol, has_any_variable, has_obvious_nonlinearity,
+    has_obvious_nonlinearity_expr, is_linear_in_variable, is_linear_in_variable_expr,
+    is_polynomial_expr, is_polynomial_expression,
 };
 pub(crate) use substitution::substitute_values;
