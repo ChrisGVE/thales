@@ -128,7 +128,27 @@ fn limit_at_finite(
         let probe_l = eval_float(expr, var, f_point - 1e-7);
 
         match (probe_l, probe_r) {
-            (Some(l), Some(r)) if l.is_infinite() || r.is_infinite() => {
+            // For a one-sided query we only care about the relevant side —
+            // the far side may blow up even when the approach side has a
+            // clean finite limit (e.g. `exp(x)` as x → -∞: one side 0, one
+            // side ∞).
+            (_, Some(r))
+                if matches!(original_point, LimitPoint::FromRight(_))
+                    && r.is_finite()
+                    && r.abs() < 1e6 =>
+            {
+                return LimitResult::Value(float_to_exact(r));
+            }
+            (Some(l), _)
+                if matches!(original_point, LimitPoint::FromLeft(_))
+                    && l.is_finite()
+                    && l.abs() < 1e6 =>
+            {
+                return LimitResult::Value(float_to_exact(l));
+            }
+            (Some(l), Some(r))
+                if l.is_infinite() || r.is_infinite() || l.abs() > 1e6 || r.abs() > 1e6 =>
+            {
                 return one_sided_limit_float(l, r, original_point);
             }
             (Some(l), Some(r)) if !l.is_nan() && !r.is_nan() => {
@@ -136,9 +156,13 @@ fn limit_at_finite(
                 if (l - r).abs() < 1e-4 * (l.abs().max(1.0)) {
                     let avg = (l + r) / 2.0;
                     if !avg.is_nan() {
-                        // Return as float only if symbolic failed.
+                        // Prefer the symbolic substitution when it produced a
+                        // clean numeric value; otherwise synthesize from the
+                        // float average, promoting near-integer results to
+                        // an exact integer so downstream assertions compare
+                        // cleanly (`Value(Integer(2))` rather than `Value(Float(2.0))`).
                         if expr_to_f64(&subst).map_or(true, |v| v.is_nan()) {
-                            return LimitResult::Value(Expr::float(avg));
+                            return LimitResult::Value(float_to_exact(avg));
                         }
                         return LimitResult::Value(subst);
                     }
@@ -651,6 +675,21 @@ fn expr_to_f64(expr: &Arc<Expr>) -> Option<f64> {
         Expr::Float(f) => Some(*f),
         _ => None,
     }
+}
+
+/// Convert a float limit value to the tightest exact `Expr` form available.
+/// Near-integer results promote to [`Expr::int`]; other values stay as
+/// [`Expr::float`]. The tolerance is loose enough to absorb the 1e-7-scale
+/// noise from our one-sided numerical probe, tight enough that genuinely
+/// non-integer limits (e.g. `0.5`, `e`, `π`) stay as floats.
+fn float_to_exact(v: f64) -> Arc<Expr> {
+    if v.is_finite() {
+        let rounded = v.round();
+        if (v - rounded).abs() < 1e-6 && rounded.abs() < i64::MAX as f64 {
+            return Expr::int(rounded as i64);
+        }
+    }
+    Expr::float(v)
 }
 
 fn rational_to_f64_opt(r: &super::BigRational) -> Option<f64> {

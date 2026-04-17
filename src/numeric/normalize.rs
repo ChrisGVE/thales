@@ -165,8 +165,11 @@ pub fn neg(expr: Arc<Expr>) -> Arc<Expr> {
 
 /// Build a normalized product of two expressions.
 pub fn mul(lhs: Arc<Expr>, rhs: Arc<Expr>) -> Arc<Expr> {
-    // Rule 6: 0 * x → 0, x * 0 → 0
-    if lhs.is_zero() || rhs.is_zero() {
+    // Rule 6: 0 * x → 0, x * 0 → 0 — but ONLY when the other operand is not
+    // itself a singular form (`Pow` with a non-positive exponent over a base
+    // that could vanish, i.e. `0^(-k)`, `0^0`, ...). Collapsing `0 * 0^(-k)`
+    // to `0` would hide indeterminate `0/0` forms from limit analysis.
+    if (lhs.is_zero() && !is_singular_pow(&rhs)) || (rhs.is_zero() && !is_singular_pow(&lhs)) {
         return Expr::int(0);
     }
 
@@ -217,9 +220,16 @@ fn mul_into_node(node: &mut MulNode, expr: &Arc<Expr>) {
 
 /// Finalize a MulNode into an Arc<Expr>, applying unwrap rules.
 fn finish_mul_node(node: MulNode) -> Arc<Expr> {
-    // Rule 6: zero coefficient
+    // Rule 6: zero coefficient — collapse to 0 only when no factor is a
+    // singular `0^(-k)` / `0^0` form. Collapsing otherwise would hide an
+    // indeterminate `0/0` from downstream limit / simplification analysis.
     if node.coeff.is_zero() {
-        return Expr::int(0);
+        let has_singular = node.factors.iter().any(|(base, exp)| {
+            (base.is_zero() && !is_positive_numeric(exp)) || is_singular_pow(base)
+        });
+        if !has_singular {
+            return Expr::int(0);
+        }
     }
 
     // Rule 8: unwrap
@@ -254,9 +264,15 @@ pub fn pow(base: Arc<Expr>, exp: Arc<Expr>) -> Arc<Expr> {
         return base;
     }
 
-    // Rule: 0^n → 0 (for positive n)
+    // Rule: 0^n → 0 (only when exp is definitely positive; negative or unknown
+    // exponents keep the singular form so downstream analyses — limits,
+    // differentiation, etc. — can see the 0^(-k) singularity instead of a
+    // collapsed 0).
     if base.is_zero() {
-        return Expr::int(0);
+        if is_positive_numeric(&exp) {
+            return Expr::int(0);
+        }
+        return Arc::new(Expr::Pow(base, exp));
     }
 
     // Rule: 1^n → 1
@@ -411,6 +427,31 @@ fn rational_to_expr(r: BigRational) -> Arc<Expr> {
 /// Check if an expression is a known integer.
 fn is_integer_expr(e: &Expr) -> bool {
     matches!(e, Expr::Integer(_))
+}
+
+/// Check if an expression is a known strictly-positive numeric literal.
+/// Used to guard the `0^n → 0` rule so that 0 raised to zero, a negative,
+/// or an unknown exponent keeps its singular form rather than collapsing.
+fn is_positive_numeric(e: &Expr) -> bool {
+    match e {
+        Expr::Integer(n) => !n.is_zero() && !n.is_negative(),
+        Expr::Rational(r) => !r.is_zero() && !r.is_negative(),
+        Expr::Float(f) => *f > 0.0,
+        _ => false,
+    }
+}
+
+/// Returns true if `expr` is a singular power form — `base^exp` where the
+/// base is a literal zero and the exponent is not strictly positive. Such
+/// forms encode undefined / indeterminate values (e.g. `0^(-1)` = `1/0`) and
+/// must not be collapsed through `0 * …` multiplication.
+fn is_singular_pow(expr: &Expr) -> bool {
+    if let Expr::Pow(base, exp) = expr {
+        if base.is_zero() && !is_positive_numeric(exp) {
+            return true;
+        }
+    }
+    false
 }
 
 /// Try to raise a BigRational to an integer power from an Expr.
