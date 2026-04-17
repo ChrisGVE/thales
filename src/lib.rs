@@ -493,7 +493,9 @@ pub use integration::{
     integrate_by_substitution, integrate_with_substitution, numerical_integrate,
     tabular_integration, IntegrationError,
 };
-pub use latex::{parse_latex, parse_latex_equation};
+pub use latex::{
+    parse_latex, parse_latex_equation, parse_latex_equation_to_expr, parse_latex_to_expr,
+};
 pub use matrix::{BracketStyle, MatrixError, MatrixExpr};
 pub use numerical::{
     optimize_constrained, BisectionMethod, BrentsMethod, LagrangianResult, LagrangianSolver,
@@ -511,7 +513,10 @@ pub use optimization::{
     track_precision, ComputationStep, ManualStep, MultiplicativeChain, OperationConfig,
     OperationType, PrecisionReport, StepOperand,
 };
-pub use parser::{parse_equation, parse_equation_system, parse_expression};
+pub use parser::{
+    parse_equation, parse_equation_system, parse_equation_system_to_expr, parse_equation_to_expr,
+    parse_expression, parse_to_expr,
+};
 pub use partial_fractions::{
     decompose, is_polynomial, is_rational_function, DecomposeError, PartialFractionResult,
     PartialFractionTerm,

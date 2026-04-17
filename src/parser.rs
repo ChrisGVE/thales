@@ -139,6 +139,9 @@
 
 use crate::ast::{Equation, Expression};
 use crate::mathlex_bridge::{self, ExtractedODE};
+use crate::numeric::compile::compile;
+use crate::numeric::expr::Expr;
+use std::sync::Arc;
 
 /// Parse error type with detailed position information.
 ///
@@ -634,4 +637,100 @@ pub fn parse_ode(input: &str) -> Result<ExtractedODE, Vec<ParseError>> {
             message: "equation does not contain recognizable ODE derivative terms".to_string(),
         }]
     })
+}
+
+/// Parse a mathematical expression directly into the internal CAS [`Expr`] form.
+///
+/// This is the fast-path entry for internal CAS operations: it parses the input
+/// string into the legacy [`Expression`] AST via mathlex, then immediately
+/// compiles into the canonical [`Expr`] representation used by the simplifier,
+/// evaluator, solver, and calculus modules.
+///
+/// The public API [`parse_expression`] remains available for callers who want
+/// the legacy [`Expression`] tree. This function is the preferred entry for
+/// internal pipelines that would otherwise need to call `compile()` themselves.
+///
+/// # Arguments
+///
+/// * `input` - String slice containing the mathematical expression.
+///
+/// # Returns
+///
+/// * `Ok(Arc<Expr>)` - Canonical, normalized internal form.
+/// * `Err(Vec<ParseError>)` - Parse errors with position information.
+///
+/// # Examples
+///
+/// ```
+/// use thales::parser::parse_to_expr;
+///
+/// let expr = parse_to_expr("x + 2*y").unwrap();
+/// // Expr is a canonical AddNode with two terms.
+/// ```
+#[must_use = "parsing returns a result that should be used"]
+pub fn parse_to_expr(input: &str) -> Result<Arc<Expr>, Vec<ParseError>> {
+    let expression = parse_expression(input)?;
+    Ok(compile(&expression))
+}
+
+/// Parse an equation directly into a pair of internal [`Expr`] sides.
+///
+/// Both sides of the equation are compiled from the legacy [`Expression`] form
+/// into the canonical [`Expr`] representation. This is the preferred entry for
+/// internal solvers that operate on [`Expr`].
+///
+/// # Arguments
+///
+/// * `input` - Equation string with exactly one `=` separator.
+///
+/// # Returns
+///
+/// * `Ok((Arc<Expr>, Arc<Expr>))` - Left and right side in canonical form.
+/// * `Err(Vec<ParseError>)` - Parse errors.
+///
+/// # Examples
+///
+/// ```
+/// use thales::parser::parse_equation_to_expr;
+///
+/// let (left, right) = parse_equation_to_expr("x + 2 = 5").unwrap();
+/// ```
+#[must_use = "parsing returns a result that should be used"]
+pub fn parse_equation_to_expr(input: &str) -> Result<(Arc<Expr>, Arc<Expr>), Vec<ParseError>> {
+    let eq = parse_equation(input)?;
+    Ok((compile(&eq.left), compile(&eq.right)))
+}
+
+/// Parse a semicolon-separated equation system into pairs of internal [`Expr`]
+/// sides.
+///
+/// Each segment between semicolons is trimmed and parsed; empty segments are
+/// skipped. All parse errors across all failing segments are collected.
+///
+/// # Arguments
+///
+/// * `input` - Semicolon-separated equation list.
+///
+/// # Returns
+///
+/// * `Ok(Vec<(Arc<Expr>, Arc<Expr>)>)` - Per-equation (left, right) pairs.
+/// * `Err(Vec<ParseError>)` - Parse errors from all failing segments.
+///
+/// # Examples
+///
+/// ```
+/// use thales::parser::parse_equation_system_to_expr;
+///
+/// let pairs = parse_equation_system_to_expr("x + y = 5; 2*x - y = 1").unwrap();
+/// assert_eq!(pairs.len(), 2);
+/// ```
+#[must_use = "parsing returns a result that should be used"]
+pub fn parse_equation_system_to_expr(
+    input: &str,
+) -> Result<Vec<(Arc<Expr>, Arc<Expr>)>, Vec<ParseError>> {
+    let equations = parse_equation_system(input)?;
+    Ok(equations
+        .iter()
+        .map(|eq| (compile(&eq.left), compile(&eq.right)))
+        .collect())
 }

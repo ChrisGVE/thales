@@ -76,7 +76,10 @@
 
 use crate::ast::Expression;
 use crate::mathlex_bridge;
+use crate::numeric::compile::compile;
+use crate::numeric::expr::Expr;
 use std::fmt;
+use std::sync::Arc;
 
 /// Error type for LaTeX parsing failures.
 ///
@@ -310,6 +313,60 @@ pub fn parse_latex_equation(input: &str) -> Result<(Expression, Expression), Vec
             Ok((left, right))
         }
     }
+}
+
+/// Parse a LaTeX expression directly into the internal CAS [`Expr`] form.
+///
+/// This is the fast-path entry for internal CAS operations on LaTeX input: it
+/// parses via mathlex into a legacy [`Expression`] AST, then compiles into the
+/// canonical [`Expr`] representation.
+///
+/// # Arguments
+///
+/// * `input` - A LaTeX expression string.
+///
+/// # Returns
+///
+/// * `Ok(Arc<Expr>)` - Canonical, normalized internal form.
+/// * `Err(Vec<LaTeXParseError>)` - Parse errors.
+///
+/// # Examples
+///
+/// ```
+/// use thales::latex::parse_latex_to_expr;
+///
+/// let expr = parse_latex_to_expr(r"\frac{x}{2}").unwrap();
+/// ```
+#[must_use = "parsing returns a result that should be used"]
+pub fn parse_latex_to_expr(input: &str) -> Result<Arc<Expr>, Vec<LaTeXParseError>> {
+    let expression = parse_latex(input)?;
+    Ok(compile(&expression))
+}
+
+/// Parse a LaTeX equation directly into a pair of internal [`Expr`] sides.
+///
+/// # Arguments
+///
+/// * `input` - A LaTeX equation string (e.g. `r"x^2 = 4"`).
+///
+/// # Returns
+///
+/// * `Ok((Arc<Expr>, Arc<Expr>))` - Left and right side in canonical form.
+/// * `Err(Vec<LaTeXParseError>)` - Parse errors.
+///
+/// # Examples
+///
+/// ```
+/// use thales::latex::parse_latex_equation_to_expr;
+///
+/// let (left, right) = parse_latex_equation_to_expr(r"x^2 = 4").unwrap();
+/// ```
+#[must_use = "parsing returns a result that should be used"]
+pub fn parse_latex_equation_to_expr(
+    input: &str,
+) -> Result<(Arc<Expr>, Arc<Expr>), Vec<LaTeXParseError>> {
+    let (left, right) = parse_latex_equation(input)?;
+    Ok((compile(&left), compile(&right)))
 }
 
 #[cfg(test)]
