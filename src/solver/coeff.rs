@@ -16,26 +16,8 @@ use std::sync::Arc;
 use crate::ast::Variable;
 use crate::numeric::{BigRational, Expr, SymbolId};
 
+use super::helpers::contains_symbol;
 use super::types::{SolverError, SolverResult};
-
-/// Return `true` if `expr` references `var` anywhere in its subtree.
-pub(super) fn contains_symbol(expr: &Expr, var: SymbolId) -> bool {
-    match expr {
-        Expr::Symbol(s) => *s == var,
-        Expr::Integer(_)
-        | Expr::Rational(_)
-        | Expr::Float(_)
-        | Expr::Complex(_)
-        | Expr::Constant(_) => false,
-        Expr::Add(node) => node.terms.keys().any(|t| contains_symbol(t, var)),
-        Expr::Mul(node) => node
-            .factors
-            .iter()
-            .any(|(b, e)| contains_symbol(b, var) || contains_symbol(e, var)),
-        Expr::Pow(base, exp) => contains_symbol(base, var) || contains_symbol(exp, var),
-        Expr::Func(_, args) => args.iter().any(|a| contains_symbol(a, var)),
-    }
-}
 
 /// Extract the scalar coefficient of `var` from a purely multiplicative
 /// `term` and return it as an exact `BigRational`.
