@@ -409,6 +409,29 @@ impl Expr {
 
 use num::traits::{One, Zero};
 
+// ── Display helpers ──────────────────────────────────────────────────────────
+
+/// Returns `true` if this expression needs parentheses when used as the base
+/// of a power expression (i.e. it is a sum or product).
+pub(crate) fn needs_parens_as_pow_base(e: &Expr) -> bool {
+    matches!(e, Expr::Add(_) | Expr::Mul(_))
+}
+
+/// Returns `true` if this expression needs parentheses when used as a factor
+/// inside a product (i.e. it is a sum).
+pub(crate) fn needs_parens_as_mul_factor(e: &Expr) -> bool {
+    matches!(e, Expr::Add(_))
+}
+
+/// Write `expr` surrounded by parentheses if `wrap` is true, otherwise plain.
+pub(crate) fn fmt_maybe_paren(expr: &Expr, wrap: bool, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    if wrap {
+        write!(f, "({expr})")
+    } else {
+        write!(f, "{expr}")
+    }
+}
+
 // ── Display ──────────────────────────────────────────────────────────────────
 
 impl fmt::Display for Expr {
@@ -430,9 +453,17 @@ impl fmt::Display for Expr {
             }
             Expr::Constant(c) => write!(f, "{c}"),
             Expr::Symbol(s) => write!(f, "{s}"),
-            Expr::Add(a) => write!(f, "({a})"),
-            Expr::Mul(m) => write!(f, "({m})"),
-            Expr::Pow(b, e) => write!(f, "({b})^({e})"),
+            // Add and Mul render themselves; no outer parens at top level.
+            Expr::Add(a) => write!(f, "{a}"),
+            Expr::Mul(m) => write!(f, "{m}"),
+            Expr::Pow(b, e) => {
+                // Wrap base only if it is itself a sum or product.
+                fmt_maybe_paren(b, needs_parens_as_pow_base(b), f)?;
+                write!(f, "^")?;
+                // Wrap exponent only if it contains operators.
+                let wrap_exp = matches!(e.as_ref(), Expr::Add(_) | Expr::Mul(_) | Expr::Pow(_, _));
+                fmt_maybe_paren(e, wrap_exp, f)
+            }
             Expr::Func(id, args) => {
                 write!(f, "{id}(")?;
                 for (i, arg) in args.iter().enumerate() {
@@ -699,7 +730,7 @@ mod tests {
     #[test]
     fn test_display_pow() {
         let e = Expr::Pow(Expr::symbol("disp_pow_x"), Expr::int(2));
-        assert_eq!(e.to_string(), "(disp_pow_x)^(2)");
+        assert_eq!(e.to_string(), "disp_pow_x^2");
     }
 
     #[test]
@@ -1232,5 +1263,88 @@ mod tests {
         let k = Expr::Constant(SymbolicConstant::I);
         let s = Expr::Symbol(SymbolId::intern("cross_sym"));
         assert!(k < s);
+    }
+
+    // ── Display improvement tests ────────────────────────────────────────────
+
+    /// `x^2` — no unnecessary parens on symbol base or integer exponent.
+    #[test]
+    fn test_display_pow_symbol_int_exp() {
+        let e = Expr::Pow(Expr::symbol("disp_imp_x"), Expr::int(2));
+        assert_eq!(e.to_string(), "disp_imp_x^2");
+    }
+
+    /// `(x + y)^2` — Add base must be wrapped in parens.
+    #[test]
+    fn test_display_pow_add_base_needs_parens() {
+        let x = Expr::symbol("disp_add_base_x");
+        let y = Expr::symbol("disp_add_base_y");
+        let mut node = AddNode::zero();
+        node.add_term(x, BigRational::from(1i64));
+        node.add_term(y, BigRational::from(1i64));
+        let sum = Arc::new(Expr::Add(node));
+        let e = Expr::Pow(sum, Expr::int(2));
+        let s = e.to_string();
+        assert!(s.starts_with('('), "expected leading '(' for Add base: {s}");
+        assert!(s.contains(")^2"), "expected ')^2' after Add base: {s}");
+    }
+
+    /// `x + y` — no outer parens when Add is the top-level expression.
+    #[test]
+    fn test_display_add_no_outer_parens() {
+        let x = Expr::symbol("disp_top_x");
+        let y = Expr::symbol("disp_top_y");
+        let mut node = AddNode::zero();
+        node.add_term(x, BigRational::from(1i64));
+        node.add_term(y, BigRational::from(1i64));
+        let s = Expr::Add(node).to_string();
+        assert!(!s.starts_with('('), "unexpected outer parens: {s}");
+    }
+
+    /// `x - y` — AddNode with negative coeff uses ` - ` not ` + (-1)*`.
+    #[test]
+    fn test_display_add_subtraction() {
+        let x = Expr::symbol("disp_sub_x");
+        let y = Expr::symbol("disp_sub_y");
+        let mut node = AddNode::zero();
+        node.add_term(x, BigRational::from(1i64));
+        node.add_term(y, BigRational::from(-1i64));
+        let s = Expr::Add(node).to_string();
+        assert!(s.contains(" - "), "expected ' - ' for subtraction: {s}");
+        assert!(!s.contains("(-1)"), "should not show '(-1)' coeff: {s}");
+    }
+
+    /// `2x` — MulNode with coeff 2, no `*` between coeff and variable.
+    #[test]
+    fn test_display_mul_coeff_no_star() {
+        let x = Expr::symbol("x");
+        let mut node = MulNode::one();
+        node.coeff = BigRational::from(2i64);
+        node.add_factor(x, Expr::int(1));
+        let s = Expr::Mul(node).to_string();
+        assert_eq!(s, "2x");
+    }
+
+    /// `-x` — MulNode with coeff -1 shows `-` not `-1*`.
+    #[test]
+    fn test_display_mul_neg_one_coeff() {
+        let x = Expr::symbol("x");
+        let mut node = MulNode::one();
+        node.coeff = BigRational::from(-1i64);
+        node.add_factor(x, Expr::int(1));
+        let s = Expr::Mul(node).to_string();
+        assert_eq!(s, "-x");
+    }
+
+    /// `x/y` — MulNode with y^(-1) renders as `x/y`.
+    #[test]
+    fn test_display_mul_division() {
+        let x = Expr::symbol("x");
+        let y = Expr::symbol("y");
+        let mut node = MulNode::one();
+        node.add_factor(x, Expr::int(1));
+        node.add_factor(y, Expr::int(-1));
+        let s = Expr::Mul(node).to_string();
+        assert_eq!(s, "x/y");
     }
 }

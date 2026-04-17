@@ -219,22 +219,28 @@ impl fmt::Display for MulNode {
         let neg_one = BigRational::from(-1i64);
         let coeff_is_one = self.coeff.is_one();
         let coeff_is_neg_one = self.coeff == neg_one;
-        let has_any_factors = !numer_parts.is_empty() || !denom_parts.is_empty();
+        let has_numer = !numer_parts.is_empty();
+        let has_any_factors = has_numer || !denom_parts.is_empty();
 
-        // `printed_something` tracks whether a token requiring "*" before the
-        // next factor has been written.  A bare "-" does NOT count — it fuses
-        // directly with the following factor.
+        // `printed_coeff` is true when a numeric coefficient token was emitted
+        // and the *next* numerator factor needs no `*` separator (e.g. `2x`).
+        // `printed_something` is the general "a `*` is needed before the next
+        // factor" flag (used between successive numerator factors).
+        let mut printed_coeff = false;
         let mut printed_something = false;
 
-        if coeff_is_neg_one && !numer_parts.is_empty() {
+        if coeff_is_neg_one && has_numer {
             write!(f, "-")?;
-        } else if !coeff_is_one || !has_any_factors {
+        } else if !coeff_is_one || !has_numer {
+            // Always print the coefficient when there are no numerator parts
+            // so that "1/x" renders as "1/x" rather than "/x".
             write!(f, "{}", self.coeff)?;
+            printed_coeff = true;
             printed_something = true;
         }
 
-        for (base, exp) in &numer_parts {
-            if printed_something {
+        for (i, (base, exp)) in numer_parts.iter().enumerate() {
+            if printed_something && !(i == 0 && printed_coeff) {
                 write!(f, "*")?;
             }
             if exp.is_one() {
@@ -392,7 +398,7 @@ mod tests {
     /// `2*x` should display as `2x` (no explicit `*` between coeff and symbol).
     #[test]
     fn test_display_coeff_times_symbol() {
-        let x = sym("mul_disp2_x");
+        let x = sym("x");
         let node = MulNode::from_coeff_and_base(BigRational::from(2i64), x);
         assert_eq!(node.to_string(), "2x");
     }
@@ -400,7 +406,7 @@ mod tests {
     /// `(-1)*x` should display as `-x`.
     #[test]
     fn test_display_neg_one_coeff() {
-        let x = sym("mul_disp_neg1_x");
+        let x = sym("x");
         let node = MulNode::from_coeff_and_base(BigRational::from(-1i64), x);
         assert_eq!(node.to_string(), "-x");
     }
@@ -408,7 +414,7 @@ mod tests {
     /// `(-2)*x` should display as `-2x`.
     #[test]
     fn test_display_neg_coeff() {
-        let x = sym("mul_disp_neg2_x");
+        let x = sym("x");
         let node = MulNode::from_coeff_and_base(BigRational::from(-2i64), x);
         assert_eq!(node.to_string(), "-2x");
     }
@@ -416,8 +422,8 @@ mod tests {
     /// `x * y^(-1)` should display as `x/y`.
     #[test]
     fn test_display_division() {
-        let x = sym("mul_div_x");
-        let y = sym("mul_div_y");
+        let x = sym("x");
+        let y = sym("y");
         let mut node = MulNode::from_factor(x, int_exp(1));
         node.add_factor(y, int_exp(-1));
         assert_eq!(node.to_string(), "x/y");
@@ -426,7 +432,7 @@ mod tests {
     /// `x^2` (coeff=1, single factor with exp=2) should display as `x^2`.
     #[test]
     fn test_display_power() {
-        let x = sym("mul_pow_x");
+        let x = sym("x");
         let node = MulNode::from_factor(x, int_exp(2));
         assert_eq!(node.to_string(), "x^2");
     }
@@ -434,7 +440,7 @@ mod tests {
     /// `1/x` (coeff=1, x^-1) should display as `1/x`.
     #[test]
     fn test_display_reciprocal_only() {
-        let x = sym("mul_recip_disp_x");
+        let x = sym("x");
         let node = MulNode::from_factor(x, int_exp(-1));
         assert_eq!(node.to_string(), "1/x");
     }
