@@ -92,11 +92,9 @@ pub(super) fn row_reduce(mut rows: Vec<Row>) -> Vec<Row> {
         let found = (cur_row..rows.len()).find(|&r| !rows[r][col].is_zero());
         let pivot = match found {
             Some(r) => r,
-            None => {
-                col = col.wrapping_add(1); // no pivot in this col; try next
-                                           // Actually just continue searching leftward
-                continue;
-            }
+            // No pivot in this column: keep cur_row fixed and let the loop
+            // advance to the next column on its own (`col -= 1` at the top).
+            None => continue,
         };
 
         rows.swap(cur_row, pivot);
