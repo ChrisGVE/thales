@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use crate::ast::{BinaryOp, Equation, Expression, Variable};
 use crate::matrix::{MatrixError, MatrixExpr};
+use crate::numeric::compile::compile;
 
 use super::coeff::extract_linear_coefficients;
 use super::gauss::{det_2x2, det_3x3, f64_to_expr, solve_gaussian};
@@ -101,9 +102,12 @@ impl LinearSystem {
             )
             .simplify();
 
-            let (row, constant) = extract_linear_coefficients(&combined, variables)?;
-            coeff_rows.push(row.into_iter().map(Expression::Float).collect());
-            const_rows.push(vec![Expression::Float(-constant)]);
+            let combined_expr = compile(&combined);
+            let (row, constant) = extract_linear_coefficients(&combined_expr, variables)?;
+            let row_f64: Vec<Expression> =
+                row.iter().map(|r| Expression::Float(r.to_f64())).collect();
+            coeff_rows.push(row_f64);
+            const_rows.push(vec![Expression::Float(-constant.to_f64())]);
         }
 
         let matrix_a =
