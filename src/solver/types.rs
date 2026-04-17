@@ -1,6 +1,14 @@
 //! Error types, result types, and solution enums for equation solving.
+//!
+//! Public types stay `Expression`-based. Internal solvers work in `Arc<Expr>`
+//! and build `Solution` values via the `*_from_expr` constructors, which
+//! decompile to `Expression` at the boundary.
+
+use std::sync::Arc;
 
 use crate::ast::{Expression, Variable};
+use crate::numeric::compile::decompile;
+use crate::numeric::Expr;
 
 /// Error types for equation solving.
 ///
@@ -277,6 +285,29 @@ pub enum Solution {
     Infinite,
 }
 
+impl Solution {
+    /// Build `Solution::Unique` from an internal `Arc<Expr>` result.
+    ///
+    /// Decompiles the `Expr` to the public `Expression` form at the boundary.
+    pub fn unique_from_expr(expr: &Arc<Expr>) -> Self {
+        Solution::Unique(decompile(expr))
+    }
+
+    /// Build `Solution::Multiple` from internal `Arc<Expr>` results.
+    pub fn multiple_from_expr(exprs: &[Arc<Expr>]) -> Self {
+        Solution::Multiple(exprs.iter().map(|e| decompile(e)).collect())
+    }
+
+    /// Build `Solution::Parametric` from an internal `Arc<Expr>` expression
+    /// and already-constructed constraints.
+    pub fn parametric_from_expr(expr: &Arc<Expr>, constraints: Vec<Constraint>) -> Self {
+        Solution::Parametric {
+            expression: decompile(expr),
+            constraints,
+        }
+    }
+}
+
 /// Constraint on a solution.
 ///
 /// Represents a condition that must be satisfied for a solution to be valid.
@@ -308,4 +339,15 @@ pub struct Constraint {
     pub variable: Variable,
     /// The condition that must hold (e.g., x >= 0)
     pub condition: Expression,
+}
+
+impl Constraint {
+    /// Build a `Constraint` from an internal `Arc<Expr>` condition,
+    /// decompiling at the boundary.
+    pub fn from_expr(variable: Variable, condition: &Arc<Expr>) -> Self {
+        Self {
+            variable,
+            condition: decompile(condition),
+        }
+    }
 }
