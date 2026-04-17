@@ -373,12 +373,11 @@ impl Solver for SmartSolver {
         // returns a single Unique result and cannot represent complex pairs.
         if !has_complex_roots {
             let path_builder = ResolutionPathBuilder::new(equation.left.clone());
-            if let Ok((result_expr, builder)) = symbolic_isolation::symbolic_isolate(
-                &equation.left,
-                &equation.right,
-                variable,
-                path_builder,
-            ) {
+            let lhs_arc = crate::numeric::compile::compile(&equation.left);
+            let rhs_arc = crate::numeric::compile::compile(&equation.right);
+            if let Ok((result_expr, builder)) =
+                symbolic_isolation::symbolic_isolate(&lhs_arc, &rhs_arc, variable, path_builder)
+            {
                 let path = builder.finish(result_expr.clone());
                 return Ok((Solution::Unique(result_expr), path));
             }

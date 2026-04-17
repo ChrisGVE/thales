@@ -14,7 +14,7 @@ use crate::numeric::{normalize, BigRational, Expr, SymbolId};
 use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder};
 
 use super::coeff::extract_linear_coefficients;
-use super::helpers::{contains_symbol, has_obvious_nonlinearity, is_linear_in_variable};
+use super::helpers::{contains_symbol, has_obvious_nonlinearity_expr, is_linear_in_variable_expr};
 use super::symbolic_isolation::symbolic_isolate;
 use super::types::{Solution, SolverError, SolverResult};
 use super::Solver;
@@ -90,7 +90,7 @@ impl Solver for LinearSolver {
         // Compile both sides to Arc<Expr> canonical form.
         let lhs_arc = compile(&equation.left);
         let rhs_arc = compile(&equation.right);
-        let residual = normalize::sub(lhs_arc, rhs_arc);
+        let residual = normalize::sub(lhs_arc.clone(), rhs_arc.clone());
 
         if !contains_symbol(&residual, var_id) {
             return Err(SolverError::CannotSolve(format!(
@@ -99,10 +99,8 @@ impl Solver for LinearSolver {
             )));
         }
 
-        // Linearity precheck on the source `Expression` form (cheap and
-        // avoids running an expensive engine on a clearly nonlinear input).
-        if !is_linear_in_variable(&equation.left, var_name)
-            || !is_linear_in_variable(&equation.right, var_name)
+        if !is_linear_in_variable_expr(&lhs_arc, var_id)
+            || !is_linear_in_variable_expr(&rhs_arc, var_id)
         {
             return Err(SolverError::UnsupportedEquationType);
         }
@@ -132,8 +130,7 @@ impl Solver for LinearSolver {
 
         // Symbolic path: linear shape but coefficient or constant is not a
         // pure rational — hand off to the full isolation engine.
-        let (result_expr, path) =
-            symbolic_isolate(&equation.left, &equation.right, variable, path)?;
+        let (result_expr, path) = symbolic_isolate(&lhs_arc, &rhs_arc, variable, path)?;
         let path = path.step(
             Operation::Isolate(variable.clone()),
             format!("Isolate {} on one side", variable),
@@ -144,7 +141,9 @@ impl Solver for LinearSolver {
     }
 
     fn can_solve(&self, equation: &Equation) -> bool {
-        !has_obvious_nonlinearity(&equation.left) && !has_obvious_nonlinearity(&equation.right)
+        let lhs = compile(&equation.left);
+        let rhs = compile(&equation.right);
+        !has_obvious_nonlinearity_expr(&lhs) && !has_obvious_nonlinearity_expr(&rhs)
     }
 }
 

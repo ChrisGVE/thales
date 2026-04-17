@@ -13,7 +13,7 @@ use crate::numeric::compile::compile;
 use crate::numeric::{normalize, Expr, SymbolId};
 use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder, StepAnnotation};
 
-use super::helpers::{contains_symbol, has_obvious_nonlinearity, simplify_numeric_expression};
+use super::helpers::{contains_symbol, has_obvious_nonlinearity_expr, simplify_numeric_expression};
 use super::types::{Solution, SolverError, SolverResult};
 use super::Solver;
 
@@ -158,7 +158,9 @@ impl Solver for QuadraticSolver {
     }
 
     fn can_solve(&self, equation: &Equation) -> bool {
-        has_obvious_nonlinearity(&equation.left) || has_obvious_nonlinearity(&equation.right)
+        let lhs = compile(&equation.left);
+        let rhs = compile(&equation.right);
+        has_obvious_nonlinearity_expr(&lhs) || has_obvious_nonlinearity_expr(&rhs)
     }
 }
 

@@ -12,7 +12,7 @@ use crate::numeric::compile::compile;
 use crate::numeric::{normalize, Expr, SymbolId};
 use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder, StepAnnotation};
 
-use super::helpers::{contains_symbol, is_polynomial_expression, simplify_numeric_expression};
+use super::helpers::{contains_symbol, is_polynomial_expr, simplify_numeric_expression};
 use super::linear::LinearSolver;
 use super::quadratic::QuadraticSolver;
 use super::types::{Solution, SolverError, SolverResult};
@@ -673,8 +673,9 @@ impl Solver for PolynomialSolver {
     }
 
     fn can_solve(&self, equation: &Equation) -> bool {
-        // Check if equation is polynomial (no transcendental functions)
-        is_polynomial_expression(&equation.left) && is_polynomial_expression(&equation.right)
+        let lhs = compile(&equation.left);
+        let rhs = compile(&equation.right);
+        is_polynomial_expr(&lhs) && is_polynomial_expr(&rhs)
     }
 }
 

@@ -259,7 +259,9 @@ impl SubstitutionSolver {
     ) -> Result<Vec<(Expression, Expression)>, SolverError> {
         // Step 1: isolate iso_var from source equation.
         let path = ResolutionPathBuilder::new(source.left.clone());
-        let (iso_expr, _) = symbolic_isolate(&source.left, &source.right, iso_var, path)?;
+        let lhs_arc = crate::numeric::compile::compile(&source.left);
+        let rhs_arc = crate::numeric::compile::compile(&source.right);
+        let (iso_expr, _) = symbolic_isolate(&lhs_arc, &rhs_arc, iso_var, path)?;
 
         // Step 2: substitute iso_var = iso_expr into both sides of target.
         let new_left = substitute_expr(&target.left, &iso_var.name, &iso_expr);

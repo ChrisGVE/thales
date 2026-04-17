@@ -10,7 +10,6 @@ use std::sync::Arc;
 
 use crate::ast::{BinaryOp, Expression};
 use crate::numeric::{Expr, SymbolId};
-use num::ToPrimitive;
 
 /// Check if expression contains the given variable.
 ///
@@ -209,7 +208,7 @@ pub(crate) fn has_obvious_nonlinearity_expr(expr: &Expr) -> bool {
 fn numeric_gt_one(exp: &Arc<Expr>) -> bool {
     match exp.as_ref() {
         Expr::Integer(n) => n.to_i64().map(|v| v > 1).unwrap_or(false),
-        Expr::Rational(r) => r.to_f64().map(|v| v > 1.0).unwrap_or(false),
+        Expr::Rational(r) => r.to_f64() > 1.0,
         Expr::Float(f) => *f > 1.0,
         _ => false,
     }
@@ -242,10 +241,10 @@ pub(crate) fn is_polynomial_expr(expr: &Expr) -> bool {
 fn is_polynomial_expr_exp(exp: &Arc<Expr>) -> bool {
     match exp.as_ref() {
         Expr::Integer(n) => n.to_i64().map(|v| v >= 0).unwrap_or(false),
-        Expr::Rational(r) => r
-            .to_f64()
-            .map(|v| v >= 0.0 && (v - v.round()).abs() < 1e-10)
-            .unwrap_or(false),
+        Expr::Rational(r) => {
+            let v = r.to_f64();
+            v >= 0.0 && (v - v.round()).abs() < 1e-10
+        }
         Expr::Float(f) => *f >= 0.0 && (*f - f.round()).abs() < 1e-10,
         // Symbolic exponent: treat as polynomial if exponent itself is
         // purely algebraic (matches legacy behaviour where a polynomial
