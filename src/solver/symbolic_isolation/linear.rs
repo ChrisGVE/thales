@@ -1,140 +1,99 @@
-//! Linear term collection for symbolic isolation.
+//! Multi-term linear factoring over `Expr`.
 //!
-//! Handles cases where the target variable appears on both sides of a binary
-//! operation, collecting linear coefficients to combine terms.
+//! When an `Expr::Add` has multiple terms containing the target variable,
+//! try to factor it out: `Σ coeff_i · (rest_i · var) = other`
+//! → `var = other / Σ coeff_i · rest_i`. Each term must be linear in `var`
+//! (i.e. carry exactly one `var^1` factor and no other `var`-dependence).
 
-use crate::ast::{BinaryOp, Expression, UnaryOp};
+use std::sync::Arc;
+
+use crate::numeric::compile::decompile;
+use crate::numeric::{normalize, BigRational, Expr, MulNode, SymbolId};
 use crate::resolution_path::{Operation, ResolutionPathBuilder, StepAnnotation};
 
-use super::super::helpers::contains_variable;
+use super::super::helpers::contains_symbol;
 use super::super::types::SolverError;
+use super::unwrap::{finish_mul_like, rational_to_arc};
 
-/// Count how many times a variable appears in an expression.
-pub(super) fn count_variable(expr: &Expression, var: &str) -> usize {
-    match expr {
-        Expression::Variable(v) if v.name == var => 1,
-        Expression::Variable(_)
-        | Expression::Integer(_)
-        | Expression::Float(_)
-        | Expression::Rational(_)
-        | Expression::Complex(_)
-        | Expression::Constant(_) => 0,
-        Expression::Unary(_, inner) => count_variable(inner, var),
-        Expression::Binary(_, left, right) => {
-            count_variable(left, var) + count_variable(right, var)
-        }
-        Expression::Power(base, exp) => count_variable(base, var) + count_variable(exp, var),
-        Expression::Function(_, args) => args.iter().map(|a| count_variable(a, var)).sum(),
-    }
-}
+type Unwrapped = (Arc<Expr>, ResolutionPathBuilder);
 
-/// Attempt to collect linear terms when the variable appears on both sides
-/// of a binary operation.
-///
-/// Handles patterns like `a*v + b*v = (a+b)*v` and `a*v - b*v = (a-b)*v`.
-pub(super) fn collect_linear_terms(
-    op: BinaryOp,
-    left: &Expression,
-    right: &Expression,
-    other: &Expression,
-    var: &str,
+/// Isolate `var` from a sum with multiple var-containing terms.
+pub(super) fn collect_linear_var_terms(
+    var_terms: &[(Arc<Expr>, BigRational)],
+    other: &Arc<Expr>,
+    var: SymbolId,
     path: ResolutionPathBuilder,
-) -> Result<(Expression, ResolutionPathBuilder), SolverError> {
-    // Only addition and subtraction can have linear collection
-    if op != BinaryOp::Add && op != BinaryOp::Sub {
+) -> Result<Unwrapped, SolverError> {
+    let mut factors: Vec<Arc<Expr>> = Vec::new();
+    for (term, coeff) in var_terms {
+        match divide_out_var(term, var, coeff) {
+            Some(f) => factors.push(f),
+            None => {
+                return Err(SolverError::CannotSolve(format!(
+                    "Cannot isolate '{}': nonlinear term {}",
+                    var.as_str(),
+                    term
+                )));
+            }
+        }
+    }
+
+    let combined_coeff = normalize::add_many(factors);
+    if combined_coeff.is_zero() {
         return Err(SolverError::CannotSolve(format!(
-            "Cannot isolate '{}': variable appears in both operands of {:?}",
-            var, op
+            "Variable '{}' cancels — no unique solution",
+            var.as_str()
         )));
     }
 
-    // Try to extract coefficients: left = coeff_l * var, right = coeff_r * var
-    let coeff_l = try_extract_linear_coeff(left, var);
-    let coeff_r = try_extract_linear_coeff(right, var);
-
-    match (coeff_l, coeff_r) {
-        (Some(cl), Some(cr)) => {
-            // Combine: (cl +/- cr) * var = other
-            let combined_coeff = match op {
-                BinaryOp::Add => {
-                    Expression::Binary(BinaryOp::Add, Box::new(cl), Box::new(cr)).simplify()
-                }
-                BinaryOp::Sub => {
-                    Expression::Binary(BinaryOp::Sub, Box::new(cl), Box::new(cr)).simplify()
-                }
-                _ => unreachable!(),
-            };
-            let new_other = Expression::Binary(
-                BinaryOp::Div,
-                Box::new(other.clone()),
-                Box::new(combined_coeff.clone()),
-            )
-            .simplify();
-            let p = path.annotated_step(
-                Operation::DivideBothSides(combined_coeff),
-                format!("Collect terms and divide to isolate {}", var),
-                new_other.clone(),
-                StepAnnotation::elementary(),
-            );
-            Ok((new_other, p))
-        }
-        _ => {
-            // Linear extraction failed — try clearing denominators
-            if let Some(result) =
-                super::rational::try_clear_denominators(op, left, right, other, var, &path)
-            {
-                return result;
-            }
-            Err(SolverError::CannotSolve(format!(
-                "Cannot isolate '{}': variable appears non-linearly in both operands",
-                var
-            )))
-        }
-    }
+    let new_other = normalize::div(other.clone(), combined_coeff.clone());
+    let coeff_expr = decompile(&combined_coeff);
+    let new_other_expr = decompile(&new_other);
+    let path = path.annotated_step(
+        Operation::DivideBothSides(coeff_expr),
+        format!("Collect terms and divide to isolate {}", var.as_str()),
+        new_other_expr,
+        StepAnnotation::elementary(),
+    );
+    Ok((new_other, path))
 }
 
-/// Try to extract the coefficient of a variable from an expression that is
-/// a linear multiple of the variable.
-///
-/// Returns `Some(coeff)` if `expr = coeff * var`, `None` otherwise.
-fn try_extract_linear_coeff(expr: &Expression, var: &str) -> Option<Expression> {
-    if count_variable(expr, var) != 1 {
-        return None;
-    }
+/// Return `coeff · (term / var)` as an `Arc<Expr>` when `term` is linear in
+/// `var` (holds `var` as a simple `var^1` factor and nothing else involving
+/// `var`). Returns `None` for any nonlinear form.
+pub(super) fn divide_out_var(
+    term: &Arc<Expr>,
+    var: SymbolId,
+    coeff: &BigRational,
+) -> Option<Arc<Expr>> {
+    match term.as_ref() {
+        Expr::Symbol(s) if *s == var => Some(rational_to_arc(coeff.clone())),
 
-    match expr {
-        Expression::Variable(v) if v.name == var => Some(Expression::Integer(1)),
-
-        Expression::Unary(UnaryOp::Neg, inner) => try_extract_linear_coeff(inner, var)
-            .map(|c| Expression::Unary(UnaryOp::Neg, Box::new(c)).simplify()),
-
-        Expression::Binary(BinaryOp::Mul, left, right) => {
-            let left_has = contains_variable(left, var);
-            let right_has = contains_variable(right, var);
-            if left_has && !right_has {
-                try_extract_linear_coeff(left, var).map(|c| {
-                    Expression::Binary(BinaryOp::Mul, Box::new(c), Box::new(right.as_ref().clone()))
-                        .simplify()
-                })
-            } else if right_has && !left_has {
-                try_extract_linear_coeff(right, var).map(|c| {
-                    Expression::Binary(BinaryOp::Mul, Box::new(left.as_ref().clone()), Box::new(c))
-                        .simplify()
-                })
-            } else {
-                None
+        Expr::Mul(node) => {
+            let mut has_var = false;
+            let combined = &node.coeff * coeff;
+            let mut result = MulNode::from_coeff(combined);
+            for (base, exp) in &node.factors {
+                if let Expr::Symbol(s) = base.as_ref() {
+                    if *s == var {
+                        match exp.as_ref() {
+                            Expr::Integer(n) if n.to_i64() == Some(1) => {
+                                has_var = true;
+                                continue;
+                            }
+                            _ => return None,
+                        }
+                    }
+                }
+                if contains_symbol(base, var) || contains_symbol(exp, var) {
+                    return None;
+                }
+                result.add_factor(base.clone(), exp.clone());
             }
-        }
-
-        Expression::Binary(BinaryOp::Div, left, right) => {
-            if contains_variable(right, var) {
-                None // var in denominator is not linear
-            } else {
-                try_extract_linear_coeff(left, var).map(|c| {
-                    Expression::Binary(BinaryOp::Div, Box::new(c), Box::new(right.as_ref().clone()))
-                        .simplify()
-                })
+            if !has_var {
+                return None;
             }
+            Some(finish_mul_like(result))
         }
 
         _ => None,
