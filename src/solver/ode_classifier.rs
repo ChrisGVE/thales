@@ -22,8 +22,14 @@
 //! assert_eq!(cls.ode_type, ODEType::Separable);
 //! ```
 
-use crate::ast::{BinaryOp, Expression, UnaryOp};
+use std::sync::Arc;
+
+use crate::ast::Expression;
+use crate::numeric::compile::compile;
+use crate::numeric::{Expr, SymbolId};
 use crate::ode::{FirstOrderODE, SecondOrderODE};
+
+use super::helpers::contains_symbol;
 
 // ---------------------------------------------------------------------------
 // Public type definitions
@@ -200,74 +206,127 @@ fn first_order_linearity(ode: &FirstOrderODE) -> ODELinearity {
 ///
 /// "Constant coefficients" means the rhs does not depend on the independent
 /// variable at all (autonomous equation), e.g. dy/dx = a*y.
+///
+/// Operates on a canonical `Arc<Expr>` form of the rhs using
+/// [`contains_symbol`].
 fn has_constant_coeff_first_order(ode: &FirstOrderODE) -> bool {
-    !ode.rhs.contains_variable(&ode.independent)
+    let rhs_arc = compile(&ode.rhs);
+    let x_id = SymbolId::intern(&ode.independent);
+    !contains_symbol(&rhs_arc, x_id)
 }
 
 /// Heuristic test for Bernoulli form: dy/dx + P(x)·y = Q(x)·y^n, n ≠ 0, 1.
 ///
 /// In terms of the RHS, rhs contains a y^n term (n ≠ 0, 1) possibly combined
 /// with a linear-in-y term. We find the highest-power y-term in rhs.
-fn is_bernoulli(rhs: &Expression, x_var: &str, y_var: &str) -> bool {
-    find_max_y_exponent(rhs, x_var, y_var)
-        .map(|n| n != 0.0 && (n - 1.0).abs() > 1e-10)
+fn is_bernoulli(rhs: &Expression, _x_var: &str, y_var: &str) -> bool {
+    let rhs_arc = compile(rhs);
+    let y_id = SymbolId::intern(y_var);
+    find_max_y_exponent_expr(&rhs_arc, y_id)
+        .map(|n| n != 0 && n != 1)
         .unwrap_or(false)
 }
 
-/// Find the maximum exponent of `y_var` in `expr`, traversing sums.
+/// Find the maximum exponent of `y_var` in the canonical `expr`, walking
+/// additive sums.
 ///
-/// `y + x·y²` returns `2.0`; a pure product `x·y²` returns `2.0`.
-fn find_max_y_exponent(expr: &Expression, x_var: &str, y_var: &str) -> Option<f64> {
-    match expr {
-        Expression::Binary(BinaryOp::Add | BinaryOp::Sub, left, right) => {
-            let l = find_max_y_exponent(left, x_var, y_var);
-            let r = find_max_y_exponent(right, x_var, y_var);
-            match (l, r) {
-                (Some(a), Some(b)) => Some(if a >= b { a } else { b }),
-                (Some(a), None) | (None, Some(a)) => Some(a),
-                (None, None) => None,
+/// `y + x·y²` returns `2`; a pure product `x·y²` returns `2`.
+///
+/// Uses exact integer exponents — matches the canonical `Arc<Expr>` form
+/// where `Pow` exponents are integer literals after normalization.
+fn find_max_y_exponent_expr(expr: &Arc<Expr>, y_var: SymbolId) -> Option<i64> {
+    match expr.as_ref() {
+        Expr::Add(node) => {
+            let mut best: Option<i64> = None;
+            for (term, _coeff) in &node.terms {
+                if let Some(n) = extract_y_exponent_expr(term, y_var) {
+                    best = Some(match best {
+                        Some(prev) if prev >= n => prev,
+                        _ => n,
+                    });
+                }
             }
+            best
         }
-        _ => extract_y_exponent(expr, x_var, y_var),
+        _ => extract_y_exponent_expr(expr, y_var),
     }
 }
 
-/// Extract the exponent n from a single term of the form `coeff(x)·y^n`.
-fn extract_y_exponent(expr: &Expression, x_var: &str, y_var: &str) -> Option<f64> {
-    match expr {
-        Expression::Variable(v) if v.name == y_var => Some(1.0),
-        Expression::Power(base, exp) => {
-            let base_is_y = matches!(base.as_ref(), Expression::Variable(v) if v.name == y_var);
-            if base_is_y && !exp.contains_variable(y_var) {
-                exponent_to_f64(exp)
+/// Extract the exponent `n` from a single canonical term of the form
+/// `coeff(x) · y^n`.
+///
+/// Returns `None` when the term does not involve `y_var` as a simple
+/// factor, when the exponent is non-integer, or when `y_var` appears
+/// inside a function or inside the exponent itself.
+fn extract_y_exponent_expr(expr: &Arc<Expr>, y_var: SymbolId) -> Option<i64> {
+    match expr.as_ref() {
+        Expr::Symbol(s) if *s == y_var => Some(1),
+        Expr::Pow(base, exp) => {
+            let base_is_y = matches!(base.as_ref(), Expr::Symbol(s) if *s == y_var);
+            if base_is_y && !contains_symbol(exp, y_var) {
+                exponent_to_i64_expr(exp)
             } else {
                 None
             }
         }
-        Expression::Binary(BinaryOp::Mul, left, right) => {
-            let left_has_y = left.contains_variable(y_var);
-            let right_has_y = right.contains_variable(y_var);
-            match (left_has_y, right_has_y) {
-                (true, false) => extract_y_exponent(left, x_var, y_var),
-                (false, true) => extract_y_exponent(right, x_var, y_var),
-                _ => None,
+        Expr::Mul(node) => {
+            // Canonical Mul carries factors as (base, exp) pairs. `y^2`
+            // normalizes with `base = Pow(Symbol(y), 2)` and `exp = 1`,
+            // so both direct `Symbol(y)` and `Pow(Symbol(y), k)` bases
+            // are recognized here.
+            for (base, exp) in &node.factors {
+                if contains_symbol(exp, y_var) {
+                    return None;
+                }
+                match base.as_ref() {
+                    Expr::Symbol(s) if *s == y_var => {
+                        return exponent_to_i64_expr(exp);
+                    }
+                    Expr::Pow(inner_base, inner_exp) => {
+                        let inner_is_y = matches!(
+                            inner_base.as_ref(),
+                            Expr::Symbol(s) if *s == y_var
+                        );
+                        if inner_is_y && !contains_symbol(inner_exp, y_var) {
+                            let outer = exponent_to_i64_expr(exp)?;
+                            let inner = exponent_to_i64_expr(inner_exp)?;
+                            return Some(outer * inner);
+                        }
+                        if contains_symbol(base, y_var) {
+                            return None;
+                        }
+                    }
+                    _ => {
+                        if contains_symbol(base, y_var) {
+                            return None;
+                        }
+                    }
+                }
             }
+            None
         }
-        Expression::Unary(UnaryOp::Neg, inner) => extract_y_exponent(inner, x_var, y_var),
         _ => None,
     }
 }
 
-/// Convert a constant expression to f64 for exponent comparison.
-fn exponent_to_f64(expr: &Expression) -> Option<f64> {
-    match expr {
-        Expression::Integer(n) => Some(*n as f64),
-        Expression::Float(f) => Some(*f),
-        Expression::Rational(r) => {
-            if *r.denom() == 0 {
-                None
+/// Convert a canonical `Arc<Expr>` constant to `i64` for exponent
+/// comparison. Accepts integer literals and integer-valued rationals /
+/// floats.
+fn exponent_to_i64_expr(expr: &Arc<Expr>) -> Option<i64> {
+    match expr.as_ref() {
+        Expr::Integer(n) => n.to_i64(),
+        Expr::Rational(r) => {
+            if r.is_integer() {
+                r.numer().to_i64()
             } else {
-                Some(*r.numer() as f64 / *r.denom() as f64)
+                None
+            }
+        }
+        Expr::Float(f) => {
+            if (*f - f.round()).abs() < 1e-10 {
+                Some(f.round() as i64)
+            } else {
+                None
             }
         }
         _ => None,
