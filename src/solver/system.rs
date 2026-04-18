@@ -13,6 +13,10 @@ use super::types::{Solution, SolverError, SolverResult};
 pub enum SystemSolution {
     /// Unique solution: each variable has exactly one value.
     Unique(HashMap<Variable, Expression>),
+    /// Multiple discrete solutions (typical of non-linear polynomial systems
+    /// solved via Groebner basis elimination). Each element is a full
+    /// solution point assigning a value to every system variable.
+    Multiple(Vec<HashMap<Variable, Expression>>),
     /// Infinite solutions: variables are expressed in terms of free parameters.
     Infinite {
         /// Variables that have specific values.
@@ -115,6 +119,28 @@ impl SystemSolver {
                 let mut out = HashMap::new();
                 for (var, expr) in sol {
                     out.insert(var, Solution::Unique(expr));
+                }
+                Ok(out)
+            }
+            SystemSolution::Multiple(points) => {
+                // Aggregate each variable's values across all solution
+                // points into a `Solution::Multiple`. Pairing between
+                // variables is lost here; callers that need joint points
+                // should consume `SystemSolution::Multiple` directly.
+                let mut by_var: HashMap<Variable, Vec<Expression>> = HashMap::new();
+                for point in points {
+                    for (var, expr) in point {
+                        by_var.entry(var).or_default().push(expr);
+                    }
+                }
+                let mut out = HashMap::new();
+                for (var, values) in by_var {
+                    let sol = if values.len() == 1 {
+                        Solution::Unique(values.into_iter().next().unwrap())
+                    } else {
+                        Solution::Multiple(values)
+                    };
+                    out.insert(var, sol);
                 }
                 Ok(out)
             }

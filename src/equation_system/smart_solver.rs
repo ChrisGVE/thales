@@ -241,6 +241,17 @@ fn system_solution_to_pairs(
                 .collect();
             Ok(pairs)
         }
+        SystemSolution::Multiple(points) => {
+            // Caller expects a single assignment — return the first solution
+            // point. A richer API for multi-point consumers belongs at a
+            // higher layer than this helper.
+            let map = points.into_iter().next().ok_or(SolverError::NoSolution)?;
+            let pairs = variables
+                .iter()
+                .filter_map(|v| map.get(v).map(|e| (v.name.clone(), e.clone())))
+                .collect();
+            Ok(pairs)
+        }
         SystemSolution::NoSolution => Err(SolverError::NoSolution),
         SystemSolution::Infinite { .. } => Err(SolverError::InfiniteSolutions),
     }
