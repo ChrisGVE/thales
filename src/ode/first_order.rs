@@ -546,6 +546,28 @@ fn solve_for_constant(equation: &Expression, const_name: &str) -> Option<Express
             if matches!(right.as_ref(), Expression::Variable(v) if v.name == const_name) {
                 return Some(left.as_ref().clone());
             }
+            // Exp(C) - value = 0 => C = Ln(value)  (isolating from an explicit
+            // exponential form produced by ln-based antiderivatives).
+            if let Expression::Function(Function::Exp, args) = left.as_ref() {
+                if args.len() == 1 {
+                    if matches!(&args[0], Expression::Variable(v) if v.name == const_name) {
+                        return Some(Expression::Function(
+                            Function::Ln,
+                            vec![right.as_ref().clone()],
+                        ));
+                    }
+                }
+            }
+            if let Expression::Function(Function::Exp, args) = right.as_ref() {
+                if args.len() == 1 {
+                    if matches!(&args[0], Expression::Variable(v) if v.name == const_name) {
+                        return Some(Expression::Function(
+                            Function::Ln,
+                            vec![left.as_ref().clone()],
+                        ));
+                    }
+                }
+            }
         }
         // C + value = 0 => C = -value
         Expression::Binary(BinaryOp::Add, left, right) => {
