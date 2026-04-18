@@ -133,8 +133,9 @@ fn table_lookup_power(expr: &Arc<Expr>, var: SymbolId, x: &Arc<Expr>) -> Option<
 /// candidate `u = g(x)`, computes `g'(x)`, and checks whether the remaining
 /// factor simplifies to a constant multiple of `g'(x)`.
 fn try_u_substitution(expr: &Arc<Expr>, var: SymbolId) -> Option<Arc<Expr>> {
-    // Only useful for products
-    let (coeff, factors) = extract_mul_factors(expr)?;
+    // Accept both products and bare single-function expressions like `sin(2x)`.
+    let (coeff, factors) =
+        extract_mul_factors(expr).unwrap_or_else(|| (Expr::int(1), vec![expr.clone()]));
 
     // Find the first factor that is a known single-arg function
     let (func_idx, func_id, inner) =
@@ -179,44 +180,45 @@ fn try_u_substitution(expr: &Arc<Expr>, var: SymbolId) -> Option<Arc<Expr>> {
 
 // ── Tabular integration by parts ─────────────────────────────────────────────
 
-/// Handle `xⁿ · sin(x)` and `xⁿ · cos(x)` for n ∈ {0,1,2,3} by the tabular
-/// (repeated differentiation / integration) method.
+/// Handle `xⁿ · sin(x)`, `xⁿ · cos(x)`, and `xⁿ · exp(x)` for `n ∈ {0..=6}`
+/// via the tabular (repeated differentiation / integration) method.
 fn try_tabular_parts(expr: &Arc<Expr>, var: SymbolId) -> Option<Arc<Expr>> {
-    let (n, trig_id) = extract_xn_trig(expr, var)?;
-    if n > 3 || n < 0 {
+    let (n, func_id) = extract_xn_elementary(expr, var)?;
+    if !(0..=6).contains(&n) {
         return None;
     }
     let x = Expr::symbol(&var.as_str());
-    Some(tabular_xn_trig(n, trig_id, &x, var))
+    match func_id {
+        FuncId::Sin | FuncId::Cos => Some(tabular_xn_trig(n, func_id, &x, var)),
+        FuncId::Exp => Some(tabular_xn_exp(n, &x, var)),
+        _ => None,
+    }
 }
 
-/// Extract `(n, FuncId)` from an expression matching `xⁿ · sin/cos(x)` or
-/// `sin/cos(x)` (n=0) or `x · sin/cos(x)` (n=1).
-fn extract_xn_trig(expr: &Arc<Expr>, var: SymbolId) -> Option<(i64, FuncId)> {
-    // Direct: sin(x) or cos(x)
-    if let Some(inner) = match_func1(expr, FuncId::Sin) {
-        if is_var(inner, var) {
-            return Some((0, FuncId::Sin));
-        }
-    }
-    if let Some(inner) = match_func1(expr, FuncId::Cos) {
-        if is_var(inner, var) {
-            return Some((0, FuncId::Cos));
+/// Extract `(n, FuncId)` from an expression matching `xⁿ · f(x)` where `f` is
+/// one of `sin`, `cos`, `exp`. Also matches the bare function for `n=0` and
+/// the single-factor `x · f(x)` product for `n=1`.
+fn extract_xn_elementary(expr: &Arc<Expr>, var: SymbolId) -> Option<(i64, FuncId)> {
+    // Direct: f(x) with f ∈ {sin, cos, exp}
+    for fid in [FuncId::Sin, FuncId::Cos, FuncId::Exp] {
+        if let Some(inner) = match_func1(expr, fid) {
+            if is_var(inner, var) {
+                return Some((0, fid));
+            }
         }
     }
 
-    // Product: must have exactly xⁿ and a trig func
+    // Product: must have exactly xⁿ and a matching func factor
     let (_, factors) = extract_mul_factors(expr)?;
     let mut pow_n: Option<i64> = None;
-    let mut trig: Option<FuncId> = None;
+    let mut func_id: Option<FuncId> = None;
 
     for f in &factors {
         match f.as_ref() {
-            Expr::Func(FuncId::Sin, args) if args.len() == 1 && is_var(&args[0], var) => {
-                trig = Some(FuncId::Sin);
-            }
-            Expr::Func(FuncId::Cos, args) if args.len() == 1 && is_var(&args[0], var) => {
-                trig = Some(FuncId::Cos);
+            Expr::Func(id @ (FuncId::Sin | FuncId::Cos | FuncId::Exp), args)
+                if args.len() == 1 && is_var(&args[0], var) =>
+            {
+                func_id = Some(*id);
             }
             Expr::Pow(base, exp) if is_var(base, var) => {
                 pow_n = as_integer(exp);
@@ -228,7 +230,7 @@ fn extract_xn_trig(expr: &Arc<Expr>, var: SymbolId) -> Option<(i64, FuncId)> {
         }
     }
 
-    match (pow_n, trig) {
+    match (pow_n, func_id) {
         (Some(n), Some(id)) if n >= 0 => Some((n, id)),
         _ => None,
     }
@@ -270,6 +272,38 @@ fn tabular_xn_trig(n: i64, trig: FuncId, x: &Arc<Expr>, var: SymbolId) -> Arc<Ex
         let d = &derivs[i];
         let v = &integrals[i].0;
         let term = normalize::mul(d.clone(), v.clone());
+        if sign_pos {
+            acc = normalize::add(acc, term);
+        } else {
+            acc = normalize::sub(acc, term);
+        }
+        sign_pos = !sign_pos;
+    }
+    acc
+}
+
+/// Compute `∫ xⁿ · exp(x) dx` via the tabular method.
+///
+/// `∫exp(x) = exp(x)` (self-repeating), so the table is:
+/// derivatives `xⁿ, n·xⁿ⁻¹, …, n!, 0` against integrals `exp(x), exp(x), …`
+/// with alternating signs: `+u₀·v₁ − u₁·v₂ + u₂·v₃ − …`.
+fn tabular_xn_exp(n: i64, x: &Arc<Expr>, var: SymbolId) -> Arc<Expr> {
+    let x_pow = normalize::pow(x.clone(), Expr::int(n));
+    let mut derivs: Vec<Arc<Expr>> = vec![x_pow];
+    for _ in 0..=n {
+        let last = derivs.last().unwrap().clone();
+        let d = diff_arc(&last, var);
+        derivs.push(d);
+    }
+    let exp_x = Expr::func(FuncId::Exp, vec![x.clone()]);
+
+    let mut sign_pos = true;
+    let mut acc = Expr::int(0);
+    for d in &derivs {
+        if d.is_zero() {
+            break;
+        }
+        let term = normalize::mul(d.clone(), exp_x.clone());
         if sign_pos {
             acc = normalize::add(acc, term);
         } else {
