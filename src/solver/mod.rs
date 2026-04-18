@@ -149,10 +149,13 @@ use crate::ast::{BinaryOp, Equation, Expression, Variable};
 use crate::numerical::SmartNumericalSolver;
 use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder, ResolutionStep};
 use helpers::{
-    evaluate_constants, extract_quadratic_coefficients_expr, get_polynomial_degree_expr,
-    is_polynomial_expr, substitute_values,
+    contains_symbol, evaluate_constants, extract_quadratic_coefficients_expr,
+    get_polynomial_degree_expr, is_polynomial_expr, substitute_values,
 };
 use std::collections::HashMap;
+use std::sync::Arc;
+
+use crate::numeric::{Expr, SymbolId};
 
 /// Trait for equation solvers.
 ///
@@ -471,87 +474,122 @@ impl Solver for SmartSolver {
 // Symbolic-to-Numerical Handoff Helpers
 // ============================================================================
 
-/// Count the number of times a variable appears in an expression.
-fn count_variable_occurrences(expr: &Expression, var_name: &str) -> usize {
-    match expr {
-        Expression::Variable(v) if v.name == var_name => 1,
-        Expression::Variable(_)
-        | Expression::Integer(_)
-        | Expression::Float(_)
-        | Expression::Rational(_)
-        | Expression::Complex(_)
-        | Expression::Constant(_) => 0,
-        Expression::Unary(_, inner) => count_variable_occurrences(inner, var_name),
-        Expression::Binary(_, left, right) => {
-            count_variable_occurrences(left, var_name) + count_variable_occurrences(right, var_name)
+/// Count the number of times a variable appears in a canonical
+/// `Arc<Expr>`.
+///
+/// After normalization, like terms are merged — `x + x` canonicalizes
+/// to `2·x` with one `Symbol(x)` node, not two. The count therefore
+/// represents distinct, non-combinable appearances, which is what
+/// [`analyze_symbolic_failure`] needs when reporting why the symbolic
+/// path could not isolate the variable.
+fn count_variable_occurrences_expr(expr: &Arc<Expr>, var: SymbolId) -> usize {
+    match expr.as_ref() {
+        Expr::Symbol(s) => {
+            if *s == var {
+                1
+            } else {
+                0
+            }
         }
-        Expression::Function(_, args) => args
-            .iter()
-            .map(|a| count_variable_occurrences(a, var_name))
+        Expr::Integer(_)
+        | Expr::Rational(_)
+        | Expr::Float(_)
+        | Expr::Complex(_)
+        | Expr::Constant(_) => 0,
+        Expr::Add(node) => node
+            .terms
+            .keys()
+            .map(|t| count_variable_occurrences_expr(t, var))
             .sum(),
-        Expression::Power(base, exp) => {
-            count_variable_occurrences(base, var_name) + count_variable_occurrences(exp, var_name)
+        Expr::Mul(node) => node
+            .factors
+            .iter()
+            .map(|(b, e)| {
+                count_variable_occurrences_expr(b, var) + count_variable_occurrences_expr(e, var)
+            })
+            .sum(),
+        Expr::Pow(base, exp) => {
+            count_variable_occurrences_expr(base, var) + count_variable_occurrences_expr(exp, var)
         }
+        Expr::Func(_, args) => args
+            .iter()
+            .map(|a| count_variable_occurrences_expr(a, var))
+            .sum(),
     }
 }
 
-/// Check whether the variable appears inside a transcendental function.
-fn variable_in_transcendental(expr: &Expression, var_name: &str) -> bool {
-    match expr {
-        Expression::Function(_, args) => args.iter().any(|a| a.contains_variable(var_name)),
-        Expression::Unary(_, inner) => variable_in_transcendental(inner, var_name),
-        Expression::Binary(_, left, right) => {
-            variable_in_transcendental(left, var_name)
-                || variable_in_transcendental(right, var_name)
-        }
-        Expression::Power(base, exp) => {
-            variable_in_transcendental(base, var_name) || variable_in_transcendental(exp, var_name)
+/// Check whether the variable appears inside a transcendental function
+/// (canonical `Expr::Func`).
+fn variable_in_transcendental_expr(expr: &Arc<Expr>, var: SymbolId) -> bool {
+    match expr.as_ref() {
+        Expr::Func(_, args) => args.iter().any(|a| contains_symbol(a, var)),
+        Expr::Add(node) => node
+            .terms
+            .keys()
+            .any(|t| variable_in_transcendental_expr(t, var)),
+        Expr::Mul(node) => node.factors.iter().any(|(b, e)| {
+            variable_in_transcendental_expr(b, var) || variable_in_transcendental_expr(e, var)
+        }),
+        Expr::Pow(base, exp) => {
+            variable_in_transcendental_expr(base, var) || variable_in_transcendental_expr(exp, var)
         }
         _ => false,
     }
 }
 
-/// Check whether the variable appears in an algebraic (non-transcendental) position.
-fn variable_in_algebraic(expr: &Expression, var_name: &str) -> bool {
-    match expr {
-        Expression::Variable(v) if v.name == var_name => true,
-        Expression::Variable(_)
-        | Expression::Integer(_)
-        | Expression::Float(_)
-        | Expression::Rational(_)
-        | Expression::Complex(_)
-        | Expression::Constant(_) => false,
-        Expression::Function(_, _) => false, // Skip into function args
-        Expression::Unary(_, inner) => variable_in_algebraic(inner, var_name),
-        Expression::Binary(_, left, right) => {
-            variable_in_algebraic(left, var_name) || variable_in_algebraic(right, var_name)
-        }
-        Expression::Power(base, exp) => {
-            // x^n where x contains var is algebraic; n^x is transcendental
-            if base.contains_variable(var_name) && !exp.contains_variable(var_name) {
+/// Check whether the variable appears in an algebraic (non-
+/// transcendental) position. A `Pow(base, exp)` is algebraic when
+/// `var` is inside `base` and not inside `exp`; placing `var` inside
+/// the exponent makes the position transcendental.
+fn variable_in_algebraic_expr(expr: &Arc<Expr>, var: SymbolId) -> bool {
+    match expr.as_ref() {
+        Expr::Symbol(s) => *s == var,
+        Expr::Integer(_)
+        | Expr::Rational(_)
+        | Expr::Float(_)
+        | Expr::Complex(_)
+        | Expr::Constant(_) => false,
+        Expr::Func(_, _) => false,
+        Expr::Add(node) => node
+            .terms
+            .keys()
+            .any(|t| variable_in_algebraic_expr(t, var)),
+        Expr::Mul(node) => node.factors.iter().any(|(b, e)| {
+            if contains_symbol(b, var) && !contains_symbol(e, var) {
                 true
             } else {
-                variable_in_algebraic(base, var_name)
+                variable_in_algebraic_expr(b, var) || variable_in_algebraic_expr(e, var)
+            }
+        }),
+        Expr::Pow(base, exp) => {
+            if contains_symbol(base, var) && !contains_symbol(exp, var) {
+                true
+            } else {
+                variable_in_algebraic_expr(base, var)
             }
         }
     }
 }
 
 /// Check whether the expression mixes algebraic and transcendental uses of the variable.
-fn has_transcendental_mixing(expr: &Expression, var_name: &str) -> bool {
-    variable_in_transcendental(expr, var_name) && variable_in_algebraic(expr, var_name)
+fn has_transcendental_mixing_expr(expr: &Arc<Expr>, var: SymbolId) -> bool {
+    variable_in_transcendental_expr(expr, var) && variable_in_algebraic_expr(expr, var)
 }
 
 /// Analyze why symbolic solving failed and return a structured reason.
+///
+/// Compiles `(lhs − rhs)` once and runs all structural checks against
+/// the canonical `Arc<Expr>` form.
 fn analyze_symbolic_failure(equation: &Equation, variable: &Variable) -> SymbolicFailureReason {
-    let var_name = &variable.name;
-    let expr = Expression::Binary(
+    let combined = Expression::Binary(
         BinaryOp::Sub,
         Box::new(equation.left.clone()),
         Box::new(equation.right.clone()),
     );
+    let combined_arc = crate::numeric::compile::compile(&combined);
+    let var_id = crate::numeric::SymbolId::intern(&variable.name);
 
-    let occurrences = count_variable_occurrences(&expr, var_name);
+    let occurrences = count_variable_occurrences_expr(&combined_arc, var_id);
 
     if occurrences == 0 {
         return SymbolicFailureReason::NonIsolable {
@@ -561,14 +599,14 @@ fn analyze_symbolic_failure(equation: &Equation, variable: &Variable) -> Symboli
     }
 
     // Check for mixed algebraic-transcendental usage (e.g. x * exp(x) = 5)
-    if has_transcendental_mixing(&expr, var_name) {
+    if has_transcendental_mixing_expr(&combined_arc, var_id) {
         return SymbolicFailureReason::Transcendental {
             equation_type: "mixed algebraic-transcendental".to_string(),
         };
     }
 
     // Pure transcendental usage
-    if variable_in_transcendental(&expr, var_name) {
+    if variable_in_transcendental_expr(&combined_arc, var_id) {
         return SymbolicFailureReason::Transcendental {
             equation_type: "transcendental".to_string(),
         };
