@@ -1,10 +1,26 @@
-//! Linear system of equations solver.
+//! System of equations solver — linear and polynomial.
+//!
+//! Linear systems are handled by the internal [`LinearSystem`] machinery
+//! (exact Gaussian / Cramer / LU on `Arc<Expr>`). Polynomial (non-linear)
+//! systems are delegated to [`crate::numeric::system_solver`], which
+//! computes a Groebner basis under lexicographic elimination order and
+//! back-substitutes to recover every rational solution point.
+//!
+//! [`SystemSolver::solve`] auto-dispatches: it inspects each equation's
+//! `(lhs − rhs)` in canonical `Arc<Expr>` form and routes linear systems
+//! through the linear path and polynomial (or mixed linear/polynomial)
+//! systems through the Groebner path.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::ast::{Equation, Expression, Variable};
+use crate::numeric::compile::{compile, decompile};
+use crate::numeric::system_solver::solve_system_expr;
+use crate::numeric::{Expr, SymbolId};
 use crate::resolution_path::{Operation, ResolutionPath, ResolutionStep};
 
+use super::helpers::is_linear_system_expr;
 use super::linear_system::LinearSystem;
 use super::types::{Solution, SolverError, SolverResult};
 
@@ -286,257 +302,110 @@ impl SystemSolver {
         }
         system.solve()
     }
+
+    /// Solve a non-linear polynomial system via Groebner basis elimination.
+    ///
+    /// Each equation `lhs = rhs` is compiled to canonical `Arc<Expr>` form
+    /// and treated as `lhs − rhs = 0`. The unknowns are listed in
+    /// `variables`; the last variable is eliminated first under lex order.
+    ///
+    /// Only rational real solution points are returned — complex roots
+    /// and irrational roots outside the quadratic-surd envelope are
+    /// dropped by the underlying numeric solver.
+    ///
+    /// Returns:
+    /// - [`SystemSolution::Unique`] when exactly one rational point is
+    ///   recovered,
+    /// - [`SystemSolution::Multiple`] for several rational points,
+    /// - [`SystemSolution::NoSolution`] when the Groebner basis has no
+    ///   rational solutions.
+    ///
+    /// Underdetermined systems (fewer independent polynomial relations
+    /// than unknowns) currently return `NoSolution` because the numeric
+    /// back-substitution cannot enumerate a parametric family without a
+    /// univariate base element — this is a limitation of the numeric
+    /// layer, not a semantic claim.
+    pub fn solve_polynomial_system(
+        &self,
+        equations: &[Equation],
+        variables: &[Variable],
+    ) -> SolverResult<SystemSolution> {
+        if equations.is_empty() || variables.is_empty() {
+            return Err(SolverError::Other("Empty system".to_string()));
+        }
+
+        let eq_pairs: Vec<(Arc<Expr>, Arc<Expr>)> = equations
+            .iter()
+            .map(|eq| (compile(&eq.left), compile(&eq.right)))
+            .collect();
+
+        let var_ids: Vec<SymbolId> = variables
+            .iter()
+            .map(|v| SymbolId::intern(&v.name))
+            .collect();
+
+        let points = solve_system_expr(&eq_pairs, &var_ids);
+
+        if points.is_empty() {
+            return Ok(SystemSolution::NoSolution);
+        }
+
+        let mut maps: Vec<HashMap<Variable, Expression>> = Vec::with_capacity(points.len());
+        for point in points {
+            let mut map: HashMap<Variable, Expression> = HashMap::new();
+            for (sid, arc) in point {
+                if let Some(var) = variables.iter().find(|v| SymbolId::intern(&v.name) == sid) {
+                    map.insert(var.clone(), decompile(&arc));
+                }
+            }
+            maps.push(map);
+        }
+
+        if maps.len() == 1 {
+            Ok(SystemSolution::Unique(maps.into_iter().next().unwrap()))
+        } else {
+            Ok(SystemSolution::Multiple(maps))
+        }
+    }
+
+    /// Auto-dispatching solver: chooses linear or polynomial path based
+    /// on equation structure.
+    ///
+    /// Compiles every `(lhs − rhs)` to canonical `Arc<Expr>` and checks
+    /// joint linearity with respect to `variables`. If every combined
+    /// residual is linear, the linear path (Gauss) is used; otherwise
+    /// the polynomial path (Groebner) is invoked.
+    pub fn solve(
+        &self,
+        equations: &[Equation],
+        variables: &[Variable],
+    ) -> SolverResult<SystemSolution> {
+        if equations.is_empty() || variables.is_empty() {
+            return Err(SolverError::Other("Empty system".to_string()));
+        }
+
+        let var_ids: Vec<SymbolId> = variables
+            .iter()
+            .map(|v| SymbolId::intern(&v.name))
+            .collect();
+
+        let is_linear = equations.iter().all(|eq| {
+            let combined = Expression::Binary(
+                crate::ast::BinaryOp::Sub,
+                Box::new(eq.left.clone()),
+                Box::new(eq.right.clone()),
+            );
+            let compiled = compile(&combined);
+            is_linear_system_expr(&compiled, &var_ids)
+        });
+
+        if is_linear {
+            self.solve_linear_system(equations, variables)
+        } else {
+            self.solve_polynomial_system(equations, variables)
+        }
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ast::{BinaryOp, Equation, Expression, Variable};
-
-    // ── helpers ───────────────────────────────────────────────────────────────
-
-    fn var_expr(name: &str) -> Expression {
-        Expression::Variable(Variable::new(name))
-    }
-
-    fn add(l: Expression, r: Expression) -> Expression {
-        Expression::Binary(BinaryOp::Add, Box::new(l), Box::new(r))
-    }
-
-    fn sub(l: Expression, r: Expression) -> Expression {
-        Expression::Binary(BinaryOp::Sub, Box::new(l), Box::new(r))
-    }
-
-    fn mul_expr(l: Expression, r: Expression) -> Expression {
-        Expression::Binary(BinaryOp::Mul, Box::new(l), Box::new(r))
-    }
-
-    fn eval(expr: &Expression) -> f64 {
-        let empty: HashMap<String, f64> = HashMap::new();
-        expr.evaluate(&empty).expect("evaluate")
-    }
-
-    fn make_2x2_system() -> ([Equation; 2], [Variable; 2]) {
-        // x + y = 5,  x − y = 1  =>  x = 3, y = 2
-        let x = Variable::new("x");
-        let y = Variable::new("y");
-        let eq1 = Equation::new(
-            "eq1",
-            add(var_expr("x"), var_expr("y")),
-            Expression::Integer(5),
-        );
-        let eq2 = Equation::new(
-            "eq2",
-            sub(var_expr("x"), var_expr("y")),
-            Expression::Integer(1),
-        );
-        ([eq1, eq2], [x, y])
-    }
-
-    fn make_3x3_system() -> ([Equation; 3], [Variable; 3]) {
-        // x + y + z = 6,  2x + 5y = 0,  2x + 3z = 10  =>  x=5, y=-2, z=0
-        // Use a cleaner 3×3: 2x+y-z=8, -3x-y+2z=-11, -2x+y+2z=-3 => x=2,y=3,z=-1
-        let x = Variable::new("x");
-        let y = Variable::new("y");
-        let z = Variable::new("z");
-        // 2x + y - z = 8
-        let lhs1 = sub(
-            add(
-                mul_expr(Expression::Integer(2), var_expr("x")),
-                var_expr("y"),
-            ),
-            var_expr("z"),
-        );
-        // -3x - y + 2z = -11
-        let lhs2 = add(
-            sub(
-                mul_expr(Expression::Integer(-3), var_expr("x")),
-                var_expr("y"),
-            ),
-            mul_expr(Expression::Integer(2), var_expr("z")),
-        );
-        // -2x + y + 2z = -3
-        let lhs3 = add(
-            add(
-                mul_expr(Expression::Integer(-2), var_expr("x")),
-                var_expr("y"),
-            ),
-            mul_expr(Expression::Integer(2), var_expr("z")),
-        );
-        let eq1 = Equation::new("eq1", lhs1, Expression::Integer(8));
-        let eq2 = Equation::new("eq2", lhs2, Expression::Integer(-11));
-        let eq3 = Equation::new("eq3", lhs3, Expression::Integer(-3));
-        ([eq1, eq2, eq3], [x, y, z])
-    }
-
-    // ── solve_matrix_inverse: 2×2 ─────────────────────────────────────────────
-
-    #[test]
-    fn test_inverse_2x2_correct_solution() {
-        let ([eq1, eq2], [x, y]) = make_2x2_system();
-        let solver = SystemSolver::new();
-        let sol = solver
-            .solve_matrix_inverse(&[eq1, eq2], &[x.clone(), y.clone()])
-            .unwrap();
-        match sol {
-            SystemSolution::Unique(map) => {
-                let xv = eval(map.get(&x).unwrap());
-                let yv = eval(map.get(&y).unwrap());
-                assert!((xv - 3.0).abs() < 1e-9, "x={xv}");
-                assert!((yv - 2.0).abs() < 1e-9, "y={yv}");
-            }
-            _ => panic!("expected unique solution"),
-        }
-    }
-
-    // ── solve_matrix_inverse: 3×3 ─────────────────────────────────────────────
-
-    #[test]
-    fn test_inverse_3x3_correct_solution() {
-        let ([eq1, eq2, eq3], [x, y, z]) = make_3x3_system();
-        let solver = SystemSolver::new();
-        let sol = solver
-            .solve_matrix_inverse(&[eq1, eq2, eq3], &[x.clone(), y.clone(), z.clone()])
-            .unwrap();
-        match sol {
-            SystemSolution::Unique(map) => {
-                let xv = eval(map.get(&x).unwrap());
-                let yv = eval(map.get(&y).unwrap());
-                let zv = eval(map.get(&z).unwrap());
-                assert!((xv - 2.0).abs() < 1e-9, "x={xv}");
-                assert!((yv - 3.0).abs() < 1e-9, "y={yv}");
-                assert!((zv - (-1.0)).abs() < 1e-9, "z={zv}");
-            }
-            _ => panic!("expected unique solution"),
-        }
-    }
-
-    // ── singular system returns error ─────────────────────────────────────────
-
-    #[test]
-    fn test_inverse_singular_system_returns_error() {
-        // x + y = 3,  2x + 2y = 6  (rows proportional => singular)
-        let x = Variable::new("x");
-        let y = Variable::new("y");
-        let eq1 = Equation::new(
-            "eq1",
-            add(var_expr("x"), var_expr("y")),
-            Expression::Integer(3),
-        );
-        let eq2 = Equation::new(
-            "eq2",
-            add(
-                mul_expr(Expression::Integer(2), var_expr("x")),
-                mul_expr(Expression::Integer(2), var_expr("y")),
-            ),
-            Expression::Integer(6),
-        );
-        let solver = SystemSolver::new();
-        let result = solver.solve_matrix_inverse(&[eq1, eq2], &[x, y]);
-        assert!(result.is_err(), "expected error for singular matrix");
-    }
-
-    // ── inverse result matches LU / Gaussian ─────────────────────────────────
-
-    #[test]
-    fn test_inverse_matches_gaussian_2x2() {
-        let ([eq1, eq2], [x, y]) = make_2x2_system();
-        let solver = SystemSolver::new();
-
-        let inv_sol = solver
-            .solve_matrix_inverse(&[eq1.clone(), eq2.clone()], &[x.clone(), y.clone()])
-            .unwrap();
-        let gauss_sol = solver
-            .solve_linear_system(&[eq1, eq2], &[x.clone(), y.clone()])
-            .unwrap();
-
-        match (inv_sol, gauss_sol) {
-            (SystemSolution::Unique(inv_map), SystemSolution::Unique(g_map)) => {
-                for var in &[x, y] {
-                    let iv = eval(inv_map.get(var).unwrap());
-                    let gv = eval(g_map.get(var).unwrap());
-                    assert!(
-                        (iv - gv).abs() < 1e-9,
-                        "mismatch for {}: inv={iv}, gauss={gv}",
-                        var.name
-                    );
-                }
-            }
-            _ => panic!("both should be unique"),
-        }
-    }
-
-    // ── solve_matrix_inverse_with_path ───────────────────────────────────────
-
-    #[test]
-    fn test_inverse_with_path_contains_matrix_inverse_op() {
-        use crate::resolution_path::Operation;
-
-        let ([eq1, eq2], [x, y]) = make_2x2_system();
-        let solver = SystemSolver::new();
-        let (_sol, path) = solver
-            .solve_matrix_inverse_with_path(&[eq1, eq2], &[x.clone(), y.clone()])
-            .unwrap();
-
-        let has_matrix_inverse = path
-            .steps
-            .iter()
-            .any(|s| matches!(s.operation, Operation::MatrixInverse));
-        assert!(has_matrix_inverse, "path must contain MatrixInverse step");
-    }
-
-    #[test]
-    fn test_inverse_with_path_contains_back_substitute_steps() {
-        use crate::resolution_path::Operation;
-
-        let ([eq1, eq2], [x, y]) = make_2x2_system();
-        let solver = SystemSolver::new();
-        let (_sol, path) = solver
-            .solve_matrix_inverse_with_path(&[eq1, eq2], &[x.clone(), y.clone()])
-            .unwrap();
-
-        let back_subs: Vec<_> = path
-            .steps
-            .iter()
-            .filter(|s| matches!(s.operation, Operation::BackSubstitute { .. }))
-            .collect();
-        assert_eq!(
-            back_subs.len(),
-            2,
-            "expected one BackSubstitute per variable"
-        );
-    }
-
-    #[test]
-    fn test_inverse_with_path_difficulty_is_advanced() {
-        use crate::resolution_path::TechniqueDifficulty;
-
-        let ([eq1, eq2], [x, y]) = make_2x2_system();
-        let solver = SystemSolver::new();
-        let (_sol, path) = solver
-            .solve_matrix_inverse_with_path(&[eq1, eq2], &[x.clone(), y.clone()])
-            .unwrap();
-
-        assert_eq!(path.max_difficulty(), TechniqueDifficulty::Advanced);
-    }
-
-    // ── solve_best_effort: prefers LU, falls back correctly ───────────────────
-
-    #[test]
-    fn test_best_effort_returns_unique_for_2x2() {
-        let ([eq1, eq2], [x, y]) = make_2x2_system();
-        let solver = SystemSolver::new();
-        let sol = solver
-            .solve_best_effort(&[eq1, eq2], &[x.clone(), y.clone()])
-            .unwrap();
-        match sol {
-            SystemSolution::Unique(map) => {
-                let xv = eval(map.get(&x).unwrap());
-                let yv = eval(map.get(&y).unwrap());
-                assert!((xv - 3.0).abs() < 1e-9);
-                assert!((yv - 2.0).abs() < 1e-9);
-            }
-            _ => panic!("expected unique solution"),
-        }
-    }
-}
+mod tests;

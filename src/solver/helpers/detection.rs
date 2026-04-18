@@ -253,6 +253,62 @@ fn is_polynomial_expr_exp(exp: &Arc<Expr>) -> bool {
     }
 }
 
+/// Multivariate linearity predicate: `true` when `expr` is linear with
+/// respect to the set `vars` as a whole — no term multiplies two
+/// unknowns together, no unknown appears in a `Pow` base, and no
+/// unknown appears inside any function or exponent.
+///
+/// Stronger than applying [`is_linear_in_variable_expr`] variable-by-
+/// variable: a product `x*y` is per-variable linear in both `x` and `y`
+/// but nonlinear in the joint system `{x, y}`.
+pub(crate) fn is_linear_system_expr(expr: &Expr, vars: &[SymbolId]) -> bool {
+    match expr {
+        Expr::Integer(_)
+        | Expr::Rational(_)
+        | Expr::Float(_)
+        | Expr::Complex(_)
+        | Expr::Constant(_)
+        | Expr::Symbol(_) => true,
+        Expr::Add(node) => node.terms.keys().all(|t| is_linear_system_expr(t, vars)),
+        Expr::Mul(node) => {
+            let mut unknown_factors: usize = 0;
+            for (base, exp) in &node.factors {
+                let base_has = vars.iter().any(|&v| contains_symbol(base, v));
+                let exp_has = vars.iter().any(|&v| contains_symbol(exp, v));
+                if !base_has && !exp_has {
+                    continue;
+                }
+                if exp_has {
+                    return false;
+                }
+                match base.as_ref() {
+                    Expr::Symbol(s) if vars.contains(s) => {
+                        if !matches!(
+                            exp.as_ref(),
+                            Expr::Integer(n) if n.to_i64() == Some(1)
+                        ) {
+                            return false;
+                        }
+                        unknown_factors += 1;
+                        if unknown_factors > 1 {
+                            return false;
+                        }
+                    }
+                    _ => return false,
+                }
+            }
+            true
+        }
+        Expr::Pow(base, exp) => {
+            if vars.iter().any(|&v| contains_symbol(base, v)) {
+                return false;
+            }
+            is_linear_system_expr(exp, vars)
+        }
+        Expr::Func(_, _) => false,
+    }
+}
+
 /// Expr counterpart of [`is_linear_in_variable`]: `true` if `var`
 /// appears at most to degree 1, not in a denominator, not multiplied by
 /// itself, and not inside any function.
