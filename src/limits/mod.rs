@@ -4,7 +4,6 @@
 //! indeterminate forms that require L'Hôpital's rule or other techniques.
 
 mod evaluation;
-mod helpers;
 mod types;
 
 pub use evaluation::{limit, limit_left, limit_right, limit_with_lhopital};
