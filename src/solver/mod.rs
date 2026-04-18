@@ -149,7 +149,8 @@ use crate::ast::{BinaryOp, Equation, Expression, Variable};
 use crate::numerical::SmartNumericalSolver;
 use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder, ResolutionStep};
 use helpers::{
-    evaluate_constants, get_polynomial_degree, is_polynomial_expression, substitute_values,
+    evaluate_constants, extract_quadratic_coefficients_expr, get_polynomial_degree_expr,
+    is_polynomial_expr, substitute_values,
 };
 use std::collections::HashMap;
 
@@ -348,23 +349,29 @@ impl Solver for SmartSolver {
         // (complex roots).  For real-root quadratics the symbolic isolation
         // path gives the expected Unique result; for complex-root cases it
         // would produce an unevaluable expression like (-1)^(1/2).
-        let combined_deg = crate::ast::Expression::Binary(
-            crate::ast::BinaryOp::Sub,
-            Box::new(equation.left.clone()),
-            Box::new(equation.right.clone()),
-        )
-        .simplify();
-        let var_degree = if is_polynomial_expression(&combined_deg) {
-            get_polynomial_degree(&combined_deg, &variable.name)
+        //
+        // Compiled once up front so the polynomial shape check, the
+        // quadratic coefficient extraction, and the downstream symbolic
+        // isolation all consume the same canonical `Arc<Expr>` form.
+        let lhs_arc = crate::numeric::compile::compile(&equation.left);
+        let rhs_arc = crate::numeric::compile::compile(&equation.right);
+        let combined_arc = crate::numeric::normalize::sub(lhs_arc.clone(), rhs_arc.clone());
+        let var_id = crate::numeric::SymbolId::intern(&variable.name);
+
+        let var_degree = if is_polynomial_expr(&combined_arc) {
+            get_polynomial_degree_expr(&combined_arc, var_id)
         } else {
             0
         };
 
-        // Compute discriminant only for true quadratics in the target variable.
+        // Compute discriminant only for true quadratics in the target
+        // variable. BigRational comparison is exact — no epsilon required.
         let has_complex_roots = if var_degree == 2 {
-            use helpers::extract_quadratic_coefficients;
-            let (a, b, c) = extract_quadratic_coefficients(&combined_deg, &variable.name);
-            a.abs() > 1e-15 && (b * b - 4.0 * a * c) < -1e-15
+            use num::traits::Zero;
+            let (a, b, c) = extract_quadratic_coefficients_expr(&combined_arc, var_id);
+            let four = crate::numeric::BigRational::from(4);
+            let disc = &(&b * &b) - &(&four * &(&a * &c));
+            !a.is_zero() && disc < crate::numeric::BigRational::zero()
         } else {
             false
         };
@@ -375,8 +382,6 @@ impl Solver for SmartSolver {
         // returns a single Unique result and cannot represent complex pairs.
         if !has_complex_roots {
             let path_builder = ResolutionPathBuilder::new(equation.left.clone());
-            let lhs_arc = crate::numeric::compile::compile(&equation.left);
-            let rhs_arc = crate::numeric::compile::compile(&equation.right);
             if let Ok((result_expr, builder)) =
                 symbolic_isolation::symbolic_isolate(&lhs_arc, &rhs_arc, variable, path_builder)
             {

@@ -17,7 +17,8 @@ pub(crate) mod substitution;
 
 pub(crate) use coefficients::{
     evaluate_constants, extract_coefficient, extract_polynomial_coefficients,
-    extract_quadratic_coefficients, get_polynomial_degree, simplify_numeric_expression,
+    extract_quadratic_coefficients, extract_quadratic_coefficients_expr, get_polynomial_degree,
+    get_polynomial_degree_expr, simplify_numeric_expression,
 };
 pub(crate) use detection::{
     contains_symbol, contains_variable, has_any_symbol, has_any_variable, has_obvious_nonlinearity,
