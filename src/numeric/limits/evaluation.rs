@@ -82,6 +82,23 @@ pub(crate) fn limit_at_finite(
                 if (l - r).abs() < 1e-4 * (l.abs().max(1.0)) {
                     let avg = (l + r) / 2.0;
                     if !avg.is_nan() {
+                        // Before trusting the float probe, try L'Hôpital: for
+                        // 0/0 forms like `(1 − cos x)/x²` the probe suffers
+                        // from catastrophic cancellation near the point, while
+                        // L'Hôpital gives an exact result that evaluates
+                        // numerically (e.g. `cos(0)/2 = 1/2`).
+                        if let Some(lh) = try_lhopital(expr, var, point) {
+                            if let LimitResult::Value(ref v) = lh {
+                                if let Some(lh_f) = eval_f64(v) {
+                                    // Trust L'Hôpital when its result agrees
+                                    // with the probe's neighbourhood — it
+                                    // provides more precision.
+                                    if (lh_f - avg).abs() < 1e-2 * lh_f.abs().max(1.0) {
+                                        return lh;
+                                    }
+                                }
+                            }
+                        }
                         // Prefer the symbolic substitution when it produced a
                         // clean numeric value; otherwise synthesize from the
                         // float average, promoting near-integer results to

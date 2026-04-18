@@ -100,20 +100,30 @@ fn extract_ratio(expr: &Arc<Expr>) -> Option<(Arc<Expr>, Arc<Expr>)> {
             let mut den_factors: Vec<(Arc<Expr>, Arc<Expr>)> = Vec::new();
 
             for (base, exp) in &node.factors {
-                if is_negative_one(exp) {
-                    den_factors.push((base.clone(), Expr::int(1)));
-                } else if let Expr::Integer(n) = exp.as_ref() {
+                // Compute the effective exponent by unwrapping `Pow(p, k)` as
+                // base with exp=1 into `(p, k)`. This handles canonical forms
+                // like `Pow(x, -2)` stored as a factor with exp=1.
+                let (effective_base, effective_exp) = match (base.as_ref(), exp.as_ref()) {
+                    (Expr::Pow(inner_base, inner_exp), _) if exp.is_one() => {
+                        (inner_base.clone(), inner_exp.clone())
+                    }
+                    _ => (base.clone(), exp.clone()),
+                };
+
+                if is_negative_one(&effective_exp) {
+                    den_factors.push((effective_base, Expr::int(1)));
+                } else if let Expr::Integer(n) = effective_exp.as_ref() {
                     if let Some(v) = n.to_i64() {
                         if v < 0 {
-                            den_factors.push((base.clone(), Expr::int(-v)));
+                            den_factors.push((effective_base, Expr::int(-v)));
                         } else {
-                            num_factors.push((base.clone(), exp.clone()));
+                            num_factors.push((effective_base, effective_exp));
                         }
                     } else {
-                        num_factors.push((base.clone(), exp.clone()));
+                        num_factors.push((effective_base, effective_exp));
                     }
                 } else {
-                    num_factors.push((base.clone(), exp.clone()));
+                    num_factors.push((effective_base, effective_exp));
                 }
             }
 
