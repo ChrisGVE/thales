@@ -6,8 +6,45 @@
 
 use crate::ast::{BinaryOp, Expression, Function, UnaryOp, Variable};
 
-use super::helpers::expressions_equivalent;
 use super::{IntegrationError, IntegrationResult};
+
+/// Compute a canonical string key for an expression, normalising the order
+/// of operands in commutative operations so that, e.g., `x * 2` and `2 * x`
+/// produce the same key. Used only for equivalence testing.
+fn canonical_key(expr: &Expression) -> String {
+    match expr {
+        Expression::Binary(op @ (BinaryOp::Add | BinaryOp::Mul), left, right) => {
+            let mut parts = vec![canonical_key(left), canonical_key(right)];
+            parts.sort();
+            let op_sym = match op {
+                BinaryOp::Add => "+",
+                BinaryOp::Mul => "*",
+                _ => unreachable!(),
+            };
+            format!("({}{}{})", parts[0], op_sym, parts[1])
+        }
+        Expression::Binary(op, left, right) => {
+            format!("({}{:?}{})", canonical_key(left), op, canonical_key(right))
+        }
+        Expression::Unary(op, inner) => {
+            format!("({:?}{})", op, canonical_key(inner))
+        }
+        Expression::Power(base, exp) => {
+            format!("({}^{})", canonical_key(base), canonical_key(exp))
+        }
+        Expression::Function(f, args) => {
+            let arg_keys: Vec<_> = args.iter().map(canonical_key).collect();
+            format!("{:?}({})", f, arg_keys.join(","))
+        }
+        other => format!("{}", other),
+    }
+}
+
+/// Check if two expressions are structurally equivalent under commutativity
+/// of `Add` and `Mul`.
+fn expressions_equivalent(a: &Expression, b: &Expression) -> bool {
+    canonical_key(a) == canonical_key(b)
+}
 
 // =============================================================================
 // Definite Integration
@@ -429,6 +466,12 @@ fn evaluate_limit_at_infinity(expr: &Expression, var: &str) -> Option<Expression
                 );
             }
             None
+        }
+
+        // Unary negation: lim(-f) = -lim(f)
+        Expression::Unary(UnaryOp::Neg, inner) => {
+            let inner_limit = evaluate_limit_at_infinity(inner, var)?;
+            Some(Expression::Unary(UnaryOp::Neg, Box::new(inner_limit)).simplify())
         }
 
         _ => None,
