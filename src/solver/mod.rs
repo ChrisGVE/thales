@@ -114,10 +114,12 @@
 //! ```
 
 mod coeff;
+mod cramer;
 mod gauss;
 mod helpers;
 pub mod linear;
 pub mod linear_system;
+mod lu_exact;
 pub mod ode_classifier;
 pub mod ode_solver;
 pub mod polynomial;
@@ -1091,8 +1093,8 @@ mod system_solver_tests {
         let system = LinearSystem::from_equations(&[eq1, eq2], &[x.clone(), y.clone()]).unwrap();
 
         // Verify matrix dimensions: 2 equations × 2 variables
-        assert_eq!(system.matrix_a.rows(), 2);
-        assert_eq!(system.variables.len(), 2);
+        assert_eq!(system.num_equations(), 2);
+        assert_eq!(system.num_variables(), 2);
     }
 
     #[test]

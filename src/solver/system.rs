@@ -8,36 +8,6 @@ use crate::resolution_path::{Operation, ResolutionPath, ResolutionStep};
 use super::linear_system::LinearSystem;
 use super::types::{Solution, SolverError, SolverResult};
 
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-/// Convert a numeric column `MatrixExpr` result into a `SystemSolution`.
-///
-/// `x` must be an n×1 matrix whose elements evaluate to concrete numbers.
-fn matrix_to_solution(
-    x: &crate::matrix::MatrixExpr,
-    variables: &[Variable],
-) -> SolverResult<SystemSolution> {
-    let empty: HashMap<String, f64> = HashMap::new();
-    let mut result = HashMap::new();
-    for (i, var) in variables.iter().enumerate() {
-        let val = x
-            .get(i, 0)
-            .map_err(|_| SolverError::Other(format!("index error for variable '{}'", var.name)))
-            .and_then(|e| {
-                e.evaluate(&empty).ok_or_else(|| {
-                    SolverError::Other(format!("failed to evaluate solution for '{}'", var.name))
-                })
-            })?;
-        let expr = if (val - val.round()).abs() < 1e-10 {
-            Expression::Integer(val.round() as i64)
-        } else {
-            Expression::Float(val)
-        };
-        result.insert(var.clone(), expr);
-    }
-    Ok(SystemSolution::Unique(result))
-}
-
 /// Result type for system solutions.
 #[derive(Debug, Clone)]
 pub enum SystemSolution {
@@ -246,18 +216,11 @@ impl SystemSolver {
 
         path.add_step(ResolutionStep::new(
             Operation::MatrixInverse,
-            "Compute A⁻¹ from the coefficient matrix".to_string(),
+            "Compute x = A⁻¹ b via exact LU decomposition".to_string(),
             Expression::Integer(0),
         ));
 
-        let inv_a = system
-            .matrix_a
-            .inverse()
-            .map_err(|e| SolverError::CannotSolve(e.to_string()))?;
-
-        let x = inv_a
-            .mul(&system.vector_b)
-            .map_err(|e| SolverError::CannotSolve(e.to_string()))?;
+        let sol = system.solve_via_lu()?;
 
         for var in &system.variables {
             path.add_step(ResolutionStep::new(
@@ -269,7 +232,6 @@ impl SystemSolver {
             ));
         }
 
-        let sol = matrix_to_solution(&x, &system.variables)?;
         let result_expr = Expression::Integer(system.variables.len() as i64);
         path.set_result(result_expr);
 
@@ -291,7 +253,7 @@ impl SystemSolver {
         variables: &[Variable],
     ) -> SolverResult<SystemSolution> {
         let system = LinearSystem::from_equations(equations, variables)?;
-        if system.matrix_a.rows() == system.variables.len() {
+        if system.num_equations() == system.num_variables() {
             if let Ok(sol) = system.solve_via_lu() {
                 return Ok(sol);
             }
