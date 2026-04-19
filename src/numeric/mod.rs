@@ -54,6 +54,7 @@ pub mod series;
 pub mod simplify;
 mod solution_set;
 mod sparse_poly;
+pub mod substitute;
 pub mod system_solver;
 mod term_order;
 pub mod trig_rules;
