@@ -111,6 +111,28 @@ impl TaylorSeries {
             .cloned()
             .unwrap_or_else(|| Expr::int(0))
     }
+
+    /// Reassemble the series as a single normalized `Arc<Expr>`:
+    /// `Σ a_n · (x − center)^n`.
+    #[must_use]
+    pub fn to_expr(&self) -> Arc<Expr> {
+        let var_expr: Arc<Expr> = Arc::new(Expr::Symbol(self.var));
+        let shift = if self.center.is_zero() {
+            var_expr
+        } else {
+            super::normalize::sub(var_expr, self.center.clone())
+        };
+        let mut acc: Arc<Expr> = Expr::int(0);
+        for (n, c) in self.coefficients.iter().enumerate() {
+            if c.is_zero() {
+                continue;
+            }
+            let power = super::normalize::pow(shift.clone(), Expr::int(n as i64));
+            let term = super::normalize::mul(c.clone(), power);
+            acc = super::normalize::add(acc, term);
+        }
+        acc
+    }
 }
 
 // ── LaurentSeries ─────────────────────────────────────────────────────────────

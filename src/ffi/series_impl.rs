@@ -13,41 +13,30 @@ pub(super) fn taylor_series_ffi(
     center: f64,
     order: u32,
 ) -> Result<super::ffi::TaylorSeriesResultFFI, String> {
-    use crate::ast::Variable;
-    use crate::series::taylor;
+    use crate::numeric::compile::{compile, decompile};
+    use crate::numeric::expr::Expr;
+    use crate::numeric::series::taylor;
+    use crate::numeric::SymbolId;
 
     let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
+    let arc_expr = compile(&expr);
+    let var_id = SymbolId::intern(variable);
+    let center_arc = Expr::float(center);
 
-    let var = Variable::new(variable);
-    let center_expr = crate::ast::Expression::Float(center);
+    let ts = taylor(&arc_expr, var_id, &center_arc, order as usize);
+    let series_arc = ts.to_expr();
+    let series_expr = decompile(&series_arc);
 
-    let result = taylor(&expr, &var, &center_expr, order);
-
-    match result {
-        Ok(series) => {
-            let series_expr = series.to_expression();
-            Ok(super::ffi::TaylorSeriesResultFFI {
-                original: expression.to_string(),
-                variable: variable.to_string(),
-                center,
-                order,
-                series: format!("{}", series_expr),
-                series_latex: series_expr.to_latex(),
-                success: true,
-                error_message: String::new(),
-            })
-        }
-        Err(e) => Ok(super::ffi::TaylorSeriesResultFFI {
-            original: expression.to_string(),
-            variable: variable.to_string(),
-            center,
-            order,
-            series: String::new(),
-            series_latex: String::new(),
-            success: false,
-            error_message: format!("{}", e),
-        }),
-    }
+    Ok(super::ffi::TaylorSeriesResultFFI {
+        original: expression.to_string(),
+        variable: variable.to_string(),
+        center,
+        order,
+        series: format!("{}", series_expr),
+        series_latex: series_expr.to_latex(),
+        success: true,
+        error_message: String::new(),
+    })
 }
 
 /// Compute Maclaurin series expansion (Taylor series centered at 0).
@@ -56,40 +45,29 @@ pub(super) fn maclaurin_series_ffi(
     variable: &str,
     order: u32,
 ) -> Result<super::ffi::TaylorSeriesResultFFI, String> {
-    use crate::ast::Variable;
-    use crate::series::maclaurin;
+    use crate::numeric::compile::{compile, decompile};
+    use crate::numeric::expr::Expr;
+    use crate::numeric::series::taylor;
+    use crate::numeric::SymbolId;
 
     let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
+    let arc_expr = compile(&expr);
+    let var_id = SymbolId::intern(variable);
 
-    let var = Variable::new(variable);
+    let ts = taylor(&arc_expr, var_id, &Expr::int(0), order as usize);
+    let series_arc = ts.to_expr();
+    let series_expr = decompile(&series_arc);
 
-    let result = maclaurin(&expr, &var, order);
-
-    match result {
-        Ok(series) => {
-            let series_expr = series.to_expression();
-            Ok(super::ffi::TaylorSeriesResultFFI {
-                original: expression.to_string(),
-                variable: variable.to_string(),
-                center: 0.0,
-                order,
-                series: format!("{}", series_expr),
-                series_latex: series_expr.to_latex(),
-                success: true,
-                error_message: String::new(),
-            })
-        }
-        Err(e) => Ok(super::ffi::TaylorSeriesResultFFI {
-            original: expression.to_string(),
-            variable: variable.to_string(),
-            center: 0.0,
-            order,
-            series: String::new(),
-            series_latex: String::new(),
-            success: false,
-            error_message: format!("{}", e),
-        }),
-    }
+    Ok(super::ffi::TaylorSeriesResultFFI {
+        original: expression.to_string(),
+        variable: variable.to_string(),
+        center: 0.0,
+        order,
+        series: format!("{}", series_expr),
+        series_latex: series_expr.to_latex(),
+        success: true,
+        error_message: String::new(),
+    })
 }
 
 /// Compute Laurent series expansion around a given center point.
@@ -144,7 +122,9 @@ pub(super) fn asymptotic_series_ffi(
     direction: &str,
     num_terms: u32,
 ) -> Result<super::ffi::AsymptoticSeriesResultFFI, String> {
-    use crate::series::{asymptotic, AsymptoticDirection};
+    use crate::numeric::compile::{compile, decompile};
+    use crate::numeric::series::{asymptotic, AsymptoticDirection};
+    use crate::numeric::SymbolId;
 
     let dir = match direction {
         "pos_infinity" => AsymptoticDirection::PosInfinity,
@@ -158,12 +138,13 @@ pub(super) fn asymptotic_series_ffi(
     };
 
     let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
+    let arc_expr = compile(&expr);
+    let var_id = SymbolId::intern(variable);
 
-    let result = asymptotic(&expr, variable, dir, num_terms);
-
-    match result {
-        Ok(series) => {
-            let series_expr = series.to_expression();
+    match asymptotic(&arc_expr, var_id, dir, num_terms as usize, None) {
+        Some(series) => {
+            let series_arc = series.to_expr();
+            let series_expr = decompile(&series_arc);
             Ok(super::ffi::AsymptoticSeriesResultFFI {
                 original: expression.to_string(),
                 variable: variable.to_string(),
@@ -175,7 +156,7 @@ pub(super) fn asymptotic_series_ffi(
                 error_message: String::new(),
             })
         }
-        Err(e) => Ok(super::ffi::AsymptoticSeriesResultFFI {
+        None => Ok(super::ffi::AsymptoticSeriesResultFFI {
             original: expression.to_string(),
             variable: variable.to_string(),
             direction: direction.to_string(),
@@ -183,7 +164,8 @@ pub(super) fn asymptotic_series_ffi(
             series: String::new(),
             series_latex: String::new(),
             success: false,
-            error_message: format!("{}", e),
+            error_message: "Cannot expand: expression is not a Laurent polynomial in the variable"
+                .to_string(),
         }),
     }
 }
@@ -198,43 +180,51 @@ pub(super) fn compose_series_ffi(
     variable: &str,
     order: u32,
 ) -> Result<super::ffi::TaylorSeriesResultFFI, String> {
-    use crate::ast::Variable;
-    use crate::series::{compose_series, maclaurin};
+    use crate::numeric::compile::{compile, decompile};
+    use crate::numeric::expr::Expr;
+    use crate::numeric::series::{compose, taylor};
+    use crate::numeric::SymbolId;
 
     let outer_expr =
         parse_expression(outer).map_err(|e| format!("Parse error in outer: {:?}", e))?;
     let inner_expr =
         parse_expression(inner).map_err(|e| format!("Parse error in inner: {:?}", e))?;
-    let var = Variable::new(variable);
+    let outer_arc = compile(&outer_expr);
+    let inner_arc = compile(&inner_expr);
+    let var_id = SymbolId::intern(variable);
+    let zero = Expr::int(0);
 
-    let outer_series =
-        maclaurin(&outer_expr, &var, order).map_err(|e| format!("Outer series error: {}", e))?;
-    let inner_series =
-        maclaurin(&inner_expr, &var, order).map_err(|e| format!("Inner series error: {}", e))?;
+    let outer_series = taylor(&outer_arc, var_id, &zero, order as usize);
+    let inner_series = taylor(&inner_arc, var_id, &zero, order as usize);
 
-    match compose_series(&outer_series, &inner_series) {
-        Ok(composed) => {
-            let expr = composed.to_expression();
+    let original_label = format!("({}) \u{2218} ({})", outer, inner);
+
+    match compose(&outer_series, &inner_series, None) {
+        Some(composed) => {
+            let expr_arc = composed.to_expr();
+            let series_expr = decompile(&expr_arc);
             Ok(super::ffi::TaylorSeriesResultFFI {
-                original: format!("({}) \u{2218} ({})", outer, inner),
+                original: original_label,
                 variable: variable.to_string(),
                 center: 0.0,
                 order,
-                series: format!("{}", expr),
-                series_latex: expr.to_latex(),
+                series: format!("{}", series_expr),
+                series_latex: series_expr.to_latex(),
                 success: true,
                 error_message: String::new(),
             })
         }
-        Err(e) => Ok(super::ffi::TaylorSeriesResultFFI {
-            original: format!("({}) \u{2218} ({})", outer, inner),
+        None => Ok(super::ffi::TaylorSeriesResultFFI {
+            original: original_label,
             variable: variable.to_string(),
             center: 0.0,
             order,
             series: String::new(),
             series_latex: String::new(),
             success: false,
-            error_message: format!("{}", e),
+            error_message:
+                "Cannot compose: variables/centers differ or inner constant term is non-zero"
+                    .to_string(),
         }),
     }
 }
@@ -248,17 +238,21 @@ pub(super) fn reversion_series_ffi(
     variable: &str,
     order: u32,
 ) -> Result<super::ffi::TaylorSeriesResultFFI, String> {
-    use crate::ast::Variable;
-    use crate::series::{maclaurin, reversion};
+    use crate::numeric::compile::{compile, decompile};
+    use crate::numeric::expr::Expr;
+    use crate::numeric::series::{revert, taylor};
+    use crate::numeric::SymbolId;
 
     let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
-    let var = Variable::new(variable);
+    let arc_expr = compile(&expr);
+    let var_id = SymbolId::intern(variable);
 
-    let series = maclaurin(&expr, &var, order).map_err(|e| format!("Series error: {}", e))?;
+    let series = taylor(&arc_expr, var_id, &Expr::int(0), order as usize);
 
-    match reversion(&series) {
-        Ok(reverted) => {
-            let rev_expr = reverted.to_expression();
+    match revert(&series, None) {
+        Some(reverted) => {
+            let rev_arc = reverted.to_expr();
+            let rev_expr = decompile(&rev_arc);
             Ok(super::ffi::TaylorSeriesResultFFI {
                 original: expression.to_string(),
                 variable: variable.to_string(),
@@ -270,7 +264,7 @@ pub(super) fn reversion_series_ffi(
                 error_message: String::new(),
             })
         }
-        Err(e) => Ok(super::ffi::TaylorSeriesResultFFI {
+        None => Ok(super::ffi::TaylorSeriesResultFFI {
             original: expression.to_string(),
             variable: variable.to_string(),
             center: 0.0,
@@ -278,7 +272,9 @@ pub(super) fn reversion_series_ffi(
             series: String::new(),
             series_latex: String::new(),
             success: false,
-            error_message: format!("{}", e),
+            error_message:
+                "Cannot revert: constant term must be zero and linear coefficient non-zero"
+                    .to_string(),
         }),
     }
 }
