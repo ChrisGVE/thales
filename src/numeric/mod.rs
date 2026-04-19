@@ -57,6 +57,7 @@ mod sparse_poly;
 pub mod substitute;
 pub mod system_solver;
 mod term_order;
+pub mod trace;
 pub mod trig_rules;
 mod zassenhaus;
 
