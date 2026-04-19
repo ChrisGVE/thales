@@ -97,150 +97,108 @@ pub(crate) fn extract_linear_coefficients(
     _x_var: &str,
     y_var: &str,
 ) -> Option<(Expression, Expression)> {
-    // The RHS should be of form: terms with y (linear in y) + terms without y
-    // dy/dx = a*y + b  where a might depend on x, b might depend on x
-    // Standard form: dy/dx + P*y = Q means rhs = -P*y + Q
+    let rhs_arc = compile(rhs);
+    let y_id = SymbolId::intern(y_var);
+    let (p, q) = extract_linear_coefficients_expr(&rhs_arc, y_id)?;
+    Some((decompile(&p), decompile(&q)))
+}
 
-    // Collect terms with y and without y
-    let mut y_coefficient = Expression::Integer(0);
-    let mut constant_terms = Expression::Integer(0);
+/// Arc<Expr>-native worker for [`extract_linear_coefficients`].
+///
+/// The RHS must be linear in `y`: every AddNode term either is `y`-free or
+/// has the form `coeff · y` (possibly with y-free multiplicative factors).
+/// Returns `(P(x), Q(x))` where `rhs = -P·y + Q`, or `None` if rhs is
+/// non-linear in `y`.
+fn extract_linear_coefficients_expr(
+    rhs: &Arc<Expr>,
+    y: SymbolId,
+) -> Option<(Arc<Expr>, Arc<Expr>)> {
+    // Pure y-free: P = 0, Q = rhs.
+    if !contains_symbol(rhs, y) {
+        return Some((Expr::int(0), rhs.clone()));
+    }
 
-    fn collect_terms(
-        expr: &Expression,
-        y_var: &str,
-        y_coeff: &mut Expression,
-        const_terms: &mut Expression,
-    ) -> bool {
-        match expr {
-            // Simple y term
-            Expression::Variable(v) if v.name == y_var => {
-                *y_coeff = Expression::Binary(
-                    BinaryOp::Add,
-                    Box::new(y_coeff.clone()),
-                    Box::new(Expression::Integer(1)),
-                );
-                true
-            }
-            // Sum: recurse into both sides
-            Expression::Binary(BinaryOp::Add, left, right) => {
-                collect_terms(left, y_var, y_coeff, const_terms)
-                    && collect_terms(right, y_var, y_coeff, const_terms)
-            }
-            // Difference: handle subtraction
-            Expression::Binary(BinaryOp::Sub, left, right) => {
-                let mut neg_y_coeff = Expression::Integer(0);
-                let mut neg_const = Expression::Integer(0);
-                if !collect_terms(left, y_var, y_coeff, const_terms) {
-                    return false;
-                }
-                if !collect_terms(right, y_var, &mut neg_y_coeff, &mut neg_const) {
-                    return false;
-                }
-                // Subtract the right side contributions
-                *y_coeff = Expression::Binary(
-                    BinaryOp::Sub,
-                    Box::new(y_coeff.clone()),
-                    Box::new(neg_y_coeff),
-                );
-                *const_terms = Expression::Binary(
-                    BinaryOp::Sub,
-                    Box::new(const_terms.clone()),
-                    Box::new(neg_const),
-                );
-                true
-            }
-            // Product: check if linear in y
-            Expression::Binary(BinaryOp::Mul, left, right) => {
-                let left_has_y = left.contains_variable(y_var);
-                let right_has_y = right.contains_variable(y_var);
-
-                if left_has_y && right_has_y {
-                    // y^2 or similar - not linear
-                    return false;
-                }
-                if !left_has_y && !right_has_y {
-                    // No y - this is a constant term
-                    *const_terms = Expression::Binary(
-                        BinaryOp::Add,
-                        Box::new(const_terms.clone()),
-                        Box::new(expr.clone()),
-                    );
-                    return true;
-                }
-                // One factor is y (or contains y linearly), other is coefficient
-                if left_has_y {
-                    // left is y or y-term, right is coefficient
-                    if matches!(left.as_ref(), Expression::Variable(v) if v.name == y_var) {
-                        *y_coeff = Expression::Binary(
-                            BinaryOp::Add,
-                            Box::new(y_coeff.clone()),
-                            right.clone(),
-                        );
-                        return true;
-                    }
-                } else {
-                    // right is y or y-term, left is coefficient
-                    if matches!(right.as_ref(), Expression::Variable(v) if v.name == y_var) {
-                        *y_coeff = Expression::Binary(
-                            BinaryOp::Add,
-                            Box::new(y_coeff.clone()),
-                            left.clone(),
-                        );
-                        return true;
-                    }
-                }
-                false
-            }
-            // Negation
-            Expression::Unary(UnaryOp::Neg, inner) => {
-                let mut neg_y_coeff = Expression::Integer(0);
-                let mut neg_const = Expression::Integer(0);
-                if !collect_terms(inner, y_var, &mut neg_y_coeff, &mut neg_const) {
-                    return false;
-                }
-                *y_coeff = Expression::Binary(
-                    BinaryOp::Sub,
-                    Box::new(y_coeff.clone()),
-                    Box::new(neg_y_coeff),
-                );
-                *const_terms = Expression::Binary(
-                    BinaryOp::Sub,
-                    Box::new(const_terms.clone()),
-                    Box::new(neg_const),
-                );
-                true
-            }
-            // Any expression without y is a constant term
-            _ if !expr.contains_variable(y_var) => {
-                *const_terms = Expression::Binary(
-                    BinaryOp::Add,
-                    Box::new(const_terms.clone()),
-                    Box::new(expr.clone()),
-                );
-                true
-            }
-            // Anything else with y that doesn't fit above is not linear
-            _ => false,
+    // Sum form: walk AddNode terms.
+    if let Expr::Add(node) = rhs.as_ref() {
+        let mut y_coeff: Arc<Expr> = Expr::int(0);
+        let mut q: Arc<Expr> = Arc::new(Expr::Rational(node.constant.clone()));
+        for (term, coeff) in &node.terms {
+            let (y_c, const_c) = decompose_linear_y_term(term, coeff, y)?;
+            y_coeff = normalize::add(y_coeff, y_c);
+            q = normalize::add(q, const_c);
         }
+        let p = normalize::neg(y_coeff);
+        if contains_symbol(&p, y) {
+            return None;
+        }
+        return Some((p, q));
     }
 
-    if !collect_terms(rhs, y_var, &mut y_coefficient, &mut constant_terms) {
+    // Single term (Mul / Symbol / Pow / Func).
+    let one = crate::numeric::BigRational::from_integer(crate::numeric::SmallInt::from(1i64));
+    let (y_c, const_c) = decompose_linear_y_term(rhs, &one, y)?;
+    let p = normalize::neg(y_c);
+    if contains_symbol(&p, y) {
         return None;
     }
+    Some((p, const_c))
+}
 
-    // Simplify collected terms
-    let y_coeff = y_coefficient.simplify();
-    let q_x = constant_terms.simplify();
+/// Decompose a single AddNode term `coeff · term` into (y-contribution,
+/// y-free-contribution). Returns `None` when the term is non-linear in
+/// `y`, contains `y` inside a function, or raises `y` to any power other
+/// than 1.
+fn decompose_linear_y_term(
+    term: &Arc<Expr>,
+    coeff: &crate::numeric::BigRational,
+    y: SymbolId,
+) -> Option<(Arc<Expr>, Arc<Expr>)> {
+    let coeff_expr: Arc<Expr> = Arc::new(Expr::Rational(coeff.clone()));
 
-    // P(x) is the negative of the y coefficient (since rhs = -P*y + Q)
-    let p_x = Expression::Unary(UnaryOp::Neg, Box::new(y_coeff)).simplify();
-
-    // Check that P(x) doesn't contain y
-    if p_x.contains_variable(y_var) {
-        return None;
+    // y-free term: all contribution flows to Q.
+    if !contains_symbol(term, y) {
+        let contrib = normalize::mul(coeff_expr, term.clone());
+        return Some((Expr::int(0), contrib));
     }
 
-    Some((p_x, q_x))
+    // Bare `y`: coefficient becomes the y-coefficient.
+    if matches!(term.as_ref(), Expr::Symbol(s) if *s == y) {
+        return Some((coeff_expr, Expr::int(0)));
+    }
+
+    // Product with `y` as a direct factor of exponent 1.
+    if let Expr::Mul(node) = term.as_ref() {
+        let mut y_seen = false;
+        let mut others = MulNode::from_coeff(node.coeff.clone());
+        for (base, exp) in &node.factors {
+            let base_is_y = matches!(base.as_ref(), Expr::Symbol(s) if *s == y);
+            if base_is_y {
+                let exp_is_one = matches!(exp.as_ref(), Expr::Integer(n) if n.to_i64() == Some(1));
+                if !exp_is_one || y_seen {
+                    return None; // y^n, n != 1, or multiple y factors
+                }
+                y_seen = true;
+                continue;
+            }
+            if contains_symbol(base, y) || contains_symbol(exp, y) {
+                return None; // y buried inside a non-direct factor
+            }
+            others.add_factor(base.clone(), exp.clone());
+        }
+        if !y_seen {
+            return None;
+        }
+        let others_arc: Arc<Expr> = if others.is_one() {
+            Expr::int(1)
+        } else {
+            Arc::new(Expr::Mul(others))
+        };
+        let y_contrib = normalize::mul(coeff_expr, others_arc);
+        return Some((y_contrib, Expr::int(0)));
+    }
+
+    // `y^n` (n != 1 handled above as Integer/any non-1) or y inside Func → non-linear.
+    None
 }
 
 /// Substitute a variable with an expression.
