@@ -200,6 +200,20 @@ pub fn solve_ivp(
 
         // Substitute C back into the general solution
         let particular = substitute_var(&general.general_solution, "C", &c_value).simplify();
+
+        // Decision 2b invariant: the returned particular solution must be
+        // explicit in the dependent variable. If `y` still appears, the
+        // general solution was implicit (e.g. `try_solve_implicit_for_y`
+        // fell through and we returned `left - right`) — propagate as an
+        // error rather than returning an implicit form the caller cannot
+        // evaluate.
+        if particular.contains_variable(&ode.dependent) {
+            return Err(ODEError::InitialConditionError(format!(
+                "could not isolate '{}' in particular solution: {}",
+                ode.dependent, particular
+            )));
+        }
+
         steps.push(format!(
             "Particular solution: {} = {}",
             ode.dependent, particular

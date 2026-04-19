@@ -667,7 +667,7 @@ fn test_ode_linear_dy_dx_plus_y_eq_x() {
 fn test_ode_ivp_dy_dx_eq_y_with_y0_eq_1() {
     // dy/dx = y, y(0) = 1  →  particular solution y = exp(x)
     use thales::ast::Expression;
-    use thales::ode::{solve_ivp, FirstOrderODE};
+    use thales::ode::{solve_ivp, verify, FirstOrderODE};
 
     let rhs = parse_expression("y").expect("y must parse");
     let ode = FirstOrderODE::new("y", "x", rhs);
@@ -675,11 +675,10 @@ fn test_ode_ivp_dy_dx_eq_y_with_y0_eq_1() {
     let y0 = Expression::Float(1.0);
 
     let sol = solve_ivp(&ode, &x0, &y0).expect("IVP dy/dx=y, y(0)=1 must be solvable");
-    let sol_str = format!("{}", sol.general_solution);
-    assert!(
-        sol_str.contains("ln") || sol_str.contains("exp"),
-        "Particular solution y(0)=1 should contain ln or exp, got: {sol_str}"
-    );
+
+    // Decision 2b: particular solution must be y-free and satisfy IC at x₀.
+    verify::assert_y_free(&sol.general_solution, "y");
+    verify::assert_ic_satisfied(&sol.general_solution, "x", 0.0, 1.0, 1e-9);
 }
 
 #[test]
@@ -687,7 +686,7 @@ fn test_ode_ivp_dy_dx_eq_neg_y() {
     // dy/dx = -y, y(0) = 2
     // Integration of 1/(-y) is a known limitation of the current integrator.
     use thales::ast::Expression;
-    use thales::ode::{solve_ivp, FirstOrderODE};
+    use thales::ode::{solve_ivp, verify, FirstOrderODE};
 
     let rhs = parse_expression("-y").expect("-y must parse");
     let ode = FirstOrderODE::new("y", "x", rhs);
@@ -695,13 +694,12 @@ fn test_ode_ivp_dy_dx_eq_neg_y() {
     let y0 = Expression::Float(2.0);
 
     let result = solve_ivp(&ode, &x0, &y0);
-    // Accept either a solution or a known integration limitation
+    // Accept either a solution or a known integration limitation.
+    // Decision 2b: when a particular solution is returned, it must be y-free
+    // and satisfy the initial condition.
     if let Ok(sol) = result {
-        let sol_str = format!("{}", sol.general_solution);
-        assert!(
-            !sol_str.is_empty(),
-            "Particular solution should not be empty"
-        );
+        verify::assert_y_free(&sol.general_solution, "y");
+        verify::assert_ic_satisfied(&sol.general_solution, "x", 0.0, 2.0, 1e-9);
     }
     // If Err, that's the known integrator limitation — acceptable
 }

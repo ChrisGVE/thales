@@ -27,6 +27,7 @@ mod first_order;
 pub mod non_homogeneous;
 mod second_order;
 mod types;
+pub mod verify;
 
 pub use builder::{first_order_ode, second_order_homogeneous, ODEBuilder};
 pub use first_order::{solve_ivp, solve_linear, solve_separable};
@@ -194,8 +195,11 @@ mod tests {
         // With y(0) = 1: C = 1
         // Particular solution: y = e^x
         let ode = FirstOrderODE::new("y", "x", var("y"));
-        let result = solve_ivp(&ode, &int(0), &int(1));
-        assert!(result.is_ok());
+        let sol = solve_ivp(&ode, &int(0), &int(1)).expect("IVP must solve");
+
+        // Decision 2b: y-free + IC
+        verify::assert_y_free(&sol.general_solution, "y");
+        verify::assert_ic_satisfied(&sol.general_solution, "x", 0.0, 1.0, 1e-9);
     }
 
     #[test]
@@ -296,13 +300,12 @@ mod tests {
         let ode = SecondOrderODE::homogeneous("y", "x", 1.0, 0.0, 1.0);
         let solution = solve_second_order_ivp(&ode, 0.0, 1.0, 0.0).unwrap();
 
-        // Evaluate at x = 0: should be 1
-        let mut vars = std::collections::HashMap::new();
-        vars.insert("x".to_string(), 0.0);
-        let result = solution.evaluate(&vars).unwrap();
-        assert!((result - 1.0).abs() < 1e-10);
+        // Decision 2b: y-free + IC at x₀
+        verify::assert_y_free(&solution, "y");
+        verify::assert_ic_satisfied(&solution, "x", 0.0, 1.0, 1e-10);
 
-        // Evaluate at x = π/2: should be 0
+        // Additional spot-check at x = π/2: cos(π/2) = 0
+        let mut vars = std::collections::HashMap::new();
         vars.insert("x".to_string(), std::f64::consts::FRAC_PI_2);
         let result = solution.evaluate(&vars).unwrap();
         assert!(result.abs() < 1e-6);
@@ -318,13 +321,12 @@ mod tests {
         let ode = SecondOrderODE::homogeneous("y", "x", 1.0, 0.0, -1.0);
         let solution = solve_second_order_ivp(&ode, 0.0, 1.0, 0.0).unwrap();
 
-        // At x = 0, should be 1
-        let mut vars = std::collections::HashMap::new();
-        vars.insert("x".to_string(), 0.0);
-        let result = solution.evaluate(&vars).unwrap();
-        assert!((result - 1.0).abs() < 1e-10);
+        // Decision 2b: y-free + IC at x₀
+        verify::assert_y_free(&solution, "y");
+        verify::assert_ic_satisfied(&solution, "x", 0.0, 1.0, 1e-10);
 
-        // At x = 1, should be cosh(1) ≈ 1.543
+        // Additional spot-check at x = 1: cosh(1)
+        let mut vars = std::collections::HashMap::new();
         vars.insert("x".to_string(), 1.0);
         let result = solution.evaluate(&vars).unwrap();
         let expected = 1.0_f64.cosh();
