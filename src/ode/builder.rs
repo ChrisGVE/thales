@@ -201,7 +201,10 @@ mod tests {
         assert_eq!(ode.dependent, "y");
         assert_eq!(ode.independent, "x");
         // rhs should mirror what we passed in
-        assert!(matches!(ode.rhs, Expression::Binary(BinaryOp::Mul, _, _)));
+        assert!(matches!(
+            ode.rhs_expr(),
+            Expression::Binary(BinaryOp::Mul, _, _)
+        ));
     }
 
     #[test]

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::ast::Expression;
 use crate::integration::IntegrationError;
-use crate::numeric::compile::compile;
+use crate::numeric::compile::{compile, decompile};
 use crate::numeric::Expr;
 use crate::resolution_path::ResolutionPath;
 
@@ -68,18 +68,24 @@ impl std::fmt::Display for ODEError {
 impl std::error::Error for ODEError {}
 
 /// Represents a first-order ordinary differential equation: dy/dx = f(x, y)
+///
+/// The right-hand side is stored in canonical `Arc<Expr>` form (numeric-engine
+/// representation). Use [`FirstOrderODE::rhs_arc`] for engine-native access,
+/// or [`FirstOrderODE::rhs_expr`] as a migration bridge for legacy
+/// `Expression`-typed consumers.
 #[derive(Debug, Clone)]
 pub struct FirstOrderODE {
     /// The dependent variable (e.g., "y")
     pub dependent: String,
     /// The independent variable (e.g., "x")
     pub independent: String,
-    /// The right-hand side expression f(x, y) where dy/dx = f(x, y)
-    pub rhs: Expression,
+    rhs: Arc<Expr>,
 }
 
 impl FirstOrderODE {
-    /// Create a new first-order ODE.
+    /// Create a new first-order ODE from an `Expression`-typed right-hand side.
+    ///
+    /// The RHS is compiled to canonical `Arc<Expr>` form on construction.
     ///
     /// # Arguments
     ///
@@ -87,6 +93,15 @@ impl FirstOrderODE {
     /// * `independent` - The independent variable name (e.g., "x")
     /// * `rhs` - The expression f(x, y) such that dy/dx = f(x, y)
     pub fn new(dependent: &str, independent: &str, rhs: Expression) -> Self {
+        Self::from_arc(dependent, independent, compile(&rhs))
+    }
+
+    /// Create a first-order ODE directly from a pre-compiled `Arc<Expr>` RHS.
+    ///
+    /// Prefer this constructor when the caller already operates in canonical
+    /// form — it avoids a redundant decompile/compile round-trip.
+    #[must_use]
+    pub fn from_arc(dependent: &str, independent: &str, rhs: Arc<Expr>) -> Self {
         Self {
             dependent: dependent.to_string(),
             independent: independent.to_string(),
@@ -96,26 +111,34 @@ impl FirstOrderODE {
 
     /// Check if this ODE is separable (can be written as g(x) * h(y)).
     pub fn is_separable(&self) -> bool {
-        try_separate(&self.rhs, &self.independent, &self.dependent).is_some()
+        let rhs_expr = decompile(&self.rhs);
+        try_separate(&rhs_expr, &self.independent, &self.dependent).is_some()
     }
 
     /// Check if this ODE is first-order linear (dy/dx + P(x)*y = Q(x)).
     pub fn is_linear(&self) -> bool {
-        extract_linear_coefficients(&self.rhs, &self.independent, &self.dependent).is_some()
+        let rhs_expr = decompile(&self.rhs);
+        extract_linear_coefficients(&rhs_expr, &self.independent, &self.dependent).is_some()
     }
 
-    /// Right-hand side as a canonical `Arc<Expr>`.
+    /// Right-hand side as a canonical `Arc<Expr>` (clone of the stored field).
     ///
-    /// This is the migration bridge for the Expr-migration milestone: solvers
-    /// that have moved to `Arc<Expr>` internals call this accessor to obtain the
-    /// numeric-engine representation of `f(x, y)` without having to compile the
-    /// `Expression`-typed field themselves.
-    ///
-    /// The accessor compiles on demand; subsequent ports may cache the result
-    /// in the struct when the solver family migration is complete.
+    /// This is the engine-native accessor. Use this in solver families that
+    /// have been ported to `Arc<Expr>` internals.
     #[must_use]
     pub fn rhs_arc(&self) -> Arc<Expr> {
-        compile(&self.rhs)
+        Arc::clone(&self.rhs)
+    }
+
+    /// Right-hand side as an `Expression` (decompiled from the stored
+    /// `Arc<Expr>`).
+    ///
+    /// Migration bridge for legacy consumers that still operate in the old
+    /// `Expression` AST. Every decompile is a fresh allocation; porting the
+    /// consumer to [`FirstOrderODE::rhs_arc`] avoids the round-trip.
+    #[must_use]
+    pub fn rhs_expr(&self) -> Expression {
+        decompile(&self.rhs)
     }
 }
 

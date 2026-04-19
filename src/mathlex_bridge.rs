@@ -972,7 +972,7 @@ mod tests {
                 let mut env = std::collections::HashMap::new();
                 env.insert("x".to_string(), 2.0);
                 env.insert("y".to_string(), 3.0);
-                assert_eq!(fo.rhs.evaluate(&env), Some(6.0));
+                assert_eq!(fo.rhs_expr().evaluate(&env), Some(6.0));
             }
             _ => panic!("expected FirstOrderODE"),
         }
@@ -1110,7 +1110,7 @@ mod tests {
                 let mut env = std::collections::HashMap::new();
                 env.insert("x".to_string(), 2.0);
                 env.insert("y".to_string(), 3.0);
-                assert_eq!(fo.rhs.evaluate(&env), Some(6.0));
+                assert_eq!(fo.rhs_expr().evaluate(&env), Some(6.0));
             }
             _ => panic!("expected FirstOrderODE"),
         }

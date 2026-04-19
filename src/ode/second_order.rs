@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::ast::{BinaryOp, Expression, Function, Variable};
-use crate::numeric::compile::compile;
+use crate::numeric::compile::{compile, decompile};
 use crate::numeric::Expr;
 use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder};
 
@@ -35,6 +35,11 @@ pub struct CharacteristicRoots {
 
 /// Represents a second-order linear ODE with constant coefficients:
 /// a*y'' + b*y' + c*y = f(x)
+///
+/// The forcing function is stored in canonical `Arc<Expr>` form. Use
+/// [`SecondOrderODE::forcing_arc`] for engine-native access, or
+/// [`SecondOrderODE::forcing_expr`] as a migration bridge for legacy
+/// `Expression`-typed consumers.
 #[derive(Debug, Clone)]
 pub struct SecondOrderODE {
     /// The dependent variable name (e.g., "y")
@@ -47,12 +52,14 @@ pub struct SecondOrderODE {
     pub b: f64,
     /// Coefficient of y (must be constant)
     pub c: f64,
-    /// The forcing function f(x), or zero for homogeneous
-    pub forcing: Expression,
+    forcing: Arc<Expr>,
 }
 
 impl SecondOrderODE {
     /// Create a new second-order ODE: a*y'' + b*y' + c*y = f(x)
+    ///
+    /// The forcing function is compiled to canonical `Arc<Expr>` form on
+    /// construction.
     pub fn new(
         dependent: &str,
         independent: &str,
@@ -60,6 +67,23 @@ impl SecondOrderODE {
         b: f64,
         c: f64,
         forcing: Expression,
+    ) -> Self {
+        Self::from_arc(dependent, independent, a, b, c, compile(&forcing))
+    }
+
+    /// Create a second-order ODE directly from a pre-compiled `Arc<Expr>`
+    /// forcing function.
+    ///
+    /// Prefer this constructor when the caller already operates in canonical
+    /// form — it avoids a redundant decompile/compile round-trip.
+    #[must_use]
+    pub fn from_arc(
+        dependent: &str,
+        independent: &str,
+        a: f64,
+        b: f64,
+        c: f64,
+        forcing: Arc<Expr>,
     ) -> Self {
         SecondOrderODE {
             dependent: dependent.to_string(),
@@ -78,19 +102,32 @@ impl SecondOrderODE {
 
     /// Check if this ODE is homogeneous (f(x) = 0)
     pub fn is_homogeneous(&self) -> bool {
-        matches!(&self.forcing, Expression::Integer(0))
-            || matches!(&self.forcing, Expression::Float(x) if x.abs() < 1e-15)
+        use crate::numeric::ring::Ring;
+        match self.forcing.as_ref() {
+            Expr::Integer(n) => n.is_zero(),
+            Expr::Float(x) => x.abs() < 1e-15,
+            _ => false,
+        }
     }
 
-    /// Forcing function as a canonical `Arc<Expr>`.
+    /// Forcing function as a canonical `Arc<Expr>` (clone of the stored field).
     ///
-    /// Migration bridge for the Expr-migration milestone: second-order solvers
-    /// moving to `Arc<Expr>` internals call this accessor instead of compiling
-    /// the `Expression`-typed field themselves. See also
-    /// [`FirstOrderODE::rhs_arc`](crate::ode::FirstOrderODE::rhs_arc).
+    /// Engine-native accessor. Use this in solver families ported to
+    /// `Arc<Expr>` internals.
     #[must_use]
     pub fn forcing_arc(&self) -> Arc<Expr> {
-        compile(&self.forcing)
+        Arc::clone(&self.forcing)
+    }
+
+    /// Forcing function as an `Expression` (decompiled from the stored
+    /// `Arc<Expr>`).
+    ///
+    /// Migration bridge for legacy consumers. Every decompile is a fresh
+    /// allocation; porting the consumer to
+    /// [`SecondOrderODE::forcing_arc`] avoids the round-trip.
+    #[must_use]
+    pub fn forcing_expr(&self) -> Expression {
+        decompile(&self.forcing)
     }
 }
 

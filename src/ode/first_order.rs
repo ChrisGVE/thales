@@ -9,14 +9,15 @@ use super::{FirstOrderODE, ODEError, ODESolution};
 
 pub fn solve_separable(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
     let mut steps = Vec::new();
+    let rhs_expr = ode.rhs_expr();
     steps.push(format!(
         "Given ODE: d{}/d{} = {}",
-        ode.dependent, ode.independent, ode.rhs
+        ode.dependent, ode.independent, rhs_expr
     ));
 
     // Try to separate the equation
     let (g_x, h_y) =
-        try_separate(&ode.rhs, &ode.independent, &ode.dependent).ok_or(ODEError::NotSeparable)?;
+        try_separate(&rhs_expr, &ode.independent, &ode.dependent).ok_or(ODEError::NotSeparable)?;
 
     steps.push(format!(
         "Separating: d{}/d{} = ({}) * ({})",
@@ -93,14 +94,15 @@ pub fn solve_separable(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
 #[must_use = "solving returns a result that should be used"]
 pub fn solve_linear(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
     let mut steps = Vec::new();
+    let rhs_expr = ode.rhs_expr();
     steps.push(format!(
         "Given ODE: d{}/d{} = {}",
-        ode.dependent, ode.independent, ode.rhs
+        ode.dependent, ode.independent, rhs_expr
     ));
 
     // Extract P(x) and Q(x) from dy/dx = -P(x)*y + Q(x)
     // which is equivalent to dy/dx + P(x)*y = Q(x)
-    let (p_x, q_x) = extract_linear_coefficients(&ode.rhs, &ode.independent, &ode.dependent)
+    let (p_x, q_x) = extract_linear_coefficients(&rhs_expr, &ode.independent, &ode.dependent)
         .ok_or(ODEError::NotLinear)?;
 
     // The ODE is dy/dx = rhs, and we extracted it as dy/dx = -P*y + Q

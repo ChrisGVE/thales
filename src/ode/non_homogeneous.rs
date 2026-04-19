@@ -267,7 +267,8 @@ fn eval_as_nonneg_integer(expr: &Expression) -> Option<u32> {
 pub fn particular_solution_undetermined(
     ode: &SecondOrderODE,
 ) -> Result<(Expression, Vec<String>), ODEError> {
-    let forcing_type = identify_forcing_function(&ode.forcing, &ode.independent)
+    let forcing_expr = ode.forcing_expr();
+    let forcing_type = identify_forcing_function(&forcing_expr, &ode.independent)
         .ok_or_else(|| ODEError::CannotSolve("forcing function type not supported".to_string()))?;
 
     let mut steps = Vec::new();
@@ -326,7 +327,8 @@ fn particular_polynomial(
     ));
 
     // Collect coefficients from the forcing polynomial
-    let forcing_coeffs = extract_polynomial_coeffs(&ode.forcing, x_var, degree)?;
+    let forcing_expr = ode.forcing_expr();
+    let forcing_coeffs = extract_polynomial_coeffs(&forcing_expr, x_var, degree)?;
 
     // Solve for undetermined coefficients by matching powers of x
     let yp_coeffs = solve_polynomial_system(ode, &forcing_coeffs, multiplier)?;
@@ -501,7 +503,7 @@ fn particular_exponential(
     let amp = {
         let mut env = std::collections::HashMap::new();
         env.insert(x_var.to_string(), 1.0);
-        ode.forcing.evaluate(&env).unwrap_or(1.0) / (k * 1.0_f64).exp()
+        ode.forcing_expr().evaluate(&env).unwrap_or(1.0) / (k * 1.0_f64).exp()
     };
 
     // Compute denominator: substitute y_p = B·x^m·e^(kx) into ODE, divide by e^(kx)
@@ -595,7 +597,8 @@ fn particular_trig(
     ));
 
     // Extract sin and cos amplitudes from forcing at two points
-    let (f_sin, f_cos) = extract_trig_amplitudes(&ode.forcing, x_var, k)?;
+    let forcing_expr = ode.forcing_expr();
+    let (f_sin, f_cos) = extract_trig_amplitudes(&forcing_expr, x_var, k)?;
 
     let (p, q) = solve_trig_system(ode, k, f_sin, f_cos, resonant)?;
 

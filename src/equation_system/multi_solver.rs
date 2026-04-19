@@ -438,11 +438,7 @@ impl MultiEquationSolver {
     ) -> Result<(SolutionValue, Option<ResolutionPath>), SystemError> {
         // Construct a first-order ODE from the equation: assume form dy/dx = rhs
         // where the variable is the dependent variable.
-        let ode = FirstOrderODE {
-            dependent: variable.to_string(),
-            independent: "x".to_string(),
-            rhs: equation.right.clone(),
-        };
+        let ode = FirstOrderODE::new(variable, "x", equation.right.clone());
 
         // Try separable first, then linear
         let solution = solve_separable(&ode).or_else(|_| solve_linear_ode(&ode));
