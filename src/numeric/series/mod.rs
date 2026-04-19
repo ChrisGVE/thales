@@ -37,6 +37,7 @@ use super::SymbolId;
 
 pub mod arithmetic;
 pub mod asymptotic;
+pub mod composition;
 pub mod convergence;
 pub mod known;
 pub mod taylor;
@@ -45,6 +46,7 @@ pub use arithmetic::{add, mul, truncate};
 pub use asymptotic::{
     asymptotic, limit_via_asymptotic, AsymptoticDirection, AsymptoticSeries, AsymptoticTerm, BigO,
 };
+pub use composition::{compose, revert};
 pub use convergence::convergence_radius;
 pub use known::{atan_series, cos_series, exp_series, ln_series, sin_series};
 pub use taylor::taylor;
