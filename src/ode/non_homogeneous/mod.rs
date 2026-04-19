@@ -8,7 +8,14 @@
 //! solution and `y_p` is a particular solution found by undetermined
 //! coefficients.
 
-use crate::ast::{BinaryOp, Expression, Function};
+use std::sync::Arc;
+
+use crate::ast::{Expression, SymbolicConstant};
+use crate::numeric::compile::compile;
+use crate::numeric::expr::{Expr, FuncId};
+use crate::numeric::SymbolId;
+use crate::solver::helpers::contains_symbol;
+use num::traits::Zero;
 
 use super::{ODEError, SecondOrderODE};
 
@@ -59,112 +66,105 @@ pub enum ForcingType {
 /// | `exp(k·x)` or `e^(k·x)` | `Exponential { k }` |
 /// | `sin(k·x)` or `cos(k·x)` | `Trigonometric { k }` |
 pub fn identify_forcing_function(expr: &Expression, x_var: &str) -> Option<ForcingType> {
-    classify_forcing(expr, x_var)
+    let arc = compile(expr);
+    let x = SymbolId::intern(x_var);
+    classify_forcing_expr(&arc, x)
 }
 
-/// Recursive classifier — returns `None` if the expression is not a
-/// supported forcing type or mixes incompatible types.
-fn classify_forcing(expr: &Expression, x: &str) -> Option<ForcingType> {
-    match expr {
-        // Pure constants → degree-0 polynomial
-        Expression::Integer(_) | Expression::Float(_) | Expression::Rational(_) => {
+/// Arc<Expr>-native forcing classifier. Walks the canonical `Expr` tree
+/// directly; `Add` and `Mul` dispatch by merging the per-term
+/// classifications (addition: same type only; multiplication: scalar
+/// times a single non-trivial forcing).
+fn classify_forcing_expr(expr: &Arc<Expr>, x: SymbolId) -> Option<ForcingType> {
+    match expr.as_ref() {
+        // Pure numeric leaves → degree-0 polynomial.
+        Expr::Integer(_) | Expr::Float(_) | Expr::Rational(_) | Expr::Complex(_) => {
             Some(ForcingType::Polynomial { degree: 0 })
         }
+        // E itself compiles as a Constant leaf — no forcing shape.
+        Expr::Constant(_) => Some(ForcingType::Polynomial { degree: 0 }),
 
-        // Variable x → degree-1 polynomial
-        Expression::Variable(v) if v.name == x => Some(ForcingType::Polynomial { degree: 1 }),
+        // `x` → degree 1; other symbols → parameter, treated as constant.
+        Expr::Symbol(s) if *s == x => Some(ForcingType::Polynomial { degree: 1 }),
+        Expr::Symbol(_) => Some(ForcingType::Polynomial { degree: 0 }),
 
-        // Other variables (constants from the user's perspective) → degree 0
-        Expression::Variable(_) => Some(ForcingType::Polynomial { degree: 0 }),
+        // Power: x^n or e^(kx).
+        Expr::Pow(base, exp) => classify_power_expr(base, exp, x),
 
-        // Negation — same type as inner
-        Expression::Unary(_, inner) => classify_forcing(inner, x),
+        // Function call: exp / sin / cos.
+        Expr::Func(id, args) => classify_function_expr(*id, args, x),
 
-        // Power: x^n → polynomial of degree n; e^(kx) → exponential
-        Expression::Power(base, exp) => classify_power(base, exp, x),
+        // Sum — merge per-term classifications plus the scalar constant.
+        Expr::Add(node) => {
+            let mut acc = ForcingType::Polynomial { degree: 0 };
+            for (term, _coeff) in &node.terms {
+                let t = classify_forcing_expr(term, x)?;
+                acc = merge_forcing_types(acc, t)?;
+            }
+            Some(acc)
+        }
 
-        // Function call: exp/sin/cos
-        Expression::Function(func, args) => classify_function(func.clone(), args, x),
-
-        // Binary: addition/subtraction can merge same-type forcings
-        // Multiplication scales by a constant — keeps the inner type
-        Expression::Binary(op, left, right) => classify_binary(*op, left, right, x),
-
-        _ => None,
+        // Product — scalar × single non-trivial factor.
+        Expr::Mul(node) => {
+            let mut acc = ForcingType::Polynomial { degree: 0 };
+            for (base, exp) in &node.factors {
+                let factor_arc: Arc<Expr> = if matches!(exp.as_ref(), Expr::Integer(n) if n.to_i64() == Some(1))
+                {
+                    base.clone()
+                } else {
+                    Arc::new(Expr::Pow(base.clone(), exp.clone()))
+                };
+                let t = classify_forcing_expr(&factor_arc, x)?;
+                acc = merge_forcing_types_mul(acc, t)?;
+            }
+            Some(acc)
+        }
     }
 }
 
-/// Classify `base^exp` expressions.
-fn classify_power(base: &Expression, exp: &Expression, x: &str) -> Option<ForcingType> {
-    use crate::ast::Function as F;
-    // e^(k·x) via Power(e_const, k*x)
-    let is_e = matches!(base, Expression::Constant(crate::ast::SymbolicConstant::E))
-        || matches!(base, Expression::Function(F::Exp, _));
-
+fn classify_power_expr(base: &Arc<Expr>, exp: &Arc<Expr>, x: SymbolId) -> Option<ForcingType> {
+    let is_e = matches!(base.as_ref(), Expr::Constant(SymbolicConstant::E))
+        || matches!(base.as_ref(), Expr::Func(FuncId::Exp, _));
     if is_e {
-        let k = extract_linear_coeff_of_x(exp, x)?;
+        let k = extract_linear_coeff_of_x_expr(exp, x)?;
         return Some(ForcingType::Exponential { k });
     }
 
-    // x^n — polynomial
-    if base.contains_variable(x) && !exp.contains_variable(x) {
-        let degree = eval_as_nonneg_integer(exp)?;
+    // x^n — polynomial.
+    if contains_symbol(base, x) && !contains_symbol(exp, x) {
+        let degree = eval_as_nonneg_integer_expr(exp)?;
         return Some(ForcingType::Polynomial { degree });
     }
 
     None
 }
 
-/// Classify `Function(f, args)` expressions.
-fn classify_function(
-    func: crate::ast::Function,
-    args: &[Expression],
-    x: &str,
-) -> Option<ForcingType> {
-    use crate::ast::Function as F;
-    match func {
-        F::Exp => {
+fn classify_function_expr(id: FuncId, args: &[Arc<Expr>], x: SymbolId) -> Option<ForcingType> {
+    match id {
+        FuncId::Exp => {
             let arg = args.first()?;
-            let k = extract_linear_coeff_of_x(arg, x)?;
+            let k = extract_linear_coeff_of_x_expr(arg, x)?;
             Some(ForcingType::Exponential { k })
         }
-        F::Sin | F::Cos => {
+        FuncId::Sin | FuncId::Cos => {
             let arg = args.first()?;
-            let k = extract_linear_coeff_of_x(arg, x)?;
+            let k = extract_linear_coeff_of_x_expr(arg, x)?;
             Some(ForcingType::Trigonometric { k })
         }
         _ => None,
     }
 }
 
-/// Classify `left OP right` expressions.
-fn classify_binary(
-    op: BinaryOp,
-    left: &Expression,
-    right: &Expression,
-    x: &str,
-) -> Option<ForcingType> {
-    match op {
-        BinaryOp::Add | BinaryOp::Sub => {
-            let lt = classify_forcing(left, x)?;
-            let rt = classify_forcing(right, x)?;
-            merge_forcing_types(lt, rt)
-        }
-        BinaryOp::Mul => {
-            // Scalar * f(x) — keep the non-constant type
-            let lt = classify_forcing(left, x)?;
-            let rt = classify_forcing(right, x)?;
-            if matches!(lt, ForcingType::Polynomial { degree: 0 }) {
-                Some(rt)
-            } else if matches!(rt, ForcingType::Polynomial { degree: 0 }) {
-                Some(lt)
-            } else {
-                // Product of two non-trivial terms — not supported
-                None
-            }
-        }
-        _ => None,
+/// Merge two forcing types under multiplication: scalar × f keeps the
+/// non-trivial operand; product of two non-trivial terms is not supported.
+fn merge_forcing_types_mul(a: ForcingType, b: ForcingType) -> Option<ForcingType> {
+    if matches!(a, ForcingType::Polynomial { degree: 0 }) {
+        return Some(b);
     }
+    if matches!(b, ForcingType::Polynomial { degree: 0 }) {
+        return Some(a);
+    }
+    None
 }
 
 /// Merge two `ForcingType` values from an addition/subtraction.
@@ -196,35 +196,42 @@ fn merge_forcing_types(a: ForcingType, b: ForcingType) -> Option<ForcingType> {
 // Helpers: coefficient extraction and evaluation
 // ---------------------------------------------------------------------------
 
-/// Extract `k` from a linear expression `k·x`, `x`, or constant `0`.
+/// Extract `k` from `k·x`, `x`, `-x`, or a zero constant (Arc<Expr>).
 ///
-/// Returns `Some(k)` for expressions of the form `k*x`, `x`, `-x`, or `0`.
-/// Returns `None` for non-linear expressions in `x`.
-fn extract_linear_coeff_of_x(expr: &Expression, x: &str) -> Option<f64> {
-    match expr {
-        Expression::Integer(0) => Some(0.0),
-        Expression::Variable(v) if v.name == x => Some(1.0),
-        Expression::Float(k) => {
-            if *k == 0.0 {
-                Some(0.0)
-            } else {
-                None
+/// Returns `Some(k)` for supported linear shapes. In the canonical
+/// `Expr` form `k·x` shows up as a `MulNode` with a single factor
+/// `(Symbol(x), 1)` and a rational coefficient.
+fn extract_linear_coeff_of_x_expr(expr: &Arc<Expr>, x: SymbolId) -> Option<f64> {
+    match expr.as_ref() {
+        Expr::Integer(n) if n.to_i64() == Some(0) => Some(0.0),
+        Expr::Float(f) if *f == 0.0 => Some(0.0),
+        Expr::Rational(r) if r.numer().is_zero() => Some(0.0),
+        Expr::Symbol(s) if *s == x => Some(1.0),
+        Expr::Mul(node) => {
+            // Accept any product of the form `(rational · float · int … · x)`:
+            // the coefficient field holds the rational part; any non-symbol
+            // factor must be a numeric leaf and gets folded into `k`.
+            let mut k = node.coeff.to_f64();
+            let mut x_seen = false;
+            for (base, exp) in &node.factors {
+                if !matches!(exp.as_ref(), Expr::Integer(n) if n.to_i64() == Some(1)) {
+                    return None;
+                }
+                match base.as_ref() {
+                    Expr::Symbol(s) if *s == x => {
+                        if x_seen {
+                            return None;
+                        }
+                        x_seen = true;
+                    }
+                    Expr::Float(f) => k *= *f,
+                    Expr::Integer(n) => k *= n.to_i64()? as f64,
+                    Expr::Rational(r) => k *= r.to_f64(),
+                    _ => return None,
+                }
             }
-        }
-        Expression::Unary(crate::ast::UnaryOp::Neg, inner) => {
-            extract_linear_coeff_of_x(inner, x).map(|k| -k)
-        }
-        Expression::Binary(BinaryOp::Mul, left, right) => {
-            // k * x  or  x * k
-            let left_is_const = !left.contains_variable(x);
-            let right_is_const = !right.contains_variable(x);
-
-            if left_is_const && matches!(right.as_ref(), Expression::Variable(v) if v.name == x) {
-                eval_constant(left)
-            } else if right_is_const
-                && matches!(left.as_ref(), Expression::Variable(v) if v.name == x)
-            {
-                eval_constant(right)
+            if x_seen {
+                Some(k)
             } else {
                 None
             }
@@ -233,24 +240,14 @@ fn extract_linear_coeff_of_x(expr: &Expression, x: &str) -> Option<f64> {
     }
 }
 
-/// Evaluate a constant expression (no variables) to `f64`.
-fn eval_constant(expr: &Expression) -> Option<f64> {
-    if expr.contains_variable("") {
-        // Bail out if anything variable-like slips through
-        return None;
-    }
-    match expr {
-        Expression::Integer(n) => Some(*n as f64),
-        Expression::Float(f) => Some(*f),
-        Expression::Rational(r) => Some(*r.numer() as f64 / *r.denom() as f64),
-        Expression::Unary(crate::ast::UnaryOp::Neg, inner) => eval_constant(inner).map(|v| -v),
-        _ => expr.evaluate(&std::collections::HashMap::new()),
-    }
-}
-
-/// Evaluate an expression to a non-negative integer (for polynomial degrees).
-fn eval_as_nonneg_integer(expr: &Expression) -> Option<u32> {
-    let v = eval_constant(expr)?;
+/// Evaluate a numeric leaf to a non-negative integer ≤ 20 (degree cap).
+fn eval_as_nonneg_integer_expr(expr: &Arc<Expr>) -> Option<u32> {
+    let v = match expr.as_ref() {
+        Expr::Integer(n) => n.to_i64().map(|v| v as f64)?,
+        Expr::Float(f) => *f,
+        Expr::Rational(r) => r.to_f64(),
+        _ => return None,
+    };
     if v >= 0.0 && v.fract() == 0.0 && v <= 20.0 {
         Some(v as u32)
     } else {
@@ -317,7 +314,7 @@ fn forcing_type_display(ft: &ForcingType) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::Variable;
+    use crate::ast::{BinaryOp, Function, Variable};
     use crate::ode::SecondOrderODE;
 
     fn var(name: &str) -> Expression {
