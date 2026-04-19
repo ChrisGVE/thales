@@ -335,183 +335,90 @@ fn try_solve_implicit_for_y_expr(
     None
 }
 
-/// Try to solve an equation for a constant (typically C).
+/// Try to solve an equation for a constant (typically `C`).
+///
+/// The equation is treated as `expr = 0`. Handles:
+///
+/// - Direct isolation: `C`, `C + rest = 0`, `C - rest = 0`, `rest - C = 0` etc.
+/// - Exponential form: `exp(C) - value = 0` → `C = ln(value)` (and symmetric).
+/// - Linear-in-C: any sum that is linear in `C`, solved via the canonical
+///   `AddNode` coefficient map.
+///
+/// Delegates to the `Arc<Expr>`-native worker [`solve_for_constant_expr`].
 pub(crate) fn solve_for_constant(equation: &Expression, const_name: &str) -> Option<Expression> {
-    // Simple case: equation is of form C - value = 0 or value - C = 0
-    // or C = value form
-
-    match equation {
-        // C - value = 0 => C = value
-        Expression::Binary(BinaryOp::Sub, left, right) => {
-            if matches!(left.as_ref(), Expression::Variable(v) if v.name == const_name) {
-                return Some(right.as_ref().clone());
-            }
-            if matches!(right.as_ref(), Expression::Variable(v) if v.name == const_name) {
-                return Some(left.as_ref().clone());
-            }
-            // Exp(C) - value = 0 => C = Ln(value)  (isolating from an explicit
-            // exponential form produced by ln-based antiderivatives).
-            if let Expression::Function(Function::Exp, args) = left.as_ref() {
-                if args.len() == 1 {
-                    if matches!(&args[0], Expression::Variable(v) if v.name == const_name) {
-                        return Some(Expression::Function(
-                            Function::Ln,
-                            vec![right.as_ref().clone()],
-                        ));
-                    }
-                }
-            }
-            if let Expression::Function(Function::Exp, args) = right.as_ref() {
-                if args.len() == 1 {
-                    if matches!(&args[0], Expression::Variable(v) if v.name == const_name) {
-                        return Some(Expression::Function(
-                            Function::Ln,
-                            vec![left.as_ref().clone()],
-                        ));
-                    }
-                }
-            }
-        }
-        // C + value = 0 => C = -value
-        Expression::Binary(BinaryOp::Add, left, right) => {
-            if matches!(left.as_ref(), Expression::Variable(v) if v.name == const_name) {
-                return Some(Expression::Unary(UnaryOp::Neg, right.clone()));
-            }
-            if matches!(right.as_ref(), Expression::Variable(v) if v.name == const_name) {
-                return Some(Expression::Unary(UnaryOp::Neg, left.clone()));
-            }
-        }
-        _ => {}
-    }
-
-    // Try to isolate C from more complex equations
-    // For now, try numerical evaluation if possible
-    if let Some(c_value) = try_numerical_solve_for_c(equation, const_name) {
-        return Some(c_value);
-    }
-
-    None
+    let eq_arc = compile(equation);
+    let c_id = SymbolId::intern(const_name);
+    let result = solve_for_constant_expr(&eq_arc, c_id)?;
+    Some(decompile(&result))
 }
 
-/// Try to numerically solve for C.
-fn try_numerical_solve_for_c(equation: &Expression, const_name: &str) -> Option<Expression> {
-    // If the equation doesn't contain C, we can't solve for it
-    if !equation.contains_variable(const_name) {
-        return None;
+/// Arc<Expr>-native worker for [`solve_for_constant`].
+///
+/// Handles `C = 0`, direct isolation via `AddNode`, and the `exp(C) - value`
+/// shorthand. Returns `None` when the equation is non-linear in `C` or has
+/// multiple `C`-bearing terms.
+fn solve_for_constant_expr(equation: &Arc<Expr>, c: SymbolId) -> Option<Arc<Expr>> {
+    // `C = 0` — equation is literally Symbol(c).
+    if matches!(equation.as_ref(), Expr::Symbol(s) if *s == c) {
+        return Some(Expr::int(0));
     }
 
-    // If the equation is linear in C, we can solve analytically
-    // equation = a*C + b = 0 => C = -b/a
+    // `exp(C) = 0` has no real solution; skip.
+    // `exp(C)` alone without additive residual cannot be solved either.
 
-    // Try to extract coefficient of C
-    let mut c_coefficient = Expression::Integer(0);
-    let mut constant_part = Expression::Integer(0);
+    let Expr::Add(node) = equation.as_ref() else {
+        // Fallback: not in AddNode form → unsupported shape.
+        // (A single `Mul`/`Pow`/`Func` containing `C` is non-linear.)
+        return None;
+    };
 
-    fn extract_c_terms(
-        expr: &Expression,
-        c_name: &str,
-        c_coeff: &mut Expression,
-        const_part: &mut Expression,
-    ) -> bool {
-        match expr {
-            Expression::Variable(v) if v.name == c_name => {
-                *c_coeff = Expression::Binary(
-                    BinaryOp::Add,
-                    Box::new(c_coeff.clone()),
-                    Box::new(Expression::Integer(1)),
-                );
-                true
+    // Locate the single `C`-bearing term.
+    let mut c_term: Option<(Arc<Expr>, crate::numeric::BigRational)> = None;
+    for (term, coeff) in &node.terms {
+        if contains_symbol(term, c) {
+            if c_term.is_some() {
+                return None; // multiple C-bearing terms → give up
             }
-            Expression::Binary(BinaryOp::Add, left, right) => {
-                extract_c_terms(left, c_name, c_coeff, const_part)
-                    && extract_c_terms(right, c_name, c_coeff, const_part)
-            }
-            Expression::Binary(BinaryOp::Sub, left, right) => {
-                let mut neg_c = Expression::Integer(0);
-                let mut neg_const = Expression::Integer(0);
-                if !extract_c_terms(left, c_name, c_coeff, const_part) {
-                    return false;
-                }
-                if !extract_c_terms(right, c_name, &mut neg_c, &mut neg_const) {
-                    return false;
-                }
-                *c_coeff =
-                    Expression::Binary(BinaryOp::Sub, Box::new(c_coeff.clone()), Box::new(neg_c));
-                *const_part = Expression::Binary(
-                    BinaryOp::Sub,
-                    Box::new(const_part.clone()),
-                    Box::new(neg_const),
-                );
-                true
-            }
-            Expression::Binary(BinaryOp::Mul, left, right) => {
-                let left_has_c = left.contains_variable(c_name);
-                let right_has_c = right.contains_variable(c_name);
-                if left_has_c && right_has_c {
-                    return false; // Non-linear in C
-                }
-                if !left_has_c && !right_has_c {
-                    *const_part = Expression::Binary(
-                        BinaryOp::Add,
-                        Box::new(const_part.clone()),
-                        Box::new(expr.clone()),
-                    );
-                    return true;
-                }
-                // One side is C, other is coefficient
-                if left_has_c {
-                    if matches!(left.as_ref(), Expression::Variable(v) if v.name == c_name) {
-                        *c_coeff = Expression::Binary(
-                            BinaryOp::Add,
-                            Box::new(c_coeff.clone()),
-                            right.clone(),
-                        );
-                        return true;
-                    }
-                } else if matches!(right.as_ref(), Expression::Variable(v) if v.name == c_name) {
-                    *c_coeff =
-                        Expression::Binary(BinaryOp::Add, Box::new(c_coeff.clone()), left.clone());
-                    return true;
-                }
-                false
-            }
-            Expression::Unary(UnaryOp::Neg, inner) => {
-                let mut neg_c = Expression::Integer(0);
-                let mut neg_const = Expression::Integer(0);
-                if !extract_c_terms(inner, c_name, &mut neg_c, &mut neg_const) {
-                    return false;
-                }
-                *c_coeff =
-                    Expression::Binary(BinaryOp::Sub, Box::new(c_coeff.clone()), Box::new(neg_c));
-                *const_part = Expression::Binary(
-                    BinaryOp::Sub,
-                    Box::new(const_part.clone()),
-                    Box::new(neg_const),
-                );
-                true
-            }
-            _ if !expr.contains_variable(c_name) => {
-                *const_part = Expression::Binary(
-                    BinaryOp::Add,
-                    Box::new(const_part.clone()),
-                    Box::new(expr.clone()),
-                );
-                true
-            }
-            _ => false,
+            c_term = Some((term.clone(), coeff.clone()));
         }
     }
+    let (term, coeff) = c_term?;
 
-    if !extract_c_terms(equation, const_name, &mut c_coefficient, &mut constant_part) {
+    // Determine C-bearing term shape.
+    let is_direct = matches!(term.as_ref(), Expr::Symbol(s) if *s == c);
+    let is_exp_c = matches!(
+        term.as_ref(),
+        Expr::Func(FuncId::Exp, args)
+            if args.len() == 1
+                && matches!(args[0].as_ref(), Expr::Symbol(s) if *s == c)
+    );
+    if !is_direct && !is_exp_c {
         return None;
     }
 
-    let c_coeff = c_coefficient.simplify();
-    let b = constant_part.simplify();
+    // Build `rest = equation - coeff * term` by reassembling without the C term.
+    let mut rest = crate::numeric::AddNode::from_constant(node.constant.clone());
+    for (t, co) in &node.terms {
+        if Arc::ptr_eq(t, &term) {
+            continue;
+        }
+        rest.add_term(t.clone(), co.clone());
+    }
+    let rest_arc: Arc<Expr> = if rest.is_zero() {
+        Expr::int(0)
+    } else {
+        Arc::new(Expr::Add(rest))
+    };
 
-    // C = -b/a
-    let neg_b = Expression::Unary(UnaryOp::Neg, Box::new(b));
-    let c_value = Expression::Binary(BinaryOp::Div, Box::new(neg_b), Box::new(c_coeff)).simplify();
+    // solved = -rest / coeff
+    let neg_rest = normalize::neg(rest_arc);
+    let coeff_arc: Arc<Expr> = Arc::new(Expr::Rational(coeff));
+    let solved = normalize::div(neg_rest, coeff_arc);
 
-    Some(c_value)
+    if is_direct {
+        Some(solved)
+    } else {
+        // C = ln(solved)
+        Some(Expr::func(FuncId::Ln, vec![solved]))
+    }
 }
