@@ -7,6 +7,9 @@
 //! `Expr-migration` (task 10.4).
 
 use crate::ast::{BinaryOp, Expression, Function, UnaryOp};
+use crate::numeric::compile::{compile, decompile};
+use crate::numeric::substitute::substitute as arc_substitute;
+use crate::numeric::SymbolId;
 
 /// Attempt to separate dy/dx = f(x,y) into g(x) * h(y).
 ///
@@ -234,32 +237,16 @@ pub(crate) fn extract_linear_coefficients(
 }
 
 /// Substitute a variable with an expression.
+///
+/// Delegates to the `Arc<Expr>` walker [`crate::numeric::substitute::substitute`]
+/// via compile/decompile at the boundary. Signature is preserved so callers
+/// keep operating on `Expression` until they migrate.
 pub(crate) fn substitute_var(expr: &Expression, var: &str, replacement: &Expression) -> Expression {
-    match expr {
-        Expression::Variable(v) if v.name == var => replacement.clone(),
-        Expression::Variable(_) => expr.clone(),
-        Expression::Integer(_) | Expression::Float(_) | Expression::Rational(_) => expr.clone(),
-        Expression::Constant(_) => expr.clone(),
-        Expression::Complex(_) => expr.clone(),
-        Expression::Binary(op, left, right) => Expression::Binary(
-            *op,
-            Box::new(substitute_var(left, var, replacement)),
-            Box::new(substitute_var(right, var, replacement)),
-        ),
-        Expression::Unary(op, operand) => {
-            Expression::Unary(*op, Box::new(substitute_var(operand, var, replacement)))
-        }
-        Expression::Function(func, args) => Expression::Function(
-            func.clone(),
-            args.iter()
-                .map(|arg| substitute_var(arg, var, replacement))
-                .collect(),
-        ),
-        Expression::Power(base, exp) => Expression::Power(
-            Box::new(substitute_var(base, var, replacement)),
-            Box::new(substitute_var(exp, var, replacement)),
-        ),
-    }
+    let expr_arc = compile(expr);
+    let replacement_arc = compile(replacement);
+    let var_id = SymbolId::intern(var);
+    let result = arc_substitute(&expr_arc, var_id, &replacement_arc);
+    decompile(&result)
 }
 
 /// Try to solve an implicit relation for y explicitly.
