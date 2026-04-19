@@ -13,79 +13,80 @@ use crate::numeric::compile::{compile, decompile};
 use crate::numeric::expr::{Expr, FuncId};
 use crate::numeric::normalize;
 use crate::numeric::substitute::substitute as arc_substitute;
-use crate::numeric::SymbolId;
+use crate::numeric::{MulNode, SymbolId};
 use crate::solver::helpers::contains_symbol;
 use num::traits::One;
 
-/// Attempt to separate dy/dx = f(x,y) into g(x) * h(y).
+/// Attempt to separate `dy/dx = f(x, y)` into `g(x) · h(y)`.
 ///
-/// Returns (g(x), h(y)) if separable, None otherwise.
+/// Returns `(g(x), h(y))` if separable, `None` otherwise. Delegates to the
+/// `Arc<Expr>`-native worker [`try_separate_expr`] which iterates the
+/// canonical `MulNode` factors, so it naturally handles division
+/// (`g(x) / h(y)` stores as `Mul { g(x), Pow(h(y), -1) }`) and arbitrary
+/// factor counts.
 pub(crate) fn try_separate(
     expr: &Expression,
     x_var: &str,
     y_var: &str,
 ) -> Option<(Expression, Expression)> {
-    // Check if expression is already a product
-    if let Expression::Binary(BinaryOp::Mul, left, right) = expr {
-        let left_has_x = left.contains_variable(x_var);
-        let left_has_y = left.contains_variable(y_var);
-        let right_has_x = right.contains_variable(x_var);
-        let right_has_y = right.contains_variable(y_var);
+    let expr_arc = compile(expr);
+    let x_id = SymbolId::intern(x_var);
+    let y_id = SymbolId::intern(y_var);
+    let (g, h) = try_separate_expr(&expr_arc, x_id, y_id)?;
+    Some((decompile(&g), decompile(&h)))
+}
 
-        // Case: g(x) * h(y)
-        if left_has_x && !left_has_y && right_has_y && !right_has_x {
-            return Some((left.as_ref().clone(), right.as_ref().clone()));
-        }
-        // Case: h(y) * g(x)
-        if left_has_y && !left_has_x && right_has_x && !right_has_y {
-            return Some((right.as_ref().clone(), left.as_ref().clone()));
-        }
-        // Case: purely x-dependent (h(y) = 1)
-        if (left_has_x || right_has_x) && !left_has_y && !right_has_y {
-            return Some((expr.clone(), Expression::Integer(1)));
-        }
-        // Case: purely y-dependent (g(x) = 1)
-        if (left_has_y || right_has_y) && !left_has_x && !right_has_x {
-            return Some((Expression::Integer(1), expr.clone()));
-        }
+/// Arc<Expr>-native worker for [`try_separate`].
+///
+/// Pure cases (one variable absent) return immediately. Otherwise the
+/// expression must be a canonical product; each factor is assigned to
+/// `g(x)` (x-only or constant) or `h(y)` (y-only). Any factor that
+/// mentions both variables makes the ODE non-separable.
+fn try_separate_expr(rhs: &Arc<Expr>, x: SymbolId, y: SymbolId) -> Option<(Arc<Expr>, Arc<Expr>)> {
+    let has_x = contains_symbol(rhs, x);
+    let has_y = contains_symbol(rhs, y);
+
+    // Pure-x (or constant): h(y) = 1.
+    if !has_y {
+        return Some((rhs.clone(), Expr::int(1)));
+    }
+    // Pure-y: g(x) = 1.
+    if !has_x {
+        return Some((Expr::int(1), rhs.clone()));
     }
 
-    // Check if expression is purely x-dependent or y-dependent
-    let has_x = expr.contains_variable(x_var);
-    let has_y = expr.contains_variable(y_var);
+    // Mixed → must be a product; iterate the canonical factor map.
+    let Expr::Mul(node) = rhs.as_ref() else {
+        return None;
+    };
 
-    if has_x && !has_y {
-        // dy/dx = g(x) is separable with h(y) = 1
-        return Some((expr.clone(), Expression::Integer(1)));
-    }
-    if has_y && !has_x {
-        // dy/dx = h(y) is separable with g(x) = 1
-        return Some((Expression::Integer(1), expr.clone()));
-    }
-    if !has_x && !has_y {
-        // Constant: dy/dx = c, separable with g(x) = c, h(y) = 1
-        return Some((expr.clone(), Expression::Integer(1)));
-    }
+    let mut g = MulNode::from_coeff(node.coeff.clone());
+    let mut h = MulNode::one();
 
-    // Check for division that might be separable: g(x)/h(y) or h(y)/g(x)
-    if let Expression::Binary(BinaryOp::Div, num, denom) = expr {
-        let num_has_x = num.contains_variable(x_var);
-        let num_has_y = num.contains_variable(y_var);
-        let denom_has_x = denom.contains_variable(x_var);
-        let denom_has_y = denom.contains_variable(y_var);
-
-        // g(x) / k(y) = g(x) * (1/k(y))
-        if num_has_x && !num_has_y && denom_has_y && !denom_has_x {
-            let h_y = Expression::Binary(
-                BinaryOp::Div,
-                Box::new(Expression::Integer(1)),
-                denom.clone(),
-            );
-            return Some((num.as_ref().clone(), h_y));
+    for (base, exp) in &node.factors {
+        let factor_has_x = contains_symbol(base, x) || contains_symbol(exp, x);
+        let factor_has_y = contains_symbol(base, y) || contains_symbol(exp, y);
+        if factor_has_x && factor_has_y {
+            return None; // factor entangles x and y
+        }
+        if factor_has_y {
+            h.add_factor(base.clone(), exp.clone());
+        } else {
+            g.add_factor(base.clone(), exp.clone());
         }
     }
 
-    None
+    let g_arc: Arc<Expr> = if g.is_one() {
+        Expr::int(1)
+    } else {
+        Arc::new(Expr::Mul(g))
+    };
+    let h_arc: Arc<Expr> = if h.is_one() {
+        Expr::int(1)
+    } else {
+        Arc::new(Expr::Mul(h))
+    };
+    Some((g_arc, h_arc))
 }
 
 /// Extract P(x) and Q(x) from a linear ODE in form dy/dx = -P(x)*y + Q(x).
