@@ -6,10 +6,16 @@
 //! them to `Arc<Expr>` walkers is tracked as follow-up work under milestone
 //! `Expr-migration` (task 10.4).
 
+use std::sync::Arc;
+
 use crate::ast::{BinaryOp, Expression, Function, UnaryOp};
 use crate::numeric::compile::{compile, decompile};
+use crate::numeric::expr::{Expr, FuncId};
+use crate::numeric::normalize;
 use crate::numeric::substitute::substitute as arc_substitute;
 use crate::numeric::SymbolId;
+use crate::solver::helpers::contains_symbol;
+use num::traits::One;
 
 /// Attempt to separate dy/dx = f(x,y) into g(x) * h(y).
 ///
@@ -250,61 +256,78 @@ pub(crate) fn substitute_var(expr: &Expression, var: &str, replacement: &Express
 }
 
 /// Try to solve an implicit relation for y explicitly.
-/// For example: ln(y) = x + C => y = e^(x + C)
+///
+/// Delegates to the `Arc<Expr>`-native helper [`try_solve_implicit_for_y_expr`]
+/// via compile/decompile at the boundary. Handles:
+///
+/// - `y = right` → `right`
+/// - `ln(y) = right` or `ln(|y|) = right` → `exp(right)` (positive branch)
+/// - `y^n = right` with n y-free → `right^(1/n)`
+/// - `1/y = right` → `1/right`
 pub(crate) fn try_solve_implicit_for_y(
     left: &Expression,
     right: &Expression,
     y_var: &str,
 ) -> Option<Expression> {
-    // Simple case: left is just y
-    if matches!(left, Expression::Variable(v) if v.name == y_var) {
+    let left_arc = compile(left);
+    let right_arc = compile(right);
+    let y_id = SymbolId::intern(y_var);
+    let result = try_solve_implicit_for_y_expr(&left_arc, &right_arc, y_id)?;
+    Some(decompile(&result))
+}
+
+/// Arc<Expr>-native worker for [`try_solve_implicit_for_y`].
+///
+/// Pattern-matches on the canonical [`Expr`] form. Callers should compile
+/// their `Expression` inputs first; results are normalized through the
+/// smart constructors in [`crate::numeric::normalize`].
+fn try_solve_implicit_for_y_expr(
+    left: &Arc<Expr>,
+    right: &Arc<Expr>,
+    y: SymbolId,
+) -> Option<Arc<Expr>> {
+    // Case 1: left is just y → y = right
+    if matches!(left.as_ref(), Expr::Symbol(s) if *s == y) {
         return Some(right.clone());
     }
 
-    // Case: ln(y) = right => y = e^right
-    if let Expression::Function(Function::Ln, args) = left {
+    // Case 2: ln(y) = right → y = exp(right); also ln(|y|) = right → y = exp(right)
+    if let Expr::Func(FuncId::Ln, args) = left.as_ref() {
         if args.len() == 1 {
-            if matches!(&args[0], Expression::Variable(v) if v.name == y_var) {
-                return Some(Expression::Function(Function::Exp, vec![right.clone()]));
-            }
-            // ln(|y|) case - handle absolute value
-            if let Expression::Function(Function::Abs, inner_args) = &args[0] {
-                if inner_args.len() == 1 {
-                    if matches!(&inner_args[0], Expression::Variable(v) if v.name == y_var) {
-                        // y = ±e^right, return positive branch
-                        return Some(Expression::Function(Function::Exp, vec![right.clone()]));
-                    }
-                }
-            }
-        }
-    }
-
-    // Case: y^n = right => y = right^(1/n)
-    if let Expression::Power(base, exp) = left {
-        if matches!(base.as_ref(), Expression::Variable(v) if v.name == y_var) {
-            if !exp.contains_variable(y_var) {
-                let one_over_n = Expression::Binary(
-                    BinaryOp::Div,
-                    Box::new(Expression::Integer(1)),
-                    exp.clone(),
-                );
-                return Some(Expression::Power(
-                    Box::new(right.clone()),
-                    Box::new(one_over_n),
-                ));
+            let inner = &args[0];
+            let inner_is_y = matches!(inner.as_ref(), Expr::Symbol(s) if *s == y);
+            let inner_is_abs_y = matches!(
+                inner.as_ref(),
+                Expr::Func(FuncId::Abs, abs_args)
+                    if abs_args.len() == 1
+                        && matches!(abs_args[0].as_ref(), Expr::Symbol(s) if *s == y)
+            );
+            if inner_is_y || inner_is_abs_y {
+                return Some(Expr::func(FuncId::Exp, vec![right.clone()]));
             }
         }
     }
 
-    // Case: 1/y = right => y = 1/right
-    if let Expression::Binary(BinaryOp::Div, num, denom) = left {
-        if matches!(num.as_ref(), Expression::Integer(1)) {
-            if matches!(denom.as_ref(), Expression::Variable(v) if v.name == y_var) {
-                return Some(Expression::Binary(
-                    BinaryOp::Div,
-                    Box::new(Expression::Integer(1)),
-                    Box::new(right.clone()),
-                ));
+    // Case 3: y^n = right with n y-free → y = right^(1/n)
+    if let Expr::Pow(base, exp) = left.as_ref() {
+        if matches!(base.as_ref(), Expr::Symbol(s) if *s == y) && !contains_symbol(exp, y) {
+            let one_over_n = normalize::div(Expr::int(1), exp.clone());
+            return Some(normalize::pow(right.clone(), one_over_n));
+        }
+    }
+
+    // Case 4: 1/y = right → y = 1/right.
+    // `1/y` compiles to MulNode { coeff = 1, factors = { y: -1 } }; match that shape.
+    if let Expr::Mul(node) = left.as_ref() {
+        if node.coeff.is_one() && node.factors.len() == 1 {
+            let (base, exp) = node.factors.iter().next().unwrap();
+            let base_is_y = matches!(base.as_ref(), Expr::Symbol(s) if *s == y);
+            let exp_is_neg_one = matches!(
+                exp.as_ref(),
+                Expr::Integer(n) if n.to_i64() == Some(-1)
+            );
+            if base_is_y && exp_is_neg_one {
+                return Some(normalize::div(Expr::int(1), right.clone()));
             }
         }
     }

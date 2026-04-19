@@ -116,7 +116,7 @@
 mod coeff;
 mod cramer;
 mod gauss;
-mod helpers;
+pub(crate) mod helpers;
 pub mod linear;
 pub mod linear_system;
 mod lu_exact;
