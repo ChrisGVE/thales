@@ -468,9 +468,13 @@ pub fn solve_second_order_ivp(
     };
 
     // Substitute C1 and C2 into the general solution
-    let general = solution.general_solution;
-    let with_c1 = substitute_var(&general, "C1", &Expression::Float(c1));
-    let with_c2 = substitute_var(&with_c1, "C2", &Expression::Float(c2));
+    let general_arc = compile(&solution.general_solution);
+    let c1_id = crate::numeric::SymbolId::intern("C1");
+    let c2_id = crate::numeric::SymbolId::intern("C2");
+    let c1_arc = compile(&Expression::Float(c1));
+    let c2_arc = compile(&Expression::Float(c2));
+    let with_c1 = substitute_var(&general_arc, c1_id, &c1_arc);
+    let with_c2 = substitute_var(&with_c1, c2_id, &c2_arc);
 
-    Ok(with_c2.simplify())
+    Ok(decompile(&with_c2).simplify())
 }

@@ -11,7 +11,6 @@
 use std::sync::Arc;
 
 use crate::ast::{Expression, SymbolicConstant};
-use crate::numeric::compile::compile;
 use crate::numeric::expr::{Expr, FuncId};
 use crate::numeric::SymbolId;
 use crate::solver::helpers::contains_symbol;
@@ -53,7 +52,11 @@ pub enum ForcingType {
     Trigonometric { k: f64 },
 }
 
-/// Identify the type of a forcing function expression in variable `x_var`.
+/// Identify the type of a forcing function expression in variable `x`.
+///
+/// Walks the canonical `Expr` tree directly; `Add` and `Mul` dispatch by
+/// merging the per-term classifications (addition: same type only;
+/// multiplication: scalar times a single non-trivial forcing).
 ///
 /// Returns `None` when the expression does not match any supported type.
 ///
@@ -65,17 +68,7 @@ pub enum ForcingType {
 /// | `x`, `k·x`, `x^n`, polynomial sum/difference | `Polynomial { degree: n }` |
 /// | `exp(k·x)` or `e^(k·x)` | `Exponential { k }` |
 /// | `sin(k·x)` or `cos(k·x)` | `Trigonometric { k }` |
-pub fn identify_forcing_function(expr: &Expression, x_var: &str) -> Option<ForcingType> {
-    let arc = compile(expr);
-    let x = SymbolId::intern(x_var);
-    classify_forcing_expr(&arc, x)
-}
-
-/// Arc<Expr>-native forcing classifier. Walks the canonical `Expr` tree
-/// directly; `Add` and `Mul` dispatch by merging the per-term
-/// classifications (addition: same type only; multiplication: scalar
-/// times a single non-trivial forcing).
-fn classify_forcing_expr(expr: &Arc<Expr>, x: SymbolId) -> Option<ForcingType> {
+pub fn identify_forcing_function(expr: &Arc<Expr>, x: SymbolId) -> Option<ForcingType> {
     match expr.as_ref() {
         // Pure numeric leaves → degree-0 polynomial.
         Expr::Integer(_) | Expr::Float(_) | Expr::Rational(_) | Expr::Complex(_) => {
@@ -98,7 +91,7 @@ fn classify_forcing_expr(expr: &Arc<Expr>, x: SymbolId) -> Option<ForcingType> {
         Expr::Add(node) => {
             let mut acc = ForcingType::Polynomial { degree: 0 };
             for (term, _coeff) in &node.terms {
-                let t = classify_forcing_expr(term, x)?;
+                let t = identify_forcing_function(term, x)?;
                 acc = merge_forcing_types(acc, t)?;
             }
             Some(acc)
@@ -114,7 +107,7 @@ fn classify_forcing_expr(expr: &Arc<Expr>, x: SymbolId) -> Option<ForcingType> {
                 } else {
                     Arc::new(Expr::Pow(base.clone(), exp.clone()))
                 };
-                let t = classify_forcing_expr(&factor_arc, x)?;
+                let t = identify_forcing_function(&factor_arc, x)?;
                 acc = merge_forcing_types_mul(acc, t)?;
             }
             Some(acc)
@@ -272,8 +265,9 @@ fn eval_as_nonneg_integer_expr(expr: &Arc<Expr>) -> Option<u32> {
 pub fn particular_solution_undetermined(
     ode: &SecondOrderODE,
 ) -> Result<(Expression, Vec<String>), ODEError> {
-    let forcing_expr = ode.forcing_expr();
-    let forcing_type = identify_forcing_function(&forcing_expr, &ode.independent)
+    let forcing_arc = ode.forcing_arc();
+    let x_id = SymbolId::intern(&ode.independent);
+    let forcing_type = identify_forcing_function(&forcing_arc, x_id)
         .ok_or_else(|| ODEError::CannotSolve("forcing function type not supported".to_string()))?;
 
     let mut steps = Vec::new();
@@ -315,6 +309,7 @@ fn forcing_type_display(ft: &ForcingType) -> &'static str {
 mod tests {
     use super::*;
     use crate::ast::{BinaryOp, Function, Variable};
+    use crate::numeric::compile::compile;
     use crate::ode::SecondOrderODE;
 
     fn var(name: &str) -> Expression {
@@ -334,38 +329,42 @@ mod tests {
         Expression::Function(Function::Exp, vec![kx])
     }
 
+    fn classify(expr: &Expression, x_var: &str) -> Option<ForcingType> {
+        identify_forcing_function(&compile(expr), SymbolId::intern(x_var))
+    }
+
     // ------------------------------------------------------------------
     // identify_forcing_function
     // ------------------------------------------------------------------
 
     #[test]
     fn classify_constant_is_poly0() {
-        let ft = identify_forcing_function(&Expression::Integer(3), "x");
+        let ft = classify(&Expression::Integer(3), "x");
         assert_eq!(ft, Some(ForcingType::Polynomial { degree: 0 }));
     }
 
     #[test]
     fn classify_x_is_poly1() {
-        let ft = identify_forcing_function(&var("x"), "x");
+        let ft = classify(&var("x"), "x");
         assert_eq!(ft, Some(ForcingType::Polynomial { degree: 1 }));
     }
 
     #[test]
     fn classify_x_squared_is_poly2() {
         let x2 = Expression::Power(Box::new(var("x")), Box::new(Expression::Integer(2)));
-        let ft = identify_forcing_function(&x2, "x");
+        let ft = classify(&x2, "x");
         assert_eq!(ft, Some(ForcingType::Polynomial { degree: 2 }));
     }
 
     #[test]
     fn classify_exp_is_exponential() {
-        let ft = identify_forcing_function(&make_exp_kx(3.0), "x");
+        let ft = classify(&make_exp_kx(3.0), "x");
         assert_eq!(ft, Some(ForcingType::Exponential { k: 3.0 }));
     }
 
     #[test]
     fn classify_sin_is_trig() {
-        let ft = identify_forcing_function(&make_sin_x(), "x");
+        let ft = classify(&make_sin_x(), "x");
         assert_eq!(ft, Some(ForcingType::Trigonometric { k: 1.0 }));
     }
 

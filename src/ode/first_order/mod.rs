@@ -13,20 +13,27 @@ pub(super) use walkers::{
 
 use crate::ast::{BinaryOp, Expression, Function, Variable};
 use crate::integration::integrate;
+use crate::numeric::compile::{compile, decompile};
+use crate::numeric::SymbolId;
 
 use super::{FirstOrderODE, ODEError, ODESolution};
 
 pub fn solve_separable(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
     let mut steps = Vec::new();
-    let rhs_expr = ode.rhs_expr();
+    let rhs_arc = ode.rhs_arc();
     steps.push(format!(
         "Given ODE: d{}/d{} = {}",
-        ode.dependent, ode.independent, rhs_expr
+        ode.dependent,
+        ode.independent,
+        decompile(&rhs_arc)
     ));
 
     // Try to separate the equation
-    let (g_x, h_y) =
-        try_separate(&rhs_expr, &ode.independent, &ode.dependent).ok_or(ODEError::NotSeparable)?;
+    let x_id = SymbolId::intern(&ode.independent);
+    let y_id = SymbolId::intern(&ode.dependent);
+    let (g_arc, h_arc) = try_separate(&rhs_arc, x_id, y_id).ok_or(ODEError::NotSeparable)?;
+    let g_x = decompile(&g_arc);
+    let h_y = decompile(&h_arc);
 
     steps.push(format!(
         "Separating: d{}/d{} = ({}) * ({})",
@@ -63,7 +70,10 @@ pub fn solve_separable(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
 
     // The solution is an implicit relation
     // For some common cases, we can solve explicitly for y
-    let solution = try_solve_implicit_for_y(&left_integral, &rhs_with_c, &ode.dependent)
+    let left_arc = compile(&left_integral);
+    let rhs_with_c_arc = compile(&rhs_with_c);
+    let solution = try_solve_implicit_for_y(&left_arc, &rhs_with_c_arc, y_id)
+        .map(|arc| decompile(&arc))
         .unwrap_or_else(|| {
             // Return implicit form: left = right + C
             Expression::Binary(
@@ -103,16 +113,20 @@ pub fn solve_separable(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
 #[must_use = "solving returns a result that should be used"]
 pub fn solve_linear(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
     let mut steps = Vec::new();
-    let rhs_expr = ode.rhs_expr();
+    let rhs_arc = ode.rhs_arc();
     steps.push(format!(
         "Given ODE: d{}/d{} = {}",
-        ode.dependent, ode.independent, rhs_expr
+        ode.dependent,
+        ode.independent,
+        decompile(&rhs_arc)
     ));
 
     // Extract P(x) and Q(x) from dy/dx = -P(x)*y + Q(x)
     // which is equivalent to dy/dx + P(x)*y = Q(x)
-    let (p_x, q_x) = extract_linear_coefficients(&rhs_expr, &ode.independent, &ode.dependent)
-        .ok_or(ODEError::NotLinear)?;
+    let y_id = SymbolId::intern(&ode.dependent);
+    let (p_arc, q_arc) = extract_linear_coefficients(&rhs_arc, y_id).ok_or(ODEError::NotLinear)?;
+    let p_x = decompile(&p_arc);
+    let q_x = decompile(&q_arc);
 
     // The ODE is dy/dx = rhs, and we extracted it as dy/dx = -P*y + Q
     // So the standard form is dy/dx + P*y = Q
@@ -200,15 +214,23 @@ pub fn solve_ivp(
     ));
 
     // Substitute x = x0 and y = y0 into the general solution to find C
-    let substituted = substitute_var(&general.general_solution, &ode.independent, x0);
+    let c_id = SymbolId::intern("C");
+    let x_id = SymbolId::intern(&ode.independent);
+    let general_arc = compile(&general.general_solution);
+    let x0_arc = compile(x0);
+    let substituted_arc = substitute_var(&general_arc, x_id, &x0_arc);
+    let substituted = decompile(&substituted_arc);
     let equation = Expression::Binary(BinaryOp::Sub, Box::new(substituted), Box::new(y0.clone()));
 
     // Try to solve for C
-    if let Some(c_value) = solve_for_constant(&equation.simplify(), "C") {
+    let equation_arc = compile(&equation.simplify());
+    if let Some(c_value_arc) = solve_for_constant(&equation_arc, c_id) {
+        let c_value = decompile(&c_value_arc);
         steps.push(format!("Solving for C: C = {}", c_value));
 
         // Substitute C back into the general solution
-        let particular = substitute_var(&general.general_solution, "C", &c_value).simplify();
+        let particular_arc = substitute_var(&general_arc, c_id, &c_value_arc);
+        let particular = decompile(&particular_arc).simplify();
 
         // Decision 2b invariant: the returned particular solution must be
         // explicit in the dependent variable. If `y` still appears, the

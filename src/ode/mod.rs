@@ -45,6 +45,8 @@ mod tests {
     use super::first_order::*;
     use super::*;
     use crate::ast::{BinaryOp, Expression, Function, UnaryOp, Variable};
+    use crate::numeric::compile::{compile, decompile};
+    use crate::numeric::SymbolId;
 
     fn var(name: &str) -> Expression {
         Expression::Variable(Variable::new(name))
@@ -70,11 +72,51 @@ mod tests {
         Expression::Unary(UnaryOp::Neg, Box::new(expr))
     }
 
+    fn try_separate_expr(
+        rhs: &Expression,
+        x_var: &str,
+        y_var: &str,
+    ) -> Option<(Expression, Expression)> {
+        let arc = compile(rhs);
+        let (g, h) = try_separate(&arc, SymbolId::intern(x_var), SymbolId::intern(y_var))?;
+        Some((decompile(&g), decompile(&h)))
+    }
+
+    fn extract_linear_coefficients_expr(
+        rhs: &Expression,
+        _x_var: &str,
+        y_var: &str,
+    ) -> Option<(Expression, Expression)> {
+        let arc = compile(rhs);
+        let (p, q) = extract_linear_coefficients(&arc, SymbolId::intern(y_var))?;
+        Some((decompile(&p), decompile(&q)))
+    }
+
+    fn substitute_var_expr(expr: &Expression, var: &str, replacement: &Expression) -> Expression {
+        let arc = compile(expr);
+        let replacement_arc = compile(replacement);
+        decompile(&substitute_var(
+            &arc,
+            SymbolId::intern(var),
+            &replacement_arc,
+        ))
+    }
+
+    fn try_solve_implicit_for_y_expr(
+        left: &Expression,
+        right: &Expression,
+        y_var: &str,
+    ) -> Option<Expression> {
+        let result =
+            try_solve_implicit_for_y(&compile(left), &compile(right), SymbolId::intern(y_var))?;
+        Some(decompile(&result))
+    }
+
     #[test]
     fn test_try_separate_simple_product() {
         // dy/dx = x * y
         let expr = mul(var("x"), var("y"));
-        let result = try_separate(&expr, "x", "y");
+        let result = try_separate_expr(&expr, "x", "y");
         assert!(result.is_some());
         let (g_x, h_y) = result.unwrap();
         assert!(matches!(g_x, Expression::Variable(v) if v.name == "x"));
@@ -86,7 +128,7 @@ mod tests {
         // dy/dx = x^2
         let x = var("x");
         let expr = Expression::Power(Box::new(x), Box::new(int(2)));
-        let result = try_separate(&expr, "x", "y");
+        let result = try_separate_expr(&expr, "x", "y");
         assert!(result.is_some());
         let (g_x, h_y) = result.unwrap();
         assert!(matches!(g_x, Expression::Power(_, _)));
@@ -98,7 +140,7 @@ mod tests {
         // dy/dx = y^2
         let y = var("y");
         let expr = Expression::Power(Box::new(y), Box::new(int(2)));
-        let result = try_separate(&expr, "x", "y");
+        let result = try_separate_expr(&expr, "x", "y");
         assert!(result.is_some());
         let (g_x, h_y) = result.unwrap();
         assert!(matches!(g_x, Expression::Integer(1)));
@@ -109,7 +151,7 @@ mod tests {
     fn test_try_separate_constant() {
         // dy/dx = 5
         let expr = int(5);
-        let result = try_separate(&expr, "x", "y");
+        let result = try_separate_expr(&expr, "x", "y");
         assert!(result.is_some());
         let (g_x, h_y) = result.unwrap();
         assert!(matches!(g_x, Expression::Integer(5)));
@@ -145,7 +187,7 @@ mod tests {
         // Standard form: dy/dx + 2*y = 3*x
         // So P(x) = 2, Q(x) = 3*x
         let rhs = add(mul(int(-2), var("y")), mul(int(3), var("x")));
-        let result = extract_linear_coefficients(&rhs, "x", "y");
+        let result = extract_linear_coefficients_expr(&rhs, "x", "y");
         assert!(result.is_some());
     }
 
@@ -205,7 +247,7 @@ mod tests {
     #[test]
     fn test_substitute_var() {
         let expr = add(var("x"), var("y"));
-        let result = substitute_var(&expr, "x", &int(5));
+        let result = substitute_var_expr(&expr, "x", &int(5));
         // Should get 5 + y
         assert!(matches!(
             result,
@@ -218,7 +260,7 @@ mod tests {
         // ln(y) = x + C => y = e^(x + C)
         let left = Expression::Function(Function::Ln, vec![var("y")]);
         let right = add(var("x"), var("C"));
-        let result = try_solve_implicit_for_y(&left, &right, "y");
+        let result = try_solve_implicit_for_y_expr(&left, &right, "y");
         assert!(result.is_some());
         assert!(matches!(
             result.unwrap(),

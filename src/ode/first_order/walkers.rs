@@ -1,15 +1,12 @@
-//! Expression-AST walkers supporting the first-order ODE solvers.
+//! Arc<Expr>-native walkers supporting the first-order ODE solvers.
 //!
-//! These helpers inspect or manipulate the legacy `Expression` tree at the
-//! migration boundary — they are called after `FirstOrderODE::rhs_expr()` has
-//! decompiled the canonical `Arc<Expr>` storage back to `Expression`. Porting
-//! them to `Arc<Expr>` walkers is tracked as follow-up work under milestone
-//! `Expr-migration` (task 10.4).
+//! All helpers operate on canonical `Arc<Expr>` and `SymbolId`. Callers that
+//! still hold `Expression`-typed inputs compile at the boundary. Signatures
+//! avoid redundant compile/decompile round-trips for `ode.rhs_arc()` /
+//! `ode.forcing_arc()` consumers (milestone `Expr-migration` task 10.4).
 
 use std::sync::Arc;
 
-use crate::ast::{BinaryOp, Expression, Function, UnaryOp};
-use crate::numeric::compile::{compile, decompile};
 use crate::numeric::expr::{Expr, FuncId};
 use crate::numeric::normalize;
 use crate::numeric::substitute::substitute as arc_substitute;
@@ -19,30 +16,15 @@ use num::traits::One;
 
 /// Attempt to separate `dy/dx = f(x, y)` into `g(x) · h(y)`.
 ///
-/// Returns `(g(x), h(y))` if separable, `None` otherwise. Delegates to the
-/// `Arc<Expr>`-native worker [`try_separate_expr`] which iterates the
-/// canonical `MulNode` factors, so it naturally handles division
-/// (`g(x) / h(y)` stores as `Mul { g(x), Pow(h(y), -1) }`) and arbitrary
-/// factor counts.
-pub(crate) fn try_separate(
-    expr: &Expression,
-    x_var: &str,
-    y_var: &str,
-) -> Option<(Expression, Expression)> {
-    let expr_arc = compile(expr);
-    let x_id = SymbolId::intern(x_var);
-    let y_id = SymbolId::intern(y_var);
-    let (g, h) = try_separate_expr(&expr_arc, x_id, y_id)?;
-    Some((decompile(&g), decompile(&h)))
-}
-
-/// Arc<Expr>-native worker for [`try_separate`].
-///
 /// Pure cases (one variable absent) return immediately. Otherwise the
 /// expression must be a canonical product; each factor is assigned to
 /// `g(x)` (x-only or constant) or `h(y)` (y-only). Any factor that
 /// mentions both variables makes the ODE non-separable.
-fn try_separate_expr(rhs: &Arc<Expr>, x: SymbolId, y: SymbolId) -> Option<(Arc<Expr>, Arc<Expr>)> {
+pub(crate) fn try_separate(
+    rhs: &Arc<Expr>,
+    x: SymbolId,
+    y: SymbolId,
+) -> Option<(Arc<Expr>, Arc<Expr>)> {
     let has_x = contains_symbol(rhs, x);
     let has_y = contains_symbol(rhs, y);
 
@@ -89,27 +71,13 @@ fn try_separate_expr(rhs: &Arc<Expr>, x: SymbolId, y: SymbolId) -> Option<(Arc<E
     Some((g_arc, h_arc))
 }
 
-/// Extract P(x) and Q(x) from a linear ODE in form dy/dx = -P(x)*y + Q(x).
-///
-/// Returns (P(x), Q(x)) if linear, None otherwise.
-pub(crate) fn extract_linear_coefficients(
-    rhs: &Expression,
-    _x_var: &str,
-    y_var: &str,
-) -> Option<(Expression, Expression)> {
-    let rhs_arc = compile(rhs);
-    let y_id = SymbolId::intern(y_var);
-    let (p, q) = extract_linear_coefficients_expr(&rhs_arc, y_id)?;
-    Some((decompile(&p), decompile(&q)))
-}
-
-/// Arc<Expr>-native worker for [`extract_linear_coefficients`].
+/// Extract P(x) and Q(x) from a linear ODE in form dy/dx = -P(x)·y + Q(x).
 ///
 /// The RHS must be linear in `y`: every AddNode term either is `y`-free or
 /// has the form `coeff · y` (possibly with y-free multiplicative factors).
 /// Returns `(P(x), Q(x))` where `rhs = -P·y + Q`, or `None` if rhs is
 /// non-linear in `y`.
-fn extract_linear_coefficients_expr(
+pub(crate) fn extract_linear_coefficients(
     rhs: &Arc<Expr>,
     y: SymbolId,
 ) -> Option<(Arc<Expr>, Arc<Expr>)> {
@@ -201,46 +169,27 @@ fn decompose_linear_y_term(
     None
 }
 
-/// Substitute a variable with an expression.
+/// Substitute `var` with `replacement` in `expr`.
 ///
-/// Delegates to the `Arc<Expr>` walker [`crate::numeric::substitute::substitute`]
-/// via compile/decompile at the boundary. Signature is preserved so callers
-/// keep operating on `Expression` until they migrate.
-pub(crate) fn substitute_var(expr: &Expression, var: &str, replacement: &Expression) -> Expression {
-    let expr_arc = compile(expr);
-    let replacement_arc = compile(replacement);
-    let var_id = SymbolId::intern(var);
-    let result = arc_substitute(&expr_arc, var_id, &replacement_arc);
-    decompile(&result)
+/// Thin delegation to [`crate::numeric::substitute::substitute`]; exported
+/// under the ODE `walkers` namespace for callsite discoverability.
+pub(crate) fn substitute_var(
+    expr: &Arc<Expr>,
+    var: SymbolId,
+    replacement: &Arc<Expr>,
+) -> Arc<Expr> {
+    arc_substitute(expr, var, replacement)
 }
 
-/// Try to solve an implicit relation for y explicitly.
+/// Try to solve an implicit relation for `y` explicitly.
 ///
-/// Delegates to the `Arc<Expr>`-native helper [`try_solve_implicit_for_y_expr`]
-/// via compile/decompile at the boundary. Handles:
+/// Pattern-matches on the canonical [`Expr`] form. Handles:
 ///
 /// - `y = right` → `right`
 /// - `ln(y) = right` or `ln(|y|) = right` → `exp(right)` (positive branch)
 /// - `y^n = right` with n y-free → `right^(1/n)`
 /// - `1/y = right` → `1/right`
 pub(crate) fn try_solve_implicit_for_y(
-    left: &Expression,
-    right: &Expression,
-    y_var: &str,
-) -> Option<Expression> {
-    let left_arc = compile(left);
-    let right_arc = compile(right);
-    let y_id = SymbolId::intern(y_var);
-    let result = try_solve_implicit_for_y_expr(&left_arc, &right_arc, y_id)?;
-    Some(decompile(&result))
-}
-
-/// Arc<Expr>-native worker for [`try_solve_implicit_for_y`].
-///
-/// Pattern-matches on the canonical [`Expr`] form. Callers should compile
-/// their `Expression` inputs first; results are normalized through the
-/// smart constructors in [`crate::numeric::normalize`].
-fn try_solve_implicit_for_y_expr(
     left: &Arc<Expr>,
     right: &Arc<Expr>,
     y: SymbolId,
@@ -299,31 +248,17 @@ fn try_solve_implicit_for_y_expr(
 /// The equation is treated as `expr = 0`. Handles:
 ///
 /// - Direct isolation: `C`, `C + rest = 0`, `C - rest = 0`, `rest - C = 0` etc.
-/// - Exponential form: `exp(C) - value = 0` → `C = ln(value)` (and symmetric).
+/// - Exponential form: `exp(C) - value = 0` → `C = ln(value)`.
 /// - Linear-in-C: any sum that is linear in `C`, solved via the canonical
 ///   `AddNode` coefficient map.
 ///
-/// Delegates to the `Arc<Expr>`-native worker [`solve_for_constant_expr`].
-pub(crate) fn solve_for_constant(equation: &Expression, const_name: &str) -> Option<Expression> {
-    let eq_arc = compile(equation);
-    let c_id = SymbolId::intern(const_name);
-    let result = solve_for_constant_expr(&eq_arc, c_id)?;
-    Some(decompile(&result))
-}
-
-/// Arc<Expr>-native worker for [`solve_for_constant`].
-///
-/// Handles `C = 0`, direct isolation via `AddNode`, and the `exp(C) - value`
-/// shorthand. Returns `None` when the equation is non-linear in `C` or has
-/// multiple `C`-bearing terms.
-fn solve_for_constant_expr(equation: &Arc<Expr>, c: SymbolId) -> Option<Arc<Expr>> {
+/// Returns `None` when the equation is non-linear in `C` or has multiple
+/// `C`-bearing terms.
+pub(crate) fn solve_for_constant(equation: &Arc<Expr>, c: SymbolId) -> Option<Arc<Expr>> {
     // `C = 0` — equation is literally Symbol(c).
     if matches!(equation.as_ref(), Expr::Symbol(s) if *s == c) {
         return Some(Expr::int(0));
     }
-
-    // `exp(C) = 0` has no real solution; skip.
-    // `exp(C)` alone without additive residual cannot be solved either.
 
     let Expr::Add(node) = equation.as_ref() else {
         // Fallback: not in AddNode form → unsupported shape.

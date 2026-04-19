@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::ast::Expression;
 use crate::integration::IntegrationError;
 use crate::numeric::compile::{compile, decompile};
-use crate::numeric::Expr;
+use crate::numeric::{Expr, SymbolId};
 use crate::resolution_path::ResolutionPath;
 
 use super::first_order::{extract_linear_coefficients, try_separate};
@@ -111,14 +111,15 @@ impl FirstOrderODE {
 
     /// Check if this ODE is separable (can be written as g(x) * h(y)).
     pub fn is_separable(&self) -> bool {
-        let rhs_expr = decompile(&self.rhs);
-        try_separate(&rhs_expr, &self.independent, &self.dependent).is_some()
+        let x = SymbolId::intern(&self.independent);
+        let y = SymbolId::intern(&self.dependent);
+        try_separate(&self.rhs, x, y).is_some()
     }
 
     /// Check if this ODE is first-order linear (dy/dx + P(x)*y = Q(x)).
     pub fn is_linear(&self) -> bool {
-        let rhs_expr = decompile(&self.rhs);
-        extract_linear_coefficients(&rhs_expr, &self.independent, &self.dependent).is_some()
+        let y = SymbolId::intern(&self.dependent);
+        extract_linear_coefficients(&self.rhs, y).is_some()
     }
 
     /// Right-hand side as a canonical `Arc<Expr>` (clone of the stored field).
