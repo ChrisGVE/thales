@@ -24,8 +24,6 @@
 
 use std::sync::Arc;
 
-use crate::ast::Expression;
-use crate::numeric::compile::compile;
 use crate::numeric::{Expr, SymbolId};
 use crate::ode::{FirstOrderODE, SecondOrderODE};
 
@@ -132,7 +130,7 @@ pub fn classify_first_order(ode: &FirstOrderODE) -> ODEClassification {
         ODEType::Separable
     } else if ode.is_linear() {
         ODEType::Linear
-    } else if is_bernoulli(&ode.rhs, &ode.independent, &ode.dependent) {
+    } else if is_bernoulli(&ode.rhs_arc(), &ode.dependent) {
         ODEType::Bernoulli
     } else {
         ODEType::Unknown
@@ -210,7 +208,7 @@ fn first_order_linearity(ode: &FirstOrderODE) -> ODELinearity {
 /// Operates on a canonical `Arc<Expr>` form of the rhs using
 /// [`contains_symbol`].
 fn has_constant_coeff_first_order(ode: &FirstOrderODE) -> bool {
-    let rhs_arc = compile(&ode.rhs);
+    let rhs_arc = ode.rhs_arc();
     let x_id = SymbolId::intern(&ode.independent);
     !contains_symbol(&rhs_arc, x_id)
 }
@@ -219,10 +217,9 @@ fn has_constant_coeff_first_order(ode: &FirstOrderODE) -> bool {
 ///
 /// In terms of the RHS, rhs contains a y^n term (n ≠ 0, 1) possibly combined
 /// with a linear-in-y term. We find the highest-power y-term in rhs.
-fn is_bernoulli(rhs: &Expression, _x_var: &str, y_var: &str) -> bool {
-    let rhs_arc = compile(rhs);
+fn is_bernoulli(rhs_arc: &Arc<Expr>, y_var: &str) -> bool {
     let y_id = SymbolId::intern(y_var);
-    find_max_y_exponent_expr(&rhs_arc, y_id)
+    find_max_y_exponent_expr(rhs_arc, y_id)
         .map(|n| n != 0 && n != 1)
         .unwrap_or(false)
 }

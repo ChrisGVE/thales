@@ -1,8 +1,12 @@
 //! Second-order ODE solvers (characteristic equation method).
 
-use crate::ast::{BinaryOp, Expression, Function, Variable};
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder};
 use std::collections::HashMap;
+use std::sync::Arc;
+
+use crate::ast::{BinaryOp, Expression, Function, Variable};
+use crate::numeric::compile::compile;
+use crate::numeric::Expr;
+use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder};
 
 use super::first_order::substitute_var;
 use super::ODEError;
@@ -76,6 +80,17 @@ impl SecondOrderODE {
     pub fn is_homogeneous(&self) -> bool {
         matches!(&self.forcing, Expression::Integer(0))
             || matches!(&self.forcing, Expression::Float(x) if x.abs() < 1e-15)
+    }
+
+    /// Forcing function as a canonical `Arc<Expr>`.
+    ///
+    /// Migration bridge for the Expr-migration milestone: second-order solvers
+    /// moving to `Arc<Expr>` internals call this accessor instead of compiling
+    /// the `Expression`-typed field themselves. See also
+    /// [`FirstOrderODE::rhs_arc`](crate::ode::FirstOrderODE::rhs_arc).
+    #[must_use]
+    pub fn forcing_arc(&self) -> Arc<Expr> {
+        compile(&self.forcing)
     }
 }
 

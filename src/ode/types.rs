@@ -1,7 +1,11 @@
 //! Types for ODE solving.
 
+use std::sync::Arc;
+
 use crate::ast::Expression;
 use crate::integration::IntegrationError;
+use crate::numeric::compile::compile;
+use crate::numeric::Expr;
 use crate::resolution_path::ResolutionPath;
 
 use super::first_order::{extract_linear_coefficients, try_separate};
@@ -98,6 +102,20 @@ impl FirstOrderODE {
     /// Check if this ODE is first-order linear (dy/dx + P(x)*y = Q(x)).
     pub fn is_linear(&self) -> bool {
         extract_linear_coefficients(&self.rhs, &self.independent, &self.dependent).is_some()
+    }
+
+    /// Right-hand side as a canonical `Arc<Expr>`.
+    ///
+    /// This is the migration bridge for the Expr-migration milestone: solvers
+    /// that have moved to `Arc<Expr>` internals call this accessor to obtain the
+    /// numeric-engine representation of `f(x, y)` without having to compile the
+    /// `Expression`-typed field themselves.
+    ///
+    /// The accessor compiles on demand; subsequent ports may cache the result
+    /// in the struct when the solver family migration is complete.
+    #[must_use]
+    pub fn rhs_arc(&self) -> Arc<Expr> {
+        compile(&self.rhs)
     }
 }
 
