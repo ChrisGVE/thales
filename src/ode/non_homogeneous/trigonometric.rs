@@ -4,7 +4,13 @@
 //! Trial: `P·cos(k·x) + Q·sin(k·x)`, multiplied by `x` when `±ki` are
 //! characteristic roots (which occurs iff `b = 0` and `c = a·k²`).
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use crate::ast::{BinaryOp, Expression, Function, Variable};
+use crate::numeric::evaluation::evaluate;
+use crate::numeric::expr::Expr;
+use crate::numeric::SymbolId;
 
 use super::polynomial::build_x_power;
 use super::{ODEError, SecondOrderODE};
@@ -33,8 +39,9 @@ pub(super) fn particular_trig(
     ));
 
     // Extract sin and cos amplitudes from forcing at two points
-    let forcing_expr = ode.forcing_expr();
-    let (f_sin, f_cos) = extract_trig_amplitudes(&forcing_expr, x_var, k)?;
+    let forcing_arc = ode.forcing_arc();
+    let x_id = SymbolId::intern(x_var);
+    let (f_sin, f_cos) = extract_trig_amplitudes(&forcing_arc, x_id, k)?;
 
     let (p, q) = solve_trig_system(ode, k, f_sin, f_cos, resonant)?;
 
@@ -56,9 +63,12 @@ fn is_trig_resonant(ode: &SecondOrderODE, k: f64) -> bool {
 
 /// Extract sin-amplitude `f_s` and cos-amplitude `f_c` from `f(x)` such that
 /// `f(x) ≈ f_s·sin(kx) + f_c·cos(kx)`.
+///
+/// Operates on the canonical `Arc<Expr>` form and samples through
+/// [`crate::numeric::evaluation::evaluate`].
 fn extract_trig_amplitudes(
-    forcing: &Expression,
-    x_var: &str,
+    forcing: &Arc<Expr>,
+    x: SymbolId,
     k: f64,
 ) -> Result<(f64, f64), ODEError> {
     let pi = std::f64::consts::PI;
@@ -67,9 +77,9 @@ fn extract_trig_amplitudes(
     let x0 = 0.0_f64;
 
     let eval_at = |xi: f64| -> f64 {
-        let mut env = std::collections::HashMap::new();
-        env.insert(x_var.to_string(), xi);
-        forcing.evaluate(&env).unwrap_or(0.0)
+        let mut env = HashMap::new();
+        env.insert(x, xi);
+        evaluate(forcing, &env).unwrap_or(0.0)
     };
 
     let f_at_0 = eval_at(x0); // = f_c·cos(0) + f_s·sin(0) = f_c

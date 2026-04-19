@@ -3,7 +3,13 @@
 //! Trial form: `A_d·x^d + … + A_0`, multiplied by `x^m` when the
 //! characteristic equation has `0` as a root with multiplicity `m`.
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use crate::ast::{BinaryOp, Expression, Function, Variable};
+use crate::numeric::evaluation::evaluate;
+use crate::numeric::expr::Expr;
+use crate::numeric::SymbolId;
 
 use super::{ForcingType, ODEError, SecondOrderODE};
 
@@ -32,8 +38,9 @@ pub(super) fn particular_polynomial(
     ));
 
     // Collect coefficients from the forcing polynomial
-    let forcing_expr = ode.forcing_expr();
-    let forcing_coeffs = extract_polynomial_coeffs(&forcing_expr, x_var, degree)?;
+    let forcing_arc = ode.forcing_arc();
+    let x_id = SymbolId::intern(x_var);
+    let forcing_coeffs = extract_polynomial_coeffs(&forcing_arc, x_id, degree)?;
 
     // Solve for undetermined coefficients by matching powers of x
     let yp_coeffs = solve_polynomial_system(ode, &forcing_coeffs, multiplier)?;
@@ -64,12 +71,14 @@ fn resonance_multiplier_polynomial(ode: &SecondOrderODE) -> Result<u32, ODEError
 }
 
 /// Extract polynomial coefficients `[c0, c1, …, cn]` (constant term first)
-/// by symbolic evaluation of `f(x)` at `n+1` distinct points.
+/// by numerical evaluation of `f(x)` at `n+1` distinct points.
 ///
-/// This is a Vandermonde interpolation — works for polynomials of degree ≤ 20.
+/// This is a Vandermonde interpolation — works for polynomials of degree
+/// ≤ 20. Operates on the canonical `Arc<Expr>` form and samples through
+/// [`crate::numeric::evaluation::evaluate`].
 fn extract_polynomial_coeffs(
-    expr: &Expression,
-    x_var: &str,
+    expr: &Arc<Expr>,
+    x: SymbolId,
     degree: u32,
 ) -> Result<Vec<f64>, ODEError> {
     let n = (degree + 1) as usize;
@@ -77,9 +86,9 @@ fn extract_polynomial_coeffs(
     let values: Vec<f64> = points
         .iter()
         .map(|&xi| {
-            let mut env = std::collections::HashMap::new();
-            env.insert(x_var.to_string(), xi);
-            expr.evaluate(&env).unwrap_or(0.0)
+            let mut env = HashMap::new();
+            env.insert(x, xi);
+            evaluate(expr, &env).unwrap_or(0.0)
         })
         .collect();
 

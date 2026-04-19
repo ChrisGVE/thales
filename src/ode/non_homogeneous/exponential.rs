@@ -3,7 +3,11 @@
 //! Trial: `B·e^(k·x)`, multiplied by `x^m` when `k` is a characteristic
 //! root with multiplicity `m` (simple or repeated).
 
+use std::collections::HashMap;
+
 use crate::ast::{BinaryOp, Expression, Function, Variable};
+use crate::numeric::evaluation::evaluate;
+use crate::numeric::SymbolId;
 
 use super::polynomial::build_x_power;
 use super::{ODEError, SecondOrderODE};
@@ -32,9 +36,11 @@ pub(super) fn particular_exponential(
 
     // Evaluate forcing at one point to get amplitude A
     let amp = {
-        let mut env = std::collections::HashMap::new();
-        env.insert(x_var.to_string(), 1.0);
-        ode.forcing_expr().evaluate(&env).unwrap_or(1.0) / (k * 1.0_f64).exp()
+        let forcing_arc = ode.forcing_arc();
+        let x_id = SymbolId::intern(x_var);
+        let mut env = HashMap::new();
+        env.insert(x_id, 1.0);
+        evaluate(&forcing_arc, &env).unwrap_or(1.0) / (k * 1.0_f64).exp()
     };
 
     // Compute denominator: substitute y_p = B·x^m·e^(kx) into ODE, divide by e^(kx)
