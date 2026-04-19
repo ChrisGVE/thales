@@ -201,10 +201,8 @@ mod tests {
         assert_eq!(ode.dependent, "y");
         assert_eq!(ode.independent, "x");
         // rhs should mirror what we passed in
-        assert!(matches!(
-            ode.rhs_expr(),
-            Expression::Binary(BinaryOp::Mul, _, _)
-        ));
+        let rhs_round = crate::numeric::compile::decompile(&ode.rhs_arc());
+        assert!(matches!(rhs_round, Expression::Binary(BinaryOp::Mul, _, _)));
     }
 
     #[test]

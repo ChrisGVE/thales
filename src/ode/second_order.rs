@@ -37,9 +37,7 @@ pub struct CharacteristicRoots {
 /// a*y'' + b*y' + c*y = f(x)
 ///
 /// The forcing function is stored in canonical `Arc<Expr>` form. Use
-/// [`SecondOrderODE::forcing_arc`] for engine-native access, or
-/// [`SecondOrderODE::forcing_expr`] as a migration bridge for legacy
-/// `Expression`-typed consumers.
+/// [`SecondOrderODE::forcing_arc`] for engine-native access.
 #[derive(Debug, Clone)]
 pub struct SecondOrderODE {
     /// The dependent variable name (e.g., "y")
@@ -112,22 +110,10 @@ impl SecondOrderODE {
 
     /// Forcing function as a canonical `Arc<Expr>` (clone of the stored field).
     ///
-    /// Engine-native accessor. Use this in solver families ported to
-    /// `Arc<Expr>` internals.
+    /// Engine-native accessor. Cheap `Arc::clone`.
     #[must_use]
     pub fn forcing_arc(&self) -> Arc<Expr> {
         Arc::clone(&self.forcing)
-    }
-
-    /// Forcing function as an `Expression` (decompiled from the stored
-    /// `Arc<Expr>`).
-    ///
-    /// Migration bridge for legacy consumers. Every decompile is a fresh
-    /// allocation; porting the consumer to
-    /// [`SecondOrderODE::forcing_arc`] avoids the round-trip.
-    #[must_use]
-    pub fn forcing_expr(&self) -> Expression {
-        decompile(&self.forcing)
     }
 }
 

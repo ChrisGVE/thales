@@ -970,9 +970,12 @@ mod tests {
                 assert_eq!(fo.independent, "x");
                 // rhs should be x*y
                 let mut env = std::collections::HashMap::new();
-                env.insert("x".to_string(), 2.0);
-                env.insert("y".to_string(), 3.0);
-                assert_eq!(fo.rhs_expr().evaluate(&env), Some(6.0));
+                env.insert(crate::numeric::SymbolId::intern("x"), 2.0);
+                env.insert(crate::numeric::SymbolId::intern("y"), 3.0);
+                assert_eq!(
+                    crate::numeric::evaluation::evaluate(&fo.rhs_arc(), &env),
+                    Some(6.0)
+                );
             }
             _ => panic!("expected FirstOrderODE"),
         }
@@ -1108,9 +1111,12 @@ mod tests {
                 assert_eq!(fo.dependent, "y");
                 assert_eq!(fo.independent, "x");
                 let mut env = std::collections::HashMap::new();
-                env.insert("x".to_string(), 2.0);
-                env.insert("y".to_string(), 3.0);
-                assert_eq!(fo.rhs_expr().evaluate(&env), Some(6.0));
+                env.insert(crate::numeric::SymbolId::intern("x"), 2.0);
+                env.insert(crate::numeric::SymbolId::intern("y"), 3.0);
+                assert_eq!(
+                    crate::numeric::evaluation::evaluate(&fo.rhs_arc(), &env),
+                    Some(6.0)
+                );
             }
             _ => panic!("expected FirstOrderODE"),
         }

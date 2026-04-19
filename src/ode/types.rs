@@ -4,9 +4,8 @@ use std::sync::Arc;
 
 use crate::ast::Expression;
 use crate::integration::IntegrationError;
-use crate::numeric::compile::{compile, decompile};
+use crate::numeric::compile::compile;
 use crate::numeric::{Expr, SymbolId};
-use crate::resolution_path::ResolutionPath;
 
 use super::first_order::{extract_linear_coefficients, try_separate};
 
@@ -70,9 +69,7 @@ impl std::error::Error for ODEError {}
 /// Represents a first-order ordinary differential equation: dy/dx = f(x, y)
 ///
 /// The right-hand side is stored in canonical `Arc<Expr>` form (numeric-engine
-/// representation). Use [`FirstOrderODE::rhs_arc`] for engine-native access,
-/// or [`FirstOrderODE::rhs_expr`] as a migration bridge for legacy
-/// `Expression`-typed consumers.
+/// representation). Use [`FirstOrderODE::rhs_arc`] for engine-native access.
 #[derive(Debug, Clone)]
 pub struct FirstOrderODE {
     /// The dependent variable (e.g., "y")
@@ -124,22 +121,10 @@ impl FirstOrderODE {
 
     /// Right-hand side as a canonical `Arc<Expr>` (clone of the stored field).
     ///
-    /// This is the engine-native accessor. Use this in solver families that
-    /// have been ported to `Arc<Expr>` internals.
+    /// Engine-native accessor. Cheap `Arc::clone`.
     #[must_use]
     pub fn rhs_arc(&self) -> Arc<Expr> {
         Arc::clone(&self.rhs)
-    }
-
-    /// Right-hand side as an `Expression` (decompiled from the stored
-    /// `Arc<Expr>`).
-    ///
-    /// Migration bridge for legacy consumers that still operate in the old
-    /// `Expression` AST. Every decompile is a fresh allocation; porting the
-    /// consumer to [`FirstOrderODE::rhs_arc`] avoids the round-trip.
-    #[must_use]
-    pub fn rhs_expr(&self) -> Expression {
-        decompile(&self.rhs)
     }
 }
 
