@@ -17,7 +17,7 @@
 use std::sync::Arc;
 
 use super::super::expr::{Expr, FuncId};
-use super::super::series::taylor::substitute;
+use super::super::substitute::substitute;
 use super::super::{normalize, SymbolId};
 use super::helpers::{expr_to_f64, float_to_exact};
 use super::lhopital::try_lhopital;

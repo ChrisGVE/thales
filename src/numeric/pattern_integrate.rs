@@ -26,8 +26,8 @@
 use crate::numeric::differentiation::diff_arc;
 use crate::numeric::expr::{Expr, FuncId};
 use crate::numeric::risch::{risch_integrate, IntegrationResult};
+use crate::numeric::substitute::substitute;
 use crate::numeric::{normalize, SymbolId};
-use num::traits::Zero;
 use std::sync::Arc;
 
 // ── Public entry point ────────────────────────────────────────────────────────
@@ -335,56 +335,6 @@ fn build_signed_trig(func: FuncId, negated: bool, x: &Arc<Expr>) -> Arc<Expr> {
         normalize::neg(f)
     } else {
         f
-    }
-}
-
-// ── Helper: symbolic substitution ────────────────────────────────────────────
-
-/// Replace all occurrences of `var` symbol in `expr` with `replacement`.
-fn substitute(expr: &Arc<Expr>, var: SymbolId, replacement: &Arc<Expr>) -> Arc<Expr> {
-    match expr.as_ref() {
-        Expr::Symbol(s) if *s == var => replacement.clone(),
-        Expr::Symbol(_)
-        | Expr::Integer(_)
-        | Expr::Rational(_)
-        | Expr::Float(_)
-        | Expr::Complex(_)
-        | Expr::Constant(_) => expr.clone(),
-        Expr::Add(node) => {
-            let mut acc = normalize::mul(Expr::int(0), Expr::int(1)); // 0
-            acc = if node.constant.is_zero() {
-                Expr::int(0)
-            } else {
-                Arc::new(Expr::Rational(node.constant.clone()))
-            };
-            for (term, coeff) in &node.terms {
-                let sub_term = substitute(term, var, replacement);
-                let scaled = normalize::mul(Arc::new(Expr::Rational(coeff.clone())), sub_term);
-                acc = normalize::add(acc, scaled);
-            }
-            acc
-        }
-        Expr::Mul(node) => {
-            let mut acc = Arc::new(Expr::Rational(node.coeff.clone()));
-            for (base, exp) in &node.factors {
-                let sub_base = substitute(base, var, replacement);
-                let sub_exp = substitute(exp, var, replacement);
-                acc = normalize::mul(acc, normalize::pow(sub_base, sub_exp));
-            }
-            acc
-        }
-        Expr::Pow(base, exp) => {
-            let sub_base = substitute(base, var, replacement);
-            let sub_exp = substitute(exp, var, replacement);
-            normalize::pow(sub_base, sub_exp)
-        }
-        Expr::Func(id, args) => {
-            let sub_args: Vec<Arc<Expr>> = args
-                .iter()
-                .map(|a| substitute(a, var, replacement))
-                .collect();
-            Expr::func(*id, sub_args)
-        }
     }
 }
 

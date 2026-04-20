@@ -35,10 +35,10 @@ use super::super::{
     expr::Expr,
     limits::{limit, LimitPoint, LimitResult},
     normalize,
+    substitute::substitute,
     trace::{record, Step, TechniqueTag, Trace},
     BigRational, MulNode, SymbolId,
 };
-use super::taylor::substitute;
 
 /// Upper bound on the pole order the engine attempts to detect via the
 /// `(x − c)^k · f(x)` limit sweep. Larger orders are classified as essential.

@@ -11,7 +11,7 @@ use num::traits::One;
 
 use super::super::differentiation::diff_arc;
 use super::super::expr::Expr;
-use super::super::series::taylor::substitute;
+use super::super::substitute::substitute;
 use super::super::{normalize, BigRational, SymbolId};
 use super::evaluation::eval_float;
 use super::helpers::{expr_to_f64, LHOPITAL_MAX_ITER};
