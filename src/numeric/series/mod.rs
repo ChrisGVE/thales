@@ -40,6 +40,7 @@ pub mod asymptotic;
 pub mod composition;
 pub mod convergence;
 pub mod known;
+pub mod laurent_expand;
 pub mod singularity;
 pub mod taylor;
 
@@ -50,6 +51,7 @@ pub use asymptotic::{
 pub use composition::{compose, revert};
 pub use convergence::convergence_radius;
 pub use known::{atan_series, cos_series, exp_series, ln_series, sin_series};
+pub use laurent_expand::{laurent_expand, MAX_LAURENT_SHIFT};
 pub use singularity::{
     classify_singularity, find_singularities, pole_order, residue, Singularity, SingularityType,
 };
@@ -200,6 +202,32 @@ impl LaurentSeries {
             .get(idx as usize)
             .cloned()
             .unwrap_or_else(|| Expr::int(0))
+    }
+
+    /// Reassemble the series as a single normalized `Arc<Expr>`:
+    /// `Σ a_n · (x − center)^n` over `n ∈ [leading_power, leading_power+order]`.
+    ///
+    /// Zero coefficients are skipped. When the series is identically zero,
+    /// returns `Expr::int(0)`.
+    #[must_use]
+    pub fn to_expr(&self) -> Arc<Expr> {
+        let var_expr: Arc<Expr> = Arc::new(Expr::Symbol(self.var));
+        let shift = if self.center.is_zero() {
+            var_expr
+        } else {
+            super::normalize::sub(var_expr, self.center.clone())
+        };
+        let mut acc: Arc<Expr> = Expr::int(0);
+        for (i, c) in self.coefficients.iter().enumerate() {
+            if c.is_zero() {
+                continue;
+            }
+            let power = self.leading_power + i as i32;
+            let p = super::normalize::pow(shift.clone(), Expr::int(power as i64));
+            let term = super::normalize::mul(c.clone(), p);
+            acc = super::normalize::add(acc, term);
+        }
+        acc
     }
 
     /// Convert to a [`TaylorSeries`] when `leading_power >= 0`.

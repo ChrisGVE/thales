@@ -78,28 +78,33 @@ pub(super) fn laurent_series_ffi(
     neg_order: u32,
     pos_order: u32,
 ) -> Result<super::ffi::LaurentSeriesResultFFI, String> {
-    use crate::ast::Variable;
-    use crate::series::laurent;
+    use crate::numeric::compile::{compile, decompile};
+    use crate::numeric::expr::Expr;
+    use crate::numeric::series::laurent_expand;
+    use crate::numeric::SymbolId;
 
     let expr = parse_expression(expression).map_err(|e| format!("Parse error: {:?}", e))?;
-    let var = Variable::new(variable);
-    let center_expr = crate::ast::Expression::Float(center);
+    let arc_expr = compile(&expr);
+    let var_id = SymbolId::intern(variable);
+    let center_arc = center_to_expr(center);
 
-    let result = laurent(&expr, &var, &center_expr, neg_order, pos_order);
-
-    match result {
-        Ok(series) => Ok(super::ffi::LaurentSeriesResultFFI {
-            original: expression.to_string(),
-            variable: variable.to_string(),
-            center,
-            neg_order,
-            pos_order,
-            series: format!("{}", series),
-            series_latex: series.to_latex(),
-            success: true,
-            error_message: String::new(),
-        }),
-        Err(e) => Ok(super::ffi::LaurentSeriesResultFFI {
+    match laurent_expand(&arc_expr, var_id, &center_arc, neg_order, pos_order, None) {
+        Some(series) => {
+            let series_arc = series.to_expr();
+            let series_expr = decompile(&series_arc);
+            Ok(super::ffi::LaurentSeriesResultFFI {
+                original: expression.to_string(),
+                variable: variable.to_string(),
+                center,
+                neg_order,
+                pos_order,
+                series: format!("{}", series_expr),
+                series_latex: series_expr.to_latex(),
+                success: true,
+                error_message: String::new(),
+            })
+        }
+        None => Ok(super::ffi::LaurentSeriesResultFFI {
             original: expression.to_string(),
             variable: variable.to_string(),
             center,
@@ -108,9 +113,25 @@ pub(super) fn laurent_series_ffi(
             series: String::new(),
             series_latex: String::new(),
             success: false,
-            error_message: format!("{}", e),
+            error_message:
+                "Cannot expand: structural shift exceeds the Laurent engine's supported range"
+                    .to_string(),
         }),
     }
+}
+
+/// Convert a caller-supplied f64 center into a canonical `Arc<Expr>`, using
+/// an integer when the value is integer-valued so the structural matchers in
+/// the Laurent engine recognize `(x − center)` shifts.
+fn center_to_expr(center: f64) -> std::sync::Arc<crate::numeric::expr::Expr> {
+    use crate::numeric::expr::Expr;
+    if center == 0.0 {
+        return Expr::int(0);
+    }
+    if center.is_finite() && center.fract() == 0.0 && center.abs() < (i64::MAX as f64) {
+        return Expr::int(center as i64);
+    }
+    Expr::float(center)
 }
 
 /// Compute asymptotic series expansion of an expression.
