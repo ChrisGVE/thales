@@ -23,33 +23,202 @@ use super::Expr;
 
 /// Named technique applied at a trace step.
 ///
-/// Variants cover the calculus-level engines that emit traces: series
-/// expansion, residue / pole classification, integration, limits.
-/// Each variant is a single pre-defined label — free-form commentary
-/// belongs in [`Step::detail`].
+/// Variants cover every technique the codebase emits — from elementary
+/// equation manipulation through calculus, series, and matrix operations.
+/// Each variant is a single pre-defined label; free-form commentary belongs
+/// in [`Step::detail`].
+///
+/// The enum mirrors (and subsumes) [`crate::resolution_path::Operation`],
+/// with additional granularity for calculus rules (chain / product /
+/// quotient / power) and integration techniques. The mapping
+/// [`TechniqueTag::difficulty`] translates each tag to the educational
+/// level at which it is normally introduced, reusing
+/// [`crate::resolution_path::TechniqueDifficulty`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum TechniqueTag {
+    // ── Both-sides equation operations ───────────────────────────────────
+    /// Add the same expression to both sides.
+    AddBothSides,
+    /// Subtract the same expression from both sides.
+    SubtractBothSides,
+    /// Multiply both sides by the same expression.
+    MultiplyBothSides,
+    /// Divide both sides by the same expression.
+    DivideBothSides,
+    /// Raise both sides to the same power.
+    PowerBothSides,
+    /// Take the same root of both sides.
+    RootBothSides,
+    /// Apply the same named function to both sides (log, exp, sin, …).
+    ApplyFunction,
+
+    // ── Algebraic manipulation ───────────────────────────────────────────
+    /// Canonical simplification.
+    Simplification,
+    /// Distribute products / expand powers.
+    Expansion,
+    /// Factor expression.
+    Factoring,
+    /// Combine fractions under a common denominator.
+    CombineFractions,
+    /// Cancel common factors.
+    Cancellation,
+    /// Combine like terms.
+    CombiningLikeTerms,
+    /// Rationalise a denominator.
+    Rationalization,
+    /// Form the complex conjugate.
+    Conjugation,
+    /// Partial fraction decomposition.
+    PartialFractionDecomp,
+    /// Isolate a variable on one side.
+    Isolation,
+    /// Move a term across the equals sign.
+    MoveTerm,
+
+    // ── Substitution ─────────────────────────────────────────────────────
+    /// Variable substitution (u-sub / change of variable / bind value).
+    Substitution,
+
+    // ── Identities ───────────────────────────────────────────────────────
+    /// Apply a generic named identity (unspecified category).
+    ApplyIdentity,
+    /// Apply a trigonometric identity (Pythagorean, double-angle, sum-to-product, …).
+    TrigIdentity,
+    /// Apply a logarithmic identity.
+    LogIdentity,
+    /// Apply an exponential identity.
+    ExpIdentity,
+    /// Apply a hyperbolic identity.
+    HyperbolicIdentity,
+    /// Euler's formula `e^(iθ) = cos θ + i sin θ`.
+    EulerFormula,
+    /// De Moivre's formula `(cos θ + i sin θ)^n = cos nθ + i sin nθ`.
+    DeMoivre,
+
+    // ── Quadratic / polynomial techniques ────────────────────────────────
+    /// Quadratic formula `x = (−b ± √(b²−4ac)) / 2a`.
+    QuadraticFormula,
+    /// Complete the square.
+    CompleteTheSquare,
+    /// Rational-root theorem for polynomial roots.
+    RationalRootTheorem,
+    /// Synthetic division for polynomial factorisation.
+    SyntheticDivision,
+
+    // ── Differentiation rules ────────────────────────────────────────────
+    /// Power rule `d/dx xⁿ = n xⁿ⁻¹`.
+    PowerRule,
+    /// Product rule `(fg)' = f'g + fg'`.
+    ProductRule,
+    /// Quotient rule `(f/g)' = (f'g − fg') / g²`.
+    QuotientRule,
+    /// Chain rule `(f ∘ g)' = f'(g) · g'`.
+    ChainRule,
+    /// Implicit differentiation of an implicitly defined relation.
+    ImplicitDifferentiation,
+    /// Logarithmic differentiation.
+    LogarithmicDifferentiation,
+
+    // ── Integration techniques ───────────────────────────────────────────
+    /// Pattern-based antiderivative recognition.
+    PatternIntegration,
+    /// Integration by parts `∫ u dv = uv − ∫ v du`.
+    IntegrationByParts,
+    /// u-substitution in an integral.
+    USubstitution,
+    /// Trigonometric substitution for √(a²−x²), √(a²+x²), √(x²−a²).
+    TrigSubstitution,
+    /// Partial-fraction decomposition applied as an integration step.
+    PartialFractionIntegration,
+    /// Risch algorithm verification step on an elementary antiderivative.
+    RischVerification,
+
+    // ── Limits ───────────────────────────────────────────────────────────
+    /// L'Hôpital's rule applied to a `0/0` or `∞/∞` limit.
+    LHopitalRule,
+    /// Squeeze / sandwich theorem.
+    SqueezeTheorem,
+    /// Limit computed by algebraic manipulation (factor out, conjugate, …).
+    LimitAlgebraic,
+
+    // ── Series expansions ────────────────────────────────────────────────
     /// Repeated differentiation at the center to build a Taylor series.
     TaylorExpansion,
     /// Laurent series computed via principal + analytic parts at a pole.
     LaurentExpansion,
-    /// Asymptotic expansion (e.g. Poincaré-type) at infinity or a boundary.
+    /// Asymptotic expansion (Poincaré-type) at infinity or a boundary.
     AsymptoticExpansion,
     /// Series composition `g(f(x))` via coefficient convolution.
     SeriesComposition,
     /// Inversion of a series via Lagrange reversion (`f^{-1}(y)`).
     LagrangeReversion,
+
+    // ── Residues and singularities ───────────────────────────────────────
     /// Residue at a singularity via Laurent coefficient or limit formula.
     ResidueTheorem,
     /// Pole order / singularity type classification.
     PoleClassification,
-    /// L'Hôpital's rule applied to a `0/0` or `∞/∞` limit.
-    LHopitalRule,
-    /// Pattern-based antiderivative recognition.
-    PatternIntegration,
-    /// Risch algorithm verification step on an elementary antiderivative.
-    RischVerification,
+
+    // ── Transforms ───────────────────────────────────────────────────────
+    /// Fourier series coefficient computation.
+    FourierSeries,
+
+    // ── ODE techniques ───────────────────────────────────────────────────
+    /// Separation of variables for first-order ODEs.
+    SeparationOfVariables,
+    /// Integrating factor for linear first-order ODEs.
+    IntegratingFactor,
+    /// Characteristic equation for constant-coefficient linear ODEs.
+    CharacteristicEquation,
+    /// Method of undetermined coefficients for particular solutions.
+    UndeterminedCoefficients,
+    /// Variation of parameters for particular solutions.
+    VariationOfParameters,
+    /// Runge-Kutta numeric ODE integrator.
+    RungeKutta,
+
+    // ── Matrix / linear algebra ──────────────────────────────────────────
+    /// Gaussian elimination on a linear system.
+    GaussianElimination,
+    /// Matrix inversion.
+    MatrixInverse,
+    /// LU decomposition.
+    LuDecomposition,
+    /// QR decomposition.
+    QrDecomposition,
+    /// Eigenvalue computation via characteristic polynomial or numeric
+    /// iteration.
+    Eigendecomposition,
+    /// Determinant computation.
+    Determinant,
+
+    // ── Numerical fallback ───────────────────────────────────────────────
+    /// A numeric approximation replaced a symbolic result.
+    NumericalApproximation,
+    /// Newton-Raphson iteration.
+    NewtonRaphson,
+    /// Bisection iteration.
+    Bisection,
+    /// Brent's method iteration.
+    Brent,
+    /// Secant-method iteration.
+    Secant,
+
+    // ── Domain / diagnostic events ───────────────────────────────────────
+    /// Domain narrowing via intersection with user-declared or inferred
+    /// constraints.
+    DomainNarrowing,
+    /// Domain extension (e.g. `ℝ → ℂ` on negative discriminant).
+    DomainExtension,
+    /// Assumption of a principal branch of a multi-valued function.
+    PrincipalBranch,
+
+    // ── Catch-all ─────────────────────────────────────────────────────────
+    /// Engine-specific technique carried as a stable string label. Use only
+    /// when no existing variant fits; prefer adding a first-class variant.
+    Custom(&'static str),
 }
 
 impl TechniqueTag {
@@ -57,6 +226,51 @@ impl TechniqueTag {
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
+            TechniqueTag::AddBothSides => "Add to both sides",
+            TechniqueTag::SubtractBothSides => "Subtract from both sides",
+            TechniqueTag::MultiplyBothSides => "Multiply both sides",
+            TechniqueTag::DivideBothSides => "Divide both sides",
+            TechniqueTag::PowerBothSides => "Raise both sides to a power",
+            TechniqueTag::RootBothSides => "Take the root of both sides",
+            TechniqueTag::ApplyFunction => "Apply function to both sides",
+            TechniqueTag::Simplification => "Simplification",
+            TechniqueTag::Expansion => "Expansion",
+            TechniqueTag::Factoring => "Factoring",
+            TechniqueTag::CombineFractions => "Combine fractions",
+            TechniqueTag::Cancellation => "Cancellation",
+            TechniqueTag::CombiningLikeTerms => "Combine like terms",
+            TechniqueTag::Rationalization => "Rationalize denominator",
+            TechniqueTag::Conjugation => "Complex conjugation",
+            TechniqueTag::PartialFractionDecomp => "Partial fractions",
+            TechniqueTag::Isolation => "Isolate variable",
+            TechniqueTag::MoveTerm => "Move term",
+            TechniqueTag::Substitution => "Substitution",
+            TechniqueTag::ApplyIdentity => "Apply identity",
+            TechniqueTag::TrigIdentity => "Trigonometric identity",
+            TechniqueTag::LogIdentity => "Logarithmic identity",
+            TechniqueTag::ExpIdentity => "Exponential identity",
+            TechniqueTag::HyperbolicIdentity => "Hyperbolic identity",
+            TechniqueTag::EulerFormula => "Euler's formula",
+            TechniqueTag::DeMoivre => "De Moivre's formula",
+            TechniqueTag::QuadraticFormula => "Quadratic formula",
+            TechniqueTag::CompleteTheSquare => "Complete the square",
+            TechniqueTag::RationalRootTheorem => "Rational root theorem",
+            TechniqueTag::SyntheticDivision => "Synthetic division",
+            TechniqueTag::PowerRule => "Power rule",
+            TechniqueTag::ProductRule => "Product rule",
+            TechniqueTag::QuotientRule => "Quotient rule",
+            TechniqueTag::ChainRule => "Chain rule",
+            TechniqueTag::ImplicitDifferentiation => "Implicit differentiation",
+            TechniqueTag::LogarithmicDifferentiation => "Logarithmic differentiation",
+            TechniqueTag::PatternIntegration => "Pattern integration",
+            TechniqueTag::IntegrationByParts => "Integration by parts",
+            TechniqueTag::USubstitution => "u-substitution",
+            TechniqueTag::TrigSubstitution => "Trigonometric substitution",
+            TechniqueTag::PartialFractionIntegration => "Partial fractions for integration",
+            TechniqueTag::RischVerification => "Risch verification",
+            TechniqueTag::LHopitalRule => "L'Hôpital's rule",
+            TechniqueTag::SqueezeTheorem => "Squeeze theorem",
+            TechniqueTag::LimitAlgebraic => "Algebraic limit",
             TechniqueTag::TaylorExpansion => "Taylor expansion",
             TechniqueTag::LaurentExpansion => "Laurent expansion",
             TechniqueTag::AsymptoticExpansion => "Asymptotic expansion",
@@ -64,9 +278,126 @@ impl TechniqueTag {
             TechniqueTag::LagrangeReversion => "Lagrange reversion",
             TechniqueTag::ResidueTheorem => "Residue theorem",
             TechniqueTag::PoleClassification => "Pole classification",
-            TechniqueTag::LHopitalRule => "L'Hôpital's rule",
-            TechniqueTag::PatternIntegration => "Pattern integration",
-            TechniqueTag::RischVerification => "Risch verification",
+            TechniqueTag::FourierSeries => "Fourier series",
+            TechniqueTag::SeparationOfVariables => "Separation of variables",
+            TechniqueTag::IntegratingFactor => "Integrating factor",
+            TechniqueTag::CharacteristicEquation => "Characteristic equation",
+            TechniqueTag::UndeterminedCoefficients => "Undetermined coefficients",
+            TechniqueTag::VariationOfParameters => "Variation of parameters",
+            TechniqueTag::RungeKutta => "Runge-Kutta",
+            TechniqueTag::GaussianElimination => "Gaussian elimination",
+            TechniqueTag::MatrixInverse => "Matrix inverse",
+            TechniqueTag::LuDecomposition => "LU decomposition",
+            TechniqueTag::QrDecomposition => "QR decomposition",
+            TechniqueTag::Eigendecomposition => "Eigendecomposition",
+            TechniqueTag::Determinant => "Determinant",
+            TechniqueTag::NumericalApproximation => "Numerical approximation",
+            TechniqueTag::NewtonRaphson => "Newton-Raphson",
+            TechniqueTag::Bisection => "Bisection",
+            TechniqueTag::Brent => "Brent's method",
+            TechniqueTag::Secant => "Secant method",
+            TechniqueTag::DomainNarrowing => "Domain narrowing",
+            TechniqueTag::DomainExtension => "Domain extension",
+            TechniqueTag::PrincipalBranch => "Principal branch",
+            TechniqueTag::Custom(label) => label,
+        }
+    }
+
+    /// Difficulty level normally associated with this technique, reusing the
+    /// [`crate::resolution_path::TechniqueDifficulty`] taxonomy. The mapping
+    /// is intrinsic to the technique — no caller override; callers filter
+    /// steps by this level if they want to condense or explode narration.
+    #[must_use]
+    pub const fn difficulty(self) -> crate::resolution_path::TechniqueDifficulty {
+        use crate::resolution_path::TechniqueDifficulty::*;
+        match self {
+            // Elementary — basic equation manipulation + combining like terms.
+            TechniqueTag::AddBothSides
+            | TechniqueTag::SubtractBothSides
+            | TechniqueTag::MultiplyBothSides
+            | TechniqueTag::DivideBothSides
+            | TechniqueTag::Isolation
+            | TechniqueTag::MoveTerm
+            | TechniqueTag::CombiningLikeTerms
+            | TechniqueTag::Simplification => Elementary,
+
+            // Powers and roots.
+            TechniqueTag::PowerBothSides
+            | TechniqueTag::RootBothSides
+            | TechniqueTag::LogIdentity
+            | TechniqueTag::ExpIdentity => PowerAndRoots,
+
+            // Pre-calculus algebraic manipulation.
+            TechniqueTag::ApplyFunction
+            | TechniqueTag::Expansion
+            | TechniqueTag::Factoring
+            | TechniqueTag::CombineFractions
+            | TechniqueTag::Cancellation
+            | TechniqueTag::Rationalization
+            | TechniqueTag::Conjugation
+            | TechniqueTag::PartialFractionDecomp
+            | TechniqueTag::ApplyIdentity
+            | TechniqueTag::QuadraticFormula
+            | TechniqueTag::CompleteTheSquare
+            | TechniqueTag::RationalRootTheorem
+            | TechniqueTag::SyntheticDivision => AlgebraicManip,
+
+            // Transcendental: trig, hyperbolic, substitution.
+            TechniqueTag::Substitution
+            | TechniqueTag::TrigIdentity
+            | TechniqueTag::HyperbolicIdentity
+            | TechniqueTag::EulerFormula
+            | TechniqueTag::DeMoivre => Transcendental,
+
+            // Calculus.
+            TechniqueTag::PowerRule
+            | TechniqueTag::ProductRule
+            | TechniqueTag::QuotientRule
+            | TechniqueTag::ChainRule
+            | TechniqueTag::ImplicitDifferentiation
+            | TechniqueTag::LogarithmicDifferentiation
+            | TechniqueTag::PatternIntegration
+            | TechniqueTag::IntegrationByParts
+            | TechniqueTag::USubstitution
+            | TechniqueTag::TrigSubstitution
+            | TechniqueTag::PartialFractionIntegration
+            | TechniqueTag::LHopitalRule
+            | TechniqueTag::SqueezeTheorem
+            | TechniqueTag::LimitAlgebraic
+            | TechniqueTag::SeparationOfVariables
+            | TechniqueTag::IntegratingFactor
+            | TechniqueTag::CharacteristicEquation
+            | TechniqueTag::UndeterminedCoefficients
+            | TechniqueTag::VariationOfParameters => Calculus,
+
+            // Advanced / university.
+            TechniqueTag::RischVerification
+            | TechniqueTag::TaylorExpansion
+            | TechniqueTag::LaurentExpansion
+            | TechniqueTag::AsymptoticExpansion
+            | TechniqueTag::SeriesComposition
+            | TechniqueTag::LagrangeReversion
+            | TechniqueTag::ResidueTheorem
+            | TechniqueTag::PoleClassification
+            | TechniqueTag::FourierSeries
+            | TechniqueTag::RungeKutta
+            | TechniqueTag::GaussianElimination
+            | TechniqueTag::MatrixInverse
+            | TechniqueTag::LuDecomposition
+            | TechniqueTag::QrDecomposition
+            | TechniqueTag::Eigendecomposition
+            | TechniqueTag::Determinant
+            | TechniqueTag::NumericalApproximation
+            | TechniqueTag::NewtonRaphson
+            | TechniqueTag::Bisection
+            | TechniqueTag::Brent
+            | TechniqueTag::Secant
+            | TechniqueTag::DomainNarrowing
+            | TechniqueTag::DomainExtension
+            | TechniqueTag::PrincipalBranch => Advanced,
+
+            // Custom: caller's responsibility; default to Advanced.
+            TechniqueTag::Custom(_) => Advanced,
         }
     }
 }
