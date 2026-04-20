@@ -4,27 +4,40 @@
 //! layer work correctly. The FFI functions themselves are tested via Swift
 //! integration tests.
 
-use thales::ast::{Expression, Variable};
+use thales::ast::Expression;
+use thales::numeric::compile::{compile, decompile};
+use thales::numeric::expr::Expr;
+use thales::numeric::series::taylor;
+use thales::numeric::SymbolId;
 use thales::parser::parse_expression;
-use thales::series::{maclaurin, taylor};
 use thales::special::{beta, erf, erfc, gamma};
 
 // =============================================================================
 // Series Expansion Tests
 // =============================================================================
+//
+// These tests mirror what the FFI layer does: parse Expression → compile to
+// Arc<Expr> → call the numeric engine → decompile back to Expression for
+// display. That matches the real code path through `taylor_series_ffi` /
+// `maclaurin_series_ffi`.
+
+fn expand_taylor_expr(src: &str, var_name: &str, center: &Expr, order: usize) -> Expression {
+    let parsed = parse_expression(src).unwrap();
+    let arc_expr = compile(&parsed);
+    let var_id = SymbolId::intern(var_name);
+    let ts = taylor(
+        &arc_expr,
+        var_id,
+        &std::sync::Arc::new(center.clone()),
+        order,
+    );
+    decompile(&ts.to_expr())
+}
 
 #[test]
 fn test_taylor_series_simple_polynomial() {
     // Taylor series of x^2 around x=1 should be 1 + 2(x-1) + (x-1)^2
-    let x = Variable::new("x");
-    let expr = parse_expression("x^2").unwrap();
-    let center = Expression::Float(1.0);
-
-    let result = taylor(&expr, &x, &center, 3);
-    assert!(result.is_ok(), "Taylor series computation should succeed");
-
-    let series = result.unwrap();
-    let series_expr = series.to_expression();
+    let series_expr = expand_taylor_expr("x^2", "x", &Expr::Float(1.0), 3);
     let series_str = format!("{}", series_expr);
     assert!(!series_str.is_empty(), "Series should not be empty");
 }
@@ -32,29 +45,15 @@ fn test_taylor_series_simple_polynomial() {
 #[test]
 fn test_taylor_series_exponential() {
     // Taylor series of e^x around x=0
-    let x = Variable::new("x");
-    let expr = parse_expression("exp(x)").unwrap();
-    let center = Expression::Float(0.0);
-
-    let result = taylor(&expr, &x, &center, 4);
-    assert!(result.is_ok(), "Taylor series of exp(x) should succeed");
-
-    let series = result.unwrap();
-    let series_str = format!("{}", series.to_expression());
+    let series_expr = expand_taylor_expr("exp(x)", "x", &Expr::Integer(0i64.into()), 4);
+    let series_str = format!("{}", series_expr);
     assert!(series_str.contains('x'), "Series should contain variable x");
 }
 
 #[test]
 fn test_maclaurin_series_sin() {
     // Maclaurin series of sin(x)
-    let x = Variable::new("x");
-    let expr = parse_expression("sin(x)").unwrap();
-
-    let result = maclaurin(&expr, &x, 5);
-    assert!(result.is_ok(), "Maclaurin series of sin(x) should succeed");
-
-    let series = result.unwrap();
-    let series_expr = series.to_expression();
+    let series_expr = expand_taylor_expr("sin(x)", "x", &Expr::Integer(0i64.into()), 5);
     assert!(
         !format!("{}", series_expr).is_empty(),
         "Series should not be empty"
@@ -64,14 +63,7 @@ fn test_maclaurin_series_sin() {
 #[test]
 fn test_maclaurin_series_cos() {
     // Maclaurin series of cos(x)
-    let x = Variable::new("x");
-    let expr = parse_expression("cos(x)").unwrap();
-
-    let result = maclaurin(&expr, &x, 5);
-    assert!(result.is_ok(), "Maclaurin series of cos(x) should succeed");
-
-    let series = result.unwrap();
-    let series_expr = series.to_expression();
+    let series_expr = expand_taylor_expr("cos(x)", "x", &Expr::Integer(0i64.into()), 5);
     assert!(
         !format!("{}", series_expr).is_empty(),
         "Series should not be empty"
@@ -81,14 +73,7 @@ fn test_maclaurin_series_cos() {
 #[test]
 fn test_maclaurin_series_simple() {
     // Maclaurin series of x^3 + 2*x
-    let x = Variable::new("x");
-    let expr = parse_expression("x^3 + 2*x").unwrap();
-
-    let result = maclaurin(&expr, &x, 4);
-    assert!(result.is_ok(), "Maclaurin series should succeed");
-
-    let series = result.unwrap();
-    let series_expr = series.to_expression();
+    let series_expr = expand_taylor_expr("x^3 + 2*x", "x", &Expr::Integer(0i64.into()), 4);
     assert!(
         !format!("{}", series_expr).is_empty(),
         "Series should not be empty"
@@ -375,11 +360,7 @@ fn test_erfc_has_derivation_steps() {
 
 #[test]
 fn test_series_latex_output() {
-    let x = Variable::new("x");
-    let expr = parse_expression("x^2").unwrap();
-
-    let series = maclaurin(&expr, &x, 3).unwrap();
-    let series_expr = series.to_expression();
+    let series_expr = expand_taylor_expr("x^2", "x", &Expr::Integer(0i64.into()), 3);
     let latex = series_expr.to_latex();
 
     assert!(!latex.is_empty(), "LaTeX output should not be empty");

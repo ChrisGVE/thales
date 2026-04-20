@@ -411,7 +411,6 @@ pub mod pattern;
 pub mod precision;
 pub mod resolution_path;
 pub mod runge_kutta;
-pub mod series;
 pub mod simplification_rules;
 pub mod solver;
 pub mod special;
@@ -526,43 +525,6 @@ pub use resolution_path::{
     NumericalConvergenceInfo, Operation, OperationCounts, PathStatistics, ResolutionPath,
     ResolutionPathBuilder, ResolutionStep, StepAnnotation, TechniqueDifficulty, Verbosity,
 };
-pub use series::{
-    arctan_series,
-    asymptotic,
-    binomial_series,
-    // Series arithmetic (composition and reversion)
-    compose_series,
-    compute_nth_derivative,
-    cos_series,
-    evaluate_at,
-    exp_series,
-    factorial,
-    factorial_expr,
-    find_singularities,
-    laurent,
-    limit_via_asymptotic,
-    ln_1_plus_x_series,
-    maclaurin,
-    pole_order,
-    residue,
-    reversion,
-    sin_series,
-    taylor,
-    // Asymptotic expansions
-    AsymptoticDirection,
-    AsymptoticSeries,
-    AsymptoticTerm,
-    BigO,
-    // Laurent series support
-    LaurentSeries,
-    RemainderTerm,
-    Series,
-    SeriesError,
-    SeriesResult,
-    SeriesTerm,
-    Singularity,
-    SingularityType,
-};
 pub use solver::{
     LinearSystem, SmartSolver, Solution, Solver, SymbolicFailureReason, SystemSolution,
     SystemSolver,
@@ -637,8 +599,6 @@ pub enum ThalesError {
     Parse(parser::ParseError),
     /// Error from the solver module.
     Solver(solver::SolverError),
-    /// Error from the series module.
-    Series(series::SeriesError),
     /// Error from the matrix module.
     Matrix(matrix::MatrixError),
     /// Error from the integration module.
@@ -670,7 +630,6 @@ impl std::fmt::Display for ThalesError {
         match self {
             ThalesError::Parse(e) => write!(f, "Parse error: {}", e),
             ThalesError::Solver(e) => write!(f, "Solver error: {:?}", e),
-            ThalesError::Series(e) => write!(f, "Series error: {}", e),
             ThalesError::Matrix(e) => write!(f, "Matrix error: {}", e),
             ThalesError::Integration(e) => write!(f, "Integration error: {}", e),
             ThalesError::Numerical(e) => write!(f, "Numerical error: {:?}", e),
@@ -691,7 +650,6 @@ impl std::error::Error for ThalesError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             ThalesError::Parse(e) => Some(e),
-            ThalesError::Series(e) => Some(e),
             ThalesError::Matrix(e) => Some(e),
             ThalesError::Integration(e) => Some(e),
             ThalesError::Limits(e) => Some(e),
@@ -720,12 +678,6 @@ impl From<parser::ParseError> for ThalesError {
 impl From<solver::SolverError> for ThalesError {
     fn from(e: solver::SolverError) -> Self {
         ThalesError::Solver(e)
-    }
-}
-
-impl From<series::SeriesError> for ThalesError {
-    fn from(e: series::SeriesError) -> Self {
-        ThalesError::Series(e)
     }
 }
 

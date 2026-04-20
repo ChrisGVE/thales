@@ -97,32 +97,13 @@
 //! }
 //! ```
 //!
-//! ### Series Errors: [`crate::series::SeriesError`]
+//! ### Series Errors: [`crate::numeric::series`]
 //!
-//! Errors from Taylor/Maclaurin series expansions.
+//! Series engines in [`crate::numeric::series`] signal failure by returning
+//! `None` (or an empty / short series) rather than a dedicated error enum.
+//! Callers pattern-match on the `Option` and handle the failure locally.
 //!
-//! ```rust,ignore
-//! use thales::{series::SeriesError, taylor};
-//!
-//! fn handle_series_error(err: SeriesError) {
-//!     match err {
-//!         SeriesError::CannotExpand(msg) => {
-//!             println!("Cannot expand: {}", msg);
-//!         }
-//!         SeriesError::InvalidCenter(msg) => {
-//!             println!("Invalid center: {}", msg);
-//!         }
-//!         SeriesError::DivisionByZero => {
-//!             println!("Division by zero in expansion");
-//!         }
-//!         SeriesError::DerivativeFailed(msg) => {
-//!             println!("Differentiation failed: {}", msg);
-//!         }
-//!         _ => println!("Other series error: {}", err),
-//!     }
-//! }
-//! ```
-//!
+
 //! ### Other Module Errors
 //!
 //! - [`crate::numerical::NumericalError`]: Convergence failures, invalid bounds
