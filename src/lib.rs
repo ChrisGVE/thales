@@ -389,6 +389,7 @@
 #![allow(clippy::missing_panics_doc)]
 
 // Public module exports
+pub mod api;
 pub mod approximations;
 pub mod ast;
 pub mod dimensions;
@@ -623,6 +624,10 @@ pub enum ThalesError {
     System(equation_system::SystemError),
     /// Error from the nonlinear system solver.
     NonlinearSystem(equation_system::NonlinearSystemSolverError),
+    /// The `api::execute` dispatcher received a command variant that the
+    /// v0.8.1 scaffolding does not yet implement. This error disappears once
+    /// task T5 (full dispatch) lands.
+    ApiNotImplemented,
 }
 
 impl std::fmt::Display for ThalesError {
@@ -642,6 +647,9 @@ impl std::fmt::Display for ThalesError {
             ThalesError::LaTeXParse(e) => write!(f, "LaTeX parse error: {}", e),
             ThalesError::System(e) => write!(f, "System error: {:?}", e),
             ThalesError::NonlinearSystem(e) => write!(f, "Nonlinear system error: {:?}", e),
+            ThalesError::ApiNotImplemented => {
+                write!(f, "api::execute: command variant not yet implemented")
+            }
         }
     }
 }
@@ -664,6 +672,7 @@ impl std::error::Error for ThalesError {
             ThalesError::Numerical(_) => None,
             ThalesError::System(_) => None,
             ThalesError::NonlinearSystem(_) => None,
+            ThalesError::ApiNotImplemented => None,
         }
     }
 }
