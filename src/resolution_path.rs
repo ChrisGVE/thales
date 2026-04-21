@@ -1052,33 +1052,7 @@ fn escape_latex_text(text: &str) -> String {
 /// // Hint level 3: Show result
 /// println!("Result: {:?}", step.result);
 /// ```
-/// Intrinsic difficulty of the mathematical technique required for a step.
-///
-/// This classification is based on the kind of mathematics involved, not on
-/// the number of steps. A single integration step is harder than ten elementary
-/// algebra steps. The tier maps to an approximate educational level.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum TechniqueDifficulty {
-    /// Add, subtract, multiply, divide both sides; move terms; isolate variable.
-    /// Educational level: middle school.
-    Elementary = 1,
-    /// Square/cube both sides, take nth root, apply exponent rules, logarithms.
-    /// Educational level: high school algebra.
-    PowerAndRoots = 2,
-    /// Factor, expand, complete the square, quadratic formula, combine/partial fractions.
-    /// Educational level: pre-calculus.
-    AlgebraicManip = 3,
-    /// Trig inversion (arcsin etc.), trig identities, hyperbolic functions, substitution.
-    /// Educational level: trigonometry.
-    Transcendental = 4,
-    /// Differentiate, integrate, integration by parts, u-substitution, ODE, limits.
-    /// Educational level: calculus.
-    Calculus = 5,
-    /// Matrix operations, series expansion, numerical methods, special functions,
-    /// Laplace/Fourier transforms, tensors.
-    /// Educational level: university.
-    Advanced = 6,
-}
+pub use crate::numeric::trace::TechniqueDifficulty;
 
 /// Structured annotation for a resolution step providing educational context.
 ///
@@ -2413,31 +2387,6 @@ impl ResolutionPathBuilder {
     pub fn finish(mut self, result: Expression) -> ResolutionPath {
         self.path.set_result(result);
         self.path
-    }
-}
-
-impl std::fmt::Display for TechniqueDifficulty {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Elementary => write!(f, "elementary"),
-            Self::PowerAndRoots => write!(f, "power/roots"),
-            Self::AlgebraicManip => write!(f, "algebraic"),
-            Self::Transcendental => write!(f, "transcendental"),
-            Self::Calculus => write!(f, "calculus"),
-            Self::Advanced => write!(f, "advanced"),
-        }
-    }
-}
-
-impl PartialOrd for TechniqueDifficulty {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for TechniqueDifficulty {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (*self as u8).cmp(&(*other as u8))
     }
 }
 

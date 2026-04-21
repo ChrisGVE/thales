@@ -11,13 +11,69 @@
 //! computed result pass `None` and pay no allocation cost.
 //!
 //! The tag enum is intentionally engine-oriented, not UI-oriented.
-//! Mapping `TechniqueTag → TechniqueDifficulty` lives in the Expression
-//! wrapper layer where the difficulty concept already exists
-//! (`resolution_path::TechniqueDifficulty`).
+//! Mapping `TechniqueTag → TechniqueDifficulty` is provided by
+//! [`TechniqueTag::difficulty`].
 
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
+
 use super::Expr;
+
+// ── Difficulty ───────────────────────────────────────────────────────────────
+
+/// Intrinsic difficulty of a mathematical technique.
+///
+/// Classification reflects the kind of mathematics involved, not the number
+/// of steps. A single integration step is harder than ten elementary
+/// algebra steps. Each tier maps to an approximate educational level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TechniqueDifficulty {
+    /// Add, subtract, multiply, divide both sides; move terms; isolate variable.
+    /// Educational level: middle school.
+    Elementary = 1,
+    /// Square/cube both sides, take nth root, apply exponent rules, logarithms.
+    /// Educational level: high school algebra.
+    PowerAndRoots = 2,
+    /// Factor, expand, complete the square, quadratic formula, combine/partial fractions.
+    /// Educational level: pre-calculus.
+    AlgebraicManip = 3,
+    /// Trig inversion (arcsin etc.), trig identities, hyperbolic functions, substitution.
+    /// Educational level: trigonometry.
+    Transcendental = 4,
+    /// Differentiate, integrate, integration by parts, u-substitution, ODE, limits.
+    /// Educational level: calculus.
+    Calculus = 5,
+    /// Matrix operations, series expansion, numerical methods, special functions,
+    /// Laplace/Fourier transforms, tensors.
+    /// Educational level: university.
+    Advanced = 6,
+}
+
+impl std::fmt::Display for TechniqueDifficulty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Elementary => write!(f, "elementary"),
+            Self::PowerAndRoots => write!(f, "power/roots"),
+            Self::AlgebraicManip => write!(f, "algebraic"),
+            Self::Transcendental => write!(f, "transcendental"),
+            Self::Calculus => write!(f, "calculus"),
+            Self::Advanced => write!(f, "advanced"),
+        }
+    }
+}
+
+impl PartialOrd for TechniqueDifficulty {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TechniqueDifficulty {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (*self as u8).cmp(&(*other as u8))
+    }
+}
 
 // ── Tag ──────────────────────────────────────────────────────────────────────
 
@@ -28,12 +84,10 @@ use super::Expr;
 /// Each variant is a single pre-defined label; free-form commentary belongs
 /// in [`Step::detail`].
 ///
-/// The enum mirrors (and subsumes) [`crate::resolution_path::Operation`],
-/// with additional granularity for calculus rules (chain / product /
-/// quotient / power) and integration techniques. The mapping
+/// The enum covers every technique the codebase emits. The mapping
 /// [`TechniqueTag::difficulty`] translates each tag to the educational
-/// level at which it is normally introduced, reusing
-/// [`crate::resolution_path::TechniqueDifficulty`].
+/// level at which it is normally introduced via
+/// [`TechniqueDifficulty`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum TechniqueTag {
@@ -303,13 +357,12 @@ impl TechniqueTag {
         }
     }
 
-    /// Difficulty level normally associated with this technique, reusing the
-    /// [`crate::resolution_path::TechniqueDifficulty`] taxonomy. The mapping
+    /// Difficulty level normally associated with this technique. The mapping
     /// is intrinsic to the technique — no caller override; callers filter
     /// steps by this level if they want to condense or explode narration.
     #[must_use]
-    pub const fn difficulty(self) -> crate::resolution_path::TechniqueDifficulty {
-        use crate::resolution_path::TechniqueDifficulty::*;
+    pub const fn difficulty(self) -> TechniqueDifficulty {
+        use TechniqueDifficulty::*;
         match self {
             // Elementary — basic equation manipulation + combining like terms.
             TechniqueTag::AddBothSides

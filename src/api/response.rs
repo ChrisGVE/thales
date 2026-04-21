@@ -9,8 +9,7 @@ use crate::Expression;
 
 use super::{Assumption, Condition, Diagnostic, Domain, ExprPath, Narrative, Precision};
 
-use crate::numeric::trace::TechniqueTag;
-use crate::resolution_path::TechniqueDifficulty;
+use crate::numeric::trace::{TechniqueDifficulty, TechniqueTag};
 
 /// Output of [`super::execute`].
 ///
