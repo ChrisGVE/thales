@@ -1,7 +1,8 @@
 //! Brent's method (hybrid root finder, very robust).
 
 use crate::ast::{Equation, Expression, Variable};
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder};
+use crate::numeric::expr::Expr;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use std::collections::HashMap;
 
 use super::{NumericalConfig, NumericalError, NumericalResult, NumericalSolution};
@@ -76,15 +77,17 @@ impl BrentsMethod {
         equation: &Equation,
         variable: &Variable,
         interval: (f64, f64),
-    ) -> NumericalResult<(NumericalSolution, ResolutionPath)> {
-        let (f, eval) = brent_make_eval(equation, variable);
+    ) -> NumericalResult<(NumericalSolution, Trace)> {
+        let (_f, eval) = brent_make_eval(equation, variable);
         let (mut a, mut b, mut fa, mut fb) = brent_init_bracket(interval, &eval)?;
 
-        let mut path = ResolutionPathBuilder::new(f);
-        path = path.step(
-            Operation::NumericalApproximation,
-            format!("Starting Brent on [{a}, {b}]: f(a)={fa:.6e}, f(b)={fb:.6e}"),
-            Expression::Float(b),
+        let mut trace = Trace::new();
+        trace.push(
+            Step::new(
+                TechniqueTag::Brent,
+                format!("Starting Brent on [{a}, {b}]: f(a)={fa:.6e}, f(b)={fb:.6e}"),
+            )
+            .with_output(Expr::float(b)),
         );
 
         let mut st = BrentState {
@@ -110,10 +113,12 @@ impl BrentsMethod {
 
             if i % 10 == 0 {
                 let method = if bisected { "bisect" } else { "interpolate" };
-                path = path.step(
-                    Operation::NumericalApproximation,
-                    format!("Iter {iterations}: x={s:.10}, f(x)={fs:.6e} [{method}]"),
-                    Expression::Float(s),
+                trace.push(
+                    Step::new(
+                        TechniqueTag::Brent,
+                        format!("Iter {iterations}: x={s:.10}, f(x)={fs:.6e} [{method}]"),
+                    )
+                    .with_output(Expr::float(s)),
                 );
             }
 
@@ -128,10 +133,12 @@ impl BrentsMethod {
             return Err(NumericalError::NoConvergence);
         }
 
-        path = path.step(
-            Operation::NumericalApproximation,
-            format!("Converged: x={b:.15}, |f(x)|={:.6e}", fb.abs()),
-            Expression::Float(b),
+        trace.push(
+            Step::new(
+                TechniqueTag::Brent,
+                format!("Converged: x={b:.15}, |f(x)|={:.6e}", fb.abs()),
+            )
+            .with_output(Expr::float(b)),
         );
         let sol = NumericalSolution {
             value: b,
@@ -139,7 +146,7 @@ impl BrentsMethod {
             residual: fb.abs(),
             converged,
         };
-        Ok((sol, path.finish(Expression::Float(b))))
+        Ok((sol, trace))
     }
 }
 

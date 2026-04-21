@@ -1,7 +1,8 @@
 //! Secant method root finder (derivative-free).
 
 use crate::ast::{Equation, Expression, Variable};
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder};
+use crate::numeric::expr::Expr;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use std::collections::HashMap;
 
 use super::{NumericalConfig, NumericalError, NumericalResult, NumericalSolution};
@@ -96,25 +97,27 @@ impl SecantMethod {
         equation: &Equation,
         variable: &Variable,
         initial_points: (f64, f64),
-    ) -> NumericalResult<(NumericalSolution, ResolutionPath)> {
-        let (f, eval) = secant_make_eval(equation, variable);
+    ) -> NumericalResult<(NumericalSolution, Trace)> {
+        let (_f, eval) = secant_make_eval(equation, variable);
         let (mut x_prev, mut x_curr) = initial_points;
         let mut f_prev = eval(x_prev)?;
         let mut f_curr = eval(x_curr)?;
 
-        let mut path = ResolutionPathBuilder::new(f);
-        path = path.step(
-            Operation::NumericalApproximation,
-            format!(
-                "Starting secant: x0={x_prev}, x1={x_curr}: \
-                 f(x0)={f_prev:.6e}, f(x1)={f_curr:.6e}"
-            ),
-            Expression::Float(x_curr),
+        let mut trace = Trace::new();
+        trace.push(
+            Step::new(
+                TechniqueTag::Secant,
+                format!(
+                    "Starting secant: x0={x_prev}, x1={x_curr}: \
+                     f(x0)={f_prev:.6e}, f(x1)={f_curr:.6e}"
+                ),
+            )
+            .with_output(Expr::float(x_curr)),
         );
 
         let (solution, x_final) = secant_iterate(
             &eval,
-            &mut path,
+            &mut trace,
             &mut x_prev,
             &mut x_curr,
             &mut f_prev,
@@ -123,13 +126,15 @@ impl SecantMethod {
             self.config.tolerance,
         )?;
 
-        path = path.step(
-            Operation::NumericalApproximation,
-            format!("Converged: x={x_final:.15}, |f(x)|={:.6e}", f_curr.abs()),
-            Expression::Float(x_final),
+        trace.push(
+            Step::new(
+                TechniqueTag::Secant,
+                format!("Converged: x={x_final:.15}, |f(x)|={:.6e}", f_curr.abs()),
+            )
+            .with_output(Expr::float(x_final)),
         );
 
-        Ok((solution, path.finish(Expression::Float(x_final))))
+        Ok((solution, trace))
     }
 }
 
@@ -172,13 +177,13 @@ fn secant_step(x_prev: f64, x_curr: f64, f_prev: f64, f_curr: f64) -> NumericalR
     Ok(x_curr - f_curr * (x_curr - x_prev) / denom)
 }
 
-/// Run the secant iteration loop, updating path and state in place.
+/// Run the secant iteration loop, updating trace and state in place.
 ///
 /// Separated from `SecantMethod::solve` so that `solve` stays under 80 lines.
 #[allow(clippy::too_many_arguments)]
 fn secant_iterate(
     eval: &impl Fn(f64) -> NumericalResult<f64>,
-    path: &mut ResolutionPathBuilder,
+    trace: &mut Trace,
     x_prev: &mut f64,
     x_curr: &mut f64,
     f_prev: &mut f64,
@@ -200,13 +205,15 @@ fn secant_iterate(
         let x_next = secant_step(*x_prev, *x_curr, *f_prev, *f_curr)?;
 
         if i % 10 == 0 {
-            *path = (*path).clone().step(
-                Operation::NumericalApproximation,
-                format!(
-                    "Iter {iterations}: x={x_next:.10}, f(x_curr)={:.6e}",
-                    f_curr
-                ),
-                Expression::Float(x_next),
+            trace.push(
+                Step::new(
+                    TechniqueTag::Secant,
+                    format!(
+                        "Iter {iterations}: x={x_next:.10}, f(x_curr)={:.6e}",
+                        f_curr
+                    ),
+                )
+                .with_output(Expr::float(x_next)),
             );
         }
 

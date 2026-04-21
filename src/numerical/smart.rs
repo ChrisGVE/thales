@@ -1,7 +1,7 @@
 //! Smart numerical solver that automatically selects the best method.
 
 use crate::ast::{Equation, Expression, Variable};
-use crate::resolution_path::ResolutionPath;
+use crate::numeric::trace::Trace;
 
 use super::{
     bracket_root, BisectionMethod, NewtonRaphson, NumericalConfig, NumericalError, NumericalResult,
@@ -154,7 +154,7 @@ impl SmartNumericalSolver {
         &self,
         equation: &Equation,
         variable: &Variable,
-    ) -> NumericalResult<(NumericalSolution, ResolutionPath)> {
+    ) -> NumericalResult<(NumericalSolution, Trace)> {
         // Convert equation to f(x) = 0 form
         let f = Expression::Binary(
             crate::ast::BinaryOp::Sub,
@@ -213,7 +213,7 @@ impl SmartNumericalSolver {
         equation: &Equation,
         variable: &Variable,
         interval: (f64, f64),
-    ) -> NumericalResult<(NumericalSolution, ResolutionPath)> {
+    ) -> NumericalResult<(NumericalSolution, Trace)> {
         // Prefer bisection when an interval is provided
         let bisection = BisectionMethod::new(self.config.clone());
         bisection.solve(equation, variable, interval)

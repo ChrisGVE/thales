@@ -418,8 +418,14 @@ impl MultiEquationSolver {
 
         // Use SmartNumericalSolver's solve method
         match self.numerical_solver.solve(equation, &var) {
-            Ok((sol, path)) => {
+            Ok((sol, trace)) => {
                 let value = SolutionValue::Numeric(sol.value);
+                let f_expr = Expression::Binary(
+                    crate::ast::BinaryOp::Sub,
+                    Box::new(equation.left.clone()),
+                    Box::new(equation.right.clone()),
+                );
+                let path = crate::solver::trace_to_path(&trace, f_expr);
                 Ok((value, Some(path)))
             }
             Err(e) => Err(SystemError::NumericalFailure {

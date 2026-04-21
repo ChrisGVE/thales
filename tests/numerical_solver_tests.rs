@@ -67,7 +67,7 @@ fn test_newton_raphson_transcendental() {
     assert!(solution.converged);
     // Verify solution: e^x should equal x + 2
     assert!((solution.value.exp() - (solution.value + 2.0)).abs() < 1e-9);
-    assert!(path.step_count() > 0);
+    assert!(path.len() > 0);
 }
 
 #[test]

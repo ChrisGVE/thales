@@ -1,7 +1,8 @@
 //! Bisection method root finder (guaranteed convergence for continuous functions).
 
 use crate::ast::{Equation, Expression, Variable};
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder};
+use crate::numeric::expr::Expr;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use std::collections::HashMap;
 
 use super::{NumericalConfig, NumericalError, NumericalResult, NumericalSolution};
@@ -129,7 +130,7 @@ impl BisectionMethod {
         equation: &Equation,
         variable: &Variable,
         interval: (f64, f64),
-    ) -> NumericalResult<(NumericalSolution, ResolutionPath)> {
+    ) -> NumericalResult<(NumericalSolution, Trace)> {
         // Convert equation to form f(x) = 0
         let f = Expression::Binary(
             crate::ast::BinaryOp::Sub,
@@ -145,8 +146,7 @@ impl BisectionMethod {
             std::mem::swap(&mut a, &mut b);
         }
 
-        // Build resolution path
-        let mut path = ResolutionPathBuilder::new(f.clone());
+        let mut trace = Trace::new();
 
         // Evaluate at endpoints
         let mut vars = HashMap::new();
@@ -168,13 +168,15 @@ impl BisectionMethod {
             )));
         }
 
-        path = path.step(
-            Operation::NumericalApproximation,
-            format!(
-                "Starting bisection method on interval [{}, {}]. f({}) = {}, f({}) = {}",
-                a, b, a, fa, b, fb
-            ),
-            Expression::Float((a + b) / 2.0),
+        trace.push(
+            Step::new(
+                TechniqueTag::Bisection,
+                format!(
+                    "Starting bisection method on interval [{}, {}]. f({}) = {}, f({}) = {}",
+                    a, b, a, fa, b, fb
+                ),
+            )
+            .with_output(Expr::float((a + b) / 2.0)),
         );
 
         let mut iterations = 0;
@@ -198,29 +200,33 @@ impl BisectionMethod {
 
             // Check convergence by residual
             if fc.abs() < self.config.tolerance {
-                path = path.step(
-                    Operation::NumericalApproximation,
-                    format!(
-                        "Converged: |f({})| = {} < {}",
-                        c,
-                        fc.abs(),
-                        self.config.tolerance
-                    ),
-                    Expression::Float(c),
+                trace.push(
+                    Step::new(
+                        TechniqueTag::Bisection,
+                        format!(
+                            "Converged: |f({})| = {} < {}",
+                            c,
+                            fc.abs(),
+                            self.config.tolerance
+                        ),
+                    )
+                    .with_output(Expr::float(c)),
                 );
                 break;
             }
 
             // Check convergence by interval width
             if (b - a) / 2.0 < self.config.tolerance {
-                path = path.step(
-                    Operation::NumericalApproximation,
-                    format!(
-                        "Converged: interval width {} < {}",
-                        (b - a) / 2.0,
-                        self.config.tolerance
-                    ),
-                    Expression::Float(c),
+                trace.push(
+                    Step::new(
+                        TechniqueTag::Bisection,
+                        format!(
+                            "Converged: interval width {} < {}",
+                            (b - a) / 2.0,
+                            self.config.tolerance
+                        ),
+                    )
+                    .with_output(Expr::float(c)),
                 );
                 break;
             }
@@ -244,13 +250,15 @@ impl BisectionMethod {
 
             // Log progress every 10 iterations
             if i % 10 == 0 || i == self.config.max_iterations - 1 {
-                path = path.step(
-                    Operation::NumericalApproximation,
-                    format!(
-                        "Iteration {}: interval = [{}, {}], midpoint = {}, f(midpoint) = {}",
-                        iterations, a, b, c, fc
-                    ),
-                    Expression::Float(c),
+                trace.push(
+                    Step::new(
+                        TechniqueTag::Bisection,
+                        format!(
+                            "Iteration {}: interval = [{}, {}], midpoint = {}, f(midpoint) = {}",
+                            iterations, a, b, c, fc
+                        ),
+                    )
+                    .with_output(Expr::float(c)),
                 );
             }
         }
@@ -266,8 +274,6 @@ impl BisectionMethod {
             return Err(NumericalError::NoConvergence);
         }
 
-        let final_path = path.finish(Expression::Float(c));
-
-        Ok((solution, final_path))
+        Ok((solution, trace))
     }
 }

@@ -643,10 +643,15 @@ fn try_numerical_solve(
 ) -> Result<(f64, ResolutionPath), SolverError> {
     let solver = SmartNumericalSolver::with_default_config();
     match solver.solve(equation, variable) {
-        Ok((solution, mut path)) => {
+        Ok((solution, trace)) => {
             if solution.converged {
-                // Record convergence information in the resolution path
-                let method_name = infer_numerical_method(&path);
+                let method_name = infer_numerical_method(&trace);
+                let f_expr = Expression::Binary(
+                    crate::ast::BinaryOp::Sub,
+                    Box::new(equation.left.clone()),
+                    Box::new(equation.right.clone()),
+                );
+                let mut path = trace_to_path(&trace, f_expr);
                 path.add_step(ResolutionStep::new(
                     Operation::NumericalConverged {
                         method: method_name,
@@ -659,6 +664,7 @@ fn try_numerical_solve(
                     ),
                     Expression::Float(solution.value),
                 ));
+                path.set_result(Expression::Float(solution.value));
                 Ok((solution.value, path))
             } else {
                 Err(SolverError::Other(
@@ -673,24 +679,53 @@ fn try_numerical_solve(
     }
 }
 
-/// Infer which numerical method was used by inspecting the resolution path steps.
-fn infer_numerical_method(path: &ResolutionPath) -> String {
-    for step in &path.steps {
-        let explanation = step.explanation.to_lowercase();
-        if explanation.contains("newton") {
-            return "Newton-Raphson".to_string();
-        }
-        if explanation.contains("bisection") {
-            return "Bisection".to_string();
-        }
-        if explanation.contains("brent") {
-            return "Brent".to_string();
-        }
-        if explanation.contains("secant") {
-            return "Secant".to_string();
+/// Infer which numerical method was used by inspecting the trace tags.
+fn infer_numerical_method(trace: &crate::numeric::trace::Trace) -> String {
+    use crate::numeric::trace::TechniqueTag;
+    for step in trace.steps() {
+        match step.tag {
+            TechniqueTag::NewtonRaphson => return "Newton-Raphson".to_string(),
+            TechniqueTag::Bisection => return "Bisection".to_string(),
+            TechniqueTag::Brent => return "Brent".to_string(),
+            TechniqueTag::Secant => return "Secant".to_string(),
+            _ => {}
         }
     }
     "Numerical".to_string()
+}
+
+/// Convert a numeric [`Trace`] into a [`ResolutionPath`] anchored on `initial`.
+///
+/// Each trace step becomes a `ResolutionStep` tagged
+/// [`Operation::NumericalApproximation`] with the trace `detail` as the
+/// explanation. Output values (when present on the trace step) decompile
+/// back to `Expression`; missing outputs fall back to the initial.
+///
+/// Temporary bridge used while numerical engines report via `Trace` but
+/// solver-layer callers still consume `ResolutionPath`. Remove once the
+/// solver layer itself is migrated off `ResolutionPath`.
+pub(crate) fn trace_to_path(
+    trace: &crate::numeric::trace::Trace,
+    initial: Expression,
+) -> ResolutionPath {
+    use crate::numeric::compile::decompile;
+    let mut path = ResolutionPath::new(initial.clone());
+    let mut last_result = initial;
+    for step in trace.steps() {
+        let result_expr = step
+            .output
+            .as_ref()
+            .map(|arc| decompile(arc))
+            .unwrap_or_else(|| last_result.clone());
+        last_result = result_expr.clone();
+        path.add_step(ResolutionStep::new(
+            Operation::NumericalApproximation,
+            step.detail.clone(),
+            result_expr,
+        ));
+    }
+    path.set_result(last_result);
+    path
 }
 
 // ============================================================================

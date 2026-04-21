@@ -1,7 +1,8 @@
 //! Newton-Raphson root finder with symbolic differentiation.
 
 use crate::ast::{Equation, Expression, Variable};
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder};
+use crate::numeric::expr::Expr;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use std::collections::HashMap;
 
 use super::{NumericalConfig, NumericalError, NumericalResult, NumericalSolution};
@@ -207,7 +208,7 @@ impl NewtonRaphson {
         &self,
         equation: &Equation,
         variable: &Variable,
-    ) -> NumericalResult<(NumericalSolution, ResolutionPath)> {
+    ) -> NumericalResult<(NumericalSolution, Trace)> {
         // Convert equation to form f(x) = 0 by subtracting right side from left
         let f = Expression::Binary(
             crate::ast::BinaryOp::Sub,
@@ -221,21 +222,21 @@ impl NewtonRaphson {
         // Initial guess: use provided or estimate from domain
         let mut x = self.config.initial_guess.unwrap_or(1.0);
 
-        // Build resolution path
-        let mut path = ResolutionPathBuilder::new(f.clone());
-        path = path.step(
-            Operation::NumericalApproximation,
-            format!(
-                "Starting Newton-Raphson method with initial guess x₀ = {}",
-                x
-            ),
-            Expression::Float(x),
+        let mut trace = Trace::new();
+        trace.push(
+            Step::new(
+                TechniqueTag::NewtonRaphson,
+                format!(
+                    "Starting Newton-Raphson method with initial guess x₀ = {}",
+                    x
+                ),
+            )
+            .with_output(Expr::float(x)),
         );
-        path = path.step(
-            Operation::NumericalApproximation,
+        trace.push(Step::new(
+            TechniqueTag::NewtonRaphson,
             format!("Using symbolic derivative: f'(x) = {}", f_prime),
-            f_prime.clone(),
-        );
+        ));
 
         let mut converged = false;
         let mut iterations = 0;
@@ -260,13 +261,15 @@ impl NewtonRaphson {
             // Check convergence
             if residual < self.config.tolerance {
                 converged = true;
-                path = path.step(
-                    Operation::NumericalApproximation,
-                    format!(
-                        "Converged: |f(x)| = {} < {}",
-                        residual, self.config.tolerance
-                    ),
-                    Expression::Float(x),
+                trace.push(
+                    Step::new(
+                        TechniqueTag::NewtonRaphson,
+                        format!(
+                            "Converged: |f(x)| = {} < {}",
+                            residual, self.config.tolerance
+                        ),
+                    )
+                    .with_output(Expr::float(x)),
                 );
                 break;
             }
@@ -292,15 +295,17 @@ impl NewtonRaphson {
                 return Err(NumericalError::Unstable);
             }
 
-            // Add step to path every 10 iterations or at end
+            // Add step to trace every 10 iterations or at end
             if i % 10 == 0 || i == self.config.max_iterations - 1 {
-                path = path.step(
-                    Operation::NumericalApproximation,
-                    format!(
-                        "Iteration {}: x = {}, f(x) = {}, f'(x) = {}",
-                        iterations, x_next, fx, derivative
-                    ),
-                    Expression::Float(x_next),
+                trace.push(
+                    Step::new(
+                        TechniqueTag::NewtonRaphson,
+                        format!(
+                            "Iteration {}: x = {}, f(x) = {}, f'(x) = {}",
+                            iterations, x_next, fx, derivative
+                        ),
+                    )
+                    .with_output(Expr::float(x_next)),
                 );
             }
 
@@ -308,14 +313,16 @@ impl NewtonRaphson {
             if (x_next - x).abs() < self.config.tolerance {
                 x = x_next;
                 converged = true;
-                path = path.step(
-                    Operation::NumericalApproximation,
-                    format!(
-                        "Converged: |Δx| = {} < {}",
-                        (x_next - x).abs(),
-                        self.config.tolerance
-                    ),
-                    Expression::Float(x),
+                trace.push(
+                    Step::new(
+                        TechniqueTag::NewtonRaphson,
+                        format!(
+                            "Converged: |Δx| = {} < {}",
+                            (x_next - x).abs(),
+                            self.config.tolerance
+                        ),
+                    )
+                    .with_output(Expr::float(x)),
                 );
                 break;
             }
@@ -334,8 +341,6 @@ impl NewtonRaphson {
             converged,
         };
 
-        let final_path = path.finish(Expression::Float(x));
-
-        Ok((solution, final_path))
+        Ok((solution, trace))
     }
 }
