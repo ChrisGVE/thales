@@ -226,6 +226,23 @@ pub(super) fn unwrap_power(
         )));
     }
     if base_has {
+        // Special case `base^(-1) = other` → `base = 1/other`. This is
+        // the reciprocal of both sides, which is an elementary
+        // manipulation, not a root extraction. Keeping it under
+        // `RootBothSides` / `power_and_roots` tier would mis-classify
+        // simple algebraic rearrangements like `rho = m/V` solved for V.
+        if matches!(exp.as_ref(), Expr::Integer(n) if n.to_i64() == Some(-1)) {
+            let new_other = normalize::div(Expr::int(1), other.clone());
+            let new_other_expr = decompile(&new_other);
+            let p = path.annotated_step(
+                Operation::ApplyFunction("reciprocal".to_string()),
+                "Take the reciprocal of both sides".to_string(),
+                new_other_expr,
+                StepAnnotation::elementary(),
+            );
+            return unwrap_variable(base, &new_other, var, p);
+        }
+
         // base^exp = other → base = other^(1/exp)
         let inv_exp = normalize::div(Expr::int(1), exp.clone());
         let new_other = normalize::pow(other.clone(), inv_exp);
