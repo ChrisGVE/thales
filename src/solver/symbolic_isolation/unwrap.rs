@@ -301,7 +301,7 @@ fn unwrap_function(
     let (new_other, desc, annotation) = match fid {
         FuncId::Sin => (
             Expr::func(FuncId::Asin, vec![other.clone()]),
-            "Apply arcsin to both sides",
+            "Apply arcsine to both sides",
             StepAnnotation::transcendental("Inverse Trigonometric Function"),
         ),
         FuncId::Cos => (

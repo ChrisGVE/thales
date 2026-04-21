@@ -185,6 +185,12 @@ fn append_step(
         FuncId::Atan => "atan",
         _ => "inverse",
     };
+    let inverse_word = match inverse {
+        FuncId::Asin => "arcsine",
+        FuncId::Acos => "arccosine",
+        FuncId::Atan => "arctangent",
+        _ => "inverse",
+    };
     let solution_expr = crate::numeric::compile::decompile(solution);
     let original = match inverse {
         FuncId::Asin => "sin",
@@ -195,8 +201,8 @@ fn append_step(
     path.annotated_step(
         Operation::ApplyFunction(name.to_string()),
         format!(
-            "Apply arc-{} to solve {}({}) = value",
-            original, original, variable
+            "Apply {} to solve {}({}) = value",
+            inverse_word, original, variable
         ),
         solution_expr,
         StepAnnotation::transcendental("Inverse Trigonometric Function"),
