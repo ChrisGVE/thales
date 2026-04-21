@@ -50,7 +50,7 @@
 //! ```
 
 use crate::ast::{BinaryOp, Equation, Variable};
-use crate::numeric::compile::compile;
+use crate::numeric::compile::{compile, decompile};
 use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::ode::{
     particular_solution_undetermined, solve_linear, solve_second_order_homogeneous,
@@ -232,8 +232,9 @@ pub fn solve_ode_first_order(ode: &FirstOrderODE) -> SolverResult<(Solution, Tra
         _ => "other",
     };
     let classify = Some(("first".to_string(), ode_type_str.to_string()));
-    let path = build_ode_trace(classify, &ode_result.steps, &ode_result.general_solution);
-    Ok((Solution::Unique(ode_result.general_solution), path))
+    let general_expr = decompile(&ode_result.general_solution);
+    let path = build_ode_trace(classify, &ode_result.steps, &general_expr);
+    Ok((Solution::Unique(general_expr), path))
 }
 
 /// Solve a second-order linear ODE with constant coefficients directly.
@@ -279,20 +280,17 @@ pub fn solve_ode_second_order(ode: &SecondOrderODE) -> SolverResult<(Solution, T
     };
     let classify = Some(("second".to_string(), ode_type_str.to_string()));
 
+    let hom_expr = decompile(&hom_result.general_solution);
     if ode.is_homogeneous() {
-        let path = build_ode_trace(classify, &hom_result.steps, &hom_result.general_solution);
-        return Ok((Solution::Unique(hom_result.general_solution), path));
+        let path = build_ode_trace(classify, &hom_result.steps, &hom_expr);
+        return Ok((Solution::Unique(hom_expr), path));
     }
 
     // Non-homogeneous: find particular solution then combine.
     let (yp, yp_steps) = particular_solution_undetermined(ode)
         .map_err(|e| SolverError::CannotSolve(e.to_string()))?;
 
-    let general = crate::ast::Expression::Binary(
-        BinaryOp::Add,
-        Box::new(hom_result.general_solution),
-        Box::new(yp),
-    );
+    let general = crate::ast::Expression::Binary(BinaryOp::Add, Box::new(hom_expr), Box::new(yp));
 
     let mut all_steps = hom_result.steps;
     all_steps.extend(yp_steps);
@@ -530,39 +528,50 @@ mod tests {
 
     #[test]
     fn first_order_path_starts_with_classify_step() {
-        // dy/dx = y → separable; first step must be ClassifyODE
+        // dy/dx = y → separable; first step must classify as separable ODE
         let ode = FirstOrderODE::new("y", "x", var("y"));
         let (_solution, trace) = solve_ode_first_order(&ode).unwrap();
         let first = trace.steps().first().expect("trace must have steps");
-        assert_eq!(first.tag, TechniqueTag::Custom("ClassifyODE"));
+        assert_eq!(first.tag, TechniqueTag::SeparationOfVariables);
         assert!(first.detail.contains("order=first"));
         assert!(first.detail.contains("ode_type=separable"));
     }
 
     #[test]
     fn second_order_path_starts_with_classify_and_contains_solve_steps() {
-        // y'' - y = 0 → second-order homogeneous; first step ClassifyODE, rest SolveODE
+        // y'' - y = 0 → second-order homogeneous constant-coefficient; first
+        // step tags classification as a characteristic-equation technique.
         let ode = SecondOrderODE::homogeneous("y", "x", 1.0, 0.0, -1.0);
         let (_solution, trace) = solve_ode_second_order(&ode).unwrap();
         let first = trace.steps().first().expect("trace must have steps");
-        assert_eq!(first.tag, TechniqueTag::Custom("ClassifyODE"));
+        assert_eq!(first.tag, TechniqueTag::CharacteristicEquation);
         assert!(first.detail.contains("order=second"));
-        let has_solve_step = trace
+        // Subsequent solving steps stay at calculus tier.
+        let all_calculus = trace
             .steps()
             .iter()
-            .any(|s| s.tag == TechniqueTag::Custom("SolveODE"));
-        assert!(has_solve_step, "Expected at least one SolveODE step");
+            .all(|s| s.tag.difficulty() == crate::numeric::trace::TechniqueDifficulty::Calculus);
+        assert!(all_calculus, "Expected every trace step at Calculus tier");
     }
 
     #[test]
     fn classify_ode_difficulty_is_calculus_tier() {
-        // Custom tags default to Advanced; confirm that maps consistently.
-        let tag = TechniqueTag::Custom("ClassifyODE");
-        assert_eq!(
-            tag.difficulty(),
-            crate::numeric::trace::TechniqueDifficulty::Advanced,
-            "Custom tags default to Advanced tier"
-        );
+        // The classification tags used by the ODE trace builder are all at
+        // Calculus tier so difficulty filters see ODE work consistently.
+        for tag in [
+            TechniqueTag::SeparationOfVariables,
+            TechniqueTag::IntegratingFactor,
+            TechniqueTag::CharacteristicEquation,
+            TechniqueTag::UndeterminedCoefficients,
+            TechniqueTag::VariationOfParameters,
+        ] {
+            assert_eq!(
+                tag.difficulty(),
+                crate::numeric::trace::TechniqueDifficulty::Calculus,
+                "Expected Calculus tier for {:?}",
+                tag
+            );
+        }
     }
 
     // ------------------------------------------------------------------

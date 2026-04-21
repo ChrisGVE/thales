@@ -3,6 +3,7 @@
 use super::helpers::*;
 use super::types::{CharRoot, HigherOrderODE, HigherOrderSolution};
 use crate::ast::{BinaryOp, Expression, Function, Variable};
+use crate::numeric::compile::{compile, decompile};
 use crate::ode::{solve_second_order_homogeneous, ODEError, SecondOrderODE, SecondOrderSolution};
 
 /// Forcing function shape supported by the undetermined-coefficients method.
@@ -48,9 +49,10 @@ pub fn solve_undetermined_coefficients(
     let particular = find_particular_solution(ode, &forcing_kind, &hom, &mut steps)?;
 
     // Step 3: general = homogeneous + particular.
+    let hom_expr = decompile(&hom.general_solution);
     let general = Expression::Binary(
         BinaryOp::Add,
-        Box::new(hom.general_solution.clone()),
+        Box::new(hom_expr),
         Box::new(particular.clone()),
     );
 
@@ -61,8 +63,8 @@ pub fn solve_undetermined_coefficients(
 
     Ok(SecondOrderSolution {
         homogeneous_solution: hom.general_solution,
-        particular_solution: Some(particular),
-        general_solution: general,
+        particular_solution: Some(compile(&particular)),
+        general_solution: compile(&general),
         method: "Undetermined coefficients".to_string(),
         roots: hom.roots,
         steps,

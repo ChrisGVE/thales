@@ -240,8 +240,9 @@ mod tests {
         let sol = solve_ivp(&ode, &int(0), &int(1)).expect("IVP must solve");
 
         // Decision 2b: y-free + IC
-        verify::assert_y_free(&sol.general_solution, "y");
-        verify::assert_ic_satisfied(&sol.general_solution, "x", 0.0, 1.0, 1e-9);
+        let sol_expr = crate::numeric::compile::decompile(&sol.general_solution);
+        verify::assert_y_free(&sol_expr, "y");
+        verify::assert_ic_satisfied(&sol_expr, "x", 0.0, 1.0, 1e-9);
     }
 
     #[test]

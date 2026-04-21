@@ -131,8 +131,9 @@ impl FirstOrderODE {
 /// Result of solving an ODE
 #[derive(Debug, Clone)]
 pub struct ODESolution {
-    /// The general solution expression (may contain constant C)
-    pub general_solution: Expression,
+    /// The general solution expression (may contain constant C), in
+    /// canonical [`Arc<Expr>`] form. Decompile at the I/O boundary.
+    pub general_solution: Arc<Expr>,
     /// Description of the solution method used
     pub method: String,
     /// Solution steps for educational output

@@ -65,8 +65,9 @@ mod tests {
     fn test_higher_order_solution_is_expression() {
         let ode = HigherOrderODE::new("y", "x", vec![1.0, -6.0, 11.0, -6.0]);
         let sol = solve_higher_order_homogeneous(&ode).unwrap();
-        // General solution must be an Expression (not a unit/zero trivially).
-        assert!(!matches!(sol.general_solution, Expression::Integer(0)));
+        // General solution must be non-trivial.
+        let sol_expr = crate::numeric::compile::decompile(&sol.general_solution);
+        assert!(!matches!(sol_expr, Expression::Integer(0)));
     }
 
     #[test]
@@ -105,7 +106,9 @@ mod tests {
         // Evaluate at x=0: should be A = 1/6 ≈ 0.1667
         let mut vars = std::collections::HashMap::new();
         vars.insert("x".to_string(), 0.0);
-        let val = part.evaluate(&vars).unwrap();
+        let val = crate::numeric::compile::decompile(&part)
+            .evaluate(&vars)
+            .unwrap();
         assert!((val - 1.0 / 6.0).abs() < 1e-6, "A at x=0: {val}");
     }
 
@@ -136,7 +139,9 @@ mod tests {
         let part = sol.particular_solution.unwrap();
         let mut vars = std::collections::HashMap::new();
         vars.insert("x".to_string(), 0.0);
-        let val = part.evaluate(&vars).unwrap();
+        let val = crate::numeric::compile::decompile(&part)
+            .evaluate(&vars)
+            .unwrap();
         // At x=0: A·cos(0) + B·sin(0) = A = 1/5
         assert!((val - 0.2).abs() < 1e-6, "val at x=0: {val}");
     }

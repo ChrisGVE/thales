@@ -1,8 +1,9 @@
 //! Types for higher-order ODE solving.
 
+use std::sync::Arc;
+
 use crate::ast::Expression;
-use crate::ode::ODEError;
-use std::fmt;
+use crate::numeric::Expr;
 
 /// A single root of the characteristic polynomial, with its multiplicity.
 #[derive(Debug, Clone)]
@@ -65,8 +66,9 @@ impl HigherOrderODE {
 /// Solution of a higher-order homogeneous ODE.
 #[derive(Debug, Clone)]
 pub struct HigherOrderSolution {
-    /// The general solution expression (contains C1, C2, … constants).
-    pub general_solution: Expression,
+    /// The general solution expression (contains C1, C2, … constants), in
+    /// canonical [`Arc<Expr>`] form.
+    pub general_solution: Arc<Expr>,
     /// All characteristic roots (with multiplicity).
     pub roots: Vec<CharRoot>,
     /// Human-readable solution steps.

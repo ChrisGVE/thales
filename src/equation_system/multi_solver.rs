@@ -444,7 +444,10 @@ impl MultiEquationSolver {
         let solution = solve_separable(&ode).or_else(|_| solve_linear_ode(&ode));
 
         match solution {
-            Ok(sol) => Ok((SolutionValue::Symbolic(sol.general_solution), None)),
+            Ok(sol) => Ok((
+                SolutionValue::Symbolic(crate::numeric::compile::decompile(&sol.general_solution)),
+                None,
+            )),
             Err(e) => Err(SystemError::UnsolvableEquation {
                 id: "ode".to_string(),
                 reason: format!("ODE solver failed: {e:?}"),

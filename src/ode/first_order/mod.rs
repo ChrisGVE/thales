@@ -11,6 +11,8 @@ pub(super) use walkers::{
     extract_linear_coefficients, substitute_var, try_separate, try_solve_implicit_for_y,
 };
 
+use std::sync::Arc;
+
 use crate::ast::{BinaryOp, Expression, Function, Variable};
 use crate::integration::integrate;
 use crate::numeric::compile::{compile, decompile};
@@ -89,7 +91,7 @@ pub fn solve_separable(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
     ));
 
     Ok(ODESolution {
-        general_solution: solution,
+        general_solution: compile(&solution),
         method: "Separation of variables".to_string(),
         steps,
     })
@@ -172,7 +174,7 @@ pub fn solve_linear(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
     ));
 
     Ok(ODESolution {
-        general_solution: solution,
+        general_solution: compile(&solution),
         method: "Integrating factor".to_string(),
         steps,
     })
@@ -216,7 +218,7 @@ pub fn solve_ivp(
     // Substitute x = x0 and y = y0 into the general solution to find C
     let c_id = SymbolId::intern("C");
     let x_id = SymbolId::intern(&ode.independent);
-    let general_arc = compile(&general.general_solution);
+    let general_arc = Arc::clone(&general.general_solution);
     let x0_arc = compile(x0);
     let substituted_arc = substitute_var(&general_arc, x_id, &x0_arc);
     let substituted = decompile(&substituted_arc);
@@ -251,7 +253,7 @@ pub fn solve_ivp(
         ));
 
         Ok(ODESolution {
-            general_solution: particular,
+            general_solution: compile(&particular),
             method: format!("{} with initial condition", general.method),
             steps,
         })

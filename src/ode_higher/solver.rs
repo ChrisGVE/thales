@@ -1,6 +1,7 @@
 //! Higher-order ODE solving algorithms.
 
 use crate::ast::{BinaryOp, Expression, Function, Variable};
+use crate::numeric::compile::compile;
 use crate::ode::{solve_second_order_homogeneous, ODEError, SecondOrderODE, SecondOrderSolution};
 use std::fmt;
 
@@ -39,7 +40,7 @@ pub fn solve_higher_order_homogeneous(
     let solution = build_general_solution(&roots, &ode.independent, &mut steps);
 
     Ok(HigherOrderSolution {
-        general_solution: solution,
+        general_solution: compile(&solution),
         roots,
         steps,
         method: "Characteristic equation".to_string(),

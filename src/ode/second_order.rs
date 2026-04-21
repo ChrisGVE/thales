@@ -119,12 +119,15 @@ impl SecondOrderODE {
 /// Result of solving a second-order ODE
 #[derive(Debug, Clone)]
 pub struct SecondOrderSolution {
-    /// The homogeneous solution (with C1, C2 constants)
-    pub homogeneous_solution: Expression,
-    /// The particular solution (if non-homogeneous)
-    pub particular_solution: Option<Expression>,
-    /// The general solution (homogeneous + particular)
-    pub general_solution: Expression,
+    /// The homogeneous solution (with C1, C2 constants), in canonical
+    /// [`Arc<Expr>`] form.
+    pub homogeneous_solution: Arc<Expr>,
+    /// The particular solution (if non-homogeneous), in canonical
+    /// [`Arc<Expr>`] form.
+    pub particular_solution: Option<Arc<Expr>>,
+    /// The general solution (homogeneous + particular), in canonical
+    /// [`Arc<Expr>`] form.
+    pub general_solution: Arc<Expr>,
     /// Description of the solution method
     pub method: String,
     /// The characteristic roots
@@ -353,10 +356,11 @@ pub fn solve_second_order_homogeneous(
         }
     };
 
+    let solution_arc = compile(&solution);
     Ok(SecondOrderSolution {
-        homogeneous_solution: solution.clone(),
+        homogeneous_solution: Arc::clone(&solution_arc),
         particular_solution: None,
-        general_solution: solution,
+        general_solution: solution_arc,
         method,
         roots,
         steps,
@@ -453,7 +457,7 @@ pub fn solve_second_order_ivp(
     };
 
     // Substitute C1 and C2 into the general solution
-    let general_arc = compile(&solution.general_solution);
+    let general_arc = Arc::clone(&solution.general_solution);
     let c1_id = crate::numeric::SymbolId::intern("C1");
     let c2_id = crate::numeric::SymbolId::intern("C2");
     let c1_arc = compile(&Expression::Float(c1));

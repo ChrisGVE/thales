@@ -259,7 +259,7 @@ fn ode_success(
     solution: &crate::ode::ODESolution,
     ode_type: &str,
 ) -> super::ffi::ODEResultFFI {
-    let simplified = solution.general_solution.clone().simplify();
+    let simplified = crate::numeric::compile::decompile(&solution.general_solution).simplify();
     super::ffi::ODEResultFFI {
         equation: equation.to_string(),
         solution: format!("{}", simplified),
@@ -387,7 +387,7 @@ pub(super) fn solve_second_order_ode_ffi(
     let ode = SecondOrderODE::new("y", "x", a, b, c, forcing);
     match solve_second_order_homogeneous(&ode) {
         Ok(sol) => {
-            let simplified = sol.general_solution.clone().simplify();
+            let simplified = crate::numeric::compile::decompile(&sol.general_solution).simplify();
             Ok(super::ffi::ODEResultFFI {
                 equation: coefficients_json.to_string(),
                 solution: format!("{}", simplified),
@@ -420,7 +420,7 @@ pub(super) fn solve_higher_order_ode_ffi(
     let ode = HigherOrderODE::new("y", "x", coeffs);
     match solve_higher_order_homogeneous(&ode) {
         Ok(sol) => {
-            let simplified = sol.general_solution.clone().simplify();
+            let simplified = crate::numeric::compile::decompile(&sol.general_solution).simplify();
             Ok(super::ffi::ODEResultFFI {
                 equation: coefficients_json.to_string(),
                 solution: format!("{}", simplified),
