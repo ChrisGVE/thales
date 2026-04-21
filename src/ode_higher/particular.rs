@@ -1,11 +1,9 @@
 //! Particular solution methods (undetermined coefficients).
 
-use crate::ast::{BinaryOp, Expression, Function, Variable};
-use crate::ode::{solve_second_order_homogeneous, ODEError, SecondOrderODE, SecondOrderSolution};
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder};
-
 use super::helpers::*;
 use super::types::{CharRoot, HigherOrderODE, HigherOrderSolution};
+use crate::ast::{BinaryOp, Expression, Function, Variable};
+use crate::ode::{solve_second_order_homogeneous, ODEError, SecondOrderODE, SecondOrderSolution};
 
 /// Forcing function shape supported by the undetermined-coefficients method.
 #[derive(Debug, Clone)]

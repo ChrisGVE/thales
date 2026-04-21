@@ -2,7 +2,6 @@
 
 use crate::ast::{BinaryOp, Expression, Function, Variable};
 use crate::ode::{solve_second_order_homogeneous, ODEError, SecondOrderODE, SecondOrderSolution};
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder};
 use std::fmt;
 
 use super::helpers::*;

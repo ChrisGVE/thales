@@ -6,7 +6,6 @@ use std::sync::Arc;
 use crate::ast::{BinaryOp, Expression, Function, Variable};
 use crate::numeric::compile::{compile, decompile};
 use crate::numeric::Expr;
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder};
 
 use super::first_order::substitute_var;
 use super::ODEError;
