@@ -27,6 +27,7 @@
 pub mod command;
 pub mod condition;
 pub mod diagnostic;
+pub mod dispatch;
 pub mod domain;
 pub mod narrative;
 pub mod path;
