@@ -29,6 +29,7 @@ pub mod condition;
 pub mod diagnostic;
 pub mod dispatch;
 pub mod domain;
+pub mod json;
 pub mod narrative;
 pub mod path;
 pub mod request;
