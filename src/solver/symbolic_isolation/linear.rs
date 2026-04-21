@@ -8,22 +8,20 @@
 use std::sync::Arc;
 
 use crate::numeric::compile::decompile;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::{normalize, BigRational, Expr, MulNode, SymbolId};
-use crate::resolution_path::{Operation, ResolutionPathBuilder, StepAnnotation};
 
 use super::super::helpers::contains_symbol;
 use super::super::types::SolverError;
 use super::unwrap::{finish_mul_like, rational_to_arc};
-
-type Unwrapped = (Arc<Expr>, ResolutionPathBuilder);
 
 /// Isolate `var` from a sum with multiple var-containing terms.
 pub(super) fn collect_linear_var_terms(
     var_terms: &[(Arc<Expr>, BigRational)],
     other: &Arc<Expr>,
     var: SymbolId,
-    path: ResolutionPathBuilder,
-) -> Result<Unwrapped, SolverError> {
+    trace: &mut Trace,
+) -> Result<Arc<Expr>, SolverError> {
     let mut factors: Vec<Arc<Expr>> = Vec::new();
     for (term, coeff) in var_terms {
         match divide_out_var(term, var, coeff) {
@@ -48,14 +46,18 @@ pub(super) fn collect_linear_var_terms(
 
     let new_other = normalize::div(other.clone(), combined_coeff.clone());
     let coeff_expr = decompile(&combined_coeff);
-    let new_other_expr = decompile(&new_other);
-    let path = path.annotated_step(
-        Operation::DivideBothSides(coeff_expr),
-        format!("Collect terms and divide to isolate {}", var.as_str()),
-        new_other_expr,
-        StepAnnotation::elementary(),
+    trace.push(
+        Step::new(
+            TechniqueTag::DivideBothSides,
+            format!(
+                "Collect terms and divide by {} to isolate {}",
+                coeff_expr,
+                var.as_str()
+            ),
+        )
+        .with_output(new_other.clone()),
     );
-    Ok((new_other, path))
+    Ok(new_other)
 }
 
 /// Return `coeff · (term / var)` as an `Arc<Expr>` when `term` is linear in

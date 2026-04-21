@@ -35,7 +35,7 @@
 
 use crate::ast::{BinaryOp, Equation, Expression, Variable};
 use crate::equation_system::substitution::SubstitutionSolver;
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionStep};
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::solver::system::SystemSolution;
 use crate::solver::{SolverError, SystemSolver};
 
@@ -117,11 +117,11 @@ impl SmartSystemSolver {
         }
     }
 
-    /// Solve a system and record the resolution path describing each step.
+    /// Solve a system and record a [`Trace`] of each technique applied.
     ///
     /// Returns the same variable-value pairs as [`solve`](SmartSystemSolver::solve)
-    /// together with a [`ResolutionPath`] documenting which method was chosen
-    /// and which algebraic operations were performed.
+    /// together with a [`Trace`] documenting which method was chosen and
+    /// which algebraic operations were performed.
     ///
     /// # Errors
     ///
@@ -130,40 +130,36 @@ impl SmartSystemSolver {
         &self,
         equations: &[Equation],
         variables: &[Variable],
-    ) -> Result<(Vec<(String, Expression)>, ResolutionPath), SolverError> {
+    ) -> Result<(Vec<(String, Expression)>, Trace), SolverError> {
         let system_type = Self::classify(equations, variables);
-        let initial = Expression::Integer(equations.len() as i64);
-        let mut path = ResolutionPath::new(initial);
+        let mut trace = Trace::new();
 
         let pairs = match system_type {
             SystemType::Linear => {
-                path.add_step(ResolutionStep::new(
-                    Operation::GaussianElimination,
+                trace.push(Step::new(
+                    TechniqueTag::GaussianElimination,
                     "Classify as linear system; apply Gaussian elimination".to_string(),
-                    Expression::Integer(0),
                 ));
                 let result = self.solve_linear(equations, variables)?;
                 for (name, _) in &result {
-                    path.add_step(ResolutionStep::new(
-                        Operation::BackSubstitute {
-                            variable: name.clone(),
-                        },
-                        format!("Back-substitute to resolve {}", name),
-                        Expression::Integer(0),
+                    trace.push(Step::new(
+                        TechniqueTag::Custom("BackSubstitute"),
+                        format!("variable={}; Back-substitute to resolve {}", name, name),
                     ));
                 }
                 result
             }
             SystemType::NonlinearSmall => {
-                path.add_step(ResolutionStep::new(
-                    Operation::SystemSubstitution {
-                        variable: variables
-                            .first()
-                            .map(|v| v.name.clone())
-                            .unwrap_or_default(),
-                    },
-                    "Classify as nonlinear 2×2 system; apply substitution".to_string(),
-                    Expression::Integer(0),
+                let first_var = variables
+                    .first()
+                    .map(|v| v.name.clone())
+                    .unwrap_or_default();
+                trace.push(Step::new(
+                    TechniqueTag::Substitution,
+                    format!(
+                        "variable={}; Classify as nonlinear 2×2 system; apply substitution",
+                        first_var
+                    ),
                 ));
                 self.solve_nonlinear_small(equations, variables)?
             }
@@ -174,9 +170,7 @@ impl SmartSystemSolver {
             }
         };
 
-        let result_expr = Expression::Integer(pairs.len() as i64);
-        path.set_result(result_expr);
-        Ok((pairs, path))
+        Ok((pairs, trace))
     }
 
     // ── private dispatch helpers ──────────────────────────────────────────────
@@ -471,64 +465,64 @@ mod tests {
 
     #[test]
     fn test_solve_with_path_linear_contains_gaussian_elimination() {
-        use crate::resolution_path::Operation;
-
         let ([eq1, eq2], [x, y]) = linear_2x2();
         let solver = SmartSystemSolver::new();
-        let (_pairs, path) = solver.solve_with_path(&[eq1, eq2], &[x, y]).unwrap();
+        let (_pairs, trace) = solver.solve_with_path(&[eq1, eq2], &[x, y]).unwrap();
 
-        let has_gauss = path
-            .steps
+        let has_gauss = trace
+            .steps()
             .iter()
-            .any(|s| matches!(s.operation, Operation::GaussianElimination));
+            .any(|s| s.tag == TechniqueTag::GaussianElimination);
         assert!(
             has_gauss,
-            "linear solve path must contain GaussianElimination"
+            "linear solve trace must contain GaussianElimination"
         );
     }
 
     #[test]
     fn test_solve_with_path_linear_has_back_substitute_steps() {
-        use crate::resolution_path::Operation;
-
         let ([eq1, eq2], [x, y]) = linear_2x2();
         let solver = SmartSystemSolver::new();
-        let (_pairs, path) = solver
+        let (_pairs, trace) = solver
             .solve_with_path(&[eq1, eq2], &[x.clone(), y.clone()])
             .unwrap();
 
-        let back_subs = path
-            .steps
+        let back_subs = trace
+            .steps()
             .iter()
-            .filter(|s| matches!(s.operation, Operation::BackSubstitute { .. }))
+            .filter(|s| s.tag == TechniqueTag::Custom("BackSubstitute"))
             .count();
         assert_eq!(back_subs, 2, "expected one BackSubstitute per variable");
     }
 
     #[test]
     fn test_solve_with_path_nonlinear_contains_system_substitution() {
-        use crate::resolution_path::Operation;
-
         let ([eq1, eq2], [x, y]) = nonlinear_2x2();
         let solver = SmartSystemSolver::new();
-        let (_pairs, path) = solver.solve_with_path(&[eq1, eq2], &[x, y]).unwrap();
+        let (_pairs, trace) = solver.solve_with_path(&[eq1, eq2], &[x, y]).unwrap();
 
-        let has_sub = path
-            .steps
+        let has_sub = trace
+            .steps()
             .iter()
-            .any(|s| matches!(s.operation, Operation::SystemSubstitution { .. }));
-        assert!(has_sub, "nonlinear path must contain SystemSubstitution");
+            .any(|s| s.tag == TechniqueTag::Substitution);
+        assert!(has_sub, "nonlinear trace must contain Substitution");
     }
 
     #[test]
     fn test_solve_with_path_difficulty_is_advanced() {
-        use crate::resolution_path::TechniqueDifficulty;
+        use crate::numeric::trace::TechniqueDifficulty;
 
         let ([eq1, eq2], [x, y]) = linear_2x2();
         let solver = SmartSystemSolver::new();
-        let (_pairs, path) = solver.solve_with_path(&[eq1, eq2], &[x, y]).unwrap();
+        let (_pairs, trace) = solver.solve_with_path(&[eq1, eq2], &[x, y]).unwrap();
 
-        assert_eq!(path.max_difficulty(), TechniqueDifficulty::Advanced);
+        let max_diff = trace
+            .steps()
+            .iter()
+            .map(|s| s.tag.difficulty())
+            .max()
+            .unwrap_or(TechniqueDifficulty::Elementary);
+        assert_eq!(max_diff, TechniqueDifficulty::Advanced);
     }
 
     // ── solve: unsupported large nonlinear ────────────────────────────────────

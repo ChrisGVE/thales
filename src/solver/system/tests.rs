@@ -178,54 +178,50 @@ fn test_inverse_matches_gaussian_2x2() {
 
 #[test]
 fn test_inverse_with_path_contains_matrix_inverse_op() {
-    use crate::resolution_path::Operation;
+    use crate::numeric::trace::TechniqueTag;
 
     let ([eq1, eq2], [x, y]) = make_2x2_system();
     let solver = SystemSolver::new();
-    let (_sol, path) = solver
+    let (_sol, trace) = solver
         .solve_matrix_inverse_with_path(&[eq1, eq2], &[x.clone(), y.clone()])
         .unwrap();
 
-    let has_matrix_inverse = path
-        .steps
+    let has_matrix_inverse = trace
+        .steps()
         .iter()
-        .any(|s| matches!(s.operation, Operation::MatrixInverse));
-    assert!(has_matrix_inverse, "path must contain MatrixInverse step");
+        .any(|s| s.tag == TechniqueTag::MatrixInverse);
+    assert!(has_matrix_inverse, "trace must contain MatrixInverse step");
 }
 
 #[test]
 fn test_inverse_with_path_contains_back_substitute_steps() {
-    use crate::resolution_path::Operation;
+    use crate::numeric::trace::TechniqueTag;
 
     let ([eq1, eq2], [x, y]) = make_2x2_system();
     let solver = SystemSolver::new();
-    let (_sol, path) = solver
+    let (_sol, trace) = solver
         .solve_matrix_inverse_with_path(&[eq1, eq2], &[x.clone(), y.clone()])
         .unwrap();
 
-    let back_subs: Vec<_> = path
-        .steps
+    let back_subs = trace
+        .steps()
         .iter()
-        .filter(|s| matches!(s.operation, Operation::BackSubstitute { .. }))
-        .collect();
-    assert_eq!(
-        back_subs.len(),
-        2,
-        "expected one BackSubstitute per variable"
-    );
+        .filter(|s| s.tag == TechniqueTag::Custom("BackSubstitute"))
+        .count();
+    assert_eq!(back_subs, 2, "expected one BackSubstitute per variable");
 }
 
 #[test]
 fn test_inverse_with_path_difficulty_is_advanced() {
-    use crate::resolution_path::TechniqueDifficulty;
+    use crate::numeric::trace::TechniqueDifficulty;
 
     let ([eq1, eq2], [x, y]) = make_2x2_system();
     let solver = SystemSolver::new();
-    let (_sol, path) = solver
+    let (_sol, trace) = solver
         .solve_matrix_inverse_with_path(&[eq1, eq2], &[x.clone(), y.clone()])
         .unwrap();
 
-    assert_eq!(path.max_difficulty(), TechniqueDifficulty::Advanced);
+    assert_eq!(trace.max_difficulty(), TechniqueDifficulty::Advanced);
 }
 
 // ── solve_best_effort: prefers LU, falls back correctly ───────────────────

@@ -31,7 +31,7 @@ fn assert_solves_to_unique(equation_str: &str, target_var: &str) -> String {
         Solution::Unique(expr) => {
             // Non-trivial solves should have resolution steps
             assert!(
-                !path.steps.is_empty() || equation_str.starts_with(target_var),
+                !path.steps().is_empty() || equation_str.starts_with(target_var),
                 "Expected resolution steps for non-trivial solve of '{}' for '{}'",
                 equation_str,
                 target_var,

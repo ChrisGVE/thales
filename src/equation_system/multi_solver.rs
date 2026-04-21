@@ -8,9 +8,9 @@ use std::collections::{HashMap, HashSet};
 
 use crate::ast::{Equation, Expression, Variable};
 use crate::integration::integrate;
+use crate::numeric::trace::Trace;
 use crate::numerical::{NumericalConfig, SmartNumericalSolver};
 use crate::ode::{solve_linear as solve_linear_ode, solve_separable, FirstOrderODE};
-use crate::resolution_path::ResolutionPath;
 use crate::solver::{SmartSolver, Solution, Solver};
 
 use super::types::{
@@ -367,7 +367,7 @@ impl MultiEquationSolver {
         equation: &Equation,
         variable: &str,
         known_values: &HashMap<String, f64>,
-    ) -> Result<(SolutionValue, Option<ResolutionPath>), SystemError> {
+    ) -> Result<(SolutionValue, Option<Trace>), SystemError> {
         let var = Variable::new(variable);
 
         match self.algebraic_solver.solve(equation, &var) {
@@ -413,20 +413,14 @@ impl MultiEquationSolver {
         equation: &Equation,
         variable: &str,
         _known_values: &HashMap<String, f64>,
-    ) -> Result<(SolutionValue, Option<ResolutionPath>), SystemError> {
+    ) -> Result<(SolutionValue, Option<Trace>), SystemError> {
         let var = Variable::new(variable);
 
         // Use SmartNumericalSolver's solve method
         match self.numerical_solver.solve(equation, &var) {
             Ok((sol, trace)) => {
                 let value = SolutionValue::Numeric(sol.value);
-                let f_expr = Expression::Binary(
-                    crate::ast::BinaryOp::Sub,
-                    Box::new(equation.left.clone()),
-                    Box::new(equation.right.clone()),
-                );
-                let path = crate::solver::trace_to_path(&trace, f_expr);
-                Ok((value, Some(path)))
+                Ok((value, Some(trace)))
             }
             Err(e) => Err(SystemError::NumericalFailure {
                 variable: variable.to_string(),
@@ -441,7 +435,7 @@ impl MultiEquationSolver {
         equation: &Equation,
         variable: &str,
         _method: &str,
-    ) -> Result<(SolutionValue, Option<ResolutionPath>), SystemError> {
+    ) -> Result<(SolutionValue, Option<Trace>), SystemError> {
         // Construct a first-order ODE from the equation: assume form dy/dx = rhs
         // where the variable is the dependent variable.
         let ode = FirstOrderODE::new(variable, "x", equation.right.clone());
@@ -463,7 +457,7 @@ impl MultiEquationSolver {
         &self,
         equation: &Equation,
         variable: &str,
-    ) -> Result<(SolutionValue, Option<ResolutionPath>), SystemError> {
+    ) -> Result<(SolutionValue, Option<Trace>), SystemError> {
         // Integrate the left-hand side with respect to the variable
         let integrated = integrate(&equation.left, variable);
         match integrated {
@@ -481,7 +475,7 @@ impl MultiEquationSolver {
         equation: &Equation,
         variable: &str,
         known_values: &HashMap<String, f64>,
-    ) -> Result<(SolutionValue, Option<ResolutionPath>), SystemError> {
+    ) -> Result<(SolutionValue, Option<Trace>), SystemError> {
         // Check if the equation is in the form var = expr
         if let Expression::Variable(var) = &equation.left {
             if var.name == variable {

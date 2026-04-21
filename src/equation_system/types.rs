@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 use crate::ast::{Equation, Expression};
-use crate::resolution_path::{Operation, ResolutionPath};
+use crate::numeric::trace::{TechniqueTag, Trace};
 use crate::solver::SolverError;
 
 // ============================================================================
@@ -851,8 +851,8 @@ pub enum SystemOperation {
         /// Name of the variable whose solution is being verified.
         variable: String,
     },
-    /// Delegate to an equation-level operation.
-    EquationOperation(Operation),
+    /// Delegate to an equation-level technique.
+    EquationOperation(TechniqueTag),
 }
 
 impl fmt::Display for SystemOperation {
@@ -913,8 +913,8 @@ pub struct SystemStep {
 pub struct SystemResolutionPath {
     /// The initial context.
     pub initial_context: SystemContext,
-    /// Per-equation resolution paths.
-    pub equation_paths: HashMap<String, ResolutionPath>,
+    /// Per-equation traces of the techniques applied.
+    pub equation_paths: HashMap<String, Trace>,
     /// System-level steps.
     pub steps: Vec<SystemStep>,
     /// Final solutions.
@@ -937,9 +937,9 @@ impl SystemResolutionPath {
         self.steps.push(step);
     }
 
-    /// Add an equation's resolution path.
-    pub fn add_equation_path(&mut self, eq_id: String, path: ResolutionPath) {
-        self.equation_paths.insert(eq_id, path);
+    /// Add an equation's trace.
+    pub fn add_equation_path(&mut self, eq_id: String, trace: Trace) {
+        self.equation_paths.insert(eq_id, trace);
     }
 
     /// Record a final solution.

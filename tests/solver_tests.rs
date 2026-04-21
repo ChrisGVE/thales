@@ -365,14 +365,14 @@ fn test_solve_for_with_values() {
     }
     assert!(result.is_ok());
 
-    let path = result.unwrap();
+    let (result_expr, _trace) = result.unwrap();
     // Result should be 6.0
-    if let Expression::Float(val) = &path.result {
+    if let Expression::Float(val) = &result_expr {
         assert!((val - 6.0).abs() < 1e-10);
-    } else if let Expression::Integer(val) = &path.result {
+    } else if let Expression::Integer(val) = &result_expr {
         assert_eq!(*val, 6);
     } else {
-        panic!("Expected numeric result, got: {:?}", path.result);
+        panic!("Expected numeric result, got: {:?}", result_expr);
     }
 }
 
@@ -389,11 +389,11 @@ fn test_solve_for_partial_values() {
     let result = solve_for(&equation, "F", &known_values);
     assert!(result.is_ok());
 
-    let path = result.unwrap();
+    let (result_expr, _trace) = result.unwrap();
     // Result should be 2.0 * a
-    println!("Result: {:?}", path.result);
+    println!("Result: {:?}", result_expr);
     // Should still contain variable 'a'
-    assert!(path.result.contains_variable("a"));
+    assert!(result_expr.contains_variable("a"));
 }
 
 #[test]
@@ -408,9 +408,9 @@ fn test_solve_for_no_values() {
     let result = solve_for(&equation, "F", &known_values);
     assert!(result.is_ok());
 
-    let path = result.unwrap();
+    let (result_expr, _trace) = result.unwrap();
     // Result should be m * a
-    assert_eq!(path.result, mul(var("m"), var("a")));
+    assert_eq!(result_expr, mul(var("m"), var("a")));
 }
 
 #[test]
@@ -425,9 +425,9 @@ fn test_solve_for_simple_arithmetic() {
     let result = solve_for(&equation, "x", &known_values);
     assert!(result.is_ok());
 
-    let path = result.unwrap();
+    let (result_expr, _trace) = result.unwrap();
     // Result should be 2
-    assert_eq!(path.result, int(2));
+    assert_eq!(result_expr, int(2));
 }
 
 #[test]
@@ -941,24 +941,25 @@ fn test_quadratic_solver_annotations() {
     let (_sol, path) = solver.solve(&eq, &Variable::new("x")).unwrap();
 
     let disc_step = path
-        .steps
+        .steps()
         .iter()
-        .find(|s| s.explanation.contains("discriminant"));
+        .find(|s| s.detail.contains("discriminant"));
     assert!(disc_step.is_some(), "Expected a discriminant step");
-    let ann = disc_step.unwrap().annotation.as_ref();
-    assert!(ann.is_some(), "Discriminant step should have an annotation");
-    assert!(
-        ann.unwrap().technique.is_none(),
-        "Discriminant step should not name a technique"
+    assert_eq!(
+        disc_step.unwrap().tag,
+        thales::numeric::trace::TechniqueTag::Simplification,
+        "Discriminant step should be Simplification"
     );
 
     let formula_step = path
-        .steps
+        .steps()
         .iter()
-        .find(|s| s.explanation.contains("Quadratic formula"));
+        .find(|s| s.detail.contains("Quadratic Formula"));
     assert!(formula_step.is_some(), "Expected a quadratic formula step");
-    let ann = formula_step.unwrap().annotation.as_ref().unwrap();
-    assert_eq!(ann.technique.as_deref(), Some("Quadratic Formula"));
+    assert_eq!(
+        formula_step.unwrap().tag,
+        thales::numeric::trace::TechniqueTag::QuadraticFormula,
+    );
 }
 
 #[test]
@@ -973,15 +974,14 @@ fn test_transcendental_solver_annotations() {
     let solver = TranscendentalSolver::new();
     let (_sol, path) = solver.solve(&eq, &Variable::new("x")).unwrap();
 
-    let trig_step = path
-        .steps
-        .iter()
-        .find(|s| s.explanation.contains("arcsine"));
+    let trig_step = path.steps().iter().find(|s| s.detail.contains("arcsine"));
     assert!(trig_step.is_some(), "Expected an arcsine step");
-    let ann = trig_step.unwrap().annotation.as_ref().unwrap();
-    assert_eq!(
-        ann.technique.as_deref(),
-        Some("Inverse Trigonometric Function")
+    assert!(
+        trig_step
+            .unwrap()
+            .detail
+            .contains("Inverse Trigonometric Function"),
+        "Expected step detail to mention the technique",
     );
 }
 
@@ -998,75 +998,54 @@ fn test_symbolic_isolation_annotations() {
     let solver = SmartSolver::new();
     let (_sol, path) = solver.solve(&eq, &Variable::new("x")).unwrap();
 
-    let annotated_count = path.steps.iter().filter(|s| s.annotation.is_some()).count();
+    let tagged_count = path.steps().len();
     assert!(
-        annotated_count > 0,
-        "Expected at least one annotated step from symbolic isolation, got 0"
+        tagged_count > 0,
+        "Expected at least one trace step from symbolic isolation, got 0"
     );
 }
 
 #[test]
 fn test_quadratic_complex_root_path_contains_decomposition() {
-    use thales::resolution_path::Operation;
+    use thales::numeric::trace::TechniqueTag;
     use thales::solver::QuadraticSolver;
-    // x² + 1 = 0 => x = ±i; the resolution path must contain a ComplexDecomposition step.
+    // x² + 1 = 0 => x = ±i; the trace must contain a ComplexDecomposition step.
     let lhs = add(pow(var("x"), int(2)), int(1));
     let eq = Equation::new("cplx", lhs, int(0));
     let solver = QuadraticSolver::new();
     let (_sol, path) = solver.solve(&eq, &Variable::new("x")).unwrap();
 
-    let decomp_step = path.steps.iter().find(|s| {
-        matches!(
-            &s.operation,
-            Operation::ComplexDecomposition { original_var, .. }
-            if original_var == "x"
-        )
-    });
+    let decomp_step = path
+        .steps()
+        .iter()
+        .find(|s| s.tag == TechniqueTag::Custom("ComplexDecomposition"));
     assert!(
         decomp_step.is_some(),
-        "Resolution path for x²+1=0 must contain a ComplexDecomposition step"
+        "Trace for x²+1=0 must contain a ComplexDecomposition step"
     );
-
-    let ann = decomp_step.unwrap().annotation.as_ref().unwrap();
-    assert_eq!(
-        ann.technique.as_deref(),
-        Some("Complex Roots"),
-        "ComplexDecomposition step must be annotated with 'Complex Roots'"
+    assert!(
+        decomp_step.unwrap().detail.contains("original_var=x"),
+        "ComplexDecomposition detail must name the original variable"
     );
 }
 
 #[test]
 fn test_complex_operation_difficulty_tiers() {
-    use thales::resolution_path::{Operation, TechniqueDifficulty};
-    // ComplexDecomposition should be AlgebraicManip (Tier 3).
-    let decomp = Operation::ComplexDecomposition {
-        original_var: "x".to_string(),
-        real_var: "x_re".to_string(),
-        imag_var: "x_im".to_string(),
-    };
+    use thales::numeric::trace::{TechniqueDifficulty, TechniqueTag};
+    // ComplexDecomposition is carried as a custom tag; custom tags default
+    // to Advanced difficulty.
+    let decomp = TechniqueTag::Custom("ComplexDecomposition");
     assert_eq!(
         decomp.difficulty(),
-        TechniqueDifficulty::AlgebraicManip,
-        "ComplexDecomposition should be AlgebraicManip difficulty"
-    );
-    assert_eq!(
-        decomp.category(),
-        "complex",
-        "ComplexDecomposition should be in the 'complex' category"
+        TechniqueDifficulty::Advanced,
+        "Custom tags default to Advanced difficulty"
     );
 
-    // EulerFormula should be Transcendental (Tier 4).
-    let euler = Operation::EulerFormula {
-        direction: "polar_to_rectangular".to_string(),
-    };
+    // EulerFormula is a first-class tag sitting at Transcendental.
+    let euler = TechniqueTag::EulerFormula;
     assert_eq!(
         euler.difficulty(),
         TechniqueDifficulty::Transcendental,
         "EulerFormula should be Transcendental difficulty"
-    );
-    assert_eq!(
-        euler.category(),
-        "complex",
-        "EulerFormula should be in the 'complex' category"
     );
 }

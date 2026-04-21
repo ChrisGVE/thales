@@ -11,8 +11,8 @@
 use std::sync::Arc;
 
 use crate::ast::Variable;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::{normalize, BigRational, Expr, FuncId, MulNode, SymbolId};
-use crate::resolution_path::{Operation, ResolutionPathBuilder, StepAnnotation};
 
 use super::super::coeff::extract_coefficient;
 use super::super::helpers::contains_symbol;
@@ -36,8 +36,8 @@ pub(super) fn solve_trig_equation(
     rhs: &Arc<Expr>,
     var: SymbolId,
     variable: &Variable,
-    path: ResolutionPathBuilder,
-) -> Result<(Arc<Expr>, ResolutionPathBuilder), ResolutionPathBuilder> {
+    trace: &mut Trace,
+) -> Result<Arc<Expr>, ()> {
     let families = [
         (FuncId::Sin, FuncId::Asin),
         (FuncId::Cos, FuncId::Acos),
@@ -49,14 +49,14 @@ pub(super) fn solve_trig_equation(
                 if matches!(inverse, FuncId::Asin | FuncId::Acos)
                     && validate_trig_domain(m.applied_value, inverse).is_err()
                 {
-                    return Err(path);
+                    return Err(());
                 }
-                let path = append_step(path, m.inverse, &m.solution, variable);
-                return Ok((m.solution, path));
+                append_step(trace, m.inverse, &m.solution, variable);
+                return Ok(m.solution);
             }
         }
     }
-    Err(path)
+    Err(())
 }
 
 fn match_trig(
@@ -173,12 +173,7 @@ fn split_mul_of_func(
     Some((inner?, node.coeff.clone()))
 }
 
-fn append_step(
-    path: ResolutionPathBuilder,
-    inverse: FuncId,
-    solution: &Arc<Expr>,
-    variable: &Variable,
-) -> ResolutionPathBuilder {
+fn append_step(trace: &mut Trace, inverse: FuncId, solution: &Arc<Expr>, variable: &Variable) {
     let name = match inverse {
         FuncId::Asin => "asin",
         FuncId::Acos => "acos",
@@ -191,20 +186,20 @@ fn append_step(
         FuncId::Atan => "arctangent",
         _ => "inverse",
     };
-    let solution_expr = crate::numeric::compile::decompile(solution);
     let original = match inverse {
         FuncId::Asin => "sin",
         FuncId::Acos => "cos",
         FuncId::Atan => "tan",
         _ => "func",
     };
-    path.annotated_step(
-        Operation::ApplyFunction(name.to_string()),
-        format!(
-            "Apply {} to solve {}({}) = value",
-            inverse_word, original, variable
-        ),
-        solution_expr,
-        StepAnnotation::transcendental("Inverse Trigonometric Function"),
-    )
+    trace.push(
+        Step::new(
+            TechniqueTag::ApplyFunction,
+            format!(
+                "Inverse Trigonometric Function: {}; Apply {} to solve {}({}) = value",
+                name, inverse_word, original, variable
+            ),
+        )
+        .with_output(Arc::clone(solution)),
+    );
 }

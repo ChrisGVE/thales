@@ -8,10 +8,10 @@ use std::sync::Arc;
 
 use num_complex::Complex64;
 
-use crate::ast::{BinaryOp, Equation, Expression, Variable};
+use crate::ast::{Equation, Expression, Variable};
 use crate::numeric::compile::compile;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::{normalize, Expr, SymbolId};
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder, StepAnnotation};
 
 use super::helpers::{contains_symbol, has_obvious_nonlinearity_expr, simplify_numeric_expression};
 use super::types::{Solution, SolverError, SolverResult};
@@ -41,11 +41,7 @@ impl QuadraticSolver {
 }
 
 impl Solver for QuadraticSolver {
-    fn solve(
-        &self,
-        equation: &Equation,
-        variable: &Variable,
-    ) -> SolverResult<(Solution, ResolutionPath)> {
+    fn solve(&self, equation: &Equation, variable: &Variable) -> SolverResult<(Solution, Trace)> {
         let var_name = &variable.name;
         let var_id = SymbolId::intern(var_name);
 
@@ -53,12 +49,7 @@ impl Solver for QuadraticSolver {
         let rhs = compile(&equation.right);
         let residual = normalize::sub(lhs, rhs);
 
-        let initial_expr = Expression::Binary(
-            BinaryOp::Sub,
-            Box::new(equation.left.clone()),
-            Box::new(equation.right.clone()),
-        );
-        let mut path = ResolutionPathBuilder::new(initial_expr);
+        let mut trace = Trace::new();
 
         if !contains_symbol(&residual, var_id) {
             return Err(SolverError::CannotSolve(format!(
@@ -74,33 +65,31 @@ impl Solver for QuadraticSolver {
             ))
         })?;
 
-        path = path.step(
-            Operation::Simplify,
-            format!("Identified coefficients: a={}, b={}, c={}", a, b, c),
-            Expression::Integer(0),
+        trace.push(
+            Step::new(
+                TechniqueTag::Simplification,
+                format!("Identified coefficients: a={}, b={}, c={}", a, b, c),
+            )
+            .with_input(residual.clone()),
         );
 
         // Degenerate: a = 0 → linear / constant.
         if a.abs() < 1e-15 {
             if b.abs() < 1e-15 {
                 if c.abs() < 1e-15 {
-                    let resolution_path = path.finish(Expression::Integer(0));
-                    return Ok((Solution::Infinite, resolution_path));
+                    return Ok((Solution::Infinite, trace));
                 }
                 return Err(SolverError::NoSolution);
             }
             let solution = simplify_numeric_expression(-c / b);
-            let resolution_path = path.finish(solution.clone());
-            return Ok((Solution::Unique(solution), resolution_path));
+            return Ok((Solution::Unique(solution), trace));
         }
 
         let discriminant = b * b - 4.0 * a * c;
-        path = path.annotated_step(
-            Operation::Simplify,
+        trace.push(Step::new(
+            TechniqueTag::Simplification,
             format!("Computed discriminant: Δ = b² - 4ac = {}", discriminant),
-            Expression::Float(discriminant),
-            StepAnnotation::elementary(),
-        );
+        ));
 
         let epsilon = 1e-15;
         if discriminant > epsilon {
@@ -109,51 +98,51 @@ impl Solver for QuadraticSolver {
             let x2 = (-b - sqrt_disc) / (2.0 * a);
             let root1 = simplify_numeric_expression(x1);
             let root2 = simplify_numeric_expression(x2);
-            path = path.annotated_step(
-                Operation::Simplify,
-                format!("Quadratic formula: x = (-b ± √Δ)/(2a) = {} or {}", x1, x2),
-                root1.clone(),
-                StepAnnotation::algebraic("Quadratic Formula"),
+            trace.push(
+                Step::new(
+                    TechniqueTag::QuadraticFormula,
+                    format!("Quadratic Formula: x = (-b ± √Δ)/(2a) = {} or {}", x1, x2),
+                )
+                .with_output(compile(&root1)),
             );
-            let resolution_path = path.finish(root1.clone());
-            Ok((Solution::Multiple(vec![root1, root2]), resolution_path))
+            Ok((Solution::Multiple(vec![root1, root2]), trace))
         } else if discriminant.abs() <= epsilon {
             let x = -b / (2.0 * a);
             let root = simplify_numeric_expression(x);
-            path = path.annotated_step(
-                Operation::Simplify,
-                format!("Quadratic formula (Δ = 0): x = -b/(2a) = {}", x),
-                root.clone(),
-                StepAnnotation::algebraic("Quadratic Formula"),
+            trace.push(
+                Step::new(
+                    TechniqueTag::QuadraticFormula,
+                    format!("Quadratic Formula (Δ = 0): x = -b/(2a) = {}", x),
+                )
+                .with_output(compile(&root)),
             );
-            let resolution_path = path.finish(root.clone());
-            Ok((Solution::Unique(root), resolution_path))
+            Ok((Solution::Unique(root), trace))
         } else {
             let real_part = -b / (2.0 * a);
             let imag_part = (-discriminant).sqrt() / (2.0 * a);
             let root1 = Expression::Complex(Complex64::new(real_part, imag_part));
             let root2 = Expression::Complex(Complex64::new(real_part, -imag_part));
-            path = path.annotated_step(
-                Operation::Simplify,
-                format!("Complex roots: x = {} ± {}i", real_part, imag_part),
-                root1.clone(),
-                StepAnnotation::algebraic("Quadratic Formula"),
+            trace.push(
+                Step::new(
+                    TechniqueTag::QuadraticFormula,
+                    format!(
+                        "Quadratic Formula: complex roots x = {} ± {}i",
+                        real_part, imag_part
+                    ),
+                )
+                .with_output(compile(&root1)),
             );
-            path = path.annotated_step(
-                Operation::ComplexDecomposition {
-                    original_var: var_name.clone(),
-                    real_var: format!("{}_re", var_name),
-                    imag_var: format!("{}_im", var_name),
-                },
-                format!(
-                    "Complex Roots: real part = {}, imaginary part = ±{}",
-                    real_part, imag_part
-                ),
-                root1.clone(),
-                StepAnnotation::algebraic("Complex Roots"),
+            trace.push(
+                Step::new(
+                    TechniqueTag::Custom("ComplexDecomposition"),
+                    format!(
+                        "original_var={}, real_var={}_re, imag_var={}_im; Complex Roots: real part = {}, imaginary part = ±{}",
+                        var_name, var_name, var_name, real_part, imag_part,
+                    ),
+                )
+                .with_output(compile(&root1)),
             );
-            let resolution_path = path.finish(root1.clone());
-            Ok((Solution::Multiple(vec![root1, root2]), resolution_path))
+            Ok((Solution::Multiple(vec![root1, root2]), trace))
         }
     }
 

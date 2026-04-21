@@ -142,35 +142,6 @@ mod dimension_tests {
     }
 }
 
-// Resolution path tests
-mod resolution_path_tests {
-    use super::*;
-    use thales::resolution_path::{Operation, ResolutionPathBuilder};
-
-    #[test]
-    fn test_empty_resolution_path() {
-        let expr = Expression::Integer(5);
-        let path = thales::ResolutionPath::new(expr);
-        assert!(path.is_empty());
-        assert_eq!(path.step_count(), 0);
-    }
-
-    #[test]
-    fn test_resolution_path_builder() {
-        let initial = Expression::Integer(5);
-        let path = ResolutionPathBuilder::new(initial.clone())
-            .step(
-                Operation::Simplify,
-                "Simplify expression".to_string(),
-                Expression::Integer(5),
-            )
-            .finish(Expression::Integer(5));
-
-        assert_eq!(path.step_count(), 1);
-        assert!(!path.is_empty());
-    }
-}
-
 // Property-based tests (using proptest)
 #[cfg(test)]
 mod property_tests {

@@ -52,7 +52,7 @@
 //! let equation = Equation::new("linear_eq", left, right);
 //!
 //! let solver = LinearSolver::new();
-//! let (solution, path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+//! let (solution, _trace) = solver.solve(&equation, &Variable::new("x")).unwrap();
 //!
 //! // Solution is x = 4
 //! # use thales::solver::Solution;
@@ -82,7 +82,7 @@
 //! );
 //! let equation = Equation::new("simple", left, Expression::Integer(12));
 //!
-//! let (solution, _path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+//! let (solution, _trace) = solver.solve(&equation, &Variable::new("x")).unwrap();
 //! // Solution is x = 4
 //! ```
 //!
@@ -108,9 +108,9 @@
 //! known.insert("b".to_string(), 3.0);
 //! known.insert("c".to_string(), 11.0);
 //!
-//! let path = solve_for(&equation, "x", &known).unwrap();
+//! let (result, _trace) = solve_for(&equation, "x", &known).unwrap();
 //! // Result is x = 4.0
-//! # assert_eq!(path.result.evaluate(&HashMap::new()), Some(4.0));
+//! # assert_eq!(result.evaluate(&HashMap::new()), Some(4.0));
 //! ```
 
 mod coeff;
@@ -147,7 +147,6 @@ pub use types::{Constraint, Solution, SolverError, SolverResult, SymbolicFailure
 
 use crate::ast::{BinaryOp, Equation, Expression, Variable};
 use crate::numerical::SmartNumericalSolver;
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder, ResolutionStep};
 use helpers::{
     contains_symbol, evaluate_constants, extract_quadratic_coefficients_expr,
     get_polynomial_degree_expr, is_polynomial_expr, substitute_values,
@@ -155,6 +154,8 @@ use helpers::{
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::numeric::compile::compile;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::{Expr, SymbolId};
 
 /// Trait for equation solvers.
@@ -189,18 +190,15 @@ use crate::numeric::{Expr, SymbolId};
 /// assert!(solver.can_solve(&eq));
 ///
 /// // Solve it
-/// let (solution, path) = solver.solve(&eq, &Variable::new("x")).unwrap();
+/// let (solution, _trace) = solver.solve(&eq, &Variable::new("x")).unwrap();
 /// // Solution is x = 4
 /// ```
 pub trait Solver {
     /// Solve an equation for the specified variable.
     ///
-    /// Returns the solution(s) and a [`ResolutionPath`] showing the steps taken.
-    fn solve(
-        &self,
-        equation: &Equation,
-        variable: &Variable,
-    ) -> SolverResult<(Solution, ResolutionPath)>;
+    /// Returns the solution(s) and a [`Trace`] capturing each applied
+    /// technique.
+    fn solve(&self, equation: &Equation, variable: &Variable) -> SolverResult<(Solution, Trace)>;
 
     /// Check if this solver can handle the given equation.
     ///
@@ -342,11 +340,7 @@ impl Default for SmartSolver {
 }
 
 impl Solver for SmartSolver {
-    fn solve(
-        &self,
-        equation: &Equation,
-        variable: &Variable,
-    ) -> SolverResult<(Solution, ResolutionPath)> {
+    fn solve(&self, equation: &Equation, variable: &Variable) -> SolverResult<(Solution, Trace)> {
         // Only skip symbolic isolation for equations that are polynomial of
         // degree ≥ 2 in the target variable and have a negative discriminant
         // (complex roots).  For real-root quadratics the symbolic isolation
@@ -356,8 +350,8 @@ impl Solver for SmartSolver {
         // Compiled once up front so the polynomial shape check, the
         // quadratic coefficient extraction, and the downstream symbolic
         // isolation all consume the same canonical `Arc<Expr>` form.
-        let lhs_arc = crate::numeric::compile::compile(&equation.left);
-        let rhs_arc = crate::numeric::compile::compile(&equation.right);
+        let lhs_arc = compile(&equation.left);
+        let rhs_arc = compile(&equation.right);
         let combined_arc = crate::numeric::normalize::sub(lhs_arc.clone(), rhs_arc.clone());
         let var_id = crate::numeric::SymbolId::intern(&variable.name);
 
@@ -384,12 +378,11 @@ impl Solver for SmartSolver {
         // Skip it when the equation has complex roots: symbolic isolation
         // returns a single Unique result and cannot represent complex pairs.
         if !has_complex_roots {
-            let path_builder = ResolutionPathBuilder::new(equation.left.clone());
-            if let Ok((result_expr, builder)) =
-                symbolic_isolation::symbolic_isolate(&lhs_arc, &rhs_arc, variable, path_builder)
+            let mut trace = Trace::new();
+            if let Ok(result_expr) =
+                symbolic_isolation::symbolic_isolate(&lhs_arc, &rhs_arc, variable, &mut trace)
             {
-                let path = builder.finish(result_expr.clone());
-                return Ok((Solution::Unique(result_expr), path));
+                return Ok((Solution::Unique(result_expr), trace));
             }
         }
 
@@ -429,30 +422,27 @@ impl Solver for SmartSolver {
         let failure_reason = analyze_symbolic_failure(equation, variable);
         let recommended = recommend_numerical_method(equation);
 
-        // Build a path recording the handoff
-        let mut path = ResolutionPath::new(equation.left.clone());
-        path.add_step(ResolutionStep::new(
-            Operation::SymbolicToNumericalHandoff {
-                reason: format!("{}", failure_reason),
-                recommended_method: recommended.clone(),
-            },
-            format!(
-                "Symbolic methods exhausted: {}. Switching to {}.",
-                failure_reason, recommended
-            ),
-            equation.left.clone(),
-        ));
+        // Build a trace recording the handoff followed by the numerical steps.
+        let mut trace = Trace::new();
+        trace.push(
+            Step::new(
+                TechniqueTag::Custom("SymbolicToNumericalHandoff"),
+                format!(
+                    "reason={}, recommended_method={}; Symbolic methods exhausted: {}. Switching to {}.",
+                    failure_reason, recommended, failure_reason, recommended,
+                ),
+            )
+            .with_input(lhs_arc.clone()),
+        );
 
         // Try numerical fallback
         match try_numerical_solve(equation, variable) {
-            Ok((num_solution, num_path)) => {
-                // Append numerical steps to path
-                for step in &num_path.steps {
-                    path.add_step(step.clone());
+            Ok((num_solution, num_trace)) => {
+                for step in num_trace.steps() {
+                    trace.push(step.clone());
                 }
                 let result_expr = Expression::Float(num_solution);
-                path.set_result(result_expr.clone());
-                Ok((Solution::Unique(result_expr), path))
+                Ok((Solution::Unique(result_expr), trace))
             }
             Err(_) => {
                 // Numerical also failed — return the original symbolic error
@@ -640,32 +630,28 @@ fn recommend_numerical_method(_equation: &Equation) -> String {
 fn try_numerical_solve(
     equation: &Equation,
     variable: &Variable,
-) -> Result<(f64, ResolutionPath), SolverError> {
+) -> Result<(f64, Trace), SolverError> {
     let solver = SmartNumericalSolver::with_default_config();
     match solver.solve(equation, variable) {
-        Ok((solution, trace)) => {
+        Ok((solution, num_trace)) => {
             if solution.converged {
-                let method_name = infer_numerical_method(&trace);
-                let f_expr = Expression::Binary(
-                    crate::ast::BinaryOp::Sub,
-                    Box::new(equation.left.clone()),
-                    Box::new(equation.right.clone()),
+                let method_name = infer_numerical_method(&num_trace);
+                let mut trace = num_trace;
+                trace.push(
+                    Step::new(
+                        TechniqueTag::NumericalApproximation,
+                        format!(
+                            "method={}, iterations={}, final_error={:.2e}; Converged to x = {:.8} in {} iterations",
+                            method_name,
+                            solution.iterations,
+                            solution.residual,
+                            solution.value,
+                            solution.iterations,
+                        ),
+                    )
+                    .with_output(Expr::float(solution.value)),
                 );
-                let mut path = trace_to_path(&trace, f_expr);
-                path.add_step(ResolutionStep::new(
-                    Operation::NumericalConverged {
-                        method: method_name,
-                        iterations: solution.iterations,
-                        final_error: solution.residual,
-                    },
-                    format!(
-                        "Converged to x = {:.8} in {} iterations (error: {:.2e})",
-                        solution.value, solution.iterations, solution.residual
-                    ),
-                    Expression::Float(solution.value),
-                ));
-                path.set_result(Expression::Float(solution.value));
-                Ok((solution.value, path))
+                Ok((solution.value, trace))
             } else {
                 Err(SolverError::Other(
                     "Numerical solver did not converge".to_string(),
@@ -680,8 +666,7 @@ fn try_numerical_solve(
 }
 
 /// Infer which numerical method was used by inspecting the trace tags.
-fn infer_numerical_method(trace: &crate::numeric::trace::Trace) -> String {
-    use crate::numeric::trace::TechniqueTag;
+fn infer_numerical_method(trace: &Trace) -> String {
     for step in trace.steps() {
         match step.tag {
             TechniqueTag::NewtonRaphson => return "Newton-Raphson".to_string(),
@@ -692,40 +677,6 @@ fn infer_numerical_method(trace: &crate::numeric::trace::Trace) -> String {
         }
     }
     "Numerical".to_string()
-}
-
-/// Convert a numeric [`Trace`] into a [`ResolutionPath`] anchored on `initial`.
-///
-/// Each trace step becomes a `ResolutionStep` tagged
-/// [`Operation::NumericalApproximation`] with the trace `detail` as the
-/// explanation. Output values (when present on the trace step) decompile
-/// back to `Expression`; missing outputs fall back to the initial.
-///
-/// Temporary bridge used while numerical engines report via `Trace` but
-/// solver-layer callers still consume `ResolutionPath`. Remove once the
-/// solver layer itself is migrated off `ResolutionPath`.
-pub(crate) fn trace_to_path(
-    trace: &crate::numeric::trace::Trace,
-    initial: Expression,
-) -> ResolutionPath {
-    use crate::numeric::compile::decompile;
-    let mut path = ResolutionPath::new(initial.clone());
-    let mut last_result = initial;
-    for step in trace.steps() {
-        let result_expr = step
-            .output
-            .as_ref()
-            .map(|arc| decompile(arc))
-            .unwrap_or_else(|| last_result.clone());
-        last_result = result_expr.clone();
-        path.add_step(ResolutionStep::new(
-            Operation::NumericalApproximation,
-            step.detail.clone(),
-            result_expr,
-        ));
-    }
-    path.set_result(last_result);
-    path
 }
 
 // ============================================================================
@@ -777,20 +728,20 @@ pub(crate) fn trace_to_path(
 /// known.insert("b".to_string(), 3.0);
 /// known.insert("c".to_string(), 11.0);
 ///
-/// let path = solve_for(&equation, "x", &known).unwrap();
-/// assert_eq!(path.result.evaluate(&HashMap::new()), Some(4.0));
+/// let (result, _trace) = solve_for(&equation, "x", &known).unwrap();
+/// assert_eq!(result.evaluate(&HashMap::new()), Some(4.0));
 /// ```
 pub fn solve_for(
     equation: &Equation,
     target: &str,
     known_values: &HashMap<String, f64>,
-) -> Result<ResolutionPath, SolverError> {
+) -> Result<(Expression, Trace), SolverError> {
     // Create Variable from target string
     let target_var = Variable::new(target);
 
     // Try solving with SmartSolver
     let solver = SmartSolver::new();
-    let (solution, mut path) = solver.solve(equation, &target_var)?;
+    let (solution, mut trace) = solver.solve(equation, &target_var)?;
 
     // Extract the solution expression
     let solution_expr = match solution {
@@ -815,21 +766,18 @@ pub fn solve_for(
         let simplified = substituted.simplify();
         let evaluated = evaluate_constants(&simplified);
 
-        path.add_step(ResolutionStep::new(
-            Operation::Substitute {
-                variable: Variable::new("known_values"),
-                value: Expression::Integer(0), // Placeholder
-            },
-            "Substitute known values and evaluate".to_string(),
-            evaluated.clone(),
-        ));
+        trace.push(
+            Step::new(
+                TechniqueTag::Substitution,
+                "Substitute known values and evaluate".to_string(),
+            )
+            .with_output(compile(&evaluated)),
+        );
 
-        path.set_result(evaluated);
+        Ok((evaluated, trace))
     } else {
-        path.set_result(solution_expr);
+        Ok((solution_expr, trace))
     }
-
-    Ok(path)
 }
 
 /// Compute a partial derivative for uncertainty propagation and sensitivity analysis.
@@ -1206,7 +1154,6 @@ mod system_solver_tests {
 mod handoff_tests {
     use super::*;
     use crate::ast::{BinaryOp, Equation, Expression, Function, Variable};
-    use crate::resolution_path::Operation;
 
     /// Test that a transcendental equation (x * exp(x) = 5) triggers the
     /// symbolic-to-numerical handoff and produces an approximate solution.
@@ -1225,15 +1172,13 @@ mod handoff_tests {
         // Should succeed via numerical handoff
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
 
-        let (solution, path) = result.unwrap();
+        let (solution, trace) = result.unwrap();
 
-        // Check that the handoff step is recorded in the path
-        let has_handoff = path.steps.iter().any(|step| {
-            matches!(
-                &step.operation,
-                Operation::SymbolicToNumericalHandoff { .. }
-            )
-        });
+        // Check that the handoff step is recorded in the trace
+        let has_handoff = trace
+            .steps()
+            .iter()
+            .any(|step| step.tag == TechniqueTag::Custom("SymbolicToNumericalHandoff"));
         assert!(has_handoff, "Expected a SymbolicToNumericalHandoff step");
 
         // The solution should be numerical (x ≈ 1.3267)
@@ -1274,15 +1219,13 @@ mod handoff_tests {
         let result = solver.solve(&equation, &Variable::new("x"));
         assert!(result.is_ok());
 
-        let (solution, path) = result.unwrap();
+        let (solution, trace) = result.unwrap();
 
         // Should NOT have any handoff step
-        let has_handoff = path.steps.iter().any(|step| {
-            matches!(
-                &step.operation,
-                Operation::SymbolicToNumericalHandoff { .. }
-            )
-        });
+        let has_handoff = trace
+            .steps()
+            .iter()
+            .any(|step| step.tag == TechniqueTag::Custom("SymbolicToNumericalHandoff"));
         assert!(
             !has_handoff,
             "Linear equation should not trigger numerical handoff"

@@ -14,8 +14,8 @@ use std::sync::Arc;
 
 use crate::ast::{Expression, Variable};
 use crate::numeric::compile::decompile;
+use crate::numeric::trace::Trace;
 use crate::numeric::{normalize, Expr, SymbolId};
-use crate::resolution_path::ResolutionPathBuilder;
 
 use super::helpers::contains_symbol;
 use super::types::SolverError;
@@ -24,15 +24,15 @@ use unwrap::unwrap_variable;
 
 /// Attempt to symbolically isolate the target variable in the equation.
 ///
-/// Callers pass already-compiled `Arc<Expr>` sides. Returns the
-/// expression that the variable equals (decompiled to `Expression` for
-/// resolution-path consumption), plus the updated path builder.
+/// Callers pass already-compiled `Arc<Expr>` sides and a mutable `Trace`
+/// onto which isolation steps are appended. Returns the expression that
+/// the variable equals (decompiled to `Expression`).
 pub fn symbolic_isolate(
     lhs: &Arc<Expr>,
     rhs: &Arc<Expr>,
     variable: &Variable,
-    path: ResolutionPathBuilder,
-) -> Result<(Expression, ResolutionPathBuilder), SolverError> {
+    trace: &mut Trace,
+) -> Result<Expression, SolverError> {
     let var = SymbolId::intern(&variable.name);
 
     let left_has = contains_symbol(lhs, var);
@@ -56,8 +56,8 @@ pub fn symbolic_isolate(
         )
     };
 
-    let (result_expr, final_path) = unwrap_variable(&var_side, &other_side, var, path)?;
-    Ok((decompile(&result_expr), final_path))
+    let result_expr = unwrap_variable(&var_side, &other_side, var, trace)?;
+    Ok(decompile(&result_expr))
 }
 
 #[cfg(test)]

@@ -17,8 +17,8 @@ use std::sync::Arc;
 use crate::ast::{Equation, Expression, Variable};
 use crate::numeric::compile::{compile, decompile};
 use crate::numeric::system_solver::solve_system_expr;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::{Expr, SymbolId};
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionStep};
 
 use super::helpers::is_linear_system_expr;
 use super::linear_system::LinearSystem;
@@ -241,7 +241,7 @@ impl SystemSolver {
     }
 
     /// Solve using matrix inversion and return both the solution and the
-    /// resolution path recording all steps.
+    /// [`Trace`] of techniques applied.
     ///
     /// # Errors
     ///
@@ -251,33 +251,28 @@ impl SystemSolver {
         &self,
         equations: &[Equation],
         variables: &[Variable],
-    ) -> SolverResult<(SystemSolution, ResolutionPath)> {
+    ) -> SolverResult<(SystemSolution, Trace)> {
         let system = LinearSystem::from_equations(equations, variables)?;
-        let initial = Expression::Integer(equations.len() as i64);
-        let mut path = ResolutionPath::new(initial);
+        let mut trace = Trace::new();
 
-        path.add_step(ResolutionStep::new(
-            Operation::MatrixInverse,
+        trace.push(Step::new(
+            TechniqueTag::MatrixInverse,
             "Compute x = A⁻¹ b via exact LU decomposition".to_string(),
-            Expression::Integer(0),
         ));
 
         let sol = system.solve_via_lu()?;
 
         for var in &system.variables {
-            path.add_step(ResolutionStep::new(
-                Operation::BackSubstitute {
-                    variable: var.name.clone(),
-                },
-                format!("Compute value of {} from x = A⁻¹b", var.name),
-                Expression::Integer(0),
+            trace.push(Step::new(
+                TechniqueTag::Custom("BackSubstitute"),
+                format!(
+                    "variable={}; Compute value of {} from x = A⁻¹b",
+                    var.name, var.name
+                ),
             ));
         }
 
-        let result_expr = Expression::Integer(system.variables.len() as i64);
-        path.set_result(result_expr);
-
-        Ok((sol, path))
+        Ok((sol, trace))
     }
 
     /// Solve using the best available method.

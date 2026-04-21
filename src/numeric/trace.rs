@@ -544,6 +544,46 @@ impl Trace {
     pub fn is_empty(&self) -> bool {
         self.steps.is_empty()
     }
+
+    /// Alias for [`Trace::len`] retained for callers that previously consumed a
+    /// `ResolutionPath` with a `step_count()` method.
+    #[must_use]
+    pub fn step_count(&self) -> usize {
+        self.steps.len()
+    }
+
+    /// Return the highest [`TechniqueDifficulty`] across every recorded step.
+    ///
+    /// An empty trace returns [`TechniqueDifficulty::Elementary`] as the
+    /// baseline.
+    #[must_use]
+    pub fn max_difficulty(&self) -> TechniqueDifficulty {
+        self.steps
+            .iter()
+            .map(|s| s.tag.difficulty())
+            .max()
+            .unwrap_or(TechniqueDifficulty::Elementary)
+    }
+
+    /// Return a count of steps per difficulty tier as an array indexed by
+    /// tier (0 = Elementary, 5 = Advanced).
+    #[must_use]
+    pub fn difficulty_profile(&self) -> [usize; 6] {
+        let mut profile = [0usize; 6];
+        for step in &self.steps {
+            let tier = step.tag.difficulty() as u8;
+            if tier >= 1 && tier <= 6 {
+                profile[(tier - 1) as usize] += 1;
+            }
+        }
+        profile
+    }
+
+    /// True when every step's difficulty is at or below `level`.
+    #[must_use]
+    pub fn is_trivial_at(&self, level: TechniqueDifficulty) -> bool {
+        self.max_difficulty() <= level
+    }
 }
 
 /// Helper for engines: push a step onto an optional trace, doing nothing

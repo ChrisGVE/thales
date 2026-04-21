@@ -7,7 +7,6 @@
 //! 4. Back-substituting to recover the paired solutions
 
 use crate::ast::{BinaryOp, Equation, Expression, Variable};
-use crate::resolution_path::ResolutionPathBuilder;
 use crate::solver::symbolic_isolation::symbolic_isolate;
 use crate::solver::types::SolverError;
 use crate::solver::{QuadraticSolver, SmartSolver, Solution, Solver};
@@ -258,10 +257,10 @@ impl SubstitutionSolver {
         var1: &Variable,
     ) -> Result<Vec<(Expression, Expression)>, SolverError> {
         // Step 1: isolate iso_var from source equation.
-        let path = ResolutionPathBuilder::new(source.left.clone());
+        let mut trace = crate::numeric::trace::Trace::new();
         let lhs_arc = crate::numeric::compile::compile(&source.left);
         let rhs_arc = crate::numeric::compile::compile(&source.right);
-        let (iso_expr, _) = symbolic_isolate(&lhs_arc, &rhs_arc, iso_var, path)?;
+        let iso_expr = symbolic_isolate(&lhs_arc, &rhs_arc, iso_var, &mut trace)?;
 
         // Step 2: substitute iso_var = iso_expr into both sides of target.
         let new_left = substitute_expr(&target.left, &iso_var.name, &iso_expr);

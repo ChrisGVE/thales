@@ -34,10 +34,10 @@ mod exp;
 mod log;
 mod trig;
 
-use crate::ast::{BinaryOp, Equation, Expression, Variable};
+use crate::ast::{Equation, Variable};
 use crate::numeric::compile::{compile, decompile};
+use crate::numeric::trace::Trace;
 use crate::numeric::SymbolId;
-use crate::resolution_path::{ResolutionPath, ResolutionPathBuilder};
 
 use super::helpers::{contains_symbol, evaluate_constants};
 use super::types::{Solution, SolverError, SolverResult};
@@ -55,11 +55,7 @@ impl TranscendentalSolver {
 }
 
 impl Solver for TranscendentalSolver {
-    fn solve(
-        &self,
-        equation: &Equation,
-        variable: &Variable,
-    ) -> SolverResult<(Solution, ResolutionPath)> {
+    fn solve(&self, equation: &Equation, variable: &Variable) -> SolverResult<(Solution, Trace)> {
         let var_name = &variable.name;
         let var_id = SymbolId::intern(var_name);
 
@@ -73,30 +69,27 @@ impl Solver for TranscendentalSolver {
             )));
         }
 
-        let initial_expr = Expression::Binary(
-            BinaryOp::Sub,
-            Box::new(equation.left.clone()),
-            Box::new(equation.right.clone()),
-        );
-        let path = ResolutionPathBuilder::new(initial_expr);
-
-        // Try families in order: trig → log → exp. Each returns the
-        // builder via Err on miss so we can thread it to the next family
-        // without reconstructing it.
-        let path = match trig::solve_trig_equation(&lhs, &rhs, var_id, variable, path) {
-            Ok((solution, builder)) => return finish(solution, builder),
-            Err(p) => p,
-        };
-        let path = match log::solve_log_equation(&lhs, &rhs, var_id, variable, path) {
-            Ok((solution, builder)) => return finish(solution, builder),
-            Err(p) => p,
-        };
-        match exp::solve_exp_equation(&lhs, &rhs, var_id, variable, path) {
-            Ok((solution, builder)) => finish(solution, builder),
-            Err(_) => Err(SolverError::CannotSolve(
-                "Transcendental equation pattern not recognized or too complex".to_string(),
-            )),
+        // Try families in order: trig → log → exp. Each receives a fresh
+        // trace via a scratch buffer; a successful family returns its trace
+        // as-is, misses discard theirs.
+        let mut trace = Trace::new();
+        if let Ok(sol) = trig::solve_trig_equation(&lhs, &rhs, var_id, variable, &mut trace) {
+            return finish(sol, trace);
         }
+
+        let mut trace = Trace::new();
+        if let Ok(sol) = log::solve_log_equation(&lhs, &rhs, var_id, variable, &mut trace) {
+            return finish(sol, trace);
+        }
+
+        let mut trace = Trace::new();
+        if let Ok(sol) = exp::solve_exp_equation(&lhs, &rhs, var_id, variable, &mut trace) {
+            return finish(sol, trace);
+        }
+
+        Err(SolverError::CannotSolve(
+            "Transcendental equation pattern not recognized or too complex".to_string(),
+        ))
     }
 
     fn can_solve(&self, equation: &Equation) -> bool {
@@ -108,10 +101,9 @@ impl Solver for TranscendentalSolver {
 
 fn finish(
     solution: std::sync::Arc<crate::numeric::Expr>,
-    builder: ResolutionPathBuilder,
-) -> SolverResult<(Solution, ResolutionPath)> {
+    trace: Trace,
+) -> SolverResult<(Solution, Trace)> {
     let expr = decompile(&solution);
     let evaluated = evaluate_constants(&expr);
-    let path = builder.finish(evaluated.clone());
-    Ok((Solution::Unique(evaluated), path))
+    Ok((Solution::Unique(evaluated), trace))
 }

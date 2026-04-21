@@ -6,17 +6,13 @@
 
 use std::sync::Arc;
 
-use crate::ast::{Expression, Variable};
-use crate::numeric::compile::decompile;
 use crate::numeric::expr::FuncId;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::{normalize, Expr, SymbolId};
-use crate::resolution_path::{Operation, ResolutionPathBuilder, StepAnnotation};
 
 use super::super::helpers::contains_symbol;
 use super::super::types::SolverError;
 use super::unwrap::unwrap_variable;
-
-type Unwrapped = (Arc<Expr>, ResolutionPathBuilder);
 
 /// Recognise `integral`, `sum`, `product`, `limit`, and `derivative` wrappers.
 pub(super) fn is_calculus_wrapper(fid: FuncId) -> bool {
@@ -36,8 +32,8 @@ pub(super) fn try_unwrap_calculus_wrapper(
     args: &[Arc<Expr>],
     other: &Arc<Expr>,
     var: SymbolId,
-    path: ResolutionPathBuilder,
-) -> Result<Unwrapped, SolverError> {
+    trace: &mut Trace,
+) -> Result<Arc<Expr>, SolverError> {
     let func_name = match fid {
         FuncId::Other(sym) => sym.as_str(),
         _ => return Err(SolverError::CannotSolve("Not a calculus wrapper".into())),
@@ -80,13 +76,19 @@ pub(super) fn try_unwrap_calculus_wrapper(
         let wrapper_expr = Expr::func(fid, new_args);
         let factored = normalize::mul(var_factor, wrapper_expr);
 
-        let p = path.annotated_step(
-            Operation::ApplyFunction(format!("factor_from_{}", func_name)),
-            format!("Factor '{}' out of {} body", var.as_str(), func_name),
-            decompile(other),
-            StepAnnotation::calculus("Calculus Wrapper Isolation"),
+        trace.push(
+            Step::new(
+                TechniqueTag::ApplyFunction,
+                format!(
+                    "Calculus Wrapper Isolation: factor_from_{}; Factor '{}' out of {} body",
+                    func_name,
+                    var.as_str(),
+                    func_name
+                ),
+            )
+            .with_output(other.clone()),
         );
-        return unwrap_variable(&factored, other, var, p);
+        return unwrap_variable(&factored, other, var, trace);
     }
 
     // Body is just the variable: wrapper becomes wrapper(1) · var.
@@ -97,15 +99,17 @@ pub(super) fn try_unwrap_calculus_wrapper(
             let wrapper_one = Expr::func(fid, new_args);
             let new_other = normalize::div(other.clone(), wrapper_one);
             let name = var.as_str();
-            let var_expr = Expression::Variable(Variable::new(&name));
-            let new_other_expr = decompile(&new_other);
-            let p = path.annotated_step(
-                Operation::DivideBothSides(var_expr),
-                format!("Isolate '{}' from {} body", name, func_name),
-                new_other_expr,
-                StepAnnotation::calculus("Calculus Wrapper Isolation"),
+            trace.push(
+                Step::new(
+                    TechniqueTag::DivideBothSides,
+                    format!(
+                        "Calculus Wrapper Isolation: {}; Isolate '{}' from {} body",
+                        name, name, func_name
+                    ),
+                )
+                .with_output(new_other.clone()),
             );
-            return Ok((new_other, p));
+            return Ok(new_other);
         }
     }
 

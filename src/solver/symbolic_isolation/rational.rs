@@ -12,15 +12,12 @@ use std::sync::Arc;
 
 use num::traits::Zero;
 
-use crate::ast::Expression;
 use crate::numeric::compile::decompile;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::{normalize, Expr, MulNode, SymbolId};
-use crate::resolution_path::{Operation, ResolutionPathBuilder, StepAnnotation};
 
 use super::super::types::SolverError;
 use super::unwrap::{finish_mul_like, rational_to_arc, unwrap_variable};
-
-type Unwrapped = (Arc<Expr>, ResolutionPathBuilder);
 
 /// Cross-multiply a `Mul` factorization when multiple factors contain `var`.
 ///
@@ -31,8 +28,8 @@ pub(super) fn try_cross_multiply_mul(
     var_factors: &[(Arc<Expr>, Arc<Expr>)],
     other: &Arc<Expr>,
     var: SymbolId,
-    path: ResolutionPathBuilder,
-) -> Result<Unwrapped, SolverError> {
+    trace: &mut Trace,
+) -> Result<Arc<Expr>, SolverError> {
     // Split factors by sign of the integer exponent: negative → denom.
     // Flatten `Pow(b, e)` factors so the inner exponent participates in the
     // sign decision (e.g. `Pow(x+1, -1)` with outer exp `1` is a denominator).
@@ -75,15 +72,16 @@ pub(super) fn try_cross_multiply_mul(
     let cleared = normalize::sub(expand(&numer), rhs);
 
     let denom_expr = decompile(&denom);
-    let path = path.annotated_step(
-        Operation::MultiplyBothSides(denom_expr.clone()),
-        format!("Cross-multiply by {} to clear denominator", denom_expr),
-        Expression::Integer(0),
-        StepAnnotation::elementary(),
+    trace.push(
+        Step::new(
+            TechniqueTag::MultiplyBothSides,
+            format!("Cross-multiply by {} to clear denominator", denom_expr),
+        )
+        .with_output(cleared.clone()),
     );
 
     // Hand the cleared polynomial equation back to the general engine.
-    let (solution, path) = unwrap_variable(&cleared, &Expr::int(0), var, path)?;
+    let solution = unwrap_variable(&cleared, &Expr::int(0), var, trace)?;
 
     // Extraneous check: the cross-multiplication denominator, evaluated at
     // the candidate solution, must not be zero.
@@ -97,7 +95,7 @@ pub(super) fn try_cross_multiply_mul(
         )));
     }
 
-    Ok((solution, path))
+    Ok(solution)
 }
 
 // ── Distribution ───────────────────────────────────────────────────────────

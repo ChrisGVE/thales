@@ -410,7 +410,6 @@ pub mod parser;
 pub mod partial_fractions;
 pub mod pattern;
 pub mod precision;
-pub mod resolution_path;
 pub mod runge_kutta;
 pub mod simplification_rules;
 pub mod solver;
@@ -497,6 +496,7 @@ pub use latex::{
     parse_latex, parse_latex_equation, parse_latex_equation_to_expr, parse_latex_to_expr,
 };
 pub use matrix::{BracketStyle, MatrixError, MatrixExpr};
+pub use numeric::trace::{Step, TechniqueDifficulty, TechniqueTag, Trace};
 pub use numerical::{
     optimize_constrained, BisectionMethod, BrentsMethod, LagrangianResult, LagrangianSolver,
     NewtonRaphson, NumericalConfig, NumericalError, NumericalResult, NumericalSolution,
@@ -522,10 +522,6 @@ pub use partial_fractions::{
     PartialFractionTerm,
 };
 pub use precision::{EvalContext, EvalError, PrecisionMode, RoundingMode, Value};
-pub use resolution_path::{
-    NumericalConvergenceInfo, Operation, OperationCounts, PathStatistics, ResolutionPath,
-    ResolutionPathBuilder, ResolutionStep, StepAnnotation, TechniqueDifficulty, Verbosity,
-};
 pub use solver::{
     LinearSystem, SmartSolver, Solution, Solver, SymbolicFailureReason, SystemSolution,
     SystemSolver,

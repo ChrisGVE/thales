@@ -25,10 +25,10 @@ pub(super) fn solve_equation_ffi(equation: &str, variable: &str) -> Result<Strin
         parse_equation(equation).map_err(|e| format!("Failed to parse equation: {:?}", e))?;
 
     let known_values = HashMap::new();
-    let resolution_path = solve_for(&parsed_equation, variable, &known_values)
+    let (result, _trace) = solve_for(&parsed_equation, variable, &known_values)
         .map_err(|e| format!("Failed to solve equation: {:?}", e))?;
 
-    Ok(format!("{:?}", resolution_path.result))
+    Ok(format!("{:?}", result))
 }
 
 /// Solve equation numerically.
@@ -62,12 +62,13 @@ pub(super) fn solve_numerically_ffi(
     Ok(solution.value)
 }
 
-/// Solve equation with known values and return full resolution path.
+/// Solve equation with known values and return the full technique trace.
 pub(super) fn solve_with_values_ffi(
     equation: &str,
     variable: &str,
     known_values_json: &str,
-) -> Result<super::ffi::ResolutionPathFFI, String> {
+) -> Result<super::ffi::TraceFFI, String> {
+    use crate::numeric::compile::decompile;
     use crate::solver::solve_for;
     use std::collections::HashMap;
 
@@ -81,58 +82,46 @@ pub(super) fn solve_with_values_ffi(
             .map_err(|e| format!("Failed to parse known values JSON: {}", e))?
     };
 
-    let resolution_path = solve_for(&parsed_equation, variable, &known_values)
+    let (result, trace) = solve_for(&parsed_equation, variable, &known_values)
         .map_err(|e| format!("Failed to solve equation: {:?}", e))?;
 
-    let steps: Vec<serde_json::Value> = resolution_path
-        .steps
+    let initial_expr = trace
+        .steps()
+        .iter()
+        .find_map(|s| s.input.as_ref().map(|arc| format!("{:?}", decompile(arc))))
+        .unwrap_or_else(|| format!("{:?}", parsed_equation.left));
+
+    let steps: Vec<serde_json::Value> = trace
+        .steps()
         .iter()
         .map(|step| {
-            let mut obj = serde_json::json!({
-                "operation": step.operation.describe(),
-                "explanation": step.explanation,
-                "result": format!("{:?}", step.result)
-            });
-
-            // Add annotation fields when present
-            if let Some(ref ann) = step.annotation {
-                obj["technique"] = serde_json::json!(ann.technique);
-                obj["theorem"] = serde_json::json!(ann.theorem);
-                obj["significance"] = serde_json::json!(format!("{}", ann.significance));
-            }
-
-            // Add structured data for special operation variants
-            match &step.operation {
-                crate::resolution_path::Operation::SymbolicToNumericalHandoff {
-                    reason,
-                    recommended_method,
-                } => {
-                    obj["handoff_reason"] = serde_json::json!(reason);
-                    obj["recommended_method"] = serde_json::json!(recommended_method);
-                }
-                crate::resolution_path::Operation::NumericalConverged {
-                    method,
-                    iterations,
-                    final_error,
-                } => {
-                    obj["convergence_method"] = serde_json::json!(method);
-                    obj["convergence_iterations"] = serde_json::json!(iterations);
-                    obj["convergence_error"] = serde_json::json!(final_error);
-                }
-                _ => {}
-            }
-
-            obj
+            let tag_label = step.tag.label();
+            let input = step
+                .input
+                .as_ref()
+                .map(|arc| format!("{:?}", decompile(arc)))
+                .unwrap_or_default();
+            let output = step
+                .output
+                .as_ref()
+                .map(|arc| format!("{:?}", decompile(arc)))
+                .unwrap_or_default();
+            serde_json::json!({
+                "tag": tag_label,
+                "detail": step.detail,
+                "input": input,
+                "output": output,
+            })
         })
         .collect();
 
     let steps_json =
         serde_json::to_string(&steps).map_err(|e| format!("Failed to serialize steps: {}", e))?;
 
-    Ok(super::ffi::ResolutionPathFFI {
-        initial_expr: format!("{:?}", resolution_path.initial),
+    Ok(super::ffi::TraceFFI {
+        initial_expr,
         steps_json,
-        result_expr: format!("{:?}", resolution_path.result),
+        result_expr: format!("{:?}", result),
         success: true,
     })
 }

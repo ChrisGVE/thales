@@ -11,8 +11,8 @@ use num::traits::{One, Zero};
 
 use crate::numeric::compile::decompile;
 use crate::numeric::expr::FuncId;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::{normalize, BigRational, Expr, MulNode, SymbolId};
-use crate::resolution_path::{Operation, ResolutionPathBuilder, StepAnnotation};
 
 use super::super::helpers::contains_symbol;
 use super::super::types::SolverError;
@@ -20,8 +20,6 @@ use super::super::types::SolverError;
 use super::calculus::{is_calculus_wrapper, try_unwrap_calculus_wrapper};
 use super::linear::collect_linear_var_terms;
 use super::rational::try_cross_multiply_mul;
-
-type Unwrapped = (Arc<Expr>, ResolutionPathBuilder);
 
 /// Convert a `BigRational` constant into an `Arc<Expr>` in canonical form.
 pub(super) fn rational_to_arc(r: BigRational) -> Arc<Expr> {
@@ -56,20 +54,20 @@ pub(super) fn unwrap_variable(
     expr: &Arc<Expr>,
     other: &Arc<Expr>,
     var: SymbolId,
-    path: ResolutionPathBuilder,
-) -> Result<Unwrapped, SolverError> {
+    trace: &mut Trace,
+) -> Result<Arc<Expr>, SolverError> {
     // Base case: the expression IS the variable.
     if let Expr::Symbol(s) = expr.as_ref() {
         if *s == var {
-            return Ok((other.clone(), path));
+            return Ok(other.clone());
         }
     }
 
     match expr.as_ref() {
-        Expr::Add(_) => unwrap_add(expr, other, var, path),
-        Expr::Mul(_) => unwrap_mul(expr, other, var, path),
-        Expr::Pow(base, exp) => unwrap_power(base, exp, other, var, path),
-        Expr::Func(fid, args) => unwrap_function(*fid, args, other, var, path),
+        Expr::Add(_) => unwrap_add(expr, other, var, trace),
+        Expr::Mul(_) => unwrap_mul(expr, other, var, trace),
+        Expr::Pow(base, exp) => unwrap_power(base, exp, other, var, trace),
+        Expr::Func(fid, args) => unwrap_function(*fid, args, other, var, trace),
         _ => Err(SolverError::CannotSolve(format!(
             "Cannot isolate '{}': unsupported expression structure",
             var.as_str()
@@ -82,8 +80,8 @@ fn unwrap_add(
     expr: &Arc<Expr>,
     other: &Arc<Expr>,
     var: SymbolId,
-    path: ResolutionPathBuilder,
-) -> Result<Unwrapped, SolverError> {
+    trace: &mut Trace,
+) -> Result<Arc<Expr>, SolverError> {
     let node = match expr.as_ref() {
         Expr::Add(n) => n,
         _ => unreachable!(),
@@ -111,19 +109,18 @@ fn unwrap_add(
     }
 
     let mut new_other = other.clone();
-    let mut path = path;
 
     // Subtract non-var part from the other side in one step.
     if !non_var.is_empty() {
         let const_part = normalize::add_many(non_var);
         new_other = normalize::sub(new_other, const_part.clone());
         let const_expr = decompile(&const_part);
-        let new_other_expr = decompile(&new_other);
-        path = path.annotated_step(
-            Operation::SubtractBothSides(const_expr.clone()),
-            format!("Subtract {} from both sides", const_expr),
-            new_other_expr,
-            StepAnnotation::elementary(),
+        trace.push(
+            Step::new(
+                TechniqueTag::SubtractBothSides,
+                format!("Subtract {} from both sides", const_expr),
+            )
+            .with_output(new_other.clone()),
         );
     }
 
@@ -135,19 +132,19 @@ fn unwrap_add(
             let coeff_arc = rational_to_arc(coeff);
             new_other = normalize::div(new_other, coeff_arc.clone());
             let coeff_expr = decompile(&coeff_arc);
-            let new_other_expr = decompile(&new_other);
-            path = path.annotated_step(
-                Operation::DivideBothSides(coeff_expr.clone()),
-                format!("Divide both sides by {}", coeff_expr),
-                new_other_expr,
-                StepAnnotation::elementary(),
+            trace.push(
+                Step::new(
+                    TechniqueTag::DivideBothSides,
+                    format!("Divide both sides by {}", coeff_expr),
+                )
+                .with_output(new_other.clone()),
             );
         }
-        return unwrap_variable(&term, &new_other, var, path);
+        return unwrap_variable(&term, &new_other, var, trace);
     }
 
     // Multiple var-containing terms: try to factor var out linearly.
-    collect_linear_var_terms(&var_terms, &new_other, var, path)
+    collect_linear_var_terms(&var_terms, &new_other, var, trace)
 }
 
 /// Unwrap `coeff · Π base_i^exp_i = other`.
@@ -155,8 +152,8 @@ fn unwrap_mul(
     expr: &Arc<Expr>,
     other: &Arc<Expr>,
     var: SymbolId,
-    path: ResolutionPathBuilder,
-) -> Result<Unwrapped, SolverError> {
+    trace: &mut Trace,
+) -> Result<Arc<Expr>, SolverError> {
     let node = match expr.as_ref() {
         Expr::Mul(n) => n,
         _ => unreachable!(),
@@ -173,19 +170,18 @@ fn unwrap_mul(
     }
 
     let mut new_other = other.clone();
-    let mut path = path;
 
     // Divide numeric coefficient and non-var factors out of `other`.
     let denom = make_mul_from_parts(&node.coeff, &non_var_factors);
     if !denom.is_one() {
         new_other = normalize::div(new_other, denom.clone());
         let denom_expr = decompile(&denom);
-        let new_other_expr = decompile(&new_other);
-        path = path.annotated_step(
-            Operation::DivideBothSides(denom_expr.clone()),
-            format!("Divide both sides by {}", denom_expr),
-            new_other_expr,
-            StepAnnotation::elementary(),
+        trace.push(
+            Step::new(
+                TechniqueTag::DivideBothSides,
+                format!("Divide both sides by {}", denom_expr),
+            )
+            .with_output(new_other.clone()),
         );
     }
 
@@ -198,15 +194,15 @@ fn unwrap_mul(
 
     // Multiple var factors → cross-multiply to clear denominators.
     if var_factors.len() > 1 {
-        return try_cross_multiply_mul(&var_factors, &new_other, var, path);
+        return try_cross_multiply_mul(&var_factors, &new_other, var, trace);
     }
 
     // Exactly one var factor.
     let (base, exp) = var_factors.into_iter().next().unwrap();
     if exp.is_one() {
-        return unwrap_variable(&base, &new_other, var, path);
+        return unwrap_variable(&base, &new_other, var, trace);
     }
-    unwrap_power(&base, &exp, &new_other, var, path)
+    unwrap_power(&base, &exp, &new_other, var, trace)
 }
 
 /// Unwrap `base^exp = other`.
@@ -215,8 +211,8 @@ pub(super) fn unwrap_power(
     exp: &Arc<Expr>,
     other: &Arc<Expr>,
     var: SymbolId,
-    path: ResolutionPathBuilder,
-) -> Result<Unwrapped, SolverError> {
+    trace: &mut Trace,
+) -> Result<Arc<Expr>, SolverError> {
     let base_has = contains_symbol(base, var);
     let exp_has = contains_symbol(exp, var);
     if base_has && exp_has {
@@ -228,47 +224,45 @@ pub(super) fn unwrap_power(
     if base_has {
         // Special case `base^(-1) = other` → `base = 1/other`. This is
         // the reciprocal of both sides, which is an elementary
-        // manipulation, not a root extraction. Keeping it under
-        // `RootBothSides` / `power_and_roots` tier would mis-classify
-        // simple algebraic rearrangements like `rho = m/V` solved for V.
+        // manipulation, not a root extraction.
         if matches!(exp.as_ref(), Expr::Integer(n) if n.to_i64() == Some(-1)) {
             let new_other = normalize::div(Expr::int(1), other.clone());
-            let new_other_expr = decompile(&new_other);
-            let p = path.annotated_step(
-                Operation::ApplyFunction("reciprocal".to_string()),
-                "Take the reciprocal of both sides".to_string(),
-                new_other_expr,
-                StepAnnotation::elementary(),
+            trace.push(
+                Step::new(
+                    TechniqueTag::DivideBothSides,
+                    "reciprocal; Take the reciprocal of both sides".to_string(),
+                )
+                .with_output(new_other.clone()),
             );
-            return unwrap_variable(base, &new_other, var, p);
+            return unwrap_variable(base, &new_other, var, trace);
         }
 
         // base^exp = other → base = other^(1/exp)
         let inv_exp = normalize::div(Expr::int(1), exp.clone());
         let new_other = normalize::pow(other.clone(), inv_exp);
         let exp_expr = decompile(exp);
-        let new_other_expr = decompile(&new_other);
-        let p = path.annotated_step(
-            Operation::RootBothSides(exp_expr.clone()),
-            format!("Take the {} root of both sides", exp_expr),
-            new_other_expr,
-            StepAnnotation::power_and_roots(),
+        trace.push(
+            Step::new(
+                TechniqueTag::RootBothSides,
+                format!("Take the {} root of both sides", exp_expr),
+            )
+            .with_output(new_other.clone()),
         );
-        return unwrap_variable(base, &new_other, var, p);
+        return unwrap_variable(base, &new_other, var, trace);
     }
     // a^exp(v) = other → exp = log_base(other) = ln(other)/ln(base)
     let numer = Expr::func(FuncId::Ln, vec![other.clone()]);
     let denom = Expr::func(FuncId::Ln, vec![base.clone()]);
     let new_other = normalize::div(numer, denom);
     let base_expr = decompile(base);
-    let new_other_expr = decompile(&new_other);
-    let p = path.annotated_step(
-        Operation::ApplyFunction("log".to_string()),
-        format!("Take logarithm base {} of both sides", base_expr),
-        new_other_expr,
-        StepAnnotation::power_and_roots(),
+    trace.push(
+        Step::new(
+            TechniqueTag::ApplyFunction,
+            format!("log; Take logarithm base {} of both sides", base_expr),
+        )
+        .with_output(new_other.clone()),
     );
-    unwrap_variable(exp, &new_other, var, p)
+    unwrap_variable(exp, &new_other, var, trace)
 }
 
 /// Unwrap a function application `f(arg) = other` by applying its inverse.
@@ -277,10 +271,10 @@ fn unwrap_function(
     args: &[Arc<Expr>],
     other: &Arc<Expr>,
     var: SymbolId,
-    path: ResolutionPathBuilder,
-) -> Result<Unwrapped, SolverError> {
+    trace: &mut Trace,
+) -> Result<Arc<Expr>, SolverError> {
     if is_calculus_wrapper(fid) {
-        return try_unwrap_calculus_wrapper(fid, args, other, var, path);
+        return try_unwrap_calculus_wrapper(fid, args, other, var, trace);
     }
 
     if args.len() > 1 {
@@ -315,56 +309,46 @@ fn unwrap_function(
         )));
     }
 
-    let (new_other, desc, annotation) = match fid {
+    let (new_other, desc) = match fid {
         FuncId::Sin => (
             Expr::func(FuncId::Asin, vec![other.clone()]),
-            "Apply arcsine to both sides",
-            StepAnnotation::transcendental("Inverse Trigonometric Function"),
+            "Inverse Trigonometric Function: arcsin; Apply arcsine to both sides",
         ),
         FuncId::Cos => (
             Expr::func(FuncId::Acos, vec![other.clone()]),
-            "Apply arccos to both sides",
-            StepAnnotation::transcendental("Inverse Trigonometric Function"),
+            "Inverse Trigonometric Function: arccos; Apply arccos to both sides",
         ),
         FuncId::Tan => (
             Expr::func(FuncId::Atan, vec![other.clone()]),
-            "Apply arctan to both sides",
-            StepAnnotation::transcendental("Inverse Trigonometric Function"),
+            "Inverse Trigonometric Function: arctan; Apply arctan to both sides",
         ),
         FuncId::Asin => (
             Expr::func(FuncId::Sin, vec![other.clone()]),
-            "Apply sin to both sides",
-            StepAnnotation::transcendental("Inverse Trigonometric Function"),
+            "Inverse Trigonometric Function: sin; Apply sin to both sides",
         ),
         FuncId::Acos => (
             Expr::func(FuncId::Cos, vec![other.clone()]),
-            "Apply cos to both sides",
-            StepAnnotation::transcendental("Inverse Trigonometric Function"),
+            "Inverse Trigonometric Function: cos; Apply cos to both sides",
         ),
         FuncId::Atan => (
             Expr::func(FuncId::Tan, vec![other.clone()]),
-            "Apply tan to both sides",
-            StepAnnotation::transcendental("Inverse Trigonometric Function"),
+            "Inverse Trigonometric Function: tan; Apply tan to both sides",
         ),
         FuncId::Exp => (
             Expr::func(FuncId::Ln, vec![other.clone()]),
-            "Take natural log of both sides",
-            StepAnnotation::power_and_roots(),
+            "ln; Take natural log of both sides",
         ),
         FuncId::Ln => (
             Expr::func(FuncId::Exp, vec![other.clone()]),
-            "Exponentiate both sides",
-            StepAnnotation::power_and_roots(),
+            "exp; Exponentiate both sides",
         ),
         FuncId::Sqrt => (
             normalize::pow(other.clone(), Expr::int(2)),
             "Square both sides",
-            StepAnnotation::power_and_roots(),
         ),
         FuncId::Cbrt => (
             normalize::pow(other.clone(), Expr::int(3)),
             "Cube both sides",
-            StepAnnotation::power_and_roots(),
         ),
         _ => {
             return Err(SolverError::CannotSolve(format!(
@@ -375,15 +359,19 @@ fn unwrap_function(
         }
     };
 
-    let func_name = format!("{}", fid);
-    let new_other_expr = decompile(&new_other);
-    let p = path.annotated_step(
-        Operation::ApplyFunction(func_name),
-        desc.to_string(),
-        new_other_expr,
-        annotation,
-    );
-    unwrap_variable(inner, &new_other, var, p)
+    let tag = match fid {
+        FuncId::Sqrt | FuncId::Cbrt => TechniqueTag::RootBothSides,
+        // Applying ln to undo exp is a logarithm-identity step (PowerAndRoots
+        // tier); applying exp to undo ln is an exponential-identity step
+        // (also PowerAndRoots). The generic `ApplyFunction` tag sits at the
+        // AlgebraicManip tier, which would over-classify these elementary
+        // unwraps.
+        FuncId::Exp => TechniqueTag::LogIdentity,
+        FuncId::Ln => TechniqueTag::ExpIdentity,
+        _ => TechniqueTag::ApplyFunction,
+    };
+    trace.push(Step::new(tag, desc.to_string()).with_output(new_other.clone()));
+    unwrap_variable(inner, &new_other, var, trace)
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────

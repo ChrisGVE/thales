@@ -3,7 +3,7 @@
 use super::*;
 use crate::ast::{BinaryOp, Expression, Function, SymbolicConstant, Variable};
 use crate::numeric::compile::compile;
-use crate::resolution_path::ResolutionPathBuilder;
+use crate::numeric::trace::Trace;
 use std::collections::HashMap;
 
 // ---- helpers ----
@@ -48,12 +48,11 @@ fn pi() -> Expression {
 /// Run isolation and return the result expression.
 fn isolate(lhs: Expression, rhs: Expression, var_name: &str) -> Expression {
     let variable = Variable::new(var_name);
-    let path = ResolutionPathBuilder::new(lhs.clone());
+    let mut trace = Trace::new();
     let lhs_arc = compile(&lhs);
     let rhs_arc = compile(&rhs);
-    let (result, _) = symbolic_isolate(&lhs_arc, &rhs_arc, &variable, path)
-        .unwrap_or_else(|e| panic!("Isolation failed for '{}': {:?}", var_name, e));
-    result
+    symbolic_isolate(&lhs_arc, &rhs_arc, &variable, &mut trace)
+        .unwrap_or_else(|e| panic!("Isolation failed for '{}': {:?}", var_name, e))
 }
 
 /// Evaluate an expression with the given variable bindings.
@@ -294,10 +293,10 @@ fn extraneous_solution_detected() {
     let lhs = div(v("x"), sub(v("x"), int(1)));
     let rhs = div(int(1), sub(v("x"), int(1)));
     let variable = Variable::new("x");
-    let path = ResolutionPathBuilder::new(lhs.clone());
+    let mut trace = Trace::new();
     let lhs_arc = compile(&lhs);
     let rhs_arc = compile(&rhs);
-    let result = symbolic_isolate(&lhs_arc, &rhs_arc, &variable, path);
+    let result = symbolic_isolate(&lhs_arc, &rhs_arc, &variable, &mut trace);
     assert!(
         result.is_err(),
         "Expected error for extraneous solution, but isolation succeeded"
@@ -307,10 +306,10 @@ fn extraneous_solution_detected() {
 #[test]
 fn variable_not_found() {
     let variable = Variable::new("z");
-    let path = ResolutionPathBuilder::new(v("x"));
+    let mut trace = Trace::new();
     let x_arc = compile(&v("x"));
     let y_arc = compile(&v("y"));
-    let result = symbolic_isolate(&x_arc, &y_arc, &variable, path);
+    let result = symbolic_isolate(&x_arc, &y_arc, &variable, &mut trace);
     assert!(result.is_err());
 }
 
@@ -319,13 +318,12 @@ fn resolution_path_has_steps() {
     let lhs = v("F");
     let rhs = mul(v("m"), v("a"));
     let variable = Variable::new("a");
-    let path = ResolutionPathBuilder::new(lhs.clone());
+    let mut trace = Trace::new();
     let lhs_arc = compile(&lhs);
     let rhs_arc = compile(&rhs);
-    let (_, final_path) = symbolic_isolate(&lhs_arc, &rhs_arc, &variable, path).unwrap();
-    let resolution = final_path.finish(v("a"));
+    symbolic_isolate(&lhs_arc, &rhs_arc, &variable, &mut trace).unwrap();
     assert!(
-        resolution.step_count() > 0,
-        "Resolution path should have at least one step"
+        !trace.steps().is_empty(),
+        "Trace should have at least one step"
     );
 }

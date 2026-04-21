@@ -50,7 +50,7 @@ use transforms_impl::*;
 #[swift_bridge::bridge]
 mod ffi {
     #[swift_bridge(swift_repr = "struct")]
-    pub struct ResolutionPathFFI {
+    pub struct TraceFFI {
         pub initial_expr: String,
         pub steps_json: String,
         pub result_expr: String,
@@ -268,7 +268,7 @@ mod ffi {
             equation: &str,
             variable: &str,
             known_values_json: &str,
-        ) -> Result<ResolutionPathFFI, String>;
+        ) -> Result<TraceFFI, String>;
         fn solve_numerically_ffi(
             equation: &str,
             variable: &str,

@@ -10,8 +10,8 @@
 use std::sync::Arc;
 
 use crate::ast::Variable;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::{normalize, BigRational, Expr, FuncId, MulNode, SymbolId};
-use crate::resolution_path::{Operation, ResolutionPathBuilder, StepAnnotation};
 
 use super::super::helpers::contains_symbol;
 
@@ -20,30 +20,30 @@ pub(super) fn solve_log_equation(
     rhs: &Arc<Expr>,
     var: SymbolId,
     variable: &Variable,
-    path: ResolutionPathBuilder,
-) -> Result<(Arc<Expr>, ResolutionPathBuilder), ResolutionPathBuilder> {
+    trace: &mut Trace,
+) -> Result<Arc<Expr>, ()> {
     // ln / natural log.
     for (left, right) in [(lhs, rhs), (rhs, lhs)] {
         if let Some(result) = match_ln(left, right, var) {
-            let path = append_step_ln(path, &result, variable);
-            return Ok((result, path));
+            append_step_ln(trace, &result, variable);
+            return Ok(result);
         }
     }
     // log10.
     for (left, right) in [(lhs, rhs), (rhs, lhs)] {
         if let Some(result) = match_log10(left, right, var) {
-            let path = append_step_log10(path, &result, variable);
-            return Ok((result, path));
+            append_step_log10(trace, &result, variable);
+            return Ok(result);
         }
     }
     // log(var, base) = value.
     for (left, right) in [(lhs, rhs), (rhs, lhs)] {
         if let Some(result) = match_log_base(left, right, var) {
-            let path = append_step_log_base(path, &result, variable);
-            return Ok((result, path));
+            append_step_log_base(trace, &result, variable);
+            return Ok(result);
         }
     }
-    Err(path)
+    Err(())
 }
 
 fn match_ln(left: &Arc<Expr>, right: &Arc<Expr>, var: SymbolId) -> Option<Arc<Expr>> {
@@ -127,47 +127,35 @@ fn split_mul_of_func_of_var(node: &MulNode, func: FuncId, var: SymbolId) -> Opti
     }
 }
 
-fn append_step_ln(
-    path: ResolutionPathBuilder,
-    solution: &Arc<Expr>,
-    variable: &Variable,
-) -> ResolutionPathBuilder {
-    let expr = crate::numeric::compile::decompile(solution);
-    path.annotated_step(
-        Operation::ApplyFunction("exp".to_string()),
-        format!("Apply exponential to solve ln({}) = value", variable),
-        expr,
-        StepAnnotation::power_and_roots(),
-    )
+fn append_step_ln(trace: &mut Trace, solution: &Arc<Expr>, variable: &Variable) {
+    trace.push(
+        Step::new(
+            TechniqueTag::ApplyFunction,
+            format!("exp; Apply exponential to solve ln({}) = value", variable),
+        )
+        .with_output(Arc::clone(solution)),
+    );
 }
 
-fn append_step_log10(
-    path: ResolutionPathBuilder,
-    solution: &Arc<Expr>,
-    variable: &Variable,
-) -> ResolutionPathBuilder {
-    let expr = crate::numeric::compile::decompile(solution);
-    path.annotated_step(
-        Operation::PowerBothSides(crate::ast::Expression::Integer(10)),
-        format!("Apply 10^x to solve log10({}) = value", variable),
-        expr,
-        StepAnnotation::power_and_roots(),
-    )
+fn append_step_log10(trace: &mut Trace, solution: &Arc<Expr>, variable: &Variable) {
+    trace.push(
+        Step::new(
+            TechniqueTag::PowerBothSides,
+            format!("10; Apply 10^x to solve log10({}) = value", variable),
+        )
+        .with_output(Arc::clone(solution)),
+    );
 }
 
-fn append_step_log_base(
-    path: ResolutionPathBuilder,
-    solution: &Arc<Expr>,
-    variable: &Variable,
-) -> ResolutionPathBuilder {
-    let expr = crate::numeric::compile::decompile(solution);
-    path.annotated_step(
-        Operation::ApplyLogProperty("exponential form".to_string()),
-        format!(
-            "Convert logarithm to exponential form to solve for {}",
-            variable
-        ),
-        expr,
-        StepAnnotation::power_and_roots(),
-    )
+fn append_step_log_base(trace: &mut Trace, solution: &Arc<Expr>, variable: &Variable) {
+    trace.push(
+        Step::new(
+            TechniqueTag::LogIdentity,
+            format!(
+                "exponential form; Convert logarithm to exponential form to solve for {}",
+                variable
+            ),
+        )
+        .with_output(Arc::clone(solution)),
+    );
 }

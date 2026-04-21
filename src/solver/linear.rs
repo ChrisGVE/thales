@@ -8,10 +8,10 @@
 
 use num::traits::Zero;
 
-use crate::ast::{BinaryOp, Equation, Expression, Variable};
+use crate::ast::{Equation, Expression, Variable};
 use crate::numeric::compile::{compile, decompile};
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::{normalize, BigRational, Expr, SymbolId};
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder};
 
 use super::coeff::extract_linear_coefficients;
 use super::helpers::{contains_symbol, has_obvious_nonlinearity_expr, is_linear_in_variable_expr};
@@ -79,11 +79,7 @@ impl LinearSolver {
 }
 
 impl Solver for LinearSolver {
-    fn solve(
-        &self,
-        equation: &Equation,
-        variable: &Variable,
-    ) -> SolverResult<(Solution, ResolutionPath)> {
+    fn solve(&self, equation: &Equation, variable: &Variable) -> SolverResult<(Solution, Trace)> {
         let var_name = &variable.name;
         let var_id = SymbolId::intern(var_name);
 
@@ -105,12 +101,7 @@ impl Solver for LinearSolver {
             return Err(SolverError::UnsupportedEquationType);
         }
 
-        let initial_expr = Expression::Binary(
-            BinaryOp::Sub,
-            Box::new(equation.left.clone()),
-            Box::new(equation.right.clone()),
-        );
-        let mut path = ResolutionPathBuilder::new(initial_expr);
+        let mut trace = Trace::new();
 
         // Fast path: the residual is `coeff·var + constant` with rational
         // coefficient and rational constant — solve directly.
@@ -119,25 +110,28 @@ impl Solver for LinearSolver {
         {
             let coeff = &coeffs[0];
             let result_expr = solve_rational_linear(coeff, &constant)?;
-            path = path.step(
-                Operation::Isolate(variable.clone()),
-                format!("Isolate {} on one side", variable),
-                result_expr.clone(),
+            trace.push(
+                Step::new(
+                    TechniqueTag::Isolation,
+                    format!("Isolate {} on one side", variable),
+                )
+                .with_input(residual.clone())
+                .with_output(compile(&result_expr)),
             );
-            let resolution_path = path.finish(result_expr.clone());
-            return Ok((Solution::Unique(result_expr), resolution_path));
+            return Ok((Solution::Unique(result_expr), trace));
         }
 
         // Symbolic path: linear shape but coefficient or constant is not a
         // pure rational — hand off to the full isolation engine.
-        let (result_expr, path) = symbolic_isolate(&lhs_arc, &rhs_arc, variable, path)?;
-        let path = path.step(
-            Operation::Isolate(variable.clone()),
-            format!("Isolate {} on one side", variable),
-            result_expr.clone(),
+        let result_expr = symbolic_isolate(&lhs_arc, &rhs_arc, variable, &mut trace)?;
+        trace.push(
+            Step::new(
+                TechniqueTag::Isolation,
+                format!("Isolate {} on one side", variable),
+            )
+            .with_output(compile(&result_expr)),
         );
-        let resolution_path = path.finish(result_expr.clone());
-        Ok((Solution::Unique(result_expr), resolution_path))
+        Ok((Solution::Unique(result_expr), trace))
     }
 
     fn can_solve(&self, equation: &Equation) -> bool {

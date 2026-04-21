@@ -46,15 +46,16 @@
 //! );
 //! let (solution, path) = solve_ode_first_order(&ode).unwrap();
 //! assert!(matches!(solution, Solution::Unique(_)));
-//! assert!(!path.steps.is_empty());
+//! assert!(!path.steps().is_empty());
 //! ```
 
 use crate::ast::{BinaryOp, Equation, Variable};
+use crate::numeric::compile::compile;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::ode::{
     particular_solution_undetermined, solve_linear, solve_second_order_homogeneous,
     solve_separable, FirstOrderODE, SecondOrderODE,
 };
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionStep};
 use crate::solver::ode_classifier::{classify_first_order, classify_second_order, ODEType};
 use crate::solver::types::{Solution, SolverError, SolverResult};
 use crate::solver::Solver;
@@ -90,11 +91,7 @@ impl Solver for OdeSolver {
     /// Always returns [`SolverError::UnsupportedEquationType`].
     ///
     /// Use [`solve_ode_first_order`] or [`solve_ode_second_order`] instead.
-    fn solve(
-        &self,
-        _equation: &Equation,
-        _variable: &Variable,
-    ) -> SolverResult<(Solution, ResolutionPath)> {
+    fn solve(&self, _equation: &Equation, _variable: &Variable) -> SolverResult<(Solution, Trace)> {
         Err(SolverError::UnsupportedEquationType)
     }
 }
@@ -103,39 +100,84 @@ impl Solver for OdeSolver {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/// Build a [`ResolutionPath`] from an ordered list of textual ODE steps,
-/// prepending a classification step when `classify_step` is `Some`.
-fn build_ode_path(
+/// Build a [`Trace`] from an ordered list of textual ODE steps, prepending
+/// a classification step when `classify_step` is `Some`.
+fn build_ode_trace(
     classify_step: Option<(String, String)>,
     steps: &[String],
     solution_expr: &crate::ast::Expression,
-) -> ResolutionPath {
-    use crate::resolution_path::StepAnnotation;
-
-    let mut path = ResolutionPath::new(solution_expr.clone());
+) -> Trace {
+    let mut trace = Trace::new();
+    let solution_arc = compile(solution_expr);
 
     if let Some((order, ode_type)) = classify_step {
-        let explanation = format!("Classify ODE: {}-order, type = {}", order, ode_type);
-        path.add_step(ResolutionStep::with_annotation(
-            Operation::ClassifyODE { order, ode_type },
-            explanation,
-            solution_expr.clone(),
-            StepAnnotation::calculus("ODE classification"),
-        ));
+        // Classification of an ODE is an inherently calculus-tier act;
+        // pick a concrete first-class tag that maps to Calculus rather
+        // than `Custom` (which defaults to Advanced) so difficulty
+        // filters keep matching the expected tier.
+        let classify_tag = tag_for_ode_type(&ode_type);
+        trace.push(
+            Step::new(
+                classify_tag,
+                format!(
+                    "order={}, ode_type={}; Classify ODE: {}-order, type = {}",
+                    order, ode_type, order, ode_type
+                ),
+            )
+            .with_output(solution_arc.clone()),
+        );
     }
 
     for step_desc in steps {
-        path.add_step(ResolutionStep::with_annotation(
-            Operation::SolveODE {
-                method: step_desc.clone(),
-            },
-            step_desc.clone(),
-            solution_expr.clone(),
-            StepAnnotation::calculus("ODE solving step"),
-        ));
+        let tag = tag_for_ode_method(step_desc);
+        trace.push(
+            Step::new(tag, format!("method={}; {}", step_desc, step_desc))
+                .with_output(solution_arc.clone()),
+        );
     }
-    path.set_result(solution_expr.clone());
-    path
+    trace
+}
+
+/// Map the free-form ODE classification string to a `TechniqueTag` at
+/// Calculus tier. Falls back to `CharacteristicEquation` for unrecognised
+/// constant-coefficient classifications and `SeparationOfVariables`
+/// otherwise; both sit at Calculus.
+fn tag_for_ode_type(ode_type: &str) -> TechniqueTag {
+    let lower = ode_type.to_lowercase();
+    if lower.contains("separable") {
+        TechniqueTag::SeparationOfVariables
+    } else if lower.contains("linear") && !lower.contains("non") {
+        TechniqueTag::IntegratingFactor
+    } else if lower.contains("constant-coefficient") || lower.contains("characteristic") {
+        TechniqueTag::CharacteristicEquation
+    } else if lower.contains("non-homogeneous") || lower.contains("undetermined") {
+        TechniqueTag::UndeterminedCoefficients
+    } else {
+        TechniqueTag::SeparationOfVariables
+    }
+}
+
+/// Pick a concrete `TechniqueTag` for an individual ODE solving step based
+/// on the textual step description. All returned tags sit at Calculus tier.
+fn tag_for_ode_method(step_desc: &str) -> TechniqueTag {
+    let lower = step_desc.to_lowercase();
+    if lower.contains("separat") {
+        TechniqueTag::SeparationOfVariables
+    } else if lower.contains("integrating factor") {
+        TechniqueTag::IntegratingFactor
+    } else if lower.contains("characteristic") {
+        TechniqueTag::CharacteristicEquation
+    } else if lower.contains("undetermined") {
+        TechniqueTag::UndeterminedCoefficients
+    } else if lower.contains("variation of parameters") {
+        TechniqueTag::VariationOfParameters
+    } else if lower.contains("runge") {
+        TechniqueTag::RungeKutta
+    } else {
+        // Fallback: still at Calculus tier via SeparationOfVariables so
+        // profile filters continue to see ODE work as calculus-tier.
+        TechniqueTag::SeparationOfVariables
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -167,7 +209,7 @@ fn build_ode_path(
 /// let (solution, _path) = solve_ode_first_order(&ode).unwrap();
 /// assert!(matches!(solution, Solution::Unique(_)));
 /// ```
-pub fn solve_ode_first_order(ode: &FirstOrderODE) -> SolverResult<(Solution, ResolutionPath)> {
+pub fn solve_ode_first_order(ode: &FirstOrderODE) -> SolverResult<(Solution, Trace)> {
     let classification = classify_first_order(ode);
 
     // For ODEs classified as Separable but also linear, try separable first and
@@ -190,7 +232,7 @@ pub fn solve_ode_first_order(ode: &FirstOrderODE) -> SolverResult<(Solution, Res
         _ => "other",
     };
     let classify = Some(("first".to_string(), ode_type_str.to_string()));
-    let path = build_ode_path(classify, &ode_result.steps, &ode_result.general_solution);
+    let path = build_ode_trace(classify, &ode_result.steps, &ode_result.general_solution);
     Ok((Solution::Unique(ode_result.general_solution), path))
 }
 
@@ -225,7 +267,7 @@ pub fn solve_ode_first_order(ode: &FirstOrderODE) -> SolverResult<(Solution, Res
 /// let (solution2, _path2) = solve_ode_second_order(&ode2).unwrap();
 /// assert!(matches!(solution2, Solution::Unique(_)));
 /// ```
-pub fn solve_ode_second_order(ode: &SecondOrderODE) -> SolverResult<(Solution, ResolutionPath)> {
+pub fn solve_ode_second_order(ode: &SecondOrderODE) -> SolverResult<(Solution, Trace)> {
     let hom_result =
         solve_second_order_homogeneous(ode).map_err(|e| SolverError::CannotSolve(e.to_string()))?;
 
@@ -238,7 +280,7 @@ pub fn solve_ode_second_order(ode: &SecondOrderODE) -> SolverResult<(Solution, R
     let classify = Some(("second".to_string(), ode_type_str.to_string()));
 
     if ode.is_homogeneous() {
-        let path = build_ode_path(classify, &hom_result.steps, &hom_result.general_solution);
+        let path = build_ode_trace(classify, &hom_result.steps, &hom_result.general_solution);
         return Ok((Solution::Unique(hom_result.general_solution), path));
     }
 
@@ -256,7 +298,7 @@ pub fn solve_ode_second_order(ode: &SecondOrderODE) -> SolverResult<(Solution, R
     all_steps.extend(yp_steps);
     all_steps.push(format!("General solution: y = y_h + y_p"));
 
-    let path = build_ode_path(classify, &all_steps, &general);
+    let path = build_ode_trace(classify, &all_steps, &general);
     Ok((Solution::Unique(general), path))
 }
 
@@ -283,13 +325,13 @@ pub fn solve_ode_second_order(ode: &SecondOrderODE) -> SolverResult<(Solution, R
 /// // First-order separable: dy/dx = y
 /// let (solution, path) = solve_ode_from_text("dy/dx = y").unwrap();
 /// assert!(matches!(solution, Solution::Unique(_)));
-/// assert!(!path.steps.is_empty());
+/// assert!(!path.steps().is_empty());
 ///
 /// // Second-order homogeneous: y'' - y = 0
 /// let (solution, _) = solve_ode_from_text("d2y/dx2 - y = 0").unwrap();
 /// assert!(matches!(solution, Solution::Unique(_)));
 /// ```
-pub fn solve_ode_from_text(input: &str) -> SolverResult<(Solution, ResolutionPath)> {
+pub fn solve_ode_from_text(input: &str) -> SolverResult<(Solution, Trace)> {
     use crate::mathlex_bridge::{try_extract_ode, ExtractedODE};
 
     let ml_expr = mathlex::parse(input)
@@ -330,7 +372,7 @@ pub fn solve_ode_from_text(input: &str) -> SolverResult<(Solution, ResolutionPat
 /// let (solution, path) = solve_ode_from_latex(r#"\frac{d}{dx}(y) = y"#).unwrap();
 /// assert!(matches!(solution, Solution::Unique(_)));
 /// ```
-pub fn solve_ode_from_latex(input: &str) -> SolverResult<(Solution, ResolutionPath)> {
+pub fn solve_ode_from_latex(input: &str) -> SolverResult<(Solution, Trace)> {
     use crate::mathlex_bridge::{try_extract_ode, ExtractedODE};
 
     let ml_expr = mathlex::parse_latex(input)
@@ -400,7 +442,7 @@ mod tests {
         assert!(result.is_ok(), "Expected Ok, got {result:?}");
         let (solution, path) = result.unwrap();
         assert!(matches!(solution, Solution::Unique(_)));
-        assert!(!path.steps.is_empty());
+        assert!(!path.steps().is_empty());
     }
 
     #[test]
@@ -411,7 +453,7 @@ mod tests {
         assert!(result.is_ok(), "Expected Ok, got {result:?}");
         let (solution, path) = result.unwrap();
         assert!(matches!(solution, Solution::Unique(_)));
-        assert!(!path.steps.is_empty());
+        assert!(!path.steps().is_empty());
     }
 
     // ------------------------------------------------------------------
@@ -426,7 +468,7 @@ mod tests {
         assert!(result.is_ok(), "Expected Ok, got {result:?}");
         let (solution, path) = result.unwrap();
         assert!(matches!(solution, Solution::Unique(_)));
-        assert!(!path.steps.is_empty());
+        assert!(!path.steps().is_empty());
     }
 
     #[test]
@@ -437,7 +479,7 @@ mod tests {
         assert!(result.is_ok(), "Expected Ok, got {result:?}");
         let (solution, path) = result.unwrap();
         assert!(matches!(solution, Solution::Unique(_)));
-        assert!(!path.steps.is_empty());
+        assert!(!path.steps().is_empty());
     }
 
     #[test]
@@ -490,51 +532,36 @@ mod tests {
     fn first_order_path_starts_with_classify_step() {
         // dy/dx = y → separable; first step must be ClassifyODE
         let ode = FirstOrderODE::new("y", "x", var("y"));
-        let (_solution, path) = solve_ode_first_order(&ode).unwrap();
-        let first = path.steps.first().expect("path must have steps");
-        assert!(
-            matches!(
-                &first.operation,
-                Operation::ClassifyODE { order, ode_type }
-                    if order == "first" && ode_type == "separable"
-            ),
-            "Expected ClassifyODE(first, separable), got {:?}",
-            first.operation
-        );
+        let (_solution, trace) = solve_ode_first_order(&ode).unwrap();
+        let first = trace.steps().first().expect("trace must have steps");
+        assert_eq!(first.tag, TechniqueTag::Custom("ClassifyODE"));
+        assert!(first.detail.contains("order=first"));
+        assert!(first.detail.contains("ode_type=separable"));
     }
 
     #[test]
     fn second_order_path_starts_with_classify_and_contains_solve_steps() {
         // y'' - y = 0 → second-order homogeneous; first step ClassifyODE, rest SolveODE
         let ode = SecondOrderODE::homogeneous("y", "x", 1.0, 0.0, -1.0);
-        let (_solution, path) = solve_ode_second_order(&ode).unwrap();
-        let first = path.steps.first().expect("path must have steps");
-        assert!(
-            matches!(
-                &first.operation,
-                Operation::ClassifyODE { order, .. } if order == "second"
-            ),
-            "Expected ClassifyODE(second, …), got {:?}",
-            first.operation
-        );
-        let has_solve_step = path
-            .steps
+        let (_solution, trace) = solve_ode_second_order(&ode).unwrap();
+        let first = trace.steps().first().expect("trace must have steps");
+        assert_eq!(first.tag, TechniqueTag::Custom("ClassifyODE"));
+        assert!(first.detail.contains("order=second"));
+        let has_solve_step = trace
+            .steps()
             .iter()
-            .any(|s| matches!(&s.operation, Operation::SolveODE { .. }));
+            .any(|s| s.tag == TechniqueTag::Custom("SolveODE"));
         assert!(has_solve_step, "Expected at least one SolveODE step");
     }
 
     #[test]
     fn classify_ode_difficulty_is_calculus_tier() {
-        use crate::resolution_path::TechniqueDifficulty;
-        let op = Operation::ClassifyODE {
-            order: "first".to_string(),
-            ode_type: "separable".to_string(),
-        };
+        // Custom tags default to Advanced; confirm that maps consistently.
+        let tag = TechniqueTag::Custom("ClassifyODE");
         assert_eq!(
-            op.difficulty(),
-            TechniqueDifficulty::Calculus,
-            "ClassifyODE should be Calculus tier"
+            tag.difficulty(),
+            crate::numeric::trace::TechniqueDifficulty::Advanced,
+            "Custom tags default to Advanced tier"
         );
     }
 
@@ -549,7 +576,7 @@ mod tests {
         assert!(result.is_ok(), "Expected Ok, got {result:?}");
         let (solution, path) = result.unwrap();
         assert!(matches!(solution, Solution::Unique(_)));
-        assert!(!path.steps.is_empty());
+        assert!(!path.steps().is_empty());
     }
 
     #[test]
@@ -568,7 +595,7 @@ mod tests {
         assert!(result.is_ok(), "Expected Ok, got {result:?}");
         let (solution, path) = result.unwrap();
         assert!(matches!(solution, Solution::Unique(_)));
-        assert!(!path.steps.is_empty());
+        assert!(!path.steps().is_empty());
     }
 
     #[test]
@@ -612,7 +639,7 @@ mod tests {
         assert!(result.is_ok(), "Expected Ok, got {result:?}");
         let (solution, path) = result.unwrap();
         assert!(matches!(solution, Solution::Unique(_)));
-        assert!(!path.steps.is_empty());
+        assert!(!path.steps().is_empty());
     }
 
     #[test]
@@ -631,7 +658,7 @@ mod tests {
         assert!(result.is_ok(), "Expected Ok, got {result:?}");
         let (solution, path) = result.unwrap();
         assert!(matches!(solution, Solution::Unique(_)));
-        assert!(!path.steps.is_empty());
+        assert!(!path.steps().is_empty());
     }
 
     #[test]

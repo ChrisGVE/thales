@@ -970,7 +970,7 @@ fn test_lm_empty_input() {
 
 #[test]
 fn test_smart_solver_convergence_info_in_path() {
-    use thales::resolution_path::Operation;
+    use thales::numeric::trace::TechniqueTag;
     use thales::solver::{SmartSolver, Solver};
 
     // x + sin(x) = 1 — transcendental equation that forces numerical fallback
@@ -991,23 +991,20 @@ fn test_smart_solver_convergence_info_in_path() {
     let var = Variable::new("x");
     let result = solver.solve(&equation, &var);
 
-    if let Ok((_solution, path)) = result {
-        let has_convergence_step = path.steps.iter().any(|step| {
-            matches!(
-                &step.operation,
-                Operation::NumericalConverged { iterations, .. } if *iterations > 0
-            )
+    if let Ok((_solution, trace)) = result {
+        let has_convergence_step = trace.steps().iter().any(|s| {
+            s.tag == TechniqueTag::NumericalApproximation && s.detail.contains("iterations")
         });
         assert!(
             has_convergence_step,
-            "Resolution path should contain a NumericalConverged step with convergence info"
+            "Trace should contain a NumericalApproximation step with convergence info"
         );
     }
 }
 
 #[test]
 fn test_numerical_convergence_step_for_lambert_equation() {
-    use thales::resolution_path::Operation;
+    use thales::numeric::trace::TechniqueTag;
     use thales::solver::{SmartSolver, Solver};
 
     // x*e^x = 1 — Lambert-type equation that needs numerical methods
@@ -1027,26 +1024,28 @@ fn test_numerical_convergence_step_for_lambert_equation() {
     let solver = SmartSolver::new();
     let var = Variable::new("x");
 
-    if let Ok((_solution, path)) = solver.solve(&equation, &var) {
-        let convergence_steps: Vec<_> = path
-            .steps
+    if let Ok((_solution, trace)) = solver.solve(&equation, &var) {
+        let convergence_steps: Vec<_> = trace
+            .steps()
             .iter()
-            .filter(|step| matches!(&step.operation, Operation::NumericalConverged { .. }))
+            .filter(|s| {
+                s.tag == TechniqueTag::NumericalApproximation && s.detail.contains("iterations")
+            })
             .collect();
 
         assert!(
             !convergence_steps.is_empty(),
-            "Path should contain NumericalConverged step for Lambert-type equation"
+            "Trace should contain a NumericalApproximation convergence step for Lambert-type equation"
         );
 
         let step = convergence_steps[0];
         assert!(
-            step.explanation.contains("iterations"),
-            "Convergence step explanation should mention iterations"
+            step.detail.contains("iterations"),
+            "Convergence step detail should mention iterations"
         );
         assert!(
-            step.explanation.contains("error"),
-            "Convergence step explanation should mention error"
+            step.detail.contains("error"),
+            "Convergence step detail should mention error"
         );
     }
 }

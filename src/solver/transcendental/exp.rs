@@ -11,8 +11,8 @@
 use std::sync::Arc;
 
 use crate::ast::Variable;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::{normalize, BigRational, Expr, FuncId, MulNode, SymbolId};
-use crate::resolution_path::{Operation, ResolutionPathBuilder, StepAnnotation};
 
 use super::super::coeff::extract_coefficient;
 use super::super::helpers::contains_symbol;
@@ -22,23 +22,23 @@ pub(super) fn solve_exp_equation(
     rhs: &Arc<Expr>,
     var: SymbolId,
     variable: &Variable,
-    path: ResolutionPathBuilder,
-) -> Result<(Arc<Expr>, ResolutionPathBuilder), ResolutionPathBuilder> {
+    trace: &mut Trace,
+) -> Result<Arc<Expr>, ()> {
     // exp(...) = ...
     for (left, right) in [(lhs, rhs), (rhs, lhs)] {
         if let Some(result) = match_exp(left, right, var) {
-            let path = append_step_exp(path, &result, variable);
-            return Ok((result, path));
+            append_step_exp(trace, &result, variable);
+            return Ok(result);
         }
     }
     // a^x = ...
     for (left, right) in [(lhs, rhs), (rhs, lhs)] {
         if let Some(result) = match_power(left, right, var) {
-            let path = append_step_power(path, &result, variable);
-            return Ok((result, path));
+            append_step_power(trace, &result, variable);
+            return Ok(result);
         }
     }
-    Err(path)
+    Err(())
 }
 
 fn match_exp(left: &Arc<Expr>, right: &Arc<Expr>, var: SymbolId) -> Option<Arc<Expr>> {
@@ -125,30 +125,28 @@ fn split_mul_of_func_of_var(node: &MulNode, func: FuncId, var: SymbolId) -> Opti
     }
 }
 
-fn append_step_exp(
-    path: ResolutionPathBuilder,
-    solution: &Arc<Expr>,
-    variable: &Variable,
-) -> ResolutionPathBuilder {
-    let expr = crate::numeric::compile::decompile(solution);
-    path.annotated_step(
-        Operation::ApplyFunction("ln".to_string()),
-        format!("Apply natural logarithm to solve exp({}) = value", variable),
-        expr,
-        StepAnnotation::power_and_roots(),
-    )
+fn append_step_exp(trace: &mut Trace, solution: &Arc<Expr>, variable: &Variable) {
+    trace.push(
+        Step::new(
+            TechniqueTag::ApplyFunction,
+            format!(
+                "ln; Apply natural logarithm to solve exp({}) = value",
+                variable
+            ),
+        )
+        .with_output(Arc::clone(solution)),
+    );
 }
 
-fn append_step_power(
-    path: ResolutionPathBuilder,
-    solution: &Arc<Expr>,
-    variable: &Variable,
-) -> ResolutionPathBuilder {
-    let expr = crate::numeric::compile::decompile(solution);
-    path.annotated_step(
-        Operation::ApplyLogProperty("change of base".to_string()),
-        format!("Apply logarithm to solve for {} in exponent", variable),
-        expr,
-        StepAnnotation::power_and_roots(),
-    )
+fn append_step_power(trace: &mut Trace, solution: &Arc<Expr>, variable: &Variable) {
+    trace.push(
+        Step::new(
+            TechniqueTag::LogIdentity,
+            format!(
+                "change of base; Apply logarithm to solve for {} in exponent",
+                variable
+            ),
+        )
+        .with_output(Arc::clone(solution)),
+    );
 }

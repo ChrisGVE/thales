@@ -20,7 +20,7 @@ fn probe_invert_r_of_theta() {
     eprintln!("solve_for(theta) = {:?}", res);
 
     match res {
-        Ok(path) => eprintln!("Result: {}", path.result),
+        Ok((result, _trace)) => eprintln!("Result: {}", result),
         Err(e) => eprintln!("Error: {:?}", e),
     }
 }
@@ -62,7 +62,7 @@ fn probe_invert_cubic_in_u_symbolic_r() {
     let res = solve_for(&eq, "u", &known);
     eprintln!("solve_for(u) cubic with symbolic r = {:?}", res);
     match res {
-        Ok(path) => eprintln!("Result: {}", path.result),
+        Ok((result, _trace)) => eprintln!("Result: {}", result),
         Err(e) => eprintln!("Error: {:?}", e),
     }
 }

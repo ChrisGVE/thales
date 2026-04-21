@@ -7,10 +7,10 @@
 
 use std::sync::Arc;
 
-use crate::ast::{BinaryOp, Equation, Expression, Variable};
+use crate::ast::{Equation, Expression, Variable};
 use crate::numeric::compile::compile;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::{normalize, Expr, SymbolId};
-use crate::resolution_path::{Operation, ResolutionPath, ResolutionPathBuilder, StepAnnotation};
 
 use super::helpers::{contains_symbol, is_polynomial_expr, simplify_numeric_expression};
 use super::linear::LinearSolver;
@@ -20,11 +20,7 @@ use super::Solver;
 
 /// Solve cubic equation ax³ + bx² + cx + d = 0 using Cardano's formula.
 /// coeffs = [d, c, b, a] (constant term first)
-fn solve_cubic(
-    coeffs: &[f64],
-    _var: &str,
-    mut path: ResolutionPathBuilder,
-) -> SolverResult<(Solution, ResolutionPath)> {
+fn solve_cubic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<Solution> {
     if coeffs.len() < 4 {
         return Err(SolverError::CannotSolve(
             "Not a cubic polynomial".to_string(),
@@ -48,41 +44,10 @@ fn solve_cubic(
     let q = c / a;
     let r = d / a;
 
-    // Build an expression representing the normalized monic cubic
-    let monic_cubic = Expression::Binary(
-        BinaryOp::Add,
-        Box::new(Expression::Binary(
-            BinaryOp::Add,
-            Box::new(Expression::Binary(
-                BinaryOp::Add,
-                Box::new(Expression::Power(
-                    Box::new(Expression::Variable(Variable::new(_var))),
-                    Box::new(Expression::Integer(3)),
-                )),
-                Box::new(Expression::Binary(
-                    BinaryOp::Mul,
-                    Box::new(Expression::Float(p)),
-                    Box::new(Expression::Power(
-                        Box::new(Expression::Variable(Variable::new(_var))),
-                        Box::new(Expression::Integer(2)),
-                    )),
-                )),
-            )),
-            Box::new(Expression::Binary(
-                BinaryOp::Mul,
-                Box::new(Expression::Float(q)),
-                Box::new(Expression::Variable(Variable::new(_var))),
-            )),
-        )),
-        Box::new(Expression::Float(r)),
-    );
-
-    path = path.annotated_step(
-        Operation::Simplify,
+    trace.push(Step::new(
+        TechniqueTag::Simplification,
         format!("Normalized cubic: x³ + {}x² + {}x + {} = 0", p, q, r),
-        monic_cubic,
-        StepAnnotation::elementary(),
-    );
+    ));
 
     // Depress the cubic: substitute x = t - p/3
     // t³ + pt + q = 0 where:
@@ -91,28 +56,21 @@ fn solve_cubic(
     let dep_p = q - p * p / 3.0;
     let dep_q = r - p * q / 3.0 + 2.0 * p * p * p / 27.0;
 
-    // Build an expression representing the depressed cubic coefficients
-    let depressed_cubic = Expression::Binary(
-        BinaryOp::Add,
-        Box::new(Expression::Float(dep_p)),
-        Box::new(Expression::Float(dep_q)),
-    );
-
-    path = path.annotated_step(
-        Operation::Simplify,
-        format!("Depressed cubic: t³ + {}t + {} = 0", dep_p, dep_q),
-        depressed_cubic,
-        StepAnnotation::algebraic("Tschirnhaus Transformation"),
-    );
+    trace.push(Step::new(
+        TechniqueTag::Simplification,
+        format!(
+            "Tschirnhaus Transformation: Depressed cubic: t³ + {}t + {} = 0",
+            dep_p, dep_q
+        ),
+    ));
 
     // Discriminant: Δ = -4p³ - 27q²
     let discriminant = -4.0 * dep_p * dep_p * dep_p - 27.0 * dep_q * dep_q;
 
-    path = path.step(
-        Operation::Simplify,
+    trace.push(Step::new(
+        TechniqueTag::Simplification,
         format!("Discriminant: Δ = {}", discriminant),
-        Expression::Float(discriminant),
-    );
+    ));
 
     let shift = -p / 3.0;
     let roots: Vec<Expression>;
@@ -166,24 +124,20 @@ fn solve_cubic(
         ];
     }
 
-    path = path.annotated_step(
-        Operation::Simplify,
-        "Applied Cardano's formula".to_string(),
-        roots[0].clone(),
-        StepAnnotation::algebraic("Cardano's Formula"),
+    trace.push(
+        Step::new(
+            TechniqueTag::Simplification,
+            "Cardano's Formula: Applied Cardano's formula".to_string(),
+        )
+        .with_output(compile(&roots[0])),
     );
 
-    let resolution_path = path.finish(roots[0].clone());
-    Ok((Solution::Multiple(roots), resolution_path))
+    Ok(Solution::Multiple(roots))
 }
 
 /// Solve quartic equation ax⁴ + bx³ + cx² + dx + e = 0 using Ferrari's method.
 /// coeffs = [e, d, c, b, a] (constant term first)
-fn solve_quartic(
-    coeffs: &[f64],
-    _var: &str,
-    mut path: ResolutionPathBuilder,
-) -> SolverResult<(Solution, ResolutionPath)> {
+fn solve_quartic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<Solution> {
     if coeffs.len() < 5 {
         return Err(SolverError::CannotSolve(
             "Not a quartic polynomial".to_string(),
@@ -208,55 +162,13 @@ fn solve_quartic(
     let r = d / a;
     let s = e / a;
 
-    // Build an expression representing the normalized monic quartic
-    let monic_quartic = Expression::Binary(
-        BinaryOp::Add,
-        Box::new(Expression::Binary(
-            BinaryOp::Add,
-            Box::new(Expression::Binary(
-                BinaryOp::Add,
-                Box::new(Expression::Binary(
-                    BinaryOp::Add,
-                    Box::new(Expression::Power(
-                        Box::new(Expression::Variable(Variable::new(_var))),
-                        Box::new(Expression::Integer(4)),
-                    )),
-                    Box::new(Expression::Binary(
-                        BinaryOp::Mul,
-                        Box::new(Expression::Float(p)),
-                        Box::new(Expression::Power(
-                            Box::new(Expression::Variable(Variable::new(_var))),
-                            Box::new(Expression::Integer(3)),
-                        )),
-                    )),
-                )),
-                Box::new(Expression::Binary(
-                    BinaryOp::Mul,
-                    Box::new(Expression::Float(q)),
-                    Box::new(Expression::Power(
-                        Box::new(Expression::Variable(Variable::new(_var))),
-                        Box::new(Expression::Integer(2)),
-                    )),
-                )),
-            )),
-            Box::new(Expression::Binary(
-                BinaryOp::Mul,
-                Box::new(Expression::Float(r)),
-                Box::new(Expression::Variable(Variable::new(_var))),
-            )),
-        )),
-        Box::new(Expression::Float(s)),
-    );
-
-    path = path.annotated_step(
-        Operation::Simplify,
+    trace.push(Step::new(
+        TechniqueTag::Simplification,
         format!(
             "Normalized quartic: x⁴ + {}x³ + {}x² + {}x + {} = 0",
             p, q, r, s
         ),
-        monic_quartic,
-        StepAnnotation::elementary(),
-    );
+    ));
 
     // Depress the quartic: substitute x = y - p/4
     // y⁴ + αy² + βy + γ = 0
@@ -264,26 +176,13 @@ fn solve_quartic(
     let beta = r - p * q / 2.0 + p * p * p / 8.0;
     let gamma = s - p * r / 4.0 + p * p * q / 16.0 - 3.0 * p * p * p * p / 256.0;
 
-    // Build an expression representing the depressed quartic coefficients
-    let depressed_quartic = Expression::Binary(
-        BinaryOp::Add,
-        Box::new(Expression::Binary(
-            BinaryOp::Add,
-            Box::new(Expression::Float(alpha)),
-            Box::new(Expression::Float(beta)),
-        )),
-        Box::new(Expression::Float(gamma)),
-    );
-
-    path = path.annotated_step(
-        Operation::Simplify,
+    trace.push(Step::new(
+        TechniqueTag::Simplification,
         format!(
-            "Depressed quartic: y⁴ + {}y² + {}y + {} = 0",
+            "Tschirnhaus Transformation: Depressed quartic: y⁴ + {}y² + {}y + {} = 0",
             alpha, beta, gamma
         ),
-        depressed_quartic,
-        StepAnnotation::algebraic("Tschirnhaus Transformation"),
-    );
+    ));
 
     let shift = -p / 4.0;
 
@@ -314,13 +213,14 @@ fn solve_quartic(
                     -sqrt_imag,
                 )));
             }
-            path = path.step(
-                Operation::Simplify,
-                "Solved biquadratic via complex square roots".to_string(),
-                roots[0].clone(),
+            trace.push(
+                Step::new(
+                    TechniqueTag::Simplification,
+                    "Solved biquadratic via complex square roots".to_string(),
+                )
+                .with_output(compile(&roots[0])),
             );
-            let resolution_path = path.finish(roots[0].clone());
-            return Ok((Solution::Multiple(roots), resolution_path));
+            return Ok(Solution::Multiple(roots));
         } else {
             let u1 = (-alpha + disc.sqrt()) / 2.0;
             let u2 = (-alpha - disc.sqrt()) / 2.0;
@@ -340,13 +240,14 @@ fn solve_quartic(
                     )));
                 }
             }
-            path = path.step(
-                Operation::Simplify,
-                format!("Solved biquadratic: u = y², u₁ = {}, u₂ = {}", u1, u2),
-                roots[0].clone(),
+            trace.push(
+                Step::new(
+                    TechniqueTag::Simplification,
+                    format!("Solved biquadratic: u = y², u₁ = {}, u₂ = {}", u1, u2),
+                )
+                .with_output(compile(&roots[0])),
             );
-            let resolution_path = path.finish(roots[0].clone());
-            return Ok((Solution::Multiple(roots), resolution_path));
+            return Ok(Solution::Multiple(roots));
         }
     }
 
@@ -387,11 +288,10 @@ fn solve_quartic(
         m = u + v - resolvent_coeffs[2] / 3.0;
     }
 
-    path = path.step(
-        Operation::Simplify,
+    trace.push(Step::new(
+        TechniqueTag::Simplification,
         format!("Resolvent cubic root: m = {}", m),
-        Expression::Float(m),
-    );
+    ));
 
     // Factor quartic: (y² + m)² = (α + 2m)y² - βy + (m² + αm + γ - γ)
     // Using Ferrari's factorization into two quadratics
@@ -450,23 +350,23 @@ fn solve_quartic(
         )));
     }
 
-    path = path.annotated_step(
-        Operation::Simplify,
-        "Applied Ferrari's method".to_string(),
-        roots[0].clone(),
-        StepAnnotation::algebraic("Ferrari's Method"),
+    trace.push(
+        Step::new(
+            TechniqueTag::Simplification,
+            "Ferrari's Method: Applied Ferrari's method".to_string(),
+        )
+        .with_output(compile(&roots[0])),
     );
 
-    let resolution_path = path.finish(roots[0].clone());
-    Ok((Solution::Multiple(roots), resolution_path))
+    Ok(Solution::Multiple(roots))
 }
 
 /// Solve polynomial of degree 5+ using numerical methods (Durand-Kerner).
 fn solve_polynomial_numerically(
     coeffs: &[f64],
     _var: &str,
-    mut path: ResolutionPathBuilder,
-) -> SolverResult<(Solution, ResolutionPath)> {
+    trace: &mut Trace,
+) -> SolverResult<Solution> {
     let degree = coeffs.len() - 1;
     if degree < 1 {
         return Err(SolverError::CannotSolve("Invalid polynomial".to_string()));
@@ -480,14 +380,13 @@ fn solve_polynomial_numerically(
         ));
     }
 
-    path = path.step(
-        Operation::Simplify,
+    trace.push(Step::new(
+        TechniqueTag::NumericalApproximation,
         format!(
             "Solving degree {} polynomial numerically (Durand-Kerner method)",
             degree
         ),
-        Expression::Integer(degree as i64),
-    );
+    ));
 
     // Initial guess: roots evenly spaced on a circle
     let radius = 1.0
@@ -551,14 +450,15 @@ fn solve_polynomial_numerically(
         })
         .collect();
 
-    path = path.step(
-        Operation::Simplify,
-        format!("Found {} roots numerically", degree),
-        root_exprs[0].clone(),
+    trace.push(
+        Step::new(
+            TechniqueTag::NumericalApproximation,
+            format!("Found {} roots numerically", degree),
+        )
+        .with_output(compile(&root_exprs[0])),
     );
 
-    let resolution_path = path.finish(root_exprs[0].clone());
-    Ok((Solution::Multiple(root_exprs), resolution_path))
+    Ok(Solution::Multiple(root_exprs))
 }
 
 /// Polynomial equation solver for general degree n polynomials.
@@ -613,11 +513,7 @@ impl PolynomialSolver {
 }
 
 impl Solver for PolynomialSolver {
-    fn solve(
-        &self,
-        equation: &Equation,
-        variable: &Variable,
-    ) -> SolverResult<(Solution, ResolutionPath)> {
+    fn solve(&self, equation: &Equation, variable: &Variable) -> SolverResult<(Solution, Trace)> {
         let var_name = &variable.name;
         let var_id = SymbolId::intern(var_name);
 
@@ -625,18 +521,12 @@ impl Solver for PolynomialSolver {
         let rhs = compile(&equation.right);
         let residual = normalize::sub(lhs, rhs);
 
-        let initial_expr = Expression::Binary(
-            BinaryOp::Sub,
-            Box::new(equation.left.clone()),
-            Box::new(equation.right.clone()),
-        );
-        let mut path = ResolutionPathBuilder::new(initial_expr);
+        let mut trace = Trace::new();
 
         if !contains_symbol(&residual, var_id) {
             // Residual is a constant: 0 = const.
             if residual.is_zero() {
-                let resolution_path = path.finish(Expression::Integer(0));
-                return Ok((Solution::Infinite, resolution_path));
+                return Ok((Solution::Infinite, trace));
             }
             return Err(SolverError::NoSolution);
         }
@@ -649,11 +539,10 @@ impl Solver for PolynomialSolver {
         })?;
         let degree = coeffs.len().saturating_sub(1);
 
-        path = path.step(
-            Operation::Simplify,
+        trace.push(Step::new(
+            TechniqueTag::Simplification,
             format!("Identified polynomial of degree {}", degree),
-            Expression::Integer(degree as i64),
-        );
+        ));
 
         match degree {
             0 => {
@@ -666,9 +555,18 @@ impl Solver for PolynomialSolver {
             }
             1 => LinearSolver::new().solve(equation, variable),
             2 => QuadraticSolver::new().solve(equation, variable),
-            3 => solve_cubic(&coeffs, var_name, path),
-            4 => solve_quartic(&coeffs, var_name, path),
-            _ => solve_polynomial_numerically(&coeffs, var_name, path),
+            3 => {
+                let sol = solve_cubic(&coeffs, var_name, &mut trace)?;
+                Ok((sol, trace))
+            }
+            4 => {
+                let sol = solve_quartic(&coeffs, var_name, &mut trace)?;
+                Ok((sol, trace))
+            }
+            _ => {
+                let sol = solve_polynomial_numerically(&coeffs, var_name, &mut trace)?;
+                Ok((sol, trace))
+            }
         }
     }
 
