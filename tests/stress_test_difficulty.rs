@@ -15,9 +15,9 @@
 
 use std::time::Instant;
 use thales::ast::{BinaryOp, Expression, UnaryOp, Variable};
+use thales::numeric::trace::TechniqueDifficulty;
 use thales::ode::FirstOrderODE;
 use thales::parser::parse_equation;
-use thales::resolution_path::TechniqueDifficulty;
 use thales::solver::ode_solver::solve_ode_first_order;
 use thales::solver::{SmartSolver, Solution, Solver};
 

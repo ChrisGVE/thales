@@ -10,8 +10,8 @@
 //! solving. Tests requiring true calculus evaluation remain #[ignore].
 
 use thales::ast::Variable;
+use thales::numeric::trace::TechniqueDifficulty;
 use thales::parser::parse_equation;
-use thales::resolution_path::TechniqueDifficulty;
 use thales::solver::{SmartSolver, Solution, Solver};
 
 fn assert_solves_at_tier(equation_str: &str, target_var: &str, max_expected: TechniqueDifficulty) {
