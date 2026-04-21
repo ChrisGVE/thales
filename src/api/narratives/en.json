@@ -1,0 +1,39 @@
+{
+  "command.noop": "No operation — empty response.",
+  "command.conjugate": "Complex conjugation is not yet wired into the dispatcher.",
+  "command.inverse_fn": "Generalised inverse-function computation is not yet wired into the dispatcher.",
+  "command.apply_identity": "Named-identity application is not yet wired into the dispatcher.",
+  "command.total_diff": "Total derivative with explicit dependencies is not yet wired into the dispatcher.",
+  "command.divergence": "Divergence of a vector field is not yet wired into the dispatcher.",
+  "command.curl": "Curl of a vector field is not yet wired into the dispatcher.",
+  "command.laplacian": "Laplacian of a scalar field is not yet wired into the dispatcher.",
+  "command.jacobian": "Jacobian matrix is not yet wired into the dispatcher.",
+  "command.hessian": "Hessian matrix is not yet wired into the dispatcher.",
+  "command.directional_diff": "Directional derivative is not yet wired into the dispatcher.",
+  "command.taylor": "Taylor expansion is not yet wired into the dispatcher.",
+  "command.laurent": "Laurent expansion is not yet wired into the dispatcher.",
+  "command.asymptotic": "Asymptotic expansion is not yet wired into the dispatcher.",
+  "command.compose": "Series composition is not yet wired into the dispatcher.",
+  "command.revert": "Series reversion is not yet wired into the dispatcher.",
+  "command.residue": "Residue computation is not yet wired into the dispatcher.",
+  "command.special_fn": "Special-function evaluation is not yet wired into the dispatcher.",
+  "command.matrix": "Matrix operations are not yet wired into the dispatcher.",
+  "command.optimize": "Constrained optimisation is not yet wired into the dispatcher.",
+  "command.lagrange_mult": "Lagrange-multiplier specialisation is not yet wired into the dispatcher.",
+
+  "command.factor.partial": "Full factoring engine is not yet wired into the API; result is the canonical simplification.",
+
+  "command.integrate": "Symbolic integration.",
+  "command.def_integrate": "Definite integration.",
+  "command.limit": "Limit evaluation.",
+  "command.partial_fractions": "Partial fraction decomposition.",
+  "command.rearrange": "Rearrange equation to isolate the named variable.",
+  "command.solve_system": "Simultaneous solution of a system of equations.",
+  "command.fourier_series": "Fourier series expansion.",
+  "command.ode": "Ordinary differential equation solver.",
+
+  "step.generic": "Engine step.",
+
+  "assume.positive": "assumed $x > 0$",
+  "assume.principal_branch": "used principal branch"
+}

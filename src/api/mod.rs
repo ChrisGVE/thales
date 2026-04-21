@@ -31,6 +31,7 @@ pub mod dispatch;
 pub mod domain;
 pub mod json;
 pub mod narrative;
+pub mod narratives;
 pub mod path;
 pub mod request;
 pub mod response;

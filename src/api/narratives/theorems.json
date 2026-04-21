@@ -1,0 +1,19 @@
+{
+  "axiom.field.distributivity": "**Distributivity** — for all $a$, $b$, $c$: $a \\cdot (b + c) = a \\cdot b + a \\cdot c$.",
+  "axiom.field.commutativity_add": "**Commutativity of addition** — for all $a$, $b$: $a + b = b + a$.",
+  "axiom.field.commutativity_mul": "**Commutativity of multiplication** — for all $a$, $b$: $a \\cdot b = b \\cdot a$.",
+
+  "theorem.calc.fundamental": "**Fundamental Theorem of Calculus** — if $F$ is an antiderivative of $f$ on $[a, b]$, then $\\int_a^b f(x)\\,dx = F(b) - F(a)$.",
+  "theorem.calc.lhopital": "**L'Hôpital's Rule** — if $\\lim_{x \\to c} f(x) = \\lim_{x \\to c} g(x) = 0$ (or $\\pm\\infty$) and $g'(x) \\neq 0$ near $c$, then $\\lim_{x \\to c} \\frac{f(x)}{g(x)} = \\lim_{x \\to c} \\frac{f'(x)}{g'(x)}$ when the right-hand limit exists.",
+  "theorem.alg.fundamental": "**Fundamental Theorem of Algebra** — every non-constant polynomial with complex coefficients has at least one complex root.",
+  "theorem.complex.euler": "**Euler's Formula** — $e^{i\\theta} = \\cos\\theta + i\\sin\\theta$.",
+
+  "lemma.zorn": "**Zorn's Lemma** — every partially ordered set in which every chain has an upper bound contains at least one maximal element.",
+
+  "corollary.cauchy.residue": "**Residue Theorem (Cauchy)** — for a closed contour $\\gamma$ enclosing isolated singularities of a meromorphic function $f$: $\\oint_\\gamma f(z)\\,dz = 2\\pi i \\sum_k \\operatorname{Res}(f, z_k)$.",
+
+  "definition.derivative": "**Derivative** — $f'(x) = \\lim_{h \\to 0} \\frac{f(x + h) - f(x)}{h}$ when the limit exists.",
+  "definition.integral.riemann": "**Riemann Integral** — $\\int_a^b f(x)\\,dx = \\lim_{\\|P\\| \\to 0} \\sum_{i=1}^n f(x_i^*) \\Delta x_i$ for tagged partitions $P$ of $[a, b]$.",
+
+  "convention.principal_branch": "The principal branch of a multi-valued function is chosen unless specified otherwise."
+}
