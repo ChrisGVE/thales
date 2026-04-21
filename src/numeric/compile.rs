@@ -334,32 +334,51 @@ fn decompile_mul_node(node: &MulNode) -> Expression {
         acc = Some(big_rational_to_expr(&node.coeff));
     }
 
+    // Partition factors by sign of integer exponent so that positive-exponent
+    // factors enter the accumulator first (building the numerator) and
+    // negative-exponent factors emit as `Div` against the already-built
+    // accumulator (building `num / denom`). A factor whose exponent is not
+    // a negative integer is treated as positive.
+    let mut positive_factors: Vec<(&Arc<Expr>, &Arc<Expr>)> = Vec::new();
+    let mut negative_factors: Vec<(&Arc<Expr>, i64)> = Vec::new();
     for (base, exp) in &node.factors {
-        let base_expr = decompile(base);
-        let exp_expr = decompile(exp);
-
-        if exp.is_one() {
-            // base^1 → just base
-            let factor = base_expr;
-            acc = Some(match acc {
-                None => factor,
-                Some(prev) => Expression::Binary(BinaryOp::Mul, Box::new(prev), Box::new(factor)),
-            });
-        } else if *exp.as_ref() == Expr::Integer(SmallInt::from(-1i64)) {
-            // base^(-1) → Division
-            let current = acc.take().unwrap_or(Expression::Integer(1));
-            acc = Some(Expression::Binary(
-                BinaryOp::Div,
-                Box::new(current),
-                Box::new(base_expr),
-            ));
-        } else {
-            let factor = Expression::Power(Box::new(base_expr), Box::new(exp_expr));
-            acc = Some(match acc {
-                None => factor,
-                Some(prev) => Expression::Binary(BinaryOp::Mul, Box::new(prev), Box::new(factor)),
-            });
+        if let Expr::Integer(n) = exp.as_ref() {
+            if let Some(ni) = n.to_i64() {
+                if ni < 0 {
+                    negative_factors.push((base, ni));
+                    continue;
+                }
+            }
         }
+        positive_factors.push((base, exp));
+    }
+
+    for (base, exp) in positive_factors {
+        let base_expr = decompile(base);
+        let factor = if exp.is_one() {
+            base_expr
+        } else {
+            Expression::Power(Box::new(base_expr), Box::new(decompile(exp)))
+        };
+        acc = Some(match acc {
+            None => factor,
+            Some(prev) => Expression::Binary(BinaryOp::Mul, Box::new(prev), Box::new(factor)),
+        });
+    }
+
+    for (base, ni) in negative_factors {
+        let base_expr = decompile(base);
+        let denom = if ni == -1 {
+            base_expr
+        } else {
+            Expression::Power(Box::new(base_expr), Box::new(Expression::Integer(-ni)))
+        };
+        let current = acc.take().unwrap_or(Expression::Integer(1));
+        acc = Some(Expression::Binary(
+            BinaryOp::Div,
+            Box::new(current),
+            Box::new(denom),
+        ));
     }
 
     let result = acc.unwrap_or(Expression::Integer(1));

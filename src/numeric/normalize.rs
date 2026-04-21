@@ -204,6 +204,14 @@ fn mul_into_node(node: &mut MulNode, expr: &Arc<Expr>) {
                 node.add_factor(base.clone(), exp.clone());
             }
         }
+        // Merge `Pow(base, exp)` directly as a `(base, exp)` factor so
+        // that `x · y^(-1)` canonicalizes to a MulNode with factor
+        // `y^(-1)` keyed on `y`, not on the opaque `Pow` node. This lets
+        // downstream decompile recognise `y^(-1)` and emit `Div`, and
+        // lets `add_factor` combine like-base powers.
+        Expr::Pow(base, exp) => {
+            node.add_factor(base.clone(), exp.clone());
+        }
         // Rule 4: absorb numeric coefficients
         Expr::Integer(n) => {
             node.scale(&BigRational::from_integer(n.clone()));
