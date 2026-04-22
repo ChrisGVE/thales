@@ -1,4 +1,3 @@
-# workspace-qdrant ignore file
-# Inverse of .gitignore: ensure reference/ is indexed even though git ignores it
-!reference/
-!reference/**
+# workspace-qdrant ingestion fence
+# Additional exclusions beyond .gitignore. Use ! prefix to re-include.
+# Currently minimal — add exclusions as needed.

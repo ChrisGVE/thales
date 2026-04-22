@@ -3,9 +3,8 @@
 **/*.rs.bk
 *.pdb
 
-# Cargo.lock for libraries (not applications)
-# Uncomment if you want to commit Cargo.lock for reproducible builds
-# Cargo.lock
+# Cargo.lock: committed at workspace root, not per-crate
+Cargo.lock
 
 # IDE files
 .vscode/
@@ -18,11 +17,7 @@
 .DS_Store
 .AppleDouble
 .LSOverride
-
-# Thumbnails
 ._*
-
-# Files that might appear in the root of a volume
 .DocumentRevisions-V100
 .fseventsd
 .Spotlight-V100
@@ -67,19 +62,6 @@ coverage/
 # Documentation
 /doc/
 
-# Temporary files
-tmp/
-*.tmp
-
-# Local development files
-.taskmaster/
-.serena/
-CLAUDE.md
-CLAUDE.local.md
-handover.md
-code_audit.md
-luaswift_requirements.md
-
 # Build artifacts from other toolchains
 .build/
 *.rlib
@@ -87,6 +69,6 @@ luaswift_requirements.md
 # Reference PDFs
 *.pdf
 
-# Local reference materials
-reference/
-.wqmignore
+# Crate-local CLAUDE.md (crate-specific instructions kept local per open-source convention)
+CLAUDE.md
+CLAUDE.local.md
