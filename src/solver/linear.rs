@@ -8,8 +8,8 @@
 
 use num::traits::Zero;
 
-use crate::ast::{Equation, Expression, Variable};
-use crate::numeric::compile::{compile, decompile};
+use crate::ast::{Equation, Variable};
+use crate::numeric::compile::compile;
 use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::{normalize, BigRational, Expr, SymbolId};
 
@@ -109,16 +109,16 @@ impl Solver for LinearSolver {
             extract_linear_coefficients(&residual, std::slice::from_ref(variable))
         {
             let coeff = &coeffs[0];
-            let result_expr = solve_rational_linear(coeff, &constant)?;
+            let result_arc = solve_rational_linear(coeff, &constant)?;
             trace.push(
                 Step::new(
                     TechniqueTag::Isolation,
                     format!("Isolate {} on one side", variable),
                 )
                 .with_input(residual.clone())
-                .with_output(compile(&result_expr)),
+                .with_output(result_arc.clone()),
             );
-            return Ok((Solution::Unique(result_expr), trace));
+            return Ok((Solution::unique_from_expr(&result_arc), trace));
         }
 
         // Symbolic path: linear shape but coefficient or constant is not a
@@ -142,7 +142,13 @@ impl Solver for LinearSolver {
 }
 
 /// Solve `coeff · var + constant = 0` when both are exact rationals.
-fn solve_rational_linear(coeff: &BigRational, constant: &BigRational) -> SolverResult<Expression> {
+///
+/// Returns the solution as an `Arc<Expr>` for use in the trace and
+/// wrapped into `Solution::unique_from_expr` by the caller.
+fn solve_rational_linear(
+    coeff: &BigRational,
+    constant: &BigRational,
+) -> SolverResult<std::sync::Arc<Expr>> {
     if coeff.is_zero() {
         if constant.is_zero() {
             return Err(SolverError::InfiniteSolutions);
@@ -151,7 +157,7 @@ fn solve_rational_linear(coeff: &BigRational, constant: &BigRational) -> SolverR
     }
     let numer = -constant;
     let solution = &numer / coeff;
-    Ok(decompile(&rational_to_expr(solution)))
+    Ok(rational_to_expr(solution))
 }
 
 fn rational_to_expr(r: BigRational) -> std::sync::Arc<Expr> {
