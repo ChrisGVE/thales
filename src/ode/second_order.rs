@@ -3,9 +3,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::ast::{BinaryOp, Expression, Function, Variable};
+use crate::ast::Expression;
 use crate::numeric::compile::{compile, decompile};
-use crate::numeric::Expr;
+use crate::numeric::expr::{Expr, FuncId};
+use crate::numeric::{normalize, SymbolId};
 
 use super::first_order::substitute_var;
 use super::ODEError;
@@ -94,7 +95,7 @@ impl SecondOrderODE {
 
     /// Create a homogeneous ODE: a*y'' + b*y' + c*y = 0
     pub fn homogeneous(dependent: &str, independent: &str, a: f64, b: f64, c: f64) -> Self {
-        Self::new(dependent, independent, a, b, c, Expression::Integer(0))
+        Self::from_arc(dependent, independent, a, b, c, Expr::int(0))
     }
 
     /// Check if this ODE is homogeneous (f(x) = 0)
@@ -184,87 +185,75 @@ pub fn solve_characteristic_equation(
 
 /// Build the homogeneous solution for two distinct real roots.
 /// y = C1*e^(r1*x) + C2*e^(r2*x)
-fn build_solution_distinct_real(r1: f64, r2: f64, x_var: &str) -> Expression {
-    let x = Expression::Variable(Variable::new(x_var));
-    let c1 = Expression::Variable(Variable::new("C1"));
-    let c2 = Expression::Variable(Variable::new("C2"));
+fn build_solution_distinct_real(r1: f64, r2: f64, x_var: &str) -> Arc<Expr> {
+    let x = Expr::symbol(x_var);
+    let c1 = Expr::symbol("C1");
+    let c2 = Expr::symbol("C2");
 
     // C1 * e^(r1*x)
-    let exp1_arg = Expression::Binary(
-        BinaryOp::Mul,
-        Box::new(Expression::Float(r1)),
-        Box::new(x.clone()),
-    );
-    let exp1 = Expression::Function(Function::Exp, vec![exp1_arg]);
-    let term1 = Expression::Binary(BinaryOp::Mul, Box::new(c1), Box::new(exp1));
+    let exp1_arg = normalize::mul(Arc::new(Expr::Float(r1)), x.clone());
+    let exp1 = Expr::func(FuncId::Exp, vec![exp1_arg]);
+    let term1 = normalize::mul(c1, exp1);
 
     // C2 * e^(r2*x)
-    let exp2_arg = Expression::Binary(BinaryOp::Mul, Box::new(Expression::Float(r2)), Box::new(x));
-    let exp2 = Expression::Function(Function::Exp, vec![exp2_arg]);
-    let term2 = Expression::Binary(BinaryOp::Mul, Box::new(c2), Box::new(exp2));
+    let exp2_arg = normalize::mul(Arc::new(Expr::Float(r2)), x);
+    let exp2 = Expr::func(FuncId::Exp, vec![exp2_arg]);
+    let term2 = normalize::mul(c2, exp2);
 
     // C1*e^(r1*x) + C2*e^(r2*x)
-    Expression::Binary(BinaryOp::Add, Box::new(term1), Box::new(term2))
+    normalize::add(term1, term2)
 }
 
 /// Build the homogeneous solution for a repeated root.
 /// y = (C1 + C2*x) * e^(r*x)
-fn build_solution_repeated(r: f64, x_var: &str) -> Expression {
-    let x = Expression::Variable(Variable::new(x_var));
-    let c1 = Expression::Variable(Variable::new("C1"));
-    let c2 = Expression::Variable(Variable::new("C2"));
+fn build_solution_repeated(r: f64, x_var: &str) -> Arc<Expr> {
+    let x = Expr::symbol(x_var);
+    let c1 = Expr::symbol("C1");
+    let c2 = Expr::symbol("C2");
 
     // C1 + C2*x
-    let c2_x = Expression::Binary(BinaryOp::Mul, Box::new(c2), Box::new(x.clone()));
-    let linear = Expression::Binary(BinaryOp::Add, Box::new(c1), Box::new(c2_x));
+    let c2_x = normalize::mul(c2, x.clone());
+    let linear = normalize::add(c1, c2_x);
 
     // e^(r*x)
-    let exp_arg = Expression::Binary(BinaryOp::Mul, Box::new(Expression::Float(r)), Box::new(x));
-    let exp_term = Expression::Function(Function::Exp, vec![exp_arg]);
+    let exp_arg = normalize::mul(Arc::new(Expr::Float(r)), x);
+    let exp_term = Expr::func(FuncId::Exp, vec![exp_arg]);
 
     // (C1 + C2*x) * e^(r*x)
-    Expression::Binary(BinaryOp::Mul, Box::new(linear), Box::new(exp_term))
+    normalize::mul(linear, exp_term)
 }
 
 /// Build the homogeneous solution for complex conjugate roots α ± βi.
 /// y = e^(αx) * (C1*cos(βx) + C2*sin(βx))
-fn build_solution_complex(alpha: f64, beta: f64, x_var: &str) -> Expression {
-    let x = Expression::Variable(Variable::new(x_var));
-    let c1 = Expression::Variable(Variable::new("C1"));
-    let c2 = Expression::Variable(Variable::new("C2"));
+fn build_solution_complex(alpha: f64, beta: f64, x_var: &str) -> Arc<Expr> {
+    let x = Expr::symbol(x_var);
+    let c1 = Expr::symbol("C1");
+    let c2 = Expr::symbol("C2");
 
     // βx
-    let beta_x = Expression::Binary(
-        BinaryOp::Mul,
-        Box::new(Expression::Float(beta)),
-        Box::new(x.clone()),
-    );
+    let beta_x = normalize::mul(Arc::new(Expr::Float(beta)), x.clone());
 
     // C1*cos(βx)
-    let cos_term = Expression::Function(Function::Cos, vec![beta_x.clone()]);
-    let term1 = Expression::Binary(BinaryOp::Mul, Box::new(c1), Box::new(cos_term));
+    let cos_term = Expr::func(FuncId::Cos, vec![beta_x.clone()]);
+    let term1 = normalize::mul(c1, cos_term);
 
     // C2*sin(βx)
-    let sin_term = Expression::Function(Function::Sin, vec![beta_x]);
-    let term2 = Expression::Binary(BinaryOp::Mul, Box::new(c2), Box::new(sin_term));
+    let sin_term = Expr::func(FuncId::Sin, vec![beta_x]);
+    let term2 = normalize::mul(c2, sin_term);
 
     // C1*cos(βx) + C2*sin(βx)
-    let oscillatory = Expression::Binary(BinaryOp::Add, Box::new(term1), Box::new(term2));
+    let oscillatory = normalize::add(term1, term2);
 
     // If alpha is essentially zero, no damping envelope needed
     if alpha.abs() < 1e-10 {
         oscillatory
     } else {
         // e^(αx)
-        let exp_arg = Expression::Binary(
-            BinaryOp::Mul,
-            Box::new(Expression::Float(alpha)),
-            Box::new(x),
-        );
-        let exp_term = Expression::Function(Function::Exp, vec![exp_arg]);
+        let exp_arg = normalize::mul(Arc::new(Expr::Float(alpha)), x);
+        let exp_term = Expr::func(FuncId::Exp, vec![exp_arg]);
 
         // e^(αx) * (C1*cos(βx) + C2*sin(βx))
-        Expression::Binary(BinaryOp::Mul, Box::new(exp_term), Box::new(oscillatory))
+        normalize::mul(exp_term, oscillatory)
     }
 }
 
@@ -289,7 +278,7 @@ pub fn solve_second_order_homogeneous(
     // Solve characteristic equation
     let roots = solve_characteristic_equation(ode.a, ode.b, ode.c)?;
 
-    let (method, solution) = match roots.root_type {
+    let (method, solution_arc) = match roots.root_type {
         RootType::TwoDistinctReal => {
             steps.push(format!(
                 "Discriminant Δ = {}² - 4·{}·{} = {} > 0",
@@ -356,7 +345,6 @@ pub fn solve_second_order_homogeneous(
         }
     };
 
-    let solution_arc = compile(&solution);
     Ok(SecondOrderSolution {
         homogeneous_solution: Arc::clone(&solution_arc),
         particular_solution: None,
@@ -458,12 +446,13 @@ pub fn solve_second_order_ivp(
 
     // Substitute C1 and C2 into the general solution
     let general_arc = Arc::clone(&solution.general_solution);
-    let c1_id = crate::numeric::SymbolId::intern("C1");
-    let c2_id = crate::numeric::SymbolId::intern("C2");
-    let c1_arc = compile(&Expression::Float(c1));
-    let c2_arc = compile(&Expression::Float(c2));
+    let c1_id = SymbolId::intern("C1");
+    let c2_id = SymbolId::intern("C2");
+    let c1_arc = Expr::float(c1);
+    let c2_arc = Expr::float(c2);
     let with_c1 = substitute_var(&general_arc, c1_id, &c1_arc);
     let with_c2 = substitute_var(&with_c1, c2_id, &c2_arc);
 
+    // TODO(arc-migration): solve_second_order_ivp is re-exported from lib.rs — decompile at Rule 2 boundary.
     Ok(decompile(&with_c2).simplify())
 }
