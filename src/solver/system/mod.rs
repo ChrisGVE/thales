@@ -25,6 +25,9 @@ use super::linear_system::LinearSystem;
 use super::types::{Solution, SolverError, SolverResult};
 
 /// Result type for system solutions.
+// TODO(arc-migration): SystemSolution stores Expression at the public boundary.
+// equation_system/smart_solver.rs is still Expression-native and iterates the
+// map values directly. Migrate to Arc<Expr> when equation_system migrates.
 #[derive(Debug, Clone)]
 pub enum SystemSolution {
     /// Unique solution: each variable has exactly one value.
@@ -385,13 +388,10 @@ impl SystemSolver {
             .collect();
 
         let is_linear = equations.iter().all(|eq| {
-            let combined = Expression::Binary(
-                crate::ast::BinaryOp::Sub,
-                Box::new(eq.left.clone()),
-                Box::new(eq.right.clone()),
-            );
-            let compiled = compile(&combined);
-            is_linear_system_expr(&compiled, &var_ids)
+            let lhs_arc = compile(&eq.left);
+            let rhs_arc = compile(&eq.right);
+            let combined = crate::numeric::normalize::sub(lhs_arc, rhs_arc);
+            is_linear_system_expr(&combined, &var_ids)
         });
 
         if is_linear {
