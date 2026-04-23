@@ -11,6 +11,7 @@
 use std::sync::Arc;
 
 use crate::ast::{Expression, SymbolicConstant};
+use crate::numeric::compile::decompile;
 use crate::numeric::expr::{Expr, FuncId};
 use crate::numeric::SymbolId;
 use crate::solver::helpers::contains_symbol;
@@ -283,13 +284,15 @@ pub fn particular_solution_undetermined(
     ));
     steps.push("Apply method of undetermined coefficients".to_string());
 
-    let result = match &forcing_type {
+    let result_arc = match &forcing_type {
         ForcingType::Polynomial { degree } => particular_polynomial(ode, *degree, &mut steps)?,
         ForcingType::Exponential { k } => particular_exponential(ode, *k, &mut steps)?,
         ForcingType::Trigonometric { k } => particular_trig(ode, *k, &mut steps)?,
     };
 
-    Ok((result, steps))
+    // TODO(arc-migration): particular_solution_undetermined is publicly accessible from
+    // ode::non_homogeneous — decompile at this Rule 2 boundary.
+    Ok((decompile(&result_arc), steps))
 }
 
 /// Human-readable label for a `ForcingType`.
@@ -308,7 +311,7 @@ fn forcing_type_display(ft: &ForcingType) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{BinaryOp, Function, Variable};
+    use crate::ast::{BinaryOp, Expression, Function, Variable};
     use crate::numeric::compile::compile;
     use crate::ode::SecondOrderODE;
 
