@@ -145,7 +145,7 @@ pub use system::{SystemSolution, SystemSolver};
 pub use transcendental::TranscendentalSolver;
 pub use types::{Constraint, Solution, SolverError, SolverResult, SymbolicFailureReason};
 
-use crate::ast::{BinaryOp, Equation, Expression, Variable};
+use crate::ast::{Equation, Expression, Variable};
 use crate::numerical::SmartNumericalSolver;
 use helpers::{
     contains_symbol, evaluate_constants, extract_quadratic_coefficients_expr,

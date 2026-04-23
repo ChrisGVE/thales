@@ -11,7 +11,7 @@
 
 use std::sync::Arc;
 
-use crate::ast::{Equation, Expression, Variable};
+use crate::ast::{Equation, Variable};
 use crate::matrix::MatrixExpr;
 use crate::numeric::compile::compile;
 use crate::numeric::{normalize, BigRational, Expr, SymbolId};

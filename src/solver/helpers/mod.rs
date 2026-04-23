@@ -18,7 +18,7 @@ pub(crate) use coefficients::{
     simplify_numeric_expression,
 };
 pub(crate) use detection::{
-    contains_symbol, has_any_symbol, has_any_variable, has_obvious_nonlinearity_expr,
-    is_linear_in_variable_expr, is_linear_system_expr, is_polynomial_expr,
+    contains_symbol, has_any_symbol, has_obvious_nonlinearity_expr, is_linear_in_variable_expr,
+    is_linear_system_expr, is_polynomial_expr,
 };
 pub(crate) use substitution::substitute_values;
