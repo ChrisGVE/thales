@@ -1,6 +1,11 @@
 //! Matrix arithmetic operations and linear algebra.
 
-use crate::ast::{Expression, Variable};
+use std::sync::Arc;
+
+use crate::numeric::evaluation::evaluate;
+use crate::numeric::expr::Expr;
+use crate::numeric::normalize;
+use crate::numeric::SymbolId;
 
 use super::{MatrixError, MatrixExpr, MatrixResult};
 
@@ -15,19 +20,22 @@ impl MatrixExpr {
     ///
     /// ```
     /// use thales::matrix::MatrixExpr;
-    /// use thales::ast::Expression;
+    /// use thales::numeric::expr::Expr;
+    /// use thales::numeric::evaluation::evaluate;
+    /// use thales::numeric::SymbolId;
     /// use std::collections::HashMap;
     ///
-    /// let m = MatrixExpr::from_elements(vec![
-    ///     vec![Expression::Integer(1), Expression::Integer(2)],
-    ///     vec![Expression::Integer(3), Expression::Integer(4)],
+    /// let m = MatrixExpr::from_expr_elements(vec![
+    ///     vec![Expr::int(1), Expr::int(2)],
+    ///     vec![Expr::int(3), Expr::int(4)],
     /// ]).unwrap();
     ///
     /// let trace = m.trace().unwrap();
     /// // trace = 1 + 4 = 5
-    /// assert_eq!(trace.evaluate(&HashMap::new()), Some(5.0));
+    /// let empty: HashMap<SymbolId, f64> = HashMap::new();
+    /// assert_eq!(evaluate(&trace, &empty), Some(5.0));
     /// ```
-    pub fn trace(&self) -> MatrixResult<Expression> {
+    pub fn trace(&self) -> MatrixResult<Arc<Expr>> {
         if !self.is_square() {
             return Err(MatrixError::InvalidOperation(
                 "Trace requires a square matrix".to_string(),
@@ -36,13 +44,9 @@ impl MatrixExpr {
 
         let mut trace = self.elements[0][0].clone();
         for i in 1..self.rows {
-            trace = Expression::Binary(
-                crate::ast::BinaryOp::Add,
-                Box::new(trace),
-                Box::new(self.elements[i][i].clone()),
-            );
+            trace = normalize::add(trace, self.elements[i][i].clone());
         }
-        Ok(trace.simplify())
+        Ok(trace)
     }
 
     /// Add two matrices element-wise.
@@ -55,16 +59,16 @@ impl MatrixExpr {
     ///
     /// ```
     /// use thales::matrix::MatrixExpr;
-    /// use thales::ast::Expression;
+    /// use thales::numeric::expr::Expr;
     ///
-    /// let a = MatrixExpr::from_elements(vec![
-    ///     vec![Expression::Integer(1), Expression::Integer(2)],
-    ///     vec![Expression::Integer(3), Expression::Integer(4)],
+    /// let a = MatrixExpr::from_expr_elements(vec![
+    ///     vec![Expr::int(1), Expr::int(2)],
+    ///     vec![Expr::int(3), Expr::int(4)],
     /// ]).unwrap();
     ///
-    /// let b = MatrixExpr::from_elements(vec![
-    ///     vec![Expression::Integer(5), Expression::Integer(6)],
-    ///     vec![Expression::Integer(7), Expression::Integer(8)],
+    /// let b = MatrixExpr::from_expr_elements(vec![
+    ///     vec![Expr::int(5), Expr::int(6)],
+    ///     vec![Expr::int(7), Expr::int(8)],
     /// ]).unwrap();
     ///
     /// let sum = a.add(&b).unwrap();
@@ -78,22 +82,17 @@ impl MatrixExpr {
             });
         }
 
-        let elements: Vec<Vec<Expression>> = (0..self.rows)
+        let elements: Vec<Vec<Arc<Expr>>> = (0..self.rows)
             .map(|i| {
                 (0..self.cols)
                     .map(|j| {
-                        Expression::Binary(
-                            crate::ast::BinaryOp::Add,
-                            Box::new(self.elements[i][j].clone()),
-                            Box::new(other.elements[i][j].clone()),
-                        )
-                        .simplify()
+                        normalize::add(self.elements[i][j].clone(), other.elements[i][j].clone())
                     })
                     .collect()
             })
             .collect();
 
-        Ok(MatrixExpr::from_elements_unchecked(
+        Ok(MatrixExpr::from_expr_elements_unchecked(
             self.rows, self.cols, elements,
         ))
     }
@@ -112,56 +111,44 @@ impl MatrixExpr {
             });
         }
 
-        let elements: Vec<Vec<Expression>> = (0..self.rows)
+        let elements: Vec<Vec<Arc<Expr>>> = (0..self.rows)
             .map(|i| {
                 (0..self.cols)
                     .map(|j| {
-                        Expression::Binary(
-                            crate::ast::BinaryOp::Sub,
-                            Box::new(self.elements[i][j].clone()),
-                            Box::new(other.elements[i][j].clone()),
-                        )
-                        .simplify()
+                        normalize::sub(self.elements[i][j].clone(), other.elements[i][j].clone())
                     })
                     .collect()
             })
             .collect();
 
-        Ok(MatrixExpr::from_elements_unchecked(
+        Ok(MatrixExpr::from_expr_elements_unchecked(
             self.rows, self.cols, elements,
         ))
     }
 
-    /// Multiply by a scalar expression.
+    /// Multiply by a scalar `Arc<Expr>`.
     ///
     /// # Examples
     ///
     /// ```
     /// use thales::matrix::MatrixExpr;
-    /// use thales::ast::Expression;
+    /// use thales::numeric::expr::Expr;
     ///
     /// let m = MatrixExpr::identity(2);
-    /// let scaled = m.scalar_mul(&Expression::Integer(3));
+    /// let scaled = m.scalar_mul(&Expr::int(3));
     /// ```
-    pub fn scalar_mul(&self, scalar: &Expression) -> MatrixExpr {
-        let elements: Vec<Vec<Expression>> = self
+    pub fn scalar_mul(&self, scalar: &Arc<Expr>) -> MatrixExpr {
+        let elements: Vec<Vec<Arc<Expr>>> = self
             .elements
             .iter()
             .map(|row| {
                 row.iter()
-                    .map(|elem| {
-                        Expression::Binary(
-                            crate::ast::BinaryOp::Mul,
-                            Box::new(scalar.clone()),
-                            Box::new(elem.clone()),
-                        )
-                        .simplify()
-                    })
+                    .map(|elem| normalize::mul(scalar.clone(), elem.clone()))
                     .collect()
             })
             .collect();
 
-        MatrixExpr::from_elements_unchecked(self.rows, self.cols, elements)
+        MatrixExpr::from_expr_elements_unchecked(self.rows, self.cols, elements)
     }
 
     /// Multiply two matrices.
@@ -176,19 +163,19 @@ impl MatrixExpr {
     ///
     /// ```
     /// use thales::matrix::MatrixExpr;
-    /// use thales::ast::Expression;
+    /// use thales::numeric::expr::Expr;
     ///
     /// // 2x3 matrix
-    /// let a = MatrixExpr::from_elements(vec![
-    ///     vec![Expression::Integer(1), Expression::Integer(2), Expression::Integer(3)],
-    ///     vec![Expression::Integer(4), Expression::Integer(5), Expression::Integer(6)],
+    /// let a = MatrixExpr::from_expr_elements(vec![
+    ///     vec![Expr::int(1), Expr::int(2), Expr::int(3)],
+    ///     vec![Expr::int(4), Expr::int(5), Expr::int(6)],
     /// ]).unwrap();
     ///
     /// // 3x2 matrix
-    /// let b = MatrixExpr::from_elements(vec![
-    ///     vec![Expression::Integer(7), Expression::Integer(8)],
-    ///     vec![Expression::Integer(9), Expression::Integer(10)],
-    ///     vec![Expression::Integer(11), Expression::Integer(12)],
+    /// let b = MatrixExpr::from_expr_elements(vec![
+    ///     vec![Expr::int(7), Expr::int(8)],
+    ///     vec![Expr::int(9), Expr::int(10)],
+    ///     vec![Expr::int(11), Expr::int(12)],
     /// ]).unwrap();
     ///
     /// // Result is 2x2
@@ -208,48 +195,31 @@ impl MatrixExpr {
             });
         }
 
-        let elements: Vec<Vec<Expression>> = (0..self.rows)
+        let elements: Vec<Vec<Arc<Expr>>> = (0..self.rows)
             .map(|i| {
                 (0..other.cols)
                     .map(|j| {
                         // C[i][j] = sum(A[i][k] * B[k][j] for k in 0..n)
-                        let mut sum = Expression::Binary(
-                            crate::ast::BinaryOp::Mul,
-                            Box::new(self.elements[i][0].clone()),
-                            Box::new(other.elements[0][j].clone()),
+                        let mut sum = normalize::mul(
+                            self.elements[i][0].clone(),
+                            other.elements[0][j].clone(),
                         );
                         for k in 1..self.cols {
-                            let product = Expression::Binary(
-                                crate::ast::BinaryOp::Mul,
-                                Box::new(self.elements[i][k].clone()),
-                                Box::new(other.elements[k][j].clone()),
+                            let product = normalize::mul(
+                                self.elements[i][k].clone(),
+                                other.elements[k][j].clone(),
                             );
-                            sum = Expression::Binary(
-                                crate::ast::BinaryOp::Add,
-                                Box::new(sum),
-                                Box::new(product),
-                            );
+                            sum = normalize::add(sum, product);
                         }
-                        sum.simplify()
+                        sum
                     })
                     .collect()
             })
             .collect();
 
-        Ok(MatrixExpr::from_elements_unchecked(
+        Ok(MatrixExpr::from_expr_elements_unchecked(
             self.rows, other.cols, elements,
         ))
-    }
-
-    /// Simplify all elements in the matrix.
-    pub fn simplify(&self) -> MatrixExpr {
-        let elements: Vec<Vec<Expression>> = self
-            .elements
-            .iter()
-            .map(|row| row.iter().map(|elem| elem.simplify()).collect())
-            .collect();
-
-        MatrixExpr::from_elements_unchecked(self.rows, self.cols, elements)
     }
 
     /// Get the submatrix by removing row `row_idx` and column `col_idx`.
@@ -266,7 +236,7 @@ impl MatrixExpr {
             ));
         }
 
-        let elements: Vec<Vec<Expression>> = self
+        let elements: Vec<Vec<Arc<Expr>>> = self
             .elements
             .iter()
             .enumerate()
@@ -280,15 +250,15 @@ impl MatrixExpr {
             })
             .collect();
 
-        MatrixExpr::from_elements(elements)
+        MatrixExpr::from_expr_elements(elements)
     }
 
-    /// Compute the minor M(i, j) - the determinant of the submatrix excluding row i and column j.
+    /// Compute the minor M(i, j) — the determinant of the submatrix excluding row i and column j.
     ///
     /// # Errors
     ///
     /// Returns an error if the matrix is not square or is 1x1.
-    pub fn minor(&self, row: usize, col: usize) -> MatrixResult<Expression> {
+    pub fn minor(&self, row: usize, col: usize) -> MatrixResult<Arc<Expr>> {
         if !self.is_square() {
             return Err(MatrixError::InvalidOperation(
                 "Minor requires a square matrix".to_string(),
@@ -303,12 +273,12 @@ impl MatrixExpr {
     /// # Errors
     ///
     /// Returns an error if the matrix is not square or is 1x1.
-    pub fn cofactor(&self, row: usize, col: usize) -> MatrixResult<Expression> {
+    pub fn cofactor(&self, row: usize, col: usize) -> MatrixResult<Arc<Expr>> {
         let minor = self.minor(row, col)?;
         if (row + col) % 2 == 0 {
             Ok(minor)
         } else {
-            Ok(Expression::Unary(crate::ast::UnaryOp::Neg, Box::new(minor)).simplify())
+            Ok(normalize::neg(minor))
         }
     }
 
@@ -327,20 +297,23 @@ impl MatrixExpr {
     ///
     /// ```
     /// use thales::matrix::MatrixExpr;
-    /// use thales::ast::Expression;
+    /// use thales::numeric::expr::Expr;
+    /// use thales::numeric::evaluation::evaluate;
+    /// use thales::numeric::SymbolId;
     /// use std::collections::HashMap;
     ///
     /// // 2x2 matrix: [[1, 2], [3, 4]]
-    /// let m = MatrixExpr::from_elements(vec![
-    ///     vec![Expression::Integer(1), Expression::Integer(2)],
-    ///     vec![Expression::Integer(3), Expression::Integer(4)],
+    /// let m = MatrixExpr::from_expr_elements(vec![
+    ///     vec![Expr::int(1), Expr::int(2)],
+    ///     vec![Expr::int(3), Expr::int(4)],
     /// ]).unwrap();
     ///
     /// let det = m.determinant().unwrap();
     /// // det = 1*4 - 2*3 = -2
-    /// assert_eq!(det.evaluate(&HashMap::new()), Some(-2.0));
+    /// let empty: HashMap<SymbolId, f64> = HashMap::new();
+    /// assert_eq!(evaluate(&det, &empty), Some(-2.0));
     /// ```
-    pub fn determinant(&self) -> MatrixResult<Expression> {
+    pub fn determinant(&self) -> MatrixResult<Arc<Expr>> {
         if !self.is_square() {
             return Err(MatrixError::InvalidOperation(
                 "Determinant requires a square matrix".to_string(),
@@ -356,38 +329,19 @@ impl MatrixExpr {
                 let c = &self.elements[1][0];
                 let d = &self.elements[1][1];
 
-                let ad = Expression::Binary(
-                    crate::ast::BinaryOp::Mul,
-                    Box::new(a.clone()),
-                    Box::new(d.clone()),
-                );
-                let bc = Expression::Binary(
-                    crate::ast::BinaryOp::Mul,
-                    Box::new(b.clone()),
-                    Box::new(c.clone()),
-                );
-                Ok(
-                    Expression::Binary(crate::ast::BinaryOp::Sub, Box::new(ad), Box::new(bc))
-                        .simplify(),
-                )
+                let ad = normalize::mul(a.clone(), d.clone());
+                let bc = normalize::mul(b.clone(), c.clone());
+                Ok(normalize::sub(ad, bc))
             }
             _ => {
                 // Cofactor expansion along first row
-                let mut det = Expression::Integer(0);
+                let mut det = Expr::int(0);
                 for j in 0..self.cols {
                     let cofactor = self.cofactor(0, j)?;
-                    let term = Expression::Binary(
-                        crate::ast::BinaryOp::Mul,
-                        Box::new(self.elements[0][j].clone()),
-                        Box::new(cofactor),
-                    );
-                    det = Expression::Binary(
-                        crate::ast::BinaryOp::Add,
-                        Box::new(det),
-                        Box::new(term),
-                    );
+                    let term = normalize::mul(self.elements[0][j].clone(), cofactor);
+                    det = normalize::add(det, term);
                 }
-                Ok(det.simplify())
+                Ok(det)
             }
         }
     }
@@ -418,7 +372,7 @@ impl MatrixExpr {
             elements.push(row);
         }
 
-        MatrixExpr::from_elements(elements)
+        MatrixExpr::from_expr_elements(elements)
     }
 
     /// Compute the adjugate (classical adjoint) matrix.
@@ -433,11 +387,11 @@ impl MatrixExpr {
     ///
     /// ```
     /// use thales::matrix::MatrixExpr;
-    /// use thales::ast::Expression;
+    /// use thales::numeric::expr::Expr;
     ///
-    /// let m = MatrixExpr::from_elements(vec![
-    ///     vec![Expression::Integer(1), Expression::Integer(2)],
-    ///     vec![Expression::Integer(3), Expression::Integer(4)],
+    /// let m = MatrixExpr::from_expr_elements(vec![
+    ///     vec![Expr::int(1), Expr::int(2)],
+    ///     vec![Expr::int(3), Expr::int(4)],
     /// ]).unwrap();
     ///
     /// let adj = m.adjugate().unwrap();
@@ -452,7 +406,7 @@ impl MatrixExpr {
 
         // Special case for 1x1 matrix
         if self.rows == 1 {
-            return Ok(MatrixExpr::from_elements(vec![vec![Expression::Integer(1)]]).unwrap());
+            return Ok(MatrixExpr::from_expr_elements(vec![vec![Expr::int(1)]]).unwrap());
         }
 
         let cofactor_mat = self.cofactor_matrix()?;
@@ -473,19 +427,21 @@ impl MatrixExpr {
     ///
     /// ```
     /// use thales::matrix::MatrixExpr;
-    /// use thales::ast::Expression;
+    /// use thales::numeric::expr::Expr;
+    /// use thales::numeric::evaluation::evaluate;
+    /// use thales::numeric::SymbolId;
     /// use std::collections::HashMap;
     ///
-    /// let m = MatrixExpr::from_elements(vec![
-    ///     vec![Expression::Integer(4), Expression::Integer(7)],
-    ///     vec![Expression::Integer(2), Expression::Integer(6)],
+    /// let m = MatrixExpr::from_expr_elements(vec![
+    ///     vec![Expr::int(4), Expr::int(7)],
+    ///     vec![Expr::int(2), Expr::int(6)],
     /// ]).unwrap();
     ///
     /// let inv = m.inverse().unwrap();
     /// // Verify A * A^(-1) = I
     /// let product = m.mul(&inv).unwrap();
-    /// let vars = HashMap::new();
-    /// let result = product.evaluate(&vars).unwrap();
+    /// let empty: HashMap<SymbolId, f64> = HashMap::new();
+    /// let result = product.evaluate(&empty).unwrap();
     /// assert!((result[0][0] - 1.0).abs() < 1e-10);
     /// assert!((result[1][1] - 1.0).abs() < 1e-10);
     /// ```
@@ -499,14 +455,12 @@ impl MatrixExpr {
         let det = self.determinant()?;
 
         // Check if determinant is zero (symbolically or numerically)
-        let is_zero = match &det {
-            Expression::Integer(0) => true,
-            Expression::Float(f) if f.abs() < 1e-10 => true,
-            _ => {
-                // Try numerical evaluation for expressions that simplify to zero
-                let empty = std::collections::HashMap::new();
-                det.evaluate(&empty).map_or(false, |v| v.abs() < 1e-10)
-            }
+        let is_zero = if det.is_zero() {
+            true
+        } else {
+            // Try numerical evaluation for expressions that simplify to zero
+            let empty: std::collections::HashMap<SymbolId, f64> = std::collections::HashMap::new();
+            evaluate(&det, &empty).map_or(false, |v| v.abs() < 1e-10)
         };
 
         if is_zero {
@@ -517,33 +471,24 @@ impl MatrixExpr {
 
         // For 1x1 matrix
         if self.rows == 1 {
-            let inv_element = Expression::Binary(
-                crate::ast::BinaryOp::Div,
-                Box::new(Expression::Integer(1)),
-                Box::new(self.elements[0][0].clone()),
-            )
-            .simplify();
-            return MatrixExpr::from_elements(vec![vec![inv_element]]);
+            let inv_element = normalize::div(Expr::int(1), self.elements[0][0].clone());
+            return MatrixExpr::from_expr_elements(vec![vec![inv_element]]);
         }
 
         let adj = self.adjugate()?;
 
         // Multiply adjugate by 1/det
-        let inv_det = Expression::Binary(
-            crate::ast::BinaryOp::Div,
-            Box::new(Expression::Integer(1)),
-            Box::new(det),
-        );
+        let inv_det = normalize::div(Expr::int(1), det);
 
-        Ok(adj.scalar_mul(&inv_det).simplify())
+        Ok(adj.scalar_mul(&inv_det))
     }
 
     /// Check if the matrix is singular (determinant is zero when evaluated numerically).
     ///
     /// Returns `None` if the determinant cannot be evaluated numerically.
-    pub fn is_singular(&self, vars: &std::collections::HashMap<String, f64>) -> Option<bool> {
+    pub fn is_singular(&self, vars: &std::collections::HashMap<SymbolId, f64>) -> Option<bool> {
         let det = self.determinant().ok()?;
-        let det_value = det.evaluate(vars)?;
+        let det_value = evaluate(&det, vars)?;
         Some(det_value.abs() < 1e-10)
     }
 
@@ -559,19 +504,21 @@ impl MatrixExpr {
     ///
     /// ```
     /// use thales::matrix::MatrixExpr;
-    /// use thales::ast::Expression;
+    /// use thales::numeric::expr::Expr;
+    /// use thales::numeric::evaluation::evaluate;
+    /// use thales::numeric::SymbolId;
     /// use std::collections::HashMap;
     ///
-    /// let m = MatrixExpr::from_elements(vec![
-    ///     vec![Expression::Integer(2), Expression::Integer(1)],
-    ///     vec![Expression::Integer(1), Expression::Integer(2)],
+    /// let m = MatrixExpr::from_expr_elements(vec![
+    ///     vec![Expr::int(2), Expr::int(1)],
+    ///     vec![Expr::int(1), Expr::int(2)],
     /// ]).unwrap();
     ///
     /// let char_poly = m.characteristic_polynomial("lambda").unwrap();
     /// // For this matrix, eigenvalues are 1 and 3
     /// // So char poly = (λ - 1)(λ - 3) = λ² - 4λ + 3
     /// ```
-    pub fn characteristic_polynomial(&self, lambda_var: &str) -> MatrixResult<Expression> {
+    pub fn characteristic_polynomial(&self, lambda_var: &str) -> MatrixResult<Arc<Expr>> {
         if !self.is_square() {
             return Err(MatrixError::InvalidOperation(
                 "Characteristic polynomial requires a square matrix".to_string(),
@@ -579,7 +526,7 @@ impl MatrixExpr {
         }
 
         // Compute A - λI
-        let lambda = Expression::Variable(Variable::new(lambda_var));
+        let lambda = Expr::symbol(lambda_var);
         let lambda_i = MatrixExpr::identity(self.rows).scalar_mul(&lambda);
         let a_minus_lambda_i = self.sub(&lambda_i)?;
 
@@ -590,12 +537,15 @@ impl MatrixExpr {
     /// Evaluate all elements numerically.
     ///
     /// Returns None if any element cannot be evaluated.
-    pub fn evaluate(&self, vars: &std::collections::HashMap<String, f64>) -> Option<Vec<Vec<f64>>> {
+    pub fn evaluate(
+        &self,
+        vars: &std::collections::HashMap<SymbolId, f64>,
+    ) -> Option<Vec<Vec<f64>>> {
         self.elements
             .iter()
             .map(|row| {
                 row.iter()
-                    .map(|elem| elem.evaluate(vars))
+                    .map(|elem| evaluate(elem, vars))
                     .collect::<Option<Vec<f64>>>()
             })
             .collect()
