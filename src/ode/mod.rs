@@ -239,10 +239,9 @@ mod tests {
         let ode = FirstOrderODE::new("y", "x", var("y"));
         let sol = solve_ivp(&ode, &int(0), &int(1)).expect("IVP must solve");
 
-        // Decision 2b: y-free + IC
-        let sol_expr = crate::numeric::compile::decompile(&sol.general_solution);
-        verify::assert_y_free(&sol_expr, "y");
-        verify::assert_ic_satisfied(&sol_expr, "x", 0.0, 1.0, 1e-9);
+        // Decision 2b: y-free + IC — verify takes Arc<Expr> directly.
+        verify::assert_y_free(&sol.general_solution, "y");
+        verify::assert_ic_satisfied(&sol.general_solution, "x", 0.0, 1.0, 1e-9);
     }
 
     #[test]
@@ -344,8 +343,10 @@ mod tests {
         let solution = solve_second_order_ivp(&ode, 0.0, 1.0, 0.0).unwrap();
 
         // Decision 2b: y-free + IC at x₀
-        verify::assert_y_free(&solution, "y");
-        verify::assert_ic_satisfied(&solution, "x", 0.0, 1.0, 1e-10);
+        // solve_second_order_ivp returns Expression (Rule 2 boundary); compile for verify.
+        let solution_arc = compile(&solution);
+        verify::assert_y_free(&solution_arc, "y");
+        verify::assert_ic_satisfied(&solution_arc, "x", 0.0, 1.0, 1e-10);
 
         // Additional spot-check at x = π/2: cos(π/2) = 0
         let mut vars = std::collections::HashMap::new();
@@ -365,8 +366,10 @@ mod tests {
         let solution = solve_second_order_ivp(&ode, 0.0, 1.0, 0.0).unwrap();
 
         // Decision 2b: y-free + IC at x₀
-        verify::assert_y_free(&solution, "y");
-        verify::assert_ic_satisfied(&solution, "x", 0.0, 1.0, 1e-10);
+        // solve_second_order_ivp returns Expression (Rule 2 boundary); compile for verify.
+        let solution_arc = compile(&solution);
+        verify::assert_y_free(&solution_arc, "y");
+        verify::assert_ic_satisfied(&solution_arc, "x", 0.0, 1.0, 1e-10);
 
         // Additional spot-check at x = 1: cosh(1)
         let mut vars = std::collections::HashMap::new();
