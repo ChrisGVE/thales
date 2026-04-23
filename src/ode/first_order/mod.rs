@@ -47,6 +47,7 @@ pub fn solve_separable(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
     ));
 
     // Compute 1/h(y)
+    // TODO(arc-migration): integrate() is still Expression-native; decompile boundary crossings here.
     let one_over_h_y = Expression::Binary(
         BinaryOp::Div,
         Box::new(Expression::Integer(1)),
@@ -138,6 +139,7 @@ pub fn solve_linear(ode: &FirstOrderODE) -> Result<ODESolution, ODEError> {
     ));
 
     // Compute integrating factor μ(x) = e^(∫P(x)dx)
+    // TODO(arc-migration): integrate() is still Expression-native; decompile boundary crossings here.
     let p_integral = integrate(&p_x, &ode.independent)?;
     let mu = Expression::Function(Function::Exp, vec![p_integral.clone()]);
 
@@ -219,6 +221,7 @@ pub fn solve_ivp(
     let c_id = SymbolId::intern("C");
     let x_id = SymbolId::intern(&ode.independent);
     let general_arc = Arc::clone(&general.general_solution);
+    // TODO(arc-migration): solve_ivp x0/y0 are Expression (Rule 2 boundary); compile at crossing.
     let x0_arc = compile(x0);
     let substituted_arc = substitute_var(&general_arc, x_id, &x0_arc);
     let substituted = decompile(&substituted_arc);
