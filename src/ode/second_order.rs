@@ -1,6 +1,5 @@
 //! Second-order ODE solvers (characteristic equation method).
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::ast::Expression;
