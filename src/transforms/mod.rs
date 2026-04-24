@@ -7,12 +7,17 @@
 
 mod cartesian;
 mod complex;
+pub mod curvilinear;
 pub mod jacobian;
 mod polar;
 mod transform2d;
 
 pub use cartesian::{Cartesian2D, Cartesian3D};
 pub use complex::{decompose_complex_equation, separate_real_imag, ComplexOps};
+pub use curvilinear::{
+    curvilinear_curl, curvilinear_divergence, curvilinear_gradient, curvilinear_laplacian,
+    CurvilinearSystem,
+};
 pub use polar::{Cylindrical, Polar, Spherical};
 pub use transform2d::{Rotation3D, Transform2D};
 
