@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use crate::ast::{Equation, Expression, Variable};
+use crate::ast::{Equation, Variable};
 use crate::numeric::compile::compile;
 use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::{normalize, Expr, SymbolId};
@@ -73,22 +73,22 @@ fn solve_cubic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<So
     ));
 
     let shift = -p / 3.0;
-    let roots: Vec<Expression>;
+    let roots: Vec<std::sync::Arc<Expr>>;
 
     if discriminant.abs() < 1e-10 {
         // All roots are real, at least two are equal
         if dep_p.abs() < 1e-10 && dep_q.abs() < 1e-10 {
             // Triple root at t = 0
-            let root = simplify_numeric_expression(shift);
+            let root = compile(&simplify_numeric_expression(shift));
             roots = vec![root.clone(), root.clone(), root];
         } else {
             // One single root and one double root
             let t1 = 3.0 * dep_q / dep_p;
             let t2 = -3.0 * dep_q / (2.0 * dep_p);
             roots = vec![
-                simplify_numeric_expression(t1 + shift),
-                simplify_numeric_expression(t2 + shift),
-                simplify_numeric_expression(t2 + shift),
+                compile(&simplify_numeric_expression(t1 + shift)),
+                compile(&simplify_numeric_expression(t2 + shift)),
+                compile(&simplify_numeric_expression(t2 + shift)),
             ];
         }
     } else if discriminant > 0.0 {
@@ -102,9 +102,9 @@ fn solve_cubic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<So
         let t3 = m * (theta - 4.0 * std::f64::consts::PI / 3.0).cos();
 
         roots = vec![
-            simplify_numeric_expression(t1 + shift),
-            simplify_numeric_expression(t2 + shift),
-            simplify_numeric_expression(t3 + shift),
+            compile(&simplify_numeric_expression(t1 + shift)),
+            compile(&simplify_numeric_expression(t2 + shift)),
+            compile(&simplify_numeric_expression(t3 + shift)),
         ];
     } else {
         // One real root and two complex conjugate roots
@@ -118,9 +118,9 @@ fn solve_cubic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<So
         let imag_part = (3.0_f64).sqrt() / 2.0 * (u - v);
 
         roots = vec![
-            simplify_numeric_expression(t_real + shift),
-            Expression::Complex(num_complex::Complex64::new(real_part, imag_part)),
-            Expression::Complex(num_complex::Complex64::new(real_part, -imag_part)),
+            compile(&simplify_numeric_expression(t_real + shift)),
+            Expr::complex(real_part, imag_part),
+            Expr::complex(real_part, -imag_part),
         ];
     }
 
@@ -129,10 +129,10 @@ fn solve_cubic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<So
             TechniqueTag::Simplification,
             "Cardano's Formula: Applied Cardano's formula".to_string(),
         )
-        .with_output(compile(&roots[0])),
+        .with_output(roots[0].clone()),
     );
 
-    Ok(Solution::Multiple(roots))
+    Ok(Solution::multiple_from_expr(&roots))
 }
 
 /// Solve quartic equation ax⁴ + bx³ + cx² + dx + e = 0 using Ferrari's method.
@@ -196,7 +196,7 @@ fn solve_quartic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<
             let u1_imag = (-disc).sqrt() / 2.0;
 
             // y² = u gives y = ±√u (complex square roots)
-            let mut roots = Vec::new();
+            let mut roots: Vec<std::sync::Arc<Expr>> = Vec::new();
             for sign1 in [-1.0, 1.0] {
                 let u_real = u1_real;
                 let u_imag = sign1 * u1_imag;
@@ -204,40 +204,30 @@ fn solve_quartic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<
                 let r = (u_real * u_real + u_imag * u_imag).sqrt();
                 let sqrt_real = ((r + u_real) / 2.0).sqrt();
                 let sqrt_imag = u_imag.signum() * ((r - u_real) / 2.0).sqrt();
-                roots.push(Expression::Complex(num_complex::Complex64::new(
-                    sqrt_real + shift,
-                    sqrt_imag,
-                )));
-                roots.push(Expression::Complex(num_complex::Complex64::new(
-                    -sqrt_real + shift,
-                    -sqrt_imag,
-                )));
+                roots.push(Expr::complex(sqrt_real + shift, sqrt_imag));
+                roots.push(Expr::complex(-sqrt_real + shift, -sqrt_imag));
             }
             trace.push(
                 Step::new(
                     TechniqueTag::Simplification,
                     "Solved biquadratic via complex square roots".to_string(),
                 )
-                .with_output(compile(&roots[0])),
+                .with_output(roots[0].clone()),
             );
-            return Ok(Solution::Multiple(roots));
+            return Ok(Solution::multiple_from_expr(&roots));
         } else {
             let u1 = (-alpha + disc.sqrt()) / 2.0;
             let u2 = (-alpha - disc.sqrt()) / 2.0;
 
-            let mut roots = Vec::new();
+            let mut roots: Vec<std::sync::Arc<Expr>> = Vec::new();
             for u in [u1, u2] {
                 if u >= 0.0 {
-                    roots.push(simplify_numeric_expression(u.sqrt() + shift));
-                    roots.push(simplify_numeric_expression(-u.sqrt() + shift));
+                    roots.push(compile(&simplify_numeric_expression(u.sqrt() + shift)));
+                    roots.push(compile(&simplify_numeric_expression(-u.sqrt() + shift)));
                 } else {
                     let imag = (-u).sqrt();
-                    roots.push(Expression::Complex(num_complex::Complex64::new(
-                        shift, imag,
-                    )));
-                    roots.push(Expression::Complex(num_complex::Complex64::new(
-                        shift, -imag,
-                    )));
+                    roots.push(Expr::complex(shift, imag));
+                    roots.push(Expr::complex(shift, -imag));
                 }
             }
             trace.push(
@@ -245,9 +235,9 @@ fn solve_quartic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<
                     TechniqueTag::Simplification,
                     format!("Solved biquadratic: u = y², u₁ = {}, u₂ = {}", u1, u2),
                 )
-                .with_output(compile(&roots[0])),
+                .with_output(roots[0].clone()),
             );
-            return Ok(Solution::Multiple(roots));
+            return Ok(Solution::multiple_from_expr(&roots));
         }
     }
 
@@ -305,7 +295,7 @@ fn solve_quartic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<
         0.0
     };
 
-    let mut roots = Vec::new();
+    let mut roots: Vec<std::sync::Arc<Expr>> = Vec::new();
 
     // First quadratic: y² + sqrt(2m+α)y + (m + term) = 0
     let a1 = 1.0;
@@ -314,19 +304,17 @@ fn solve_quartic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<
     let disc1 = b1 * b1 - 4.0 * a1 * c1;
 
     if disc1 >= 0.0 {
-        roots.push(simplify_numeric_expression(
+        roots.push(compile(&simplify_numeric_expression(
             (-b1 + disc1.sqrt()) / 2.0 + shift,
-        ));
-        roots.push(simplify_numeric_expression(
+        )));
+        roots.push(compile(&simplify_numeric_expression(
             (-b1 - disc1.sqrt()) / 2.0 + shift,
-        ));
+        )));
     } else {
         let real = -b1 / 2.0 + shift;
         let imag = (-disc1).sqrt() / 2.0;
-        roots.push(Expression::Complex(num_complex::Complex64::new(real, imag)));
-        roots.push(Expression::Complex(num_complex::Complex64::new(
-            real, -imag,
-        )));
+        roots.push(Expr::complex(real, imag));
+        roots.push(Expr::complex(real, -imag));
     }
 
     // Second quadratic: y² - sqrt(2m+α)y + (m - term) = 0
@@ -335,19 +323,17 @@ fn solve_quartic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<
     let disc2 = b2 * b2 - 4.0 * a1 * c2;
 
     if disc2 >= 0.0 {
-        roots.push(simplify_numeric_expression(
+        roots.push(compile(&simplify_numeric_expression(
             (-b2 + disc2.sqrt()) / 2.0 + shift,
-        ));
-        roots.push(simplify_numeric_expression(
+        )));
+        roots.push(compile(&simplify_numeric_expression(
             (-b2 - disc2.sqrt()) / 2.0 + shift,
-        ));
+        )));
     } else {
         let real = -b2 / 2.0 + shift;
         let imag = (-disc2).sqrt() / 2.0;
-        roots.push(Expression::Complex(num_complex::Complex64::new(real, imag)));
-        roots.push(Expression::Complex(num_complex::Complex64::new(
-            real, -imag,
-        )));
+        roots.push(Expr::complex(real, imag));
+        roots.push(Expr::complex(real, -imag));
     }
 
     trace.push(
@@ -355,10 +341,10 @@ fn solve_quartic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<
             TechniqueTag::Simplification,
             "Ferrari's Method: Applied Ferrari's method".to_string(),
         )
-        .with_output(compile(&roots[0])),
+        .with_output(roots[0].clone()),
     );
 
-    Ok(Solution::Multiple(roots))
+    Ok(Solution::multiple_from_expr(&roots))
 }
 
 /// Solve polynomial of degree 5+ using numerical methods (Durand-Kerner).
@@ -438,14 +424,14 @@ fn solve_polynomial_numerically(
         }
     }
 
-    // Convert to Expression
-    let root_exprs: Vec<Expression> = roots
+    // Convert to Arc<Expr>
+    let root_exprs: Vec<std::sync::Arc<Expr>> = roots
         .iter()
         .map(|r| {
             if r.im.abs() < 1e-10 {
-                simplify_numeric_expression(r.re)
+                compile(&simplify_numeric_expression(r.re))
             } else {
-                Expression::Complex(*r)
+                Expr::complex(r.re, r.im)
             }
         })
         .collect();
@@ -455,10 +441,10 @@ fn solve_polynomial_numerically(
             TechniqueTag::NumericalApproximation,
             format!("Found {} roots numerically", degree),
         )
-        .with_output(compile(&root_exprs[0])),
+        .with_output(root_exprs[0].clone()),
     );
 
-    Ok(Solution::Multiple(root_exprs))
+    Ok(Solution::multiple_from_expr(&root_exprs))
 }
 
 /// Polynomial equation solver for general degree n polynomials.
