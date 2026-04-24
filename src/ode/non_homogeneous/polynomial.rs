@@ -6,12 +6,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::ast::{BinaryOp, Expression, Function, Variable};
 use crate::numeric::evaluation::evaluate;
 use crate::numeric::expr::Expr;
-use crate::numeric::SymbolId;
+use crate::numeric::{normalize, SymbolId};
 
-use super::{ForcingType, ODEError, SecondOrderODE};
+use super::{ODEError, SecondOrderODE};
 
 // ---------------------------------------------------------------------------
 // Particular solution: polynomial forcing
@@ -25,7 +24,7 @@ pub(super) fn particular_polynomial(
     ode: &SecondOrderODE,
     degree: u32,
     steps: &mut Vec<String>,
-) -> Result<Expression, ODEError> {
+) -> Result<Arc<Expr>, ODEError> {
     let x_var = &ode.independent;
 
     // Determine resonance multiplier
@@ -109,7 +108,6 @@ fn solve_polynomial_system(
 ) -> Result<Vec<f64>, ODEError> {
     let n = forcing.len();
     let m = multiplier as usize;
-    let total = n + m; // highest power in trial is (n-1) + m
 
     // Build coefficients for each power in the trial y_p = Σ A_j x^(j+m)
     // y_p'' contribution and y_p' contribution are computed analytically.
@@ -156,10 +154,10 @@ fn solve_polynomial_system(
     Ok(coeffs)
 }
 
-/// Build `Σ a_j · x^(j+m)` as an `Expression`.
-fn build_polynomial_expr(coeffs: &[f64], multiplier: u32, x_var: &str) -> Expression {
+/// Build `Σ a_j · x^(j+m)` as an `Arc<Expr>`.
+fn build_polynomial_expr(coeffs: &[f64], multiplier: u32, x_var: &str) -> Arc<Expr> {
     let m = multiplier as i64;
-    let mut terms: Vec<Expression> = Vec::new();
+    let mut acc: Arc<Expr> = Expr::int(0);
 
     for (j, &a_j) in coeffs.iter().enumerate() {
         if a_j.abs() < 1e-15 {
@@ -170,25 +168,21 @@ fn build_polynomial_expr(coeffs: &[f64], multiplier: u32, x_var: &str) -> Expres
         let term = if (a_j - 1.0).abs() < 1e-15 {
             x_pow
         } else {
-            Expression::Binary(
-                BinaryOp::Mul,
-                Box::new(Expression::Float(a_j)),
-                Box::new(x_pow),
-            )
+            normalize::mul(Arc::new(Expr::Float(a_j)), x_pow)
         };
-        terms.push(term);
+        acc = normalize::add(acc, term);
     }
 
-    terms_to_sum(terms)
+    acc
 }
 
-/// Build `x^n` as an `Expression`.
-pub(super) fn build_x_power(x_var: &str, n: i64) -> Expression {
-    let x = Expression::Variable(Variable::new(x_var));
+/// Build `x^n` as an `Arc<Expr>`.
+pub(super) fn build_x_power(x_var: &str, n: i64) -> Arc<Expr> {
+    let x = Expr::symbol(x_var);
     match n {
-        0 => Expression::Integer(1),
+        0 => Expr::int(1),
         1 => x,
-        _ => Expression::Power(Box::new(x), Box::new(Expression::Integer(n))),
+        _ => normalize::pow(x, Expr::int(n)),
     }
 }
 
@@ -251,20 +245,4 @@ fn gaussian_eliminate(mat: &mut Vec<Vec<f64>>, n: usize) -> Option<Vec<f64>> {
         result[row] = val / mat[row][row];
     }
     Some(result)
-}
-
-// ---------------------------------------------------------------------------
-// Utility: build sum from terms
-// ---------------------------------------------------------------------------
-
-/// Fold a `Vec<Expression>` into a left-associated sum.
-/// Returns `Expression::Integer(0)` if empty.
-fn terms_to_sum(terms: Vec<Expression>) -> Expression {
-    if terms.is_empty() {
-        return Expression::Integer(0);
-    }
-    terms
-        .into_iter()
-        .reduce(|acc, t| Expression::Binary(BinaryOp::Add, Box::new(acc), Box::new(t)))
-        .expect("non-empty iterator always reduces")
 }
