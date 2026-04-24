@@ -392,6 +392,7 @@
 pub mod api;
 pub mod approximations;
 pub mod ast;
+pub mod calculus;
 pub mod dimensions;
 pub mod equation_system;
 pub mod fourier;
