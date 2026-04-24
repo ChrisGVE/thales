@@ -50,8 +50,8 @@
 //! ```
 
 use crate::ast::{BinaryOp, Equation, Variable};
-use crate::numeric::compile::{compile, decompile};
 use crate::numeric::trace::{Step, TechniqueTag, Trace};
+use crate::numeric::Expr;
 use crate::ode::{
     particular_solution_undetermined, solve_linear, solve_second_order_homogeneous,
     solve_separable, FirstOrderODE, SecondOrderODE,
@@ -59,6 +59,7 @@ use crate::ode::{
 use crate::solver::ode_classifier::{classify_first_order, classify_second_order, ODEType};
 use crate::solver::types::{Solution, SolverError, SolverResult};
 use crate::solver::Solver;
+use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
 // OdeSolver struct
@@ -105,10 +106,9 @@ impl Solver for OdeSolver {
 fn build_ode_trace(
     classify_step: Option<(String, String)>,
     steps: &[String],
-    solution_expr: &crate::ast::Expression,
+    solution_arc: &Arc<Expr>,
 ) -> Trace {
     let mut trace = Trace::new();
-    let solution_arc = compile(solution_expr);
 
     if let Some((order, ode_type)) = classify_step {
         // Classification of an ODE is an inherently calculus-tier act;
@@ -232,9 +232,11 @@ pub fn solve_ode_first_order(ode: &FirstOrderODE) -> SolverResult<(Solution, Tra
         _ => "other",
     };
     let classify = Some(("first".to_string(), ode_type_str.to_string()));
-    let general_expr = decompile(&ode_result.general_solution);
-    let path = build_ode_trace(classify, &ode_result.steps, &general_expr);
-    Ok((Solution::Unique(general_expr), path))
+    let path = build_ode_trace(classify, &ode_result.steps, &ode_result.general_solution);
+    Ok((
+        Solution::unique_from_expr(&ode_result.general_solution),
+        path,
+    ))
 }
 
 /// Solve a second-order linear ODE with constant coefficients directly.
@@ -280,23 +282,31 @@ pub fn solve_ode_second_order(ode: &SecondOrderODE) -> SolverResult<(Solution, T
     };
     let classify = Some(("second".to_string(), ode_type_str.to_string()));
 
-    let hom_expr = decompile(&hom_result.general_solution);
     if ode.is_homogeneous() {
-        let path = build_ode_trace(classify, &hom_result.steps, &hom_expr);
-        return Ok((Solution::Unique(hom_expr), path));
+        let path = build_ode_trace(classify, &hom_result.steps, &hom_result.general_solution);
+        return Ok((
+            Solution::unique_from_expr(&hom_result.general_solution),
+            path,
+        ));
     }
 
     // Non-homogeneous: find particular solution then combine.
     let (yp, yp_steps) = particular_solution_undetermined(ode)
         .map_err(|e| SolverError::CannotSolve(e.to_string()))?;
 
+    // TODO(arc-migration): particular_solution_undetermined returns Expression;
+    // combine at Arc<Expr> level once src/ode/ migrates. Until then, compile
+    // the Expression::Binary sum to Arc<Expr> for the trace and keep the
+    // Expression form for the Solution output boundary.
+    let hom_expr = crate::numeric::compile::decompile(&hom_result.general_solution);
     let general = crate::ast::Expression::Binary(BinaryOp::Add, Box::new(hom_expr), Box::new(yp));
+    let general_arc = crate::numeric::compile::compile(&general);
 
     let mut all_steps = hom_result.steps;
     all_steps.extend(yp_steps);
     all_steps.push(format!("General solution: y = y_h + y_p"));
 
-    let path = build_ode_trace(classify, &all_steps, &general);
+    let path = build_ode_trace(classify, &all_steps, &general_arc);
     Ok((Solution::Unique(general), path))
 }
 

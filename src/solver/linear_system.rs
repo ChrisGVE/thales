@@ -11,10 +11,10 @@
 
 use std::sync::Arc;
 
-use crate::ast::{BinaryOp, Equation, Expression, Variable};
+use crate::ast::{Equation, Variable};
 use crate::matrix::MatrixExpr;
 use crate::numeric::compile::compile;
-use crate::numeric::{BigRational, Expr, SymbolId};
+use crate::numeric::{normalize, BigRational, Expr, SymbolId};
 
 use super::coeff::extract_linear_coefficients;
 use super::cramer::solve_cramer;
@@ -162,14 +162,9 @@ impl LinearSystem {
         let mut constants: Vec<Arc<Expr>> = Vec::with_capacity(n_eqs);
 
         for eq in equations {
-            let combined = Expression::Binary(
-                BinaryOp::Sub,
-                Box::new(eq.left.clone()),
-                Box::new(eq.right.clone()),
-            )
-            .simplify();
-
-            let combined_expr = compile(&combined);
+            let lhs_arc = compile(&eq.left);
+            let rhs_arc = compile(&eq.right);
+            let combined_expr = normalize::sub(lhs_arc, rhs_arc);
             let (row_rat, constant_rat) = extract_linear_coefficients(&combined_expr, variables)?;
             let row: Vec<Arc<Expr>> = row_rat.into_iter().map(bigrational_to_arc).collect();
             coeffs.push(row);

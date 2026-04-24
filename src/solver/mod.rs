@@ -145,7 +145,7 @@ pub use system::{SystemSolution, SystemSolver};
 pub use transcendental::TranscendentalSolver;
 pub use types::{Constraint, Solution, SolverError, SolverResult, SymbolicFailureReason};
 
-use crate::ast::{BinaryOp, Equation, Expression, Variable};
+use crate::ast::{Equation, Expression, Variable};
 use crate::numerical::SmartNumericalSolver;
 use helpers::{
     contains_symbol, evaluate_constants, extract_quadratic_coefficients_expr,
@@ -441,8 +441,8 @@ impl Solver for SmartSolver {
                 for step in num_trace.steps() {
                     trace.push(step.clone());
                 }
-                let result_expr = Expression::Float(num_solution);
-                Ok((Solution::Unique(result_expr), trace))
+                let result_arc = Expr::float(num_solution);
+                Ok((Solution::unique_from_expr(&result_arc), trace))
             }
             Err(_) => {
                 // Numerical also failed — return the original symbolic error
@@ -571,12 +571,9 @@ fn has_transcendental_mixing_expr(expr: &Arc<Expr>, var: SymbolId) -> bool {
 /// Compiles `(lhs − rhs)` once and runs all structural checks against
 /// the canonical `Arc<Expr>` form.
 fn analyze_symbolic_failure(equation: &Equation, variable: &Variable) -> SymbolicFailureReason {
-    let combined = Expression::Binary(
-        BinaryOp::Sub,
-        Box::new(equation.left.clone()),
-        Box::new(equation.right.clone()),
-    );
-    let combined_arc = crate::numeric::compile::compile(&combined);
+    let lhs_arc = compile(&equation.left);
+    let rhs_arc = compile(&equation.right);
+    let combined_arc = crate::numeric::normalize::sub(lhs_arc, rhs_arc);
     let var_id = crate::numeric::SymbolId::intern(&variable.name);
 
     let occurrences = count_variable_occurrences_expr(&combined_arc, var_id);
