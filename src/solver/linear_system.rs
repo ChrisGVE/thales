@@ -102,9 +102,8 @@ impl LinearSystem {
                 let cell = matrix_a
                     .get(i, j)
                     .map_err(|e| SolverError::Other(e.to_string()))?;
-                let arc = compile(cell);
                 for (k, &sid) in var_ids.iter().enumerate() {
-                    if contains_symbol(&arc, sid) {
+                    if contains_symbol(cell, sid) {
                         return Err(SolverError::Other(format!(
                             "matrix_a cell ({}, {}) depends on system variable '{}'; \
                              coefficients must be independent of the unknowns",
@@ -112,7 +111,7 @@ impl LinearSystem {
                         )));
                     }
                 }
-                row.push(arc);
+                row.push(cell.clone());
             }
             coeffs.push(row);
         }
@@ -122,16 +121,15 @@ impl LinearSystem {
             let cell = vector_b
                 .get(i, 0)
                 .map_err(|e| SolverError::Other(e.to_string()))?;
-            let arc = compile(cell);
             for (k, &sid) in var_ids.iter().enumerate() {
-                if contains_symbol(&arc, sid) {
+                if contains_symbol(cell, sid) {
                     return Err(SolverError::Other(format!(
                         "vector_b cell ({}) depends on system variable '{}'",
                         i, variables[k].name
                     )));
                 }
             }
-            constants.push(arc);
+            constants.push(cell.clone());
         }
 
         Ok(Self {
@@ -211,11 +209,11 @@ impl LinearSystem {
     /// use thales::ast::{Expression, Variable};
     /// use thales::solver::{LinearSystem, SystemSolution};
     ///
-    /// let a = MatrixExpr::from_elements(vec![
+    /// let a = MatrixExpr::from_expr_elements(vec![
     ///     vec![Expression::Integer(2), Expression::Integer(1)],
     ///     vec![Expression::Integer(1), Expression::Integer(3)],
     /// ]).unwrap();
-    /// let b = MatrixExpr::from_elements(vec![
+    /// let b = MatrixExpr::from_expr_elements(vec![
     ///     vec![Expression::Integer(5)],
     ///     vec![Expression::Integer(10)],
     /// ]).unwrap();
@@ -259,6 +257,15 @@ mod tests {
         Expression::Variable(Variable::new(name))
     }
 
+    // Arc<Expr> helpers used inside MatrixExpr::from_expr_elements calls.
+    fn aint(n: i64) -> Arc<Expr> {
+        Expr::int(n)
+    }
+
+    fn avar(name: &str) -> Arc<Expr> {
+        Expr::symbol(name)
+    }
+
     fn add(l: Expression, r: Expression) -> Expression {
         Expression::Binary(BinaryOp::Add, Box::new(l), Box::new(r))
     }
@@ -281,8 +288,9 @@ mod tests {
     #[test]
     fn test_from_matrix_valid() {
         let a =
-            MatrixExpr::from_elements(vec![vec![int(2), int(1)], vec![int(1), int(3)]]).unwrap();
-        let b = MatrixExpr::from_elements(vec![vec![int(5)], vec![int(10)]]).unwrap();
+            MatrixExpr::from_expr_elements(vec![vec![aint(2), aint(1)], vec![aint(1), aint(3)]])
+                .unwrap();
+        let b = MatrixExpr::from_expr_elements(vec![vec![aint(5)], vec![aint(10)]]).unwrap();
         let vars = make_vars(&["x", "y"]);
         let sys = LinearSystem::from_matrix(a, b, vars).unwrap();
         assert_eq!(sys.num_equations(), 2);
@@ -292,9 +300,11 @@ mod tests {
     #[test]
     fn test_from_matrix_rejects_non_column_b() {
         let a =
-            MatrixExpr::from_elements(vec![vec![int(1), int(0)], vec![int(0), int(1)]]).unwrap();
+            MatrixExpr::from_expr_elements(vec![vec![aint(1), aint(0)], vec![aint(0), aint(1)]])
+                .unwrap();
         let b =
-            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(3), int(4)]]).unwrap();
+            MatrixExpr::from_expr_elements(vec![vec![aint(1), aint(2)], vec![aint(3), aint(4)]])
+                .unwrap();
         let vars = make_vars(&["x", "y"]);
         assert!(LinearSystem::from_matrix(a, b, vars).is_err());
     }
@@ -302,8 +312,9 @@ mod tests {
     #[test]
     fn test_from_matrix_rejects_dimension_mismatch() {
         let a =
-            MatrixExpr::from_elements(vec![vec![int(1), int(0)], vec![int(0), int(1)]]).unwrap();
-        let b = MatrixExpr::from_elements(vec![vec![int(1)]]).unwrap();
+            MatrixExpr::from_expr_elements(vec![vec![aint(1), aint(0)], vec![aint(0), aint(1)]])
+                .unwrap();
+        let b = MatrixExpr::from_expr_elements(vec![vec![aint(1)]]).unwrap();
         let vars = make_vars(&["x", "y"]);
         assert!(LinearSystem::from_matrix(a, b, vars).is_err());
     }
@@ -312,9 +323,10 @@ mod tests {
     fn test_from_matrix_rejects_system_variable_in_cell() {
         // Coefficient cell contains `x`, which is a system variable —
         // algebraically incoherent.
-        let a = MatrixExpr::from_elements(vec![vec![var_expr("x"), int(1)], vec![int(0), int(1)]])
-            .unwrap();
-        let b = MatrixExpr::from_elements(vec![vec![int(1)], vec![int(1)]]).unwrap();
+        let a =
+            MatrixExpr::from_expr_elements(vec![vec![avar("x"), aint(1)], vec![aint(0), aint(1)]])
+                .unwrap();
+        let b = MatrixExpr::from_expr_elements(vec![vec![aint(1)], vec![aint(1)]]).unwrap();
         let vars = make_vars(&["x", "y"]);
         let err = LinearSystem::from_matrix(a, b, vars).unwrap_err();
         let msg = err.to_string();
@@ -325,9 +337,9 @@ mod tests {
     fn test_from_matrix_accepts_symbolic_parameter() {
         // `a` is a symbolic parameter, independent of the unknowns.
         let a_mat =
-            MatrixExpr::from_elements(vec![vec![var_expr("a"), int(1)], vec![int(0), int(1)]])
+            MatrixExpr::from_expr_elements(vec![vec![avar("a"), aint(1)], vec![aint(0), aint(1)]])
                 .unwrap();
-        let b_mat = MatrixExpr::from_elements(vec![vec![int(1)], vec![int(1)]]).unwrap();
+        let b_mat = MatrixExpr::from_expr_elements(vec![vec![aint(1)], vec![aint(1)]]).unwrap();
         let vars = make_vars(&["x", "y"]);
         assert!(LinearSystem::from_matrix(a_mat, b_mat, vars).is_ok());
     }
@@ -337,8 +349,9 @@ mod tests {
     #[test]
     fn test_solve_via_lu_2x2() {
         let a =
-            MatrixExpr::from_elements(vec![vec![int(2), int(1)], vec![int(1), int(3)]]).unwrap();
-        let b = MatrixExpr::from_elements(vec![vec![int(5)], vec![int(10)]]).unwrap();
+            MatrixExpr::from_expr_elements(vec![vec![aint(2), aint(1)], vec![aint(1), aint(3)]])
+                .unwrap();
+        let b = MatrixExpr::from_expr_elements(vec![vec![aint(5)], vec![aint(10)]]).unwrap();
         let vars = make_vars(&["x", "y"]);
         let sys = LinearSystem::from_matrix(a, b, vars.clone()).unwrap();
         let sol = sys.solve_via_lu().unwrap();
@@ -362,14 +375,14 @@ mod tests {
         // 2y + 5z = -4
         // 2x + 5y - z = 27
         // Solution: x=5, y=3, z=-2
-        let a = MatrixExpr::from_elements(vec![
-            vec![int(1), int(1), int(1)],
-            vec![int(0), int(2), int(5)],
-            vec![int(2), int(5), int(-1)],
+        let a = MatrixExpr::from_expr_elements(vec![
+            vec![aint(1), aint(1), aint(1)],
+            vec![aint(0), aint(2), aint(5)],
+            vec![aint(2), aint(5), aint(-1)],
         ])
         .unwrap();
-        let b =
-            MatrixExpr::from_elements(vec![vec![int(6)], vec![int(-4)], vec![int(27)]]).unwrap();
+        let b = MatrixExpr::from_expr_elements(vec![vec![aint(6)], vec![aint(-4)], vec![aint(27)]])
+            .unwrap();
         let vars = make_vars(&["x", "y", "z"]);
         let sys = LinearSystem::from_matrix(a, b, vars.clone()).unwrap();
         let sol = sys.solve_via_lu().unwrap();
@@ -392,8 +405,9 @@ mod tests {
     #[test]
     fn test_solve_via_lu_singular_system() {
         let a =
-            MatrixExpr::from_elements(vec![vec![int(1), int(2)], vec![int(2), int(4)]]).unwrap();
-        let b = MatrixExpr::from_elements(vec![vec![int(3)], vec![int(6)]]).unwrap();
+            MatrixExpr::from_expr_elements(vec![vec![aint(1), aint(2)], vec![aint(2), aint(4)]])
+                .unwrap();
+        let b = MatrixExpr::from_expr_elements(vec![vec![aint(3)], vec![aint(6)]]).unwrap();
         let vars = make_vars(&["x", "y"]);
         let sys = LinearSystem::from_matrix(a, b, vars).unwrap();
         let result = sys.solve_via_lu();

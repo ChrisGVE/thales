@@ -1,8 +1,13 @@
 //! Display and LaTeX output for matrices.
+//!
+//! Display is an I/O boundary (Rule 2): Arc<Expr> elements decompile to
+//! Expression here so that Expression::to_latex can render them. Decompile
+//! happens only at this seam, never inside matrix computation.
 
 use std::fmt;
 
 use super::{BracketStyle, MatrixExpr};
+use crate::numeric::compile::decompile;
 
 impl MatrixExpr {
     /// Render the matrix as LaTeX.
@@ -11,11 +16,11 @@ impl MatrixExpr {
     ///
     /// ```
     /// use thales::matrix::{MatrixExpr, BracketStyle};
-    /// use thales::ast::Expression;
+    /// use thales::numeric::expr::Expr;
     ///
-    /// let m = MatrixExpr::from_elements(vec![
-    ///     vec![Expression::Integer(1), Expression::Integer(2)],
-    ///     vec![Expression::Integer(3), Expression::Integer(4)],
+    /// let m = MatrixExpr::from_expr_elements(vec![
+    ///     vec![Expr::int(1), Expr::int(2)],
+    ///     vec![Expr::int(3), Expr::int(4)],
     /// ]).unwrap();
     ///
     /// let latex = m.to_latex(BracketStyle::Parentheses);
@@ -33,7 +38,7 @@ impl MatrixExpr {
 
         let mut result = format!("\\begin{{{}}}\n", env);
         for (i, row) in self.elements().iter().enumerate() {
-            let row_str: Vec<String> = row.iter().map(|e| e.to_latex()).collect();
+            let row_str: Vec<String> = row.iter().map(|e| decompile(e).to_latex()).collect();
             result.push_str(&row_str.join(" & "));
             if i < self.rows() - 1 {
                 result.push_str(" \\\\\n");

@@ -1,8 +1,8 @@
 //! LU decomposition with partial pivoting for [`MatrixExpr`].
 
-use std::collections::HashMap;
+use std::sync::Arc;
 
-use crate::ast::Expression;
+use crate::numeric::expr::Expr;
 
 use super::{MatrixError, MatrixExpr, MatrixResult};
 
@@ -34,7 +34,8 @@ fn back_substitute(u: &[Vec<f64>], y: &[f64]) -> Vec<f64> {
 ///
 /// Returns an error when any element contains unresolved symbolic variables.
 fn to_numeric(m: &MatrixExpr) -> MatrixResult<Vec<Vec<f64>>> {
-    let empty: HashMap<String, f64> = HashMap::new();
+    let empty: std::collections::HashMap<crate::numeric::SymbolId, f64> =
+        std::collections::HashMap::new();
     m.evaluate(&empty).ok_or_else(|| {
         MatrixError::InvalidOperation(
             "Matrix contains unresolved symbolic variables; \
@@ -44,15 +45,15 @@ fn to_numeric(m: &MatrixExpr) -> MatrixResult<Vec<Vec<f64>>> {
     })
 }
 
-/// Wrap a 2-D `f64` grid into a `MatrixExpr` of `Expression::Float` values.
+/// Wrap a 2-D `f64` grid into a `MatrixExpr` of `Expr::Float` values.
 fn from_numeric(data: Vec<Vec<f64>>) -> MatrixExpr {
     let rows = data.len();
     let cols = if rows == 0 { 0 } else { data[0].len() };
-    let elements: Vec<Vec<Expression>> = data
+    let elements: Vec<Vec<Arc<Expr>>> = data
         .into_iter()
-        .map(|row| row.into_iter().map(Expression::Float).collect())
+        .map(|row| row.into_iter().map(Expr::float).collect())
         .collect();
-    MatrixExpr::from_elements_unchecked(rows, cols, elements)
+    MatrixExpr::from_expr_elements_unchecked(rows, cols, elements)
 }
 
 // ── LU decomposition core (Doolittle with partial pivoting) ──────────────────
@@ -135,12 +136,11 @@ impl MatrixExpr {
     ///
     /// ```
     /// use thales::matrix::MatrixExpr;
-    /// use thales::ast::Expression;
-    /// use std::collections::HashMap;
+    /// use thales::numeric::expr::Expr;
     ///
-    /// let a = MatrixExpr::from_elements(vec![
-    ///     vec![Expression::Integer(4), Expression::Integer(3)],
-    ///     vec![Expression::Integer(6), Expression::Integer(3)],
+    /// let a = MatrixExpr::from_expr_elements(vec![
+    ///     vec![Expr::int(4), Expr::int(3)],
+    ///     vec![Expr::int(6), Expr::int(3)],
     /// ]).unwrap();
     ///
     /// let (l, u, perm) = a.lu_decompose().unwrap();
@@ -179,25 +179,27 @@ impl MatrixExpr {
     ///
     /// ```
     /// use thales::matrix::MatrixExpr;
-    /// use thales::ast::Expression;
+    /// use thales::numeric::expr::Expr;
+    /// use thales::numeric::evaluation::evaluate;
+    /// use thales::numeric::SymbolId;
     /// use std::collections::HashMap;
     ///
     /// // Solve [[2, 1], [1, 3]] x = [[3], [4]]
-    /// let a = MatrixExpr::from_elements(vec![
-    ///     vec![Expression::Integer(2), Expression::Integer(1)],
-    ///     vec![Expression::Integer(1), Expression::Integer(3)],
+    /// let a = MatrixExpr::from_expr_elements(vec![
+    ///     vec![Expr::int(2), Expr::int(1)],
+    ///     vec![Expr::int(1), Expr::int(3)],
     /// ]).unwrap();
     ///
-    /// let b = MatrixExpr::from_elements(vec![
-    ///     vec![Expression::Integer(3)],
-    ///     vec![Expression::Integer(4)],
+    /// let b = MatrixExpr::from_expr_elements(vec![
+    ///     vec![Expr::int(3)],
+    ///     vec![Expr::int(4)],
     /// ]).unwrap();
     ///
     /// let x = a.solve_system(&b).unwrap();
-    /// let vars = HashMap::new();
+    /// let empty: HashMap<SymbolId, f64> = HashMap::new();
     /// // Solution: x = [1, 1]
-    /// assert!((x.get(0, 0).unwrap().evaluate(&vars).unwrap() - 1.0).abs() < 1e-10);
-    /// assert!((x.get(1, 0).unwrap().evaluate(&vars).unwrap() - 1.0).abs() < 1e-10);
+    /// assert!((evaluate(x.get(0, 0).unwrap(), &empty).unwrap() - 1.0).abs() < 1e-10);
+    /// assert!((evaluate(x.get(1, 0).unwrap(), &empty).unwrap() - 1.0).abs() < 1e-10);
     /// ```
     pub fn solve_system(&self, b: &MatrixExpr) -> MatrixResult<MatrixExpr> {
         if !self.is_square() {
@@ -229,9 +231,8 @@ impl MatrixExpr {
         let y = forward_substitute(&l_data, &b_vec);
         let x = back_substitute(&u_data, &y);
 
-        let elements: Vec<Vec<Expression>> =
-            x.into_iter().map(|v| vec![Expression::Float(v)]).collect();
+        let elements: Vec<Vec<Arc<Expr>>> = x.into_iter().map(|v| vec![Expr::float(v)]).collect();
         let n = elements.len();
-        Ok(MatrixExpr::from_elements_unchecked(n, 1, elements))
+        Ok(MatrixExpr::from_expr_elements_unchecked(n, 1, elements))
     }
 }

@@ -16,11 +16,11 @@ impl MatrixExpr {
     ///
     /// ```
     /// use thales::matrix::MatrixExpr;
-    /// use thales::ast::Expression;
+    /// use thales::numeric::expr::Expr;
     ///
-    /// let m = MatrixExpr::from_elements(vec![
-    ///     vec![Expression::Integer(2), Expression::Integer(1)],
-    ///     vec![Expression::Integer(1), Expression::Integer(2)],
+    /// let m = MatrixExpr::from_expr_elements(vec![
+    ///     vec![Expr::int(2), Expr::int(1)],
+    ///     vec![Expr::int(1), Expr::int(2)],
     /// ]).unwrap();
     ///
     /// let eigenvalues = m.eigenvalues_numeric().unwrap();
@@ -147,16 +147,16 @@ impl MatrixExpr {
             }
         }
 
-        // For non-symmetric matrices, we would need to check algebraic vs geometric multiplicity
-        // This is a simplified check - return true if we can compute distinct eigenvalues
+        // For non-symmetric matrices, we would need to check algebraic vs geometric multiplicity.
+        // This is a simplified check — return true if we can compute distinct eigenvalues.
         let eigenvalues = self.eigenvalues_numeric()?;
 
         // Check if all eigenvalues are distinct (sufficient condition)
         for (i, &ev1) in eigenvalues.iter().enumerate() {
             for (j, &ev2) in eigenvalues.iter().enumerate() {
                 if i != j && (ev1 - ev2).abs() < 1e-10 {
-                    // Repeated eigenvalue - would need to check geometric multiplicity
-                    // For simplicity, assume diagonalizable
+                    // Repeated eigenvalue - would need to check geometric multiplicity.
+                    // For simplicity, assume diagonalizable.
                     return Ok(true);
                 }
             }
@@ -186,7 +186,6 @@ fn eigenvalues_2x2(elements: &[Vec<f64>]) -> MatrixResult<Vec<f64>> {
 
     if discriminant < 0.0 {
         // Complex eigenvalues - return just the real parts for now
-        // A full implementation would return Complex numbers
         let real_part = trace / 2.0;
         Ok(vec![real_part, real_part])
     } else {
@@ -200,8 +199,6 @@ fn eigenvalues_2x2(elements: &[Vec<f64>]) -> MatrixResult<Vec<f64>> {
 /// Compute eigenvalues for a 3x3 matrix using Cardano's formula.
 #[cfg(not(feature = "lapack"))]
 fn eigenvalues_3x3(elements: &[Vec<f64>]) -> MatrixResult<Vec<f64>> {
-    // For 3x3, we solve the cubic characteristic equation
-    // det(A - λI) = -λ³ + tr(A)λ² - (sum of 2x2 principal minors)λ + det(A)
     let a11 = elements[0][0];
     let a12 = elements[0][1];
     let a13 = elements[0][2];
@@ -227,39 +224,29 @@ fn eigenvalues_3x3(elements: &[Vec<f64>]) -> MatrixResult<Vec<f64>> {
         + a13 * (a21 * a32 - a22 * a31);
     let r = -det;
 
-    // Solve cubic using Cardano's formula or numerical method
     solve_cubic(p, q, r)
 }
 
 /// Compute eigenvalues using QR algorithm for larger matrices.
 #[cfg(not(feature = "lapack"))]
 fn eigenvalues_qr(elements: &[Vec<f64>]) -> MatrixResult<Vec<f64>> {
-    // Simple QR iteration
     let n = elements.len();
     let mut a = elements.to_vec();
 
-    // Maximum iterations
     const MAX_ITER: usize = 100;
     const TOL: f64 = 1e-10;
 
     for _ in 0..MAX_ITER {
-        // QR decomposition
         let (q, r) = qr_decomposition(&a);
-
-        // A = R * Q
         a = matrix_multiply(&r, &q);
 
-        // Check for convergence (off-diagonal elements small)
         let mut converged = true;
-        for i in 0..n {
+        'outer: for i in 0..n {
             for j in 0..i {
                 if a[i][j].abs() > TOL {
                     converged = false;
-                    break;
+                    break 'outer;
                 }
-            }
-            if !converged {
-                break;
             }
         }
 
@@ -268,7 +255,6 @@ fn eigenvalues_qr(elements: &[Vec<f64>]) -> MatrixResult<Vec<f64>> {
         }
     }
 
-    // Extract eigenvalues from diagonal
     Ok((0..n).map(|i| a[i][i]).collect())
 }
 
@@ -283,18 +269,13 @@ fn eigenvector_inverse_iteration(elements: &[Vec<f64>], eigenvalue: f64) -> Matr
         a_minus_lambda[i][i] -= eigenvalue;
     }
 
-    // Use inverse iteration to find eigenvector
-    // Start with a random vector
+    // Start with a normalized vector [1, 2, ..., n] / norm
     let mut v: Vec<f64> = (0..n).map(|i| (i + 1) as f64).collect();
-
-    // Normalize
     let norm: f64 = v.iter().map(|x| x * x).sum::<f64>().sqrt();
     for x in &mut v {
         *x /= norm;
     }
 
-    // Inverse iteration: solve (A - λI)w = v, then v = w/||w||
-    // Since A - λI is singular (or near-singular), we perturb slightly
     const MAX_ITER: usize = 50;
     const TOL: f64 = 1e-8;
 
@@ -302,13 +283,11 @@ fn eigenvector_inverse_iteration(elements: &[Vec<f64>], eigenvalue: f64) -> Matr
         // Solve (A - λI + εI)w = v using Gaussian elimination
         let mut augmented = a_minus_lambda.clone();
         for i in 0..n {
-            augmented[i][i] += 1e-10; // Small perturbation
+            augmented[i][i] += 1e-10; // Small perturbation for near-singular matrix
         }
 
-        // Solve using Gaussian elimination
         let w = solve_linear_system(&augmented, &v);
 
-        // Normalize
         let norm: f64 = w.iter().map(|x| x * x).sum::<f64>().sqrt();
         if norm < 1e-14 {
             break;
@@ -316,7 +295,6 @@ fn eigenvector_inverse_iteration(elements: &[Vec<f64>], eigenvalue: f64) -> Matr
 
         let w_normalized: Vec<f64> = w.iter().map(|x| x / norm).collect();
 
-        // Check convergence
         let diff: f64 = v
             .iter()
             .zip(w_normalized.iter())
@@ -337,15 +315,11 @@ fn eigenvector_inverse_iteration(elements: &[Vec<f64>], eigenvalue: f64) -> Matr
 #[cfg(not(feature = "lapack"))]
 fn solve_cubic(p: f64, q: f64, r: f64) -> MatrixResult<Vec<f64>> {
     // Depress the cubic: substitute x = t - p/3
-    // t³ + at + b = 0 where:
-    // a = q - p²/3
-    // b = r - pq/3 + 2p³/27
+    // t³ + at + b = 0 where a = q - p²/3, b = r - pq/3 + 2p³/27
     let a = q - p * p / 3.0;
     let b = r - p * q / 3.0 + 2.0 * p * p * p / 27.0;
 
-    // Discriminant
     let discriminant = -4.0 * a * a * a - 27.0 * b * b;
-
     let offset = -p / 3.0;
 
     if discriminant > 0.0 {
@@ -361,10 +335,8 @@ fn solve_cubic(p: f64, q: f64, r: f64) -> MatrixResult<Vec<f64>> {
     } else if discriminant.abs() < 1e-10 {
         // Multiple roots
         if b.abs() < 1e-10 {
-            // Triple root
             Ok(vec![offset, offset, offset])
         } else {
-            // Double root
             let double_root = 3.0 * b / a;
             let simple_root = -3.0 * b / (2.0 * a);
             Ok(vec![
@@ -374,13 +346,11 @@ fn solve_cubic(p: f64, q: f64, r: f64) -> MatrixResult<Vec<f64>> {
             ])
         }
     } else {
-        // One real root, two complex (return real root 3 times for now)
+        // One real root, two complex conjugates
         let sqrt_disc = (b * b / 4.0 + a * a * a / 27.0).sqrt();
         let u = (-b / 2.0 + sqrt_disc).cbrt();
         let v = (-b / 2.0 - sqrt_disc).cbrt();
         let real_root = u + v + offset;
-
-        // Return real root; complex roots have same real part
         let complex_real = -(u + v) / 2.0 + offset;
         Ok(vec![real_root, complex_real, complex_real])
     }
@@ -394,10 +364,8 @@ fn qr_decomposition(a: &[Vec<f64>]) -> (Vec<Vec<f64>>, Vec<Vec<f64>>) {
     let mut r = vec![vec![0.0; n]; n];
 
     for j in 0..n {
-        // Start with column j of A
         let mut v: Vec<f64> = (0..n).map(|i| a[i][j]).collect();
 
-        // Subtract projections onto previous q vectors
         for i in 0..j {
             let q_i: Vec<f64> = (0..n).map(|k| q[k][i]).collect();
             r[i][j] = dot_product(&q_i, &v);
@@ -406,7 +374,6 @@ fn qr_decomposition(a: &[Vec<f64>]) -> (Vec<Vec<f64>>, Vec<Vec<f64>>) {
             }
         }
 
-        // Compute norm and normalize
         r[j][j] = v.iter().map(|x| x * x).sum::<f64>().sqrt();
         if r[j][j] > 1e-14 {
             for k in 0..n {
@@ -445,14 +412,10 @@ fn matrix_multiply(a: &[Vec<f64>], b: &[Vec<f64>]) -> Vec<Vec<f64>> {
 #[cfg(not(feature = "lapack"))]
 fn solve_linear_system(a: &[Vec<f64>], b: &[f64]) -> Vec<f64> {
     let n = a.len();
-
-    // Create augmented matrix
     let mut aug: Vec<Vec<f64>> = a.to_vec();
     let mut rhs = b.to_vec();
 
-    // Forward elimination with partial pivoting
     for k in 0..n {
-        // Find pivot
         let mut max_row = k;
         let mut max_val = aug[k][k].abs();
         for i in (k + 1)..n {
@@ -462,13 +425,11 @@ fn solve_linear_system(a: &[Vec<f64>], b: &[f64]) -> Vec<f64> {
             }
         }
 
-        // Swap rows
         if max_row != k {
             aug.swap(k, max_row);
             rhs.swap(k, max_row);
         }
 
-        // Eliminate
         if aug[k][k].abs() > 1e-14 {
             for i in (k + 1)..n {
                 let factor = aug[i][k] / aug[k][k];
@@ -480,7 +441,6 @@ fn solve_linear_system(a: &[Vec<f64>], b: &[f64]) -> Vec<f64> {
         }
     }
 
-    // Back substitution
     let mut x = vec![0.0; n];
     for i in (0..n).rev() {
         if aug[i][i].abs() > 1e-14 {
