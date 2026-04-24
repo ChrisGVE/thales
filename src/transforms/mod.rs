@@ -2,9 +2,12 @@
 //!
 //! Provides transformations between different coordinate systems
 //! (Cartesian, Polar, Spherical, Cylindrical) and complex number operations.
+//! Also exports [`CoordSystem`] and the [`jacobian`] sub-module for symbolic
+//! Jacobian matrix and volume-element construction.
 
 mod cartesian;
 mod complex;
+pub mod jacobian;
 mod polar;
 mod transform2d;
 
@@ -12,6 +15,32 @@ pub use cartesian::{Cartesian2D, Cartesian3D};
 pub use complex::{decompose_complex_equation, separate_real_imag, ComplexOps};
 pub use polar::{Cylindrical, Polar, Spherical};
 pub use transform2d::{Rotation3D, Transform2D};
+
+/// Built-in coordinate systems recognised by [`jacobian::volume_element`].
+///
+/// The `Custom` variant is a pass-through for caller-supplied parametric maps;
+/// [`jacobian::volume_element`] returns `1` for it (the caller is expected to
+/// use [`jacobian::jacobian_determinant`] directly on their own forward map).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CoordSystem {
+    /// 2-D Cartesian (x, y).  Volume element: 1.
+    Cartesian2D,
+    /// 2-D polar (r, θ).  Volume element: r.
+    Polar2D,
+    /// 3-D Cartesian (x, y, z).  Volume element: 1.
+    Cartesian3D,
+    /// 3-D cylindrical (ρ, φ, z).  Volume element: ρ.
+    Cylindrical,
+    /// 3-D spherical (ρ, θ, φ).  Volume element: ρ²·sin(φ).
+    Spherical,
+    /// 2-D parabolic (u, v).  Volume element: u² + v².
+    Parabolic2D,
+    /// 2-D elliptic (μ, ν) with focal half-distance a.
+    /// Volume element: a·√(sinh²μ + sin²ν).
+    Elliptic2D,
+    /// Caller-defined curvilinear system.  Volume element placeholder: 1.
+    Custom,
+}
 
 #[cfg(test)]
 mod tests {
