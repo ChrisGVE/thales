@@ -4,10 +4,11 @@
 //! root with multiplicity `m` (simple or repeated).
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use crate::ast::{BinaryOp, Expression, Function, Variable};
 use crate::numeric::evaluation::evaluate;
-use crate::numeric::SymbolId;
+use crate::numeric::expr::{Expr, FuncId};
+use crate::numeric::{normalize, SymbolId};
 
 use super::polynomial::build_x_power;
 use super::{ODEError, SecondOrderODE};
@@ -25,7 +26,7 @@ pub(super) fn particular_exponential(
     ode: &SecondOrderODE,
     k: f64,
     steps: &mut Vec<String>,
-) -> Result<Expression, ODEError> {
+) -> Result<Arc<Expr>, ODEError> {
     let x_var = &ode.independent;
     let multiplier = resonance_multiplier_exp(ode, k)?;
 
@@ -82,23 +83,19 @@ fn resonance_multiplier_exp(ode: &SecondOrderODE, k: f64) -> Result<u32, ODEErro
     }
 }
 
-/// Build `B · x^m · e^(k·x)` as an `Expression`.
-fn build_exp_particular(b: f64, k: f64, multiplier: u32, x_var: &str) -> Expression {
-    let exp_arg = Expression::Binary(
-        BinaryOp::Mul,
-        Box::new(Expression::Float(k)),
-        Box::new(Expression::Variable(Variable::new(x_var))),
-    );
-    let exp_term = Expression::Function(Function::Exp, vec![exp_arg]);
+/// Build `B · x^m · e^(k·x)` as an `Arc<Expr>`.
+fn build_exp_particular(b: f64, k: f64, multiplier: u32, x_var: &str) -> Arc<Expr> {
+    // Build k·x
+    let x = Expr::symbol(x_var);
+    let k_arc = Arc::new(Expr::Float(k));
+    let exp_arg = normalize::mul(k_arc, x);
+    // Build e^(k·x)
+    let exp_term = Expr::func(FuncId::Exp, vec![exp_arg]);
 
     let base = if (b - 1.0).abs() < 1e-15 {
         exp_term
     } else {
-        Expression::Binary(
-            BinaryOp::Mul,
-            Box::new(Expression::Float(b)),
-            Box::new(exp_term),
-        )
+        normalize::mul(Arc::new(Expr::Float(b)), exp_term)
     };
 
     if multiplier == 0 {
@@ -106,5 +103,5 @@ fn build_exp_particular(b: f64, k: f64, multiplier: u32, x_var: &str) -> Express
     }
 
     let x_pow = build_x_power(x_var, multiplier as i64);
-    Expression::Binary(BinaryOp::Mul, Box::new(x_pow), Box::new(base))
+    normalize::mul(x_pow, base)
 }
