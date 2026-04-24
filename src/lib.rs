@@ -395,6 +395,7 @@ pub mod ast;
 pub mod dimensions;
 pub mod equation_system;
 pub mod fourier;
+pub mod geometry;
 pub mod inequality;
 pub mod integration;
 pub mod latex;
