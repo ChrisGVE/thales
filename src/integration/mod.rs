@@ -27,6 +27,7 @@
 
 mod by_parts;
 mod definite;
+mod partial_fractions;
 mod substitution;
 
 use crate::ast::Expression;
@@ -93,9 +94,21 @@ pub fn integrate(expr: &Expression, var: &str) -> IntegrationResult {
 
 /// Internal implementation. Compiles `expr` into `Arc<Expr>`, dispatches to
 /// [`pattern_integrate`], and decompiles the result back to [`Expression`].
+///
+/// Dispatch order:
+/// 1. Partial-fraction decomposition for rational functions `N(x)/D(x)`.
+/// 2. Pattern-matching table + U-substitution + tabular by-parts.
+/// 3. Risch algorithm (fallback inside `pattern_integrate`).
 pub(crate) fn integrate_impl(expr: &Expression, var: &str) -> IntegrationResult {
     let var_id = SymbolId::intern(var);
     let compiled = compile(expr);
+
+    // Step 1: try rational-function route before the general engine.
+    if let Some(anti) = partial_fractions::try_integrate_rational(&compiled, var_id) {
+        return Ok(decompile(&anti));
+    }
+
+    // Steps 2–3: pattern matching + Risch fallback.
     match pattern_integrate(&compiled, var_id) {
         NumericIntegrationResult::Elementary(anti) => Ok(decompile(&anti)),
         NumericIntegrationResult::NonElementary(_) => Err(IntegrationError::CannotIntegrate(
@@ -559,5 +572,130 @@ mod tests {
         let empty = std::collections::HashMap::new();
         let numeric = value.evaluate(&empty).unwrap();
         assert!((numeric - 1.0 / 3.0).abs() < 1e-10);
+    }
+
+    // =========================================================================
+    // Gap A.2 — partial-fractions integration tests
+    // =========================================================================
+
+    // Helper: check antiderivative at specified points rather than the default
+    // set [0.3, 1.7, 2.4], so tests can avoid poles of the integrand.
+    fn check_antideriv_at(expr: &Expression, anti: &Expression, var_name: &str, pts: &[f64]) {
+        let derivative = anti.differentiate(var_name).simplify();
+        for &pt in pts {
+            let got = eval_at(&derivative, var_name, pt);
+            let expected = eval_at(expr, var_name, pt);
+            assert!(
+                (got - expected).abs() < 1e-7,
+                "d/dx(F) mismatch at x={}: got {}, expected {} (F={}, dF/dx={})",
+                pt,
+                got,
+                expected,
+                anti,
+                derivative
+            );
+        }
+    }
+
+    #[test]
+    fn test_pf_linear_distinct_roots() {
+        // ∫ 1/((x-1)(x-2)) dx  — denominator x²-3x+2
+        let x = var("x");
+        let denom = add(
+            add(
+                pow(x.clone(), int(2)),
+                Expression::Unary(UnaryOp::Neg, Box::new(mul(int(3), x.clone()))),
+            ),
+            int(2),
+        );
+        let expr = div(int(1), denom);
+        let result = integrate(&expr, "x").expect("1/((x-1)(x-2)) integrates");
+        // Avoid poles at x=1 and x=2; check on x>2 and x<1
+        check_antideriv_at(&expr, &result, "x", &[3.0, 4.0, -1.0]);
+    }
+
+    #[test]
+    fn test_pf_repeated_linear_root() {
+        // ∫ 1/(x-1)² dx = -1/(x-1)
+        let x = var("x");
+        let denom = pow(
+            add(x.clone(), Expression::Unary(UnaryOp::Neg, Box::new(int(1)))),
+            int(2),
+        );
+        let expr = div(int(1), denom);
+        let result = integrate(&expr, "x").expect("1/(x-1)^2 integrates");
+        // Check on both sides of the pole at x=1
+        check_antideriv_at(&expr, &result, "x", &[2.5, 3.0, -0.5]);
+    }
+
+    #[test]
+    fn test_pf_mixed_linear_repeated() {
+        // ∫ 1/(x(x-1)²) dx — poles at x=0 and x=1
+        let x = var("x");
+        // x(x-1)² = x³ - 2x² + x
+        let denom = add(
+            add(
+                pow(x.clone(), int(3)),
+                Expression::Unary(UnaryOp::Neg, Box::new(mul(int(2), pow(x.clone(), int(2))))),
+            ),
+            x.clone(),
+        );
+        let expr = div(int(1), denom);
+        let result = integrate(&expr, "x").expect("1/(x(x-1)^2) integrates");
+        // Avoid poles at x=0 and x=1; check for x>1 and x<0
+        check_antideriv_at(&expr, &result, "x", &[2.0, 3.0, -1.0]);
+    }
+
+    #[test]
+    fn test_pf_irreducible_quadratic() {
+        // ∫ 1/(x²+1) dx = atan(x)
+        let x = var("x");
+        let denom = add(pow(x.clone(), int(2)), int(1));
+        let expr = div(int(1), denom);
+        let result = integrate(&expr, "x").expect("1/(x^2+1) integrates");
+        // Verify numerically: d/dx(result) = 1/(x^2+1) at several points
+        check_antiderivative(&expr, &result, "x");
+    }
+
+    #[test]
+    fn test_pf_bx_plus_c_over_irreducible_quadratic() {
+        // ∫ (2x+3)/(x²+2x+5) dx
+        // x²+2x+5 = (x+1)²+4 is irreducible (discriminant = 4-20 < 0)
+        let x = var("x");
+        let num = add(mul(int(2), x.clone()), int(3));
+        let denom = add(add(pow(x.clone(), int(2)), mul(int(2), x.clone())), int(5));
+        let expr = div(num, denom);
+        let result = integrate(&expr, "x").expect("(2x+3)/(x^2+2x+5) integrates");
+        check_antiderivative(&expr, &result, "x");
+    }
+
+    #[test]
+    fn test_pf_non_rational_sin_unaffected() {
+        // ∫ sin(x) dx must NOT be intercepted by the partial-fractions route
+        let sin_x = Expression::Function(Function::Sin, vec![var("x")]);
+        let result = integrate(&sin_x, "x").expect("sin(x) integrates");
+        check_antiderivative(&sin_x, &result, "x");
+    }
+
+    #[test]
+    fn test_pf_non_rational_exp_unaffected() {
+        // ∫ e^x dx must NOT be intercepted by the partial-fractions route
+        let exp_x = Expression::Function(Function::Exp, vec![var("x")]);
+        let result = integrate(&exp_x, "x").expect("e^x integrates");
+        check_antiderivative(&exp_x, &result, "x");
+    }
+
+    #[test]
+    fn test_pf_improper_fraction_long_division_first() {
+        // ∫ x²/(x-1) dx — numerator degree (2) >= denominator degree (1)
+        // Long division: x²/(x-1) = x + 1 + 1/(x-1)
+        // Antiderivative: x²/2 + x + ln|x-1|
+        let x = var("x");
+        let num = pow(x.clone(), int(2));
+        let denom = add(x.clone(), Expression::Unary(UnaryOp::Neg, Box::new(int(1))));
+        let expr = div(num, denom);
+        let result = integrate(&expr, "x").expect("x^2/(x-1) integrates");
+        // Avoid pole at x=1
+        check_antideriv_at(&expr, &result, "x", &[2.5, 3.0, -0.5]);
     }
 }
