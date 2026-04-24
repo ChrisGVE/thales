@@ -8,7 +8,9 @@
 //! The "with steps" variants return a minimal narration rather than the full
 //! hand-rolled LIATE trace of the legacy implementation.
 
-use crate::ast::{BinaryOp, Expression};
+use crate::ast::Expression;
+use crate::numeric::compile::{compile, decompile};
+use crate::numeric::normalize;
 
 use super::{IntegrationError, IntegrationResult};
 
@@ -16,11 +18,13 @@ use super::{IntegrationError, IntegrationResult};
 ///
 /// Delegates to the unified integrator, which handles parts patterns
 /// internally (tabular integration for `xⁿ · trig`, Risch for general cases).
+// TODO(arc-migration): caller (integration tests) still Expression-native — drop Expression wrapper when callers migrated
 pub fn integrate_by_parts(expr: &Expression, var: &str) -> IntegrationResult {
     super::integrate_impl(expr, var)
 }
 
 /// Integration by parts with a minimal step narration.
+// TODO(arc-migration): caller (integration tests) still Expression-native — drop Expression wrapper when callers migrated
 pub fn integrate_by_parts_with_steps(
     expr: &Expression,
     var: &str,
@@ -39,15 +43,24 @@ pub fn integrate_by_parts_with_steps(
 /// Delegates to the unified integrator after forming the product `P(x)·f(x)`.
 /// The `Arc<Expr>`-native tabular pass in `pattern_integrate` recognises
 /// this pattern for small-degree polynomials with `sin`/`cos`/`exp`.
+// TODO(arc-migration): caller (integration tests) still Expression-native — drop Expression wrapper when callers migrated
 pub fn tabular_integration(
     polynomial: &Expression,
     integrable: &Expression,
     var: &str,
 ) -> IntegrationResult {
-    let product = Expression::Binary(
-        BinaryOp::Mul,
-        Box::new(polynomial.clone()),
-        Box::new(integrable.clone()),
-    );
-    super::integrate_impl(&product, var)
+    let poly_arc = compile(polynomial);
+    let integ_arc = compile(integrable);
+    let product_arc = normalize::mul(poly_arc, integ_arc);
+    let var_id = crate::numeric::SymbolId::intern(var);
+    use crate::numeric::risch::IntegrationResult as NumericIntegrationResult;
+    match crate::numeric::pattern_integrate::pattern_integrate(&product_arc, var_id) {
+        NumericIntegrationResult::Elementary(anti) => Ok(decompile(&anti)),
+        NumericIntegrationResult::NonElementary(_) => Err(IntegrationError::CannotIntegrate(
+            "Integrand has no elementary antiderivative".to_string(),
+        )),
+        NumericIntegrationResult::Partial { .. } => Err(IntegrationError::CannotIntegrate(
+            "No closed-form elementary antiderivative found".to_string(),
+        )),
+    }
 }

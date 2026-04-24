@@ -15,11 +15,13 @@ use super::{IntegrationError, IntegrationResult};
 ///
 /// Delegates to the unified integrator, which runs u-substitution as a
 /// pattern-matching pass before falling through to Risch.
+// TODO(arc-migration): caller (integration tests) still Expression-native — drop Expression wrapper when callers migrated
 pub fn integrate_by_substitution(expr: &Expression, var: &str) -> IntegrationResult {
     super::integrate_impl(expr, var)
 }
 
 /// U-substitution with a minimal step narration.
+// TODO(arc-migration): caller (integration tests) still Expression-native — drop Expression wrapper when callers migrated
 pub fn integrate_with_substitution(
     expr: &Expression,
     var: &str,
