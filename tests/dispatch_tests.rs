@@ -226,6 +226,184 @@ fn gradient_two_dim() {
     assert_eq!(resp.results[0].1.alternatives.len(), 1);
 }
 
+// ── Higher-dimensional calculus (F1b) ────────────────────────────────────────
+
+#[test]
+fn total_diff_chain_rule() {
+    // f = x² + y²; var = x; deps = [(y, x)] → df/dx = 2x + 2y.
+    let expr = add(pow(var("x"), int(2)), pow(var("y"), int(2)));
+    let resp = execute(request(Command::TotalDiff {
+        expr,
+        var: "x".to_string(),
+        deps: vec![("y".to_string(), var("x"))],
+    }))
+    .unwrap();
+    assert_single_symbolic(&resp, EngineId::Differentiation);
+    // Expect 2x + 2y; equality of simplified compound expressions is fragile,
+    // so check structural shape: an Add of two terms each linear in 2.
+    if let ResultValue::Symbolic(e) = &resp.results[0].1.value {
+        let s = format!("{}", e);
+        assert!(
+            s.contains("2") && s.contains("x") && s.contains("y"),
+            "expected 2x + 2y form, got {}",
+            s
+        );
+    }
+}
+
+#[test]
+fn divergence_three_dim_identity_field() {
+    // ∇·(x, y, z) = 3.
+    let resp = execute(request(Command::Divergence {
+        field: vec![var("x"), var("y"), var("z")],
+        vars: vec!["x".to_string(), "y".to_string(), "z".to_string()],
+    }))
+    .unwrap();
+    assert_single_symbolic(&resp, EngineId::Differentiation);
+    if let ResultValue::Symbolic(e) = &resp.results[0].1.value {
+        assert_eq!(*e, int(3), "expected divergence == 3, got {}", e);
+    }
+}
+
+#[test]
+fn divergence_arity_mismatch_returns_engine_error() {
+    let resp = execute(request(Command::Divergence {
+        field: vec![var("x"), var("y")],
+        vars: vec!["x".to_string(), "y".to_string(), "z".to_string()],
+    }))
+    .unwrap();
+    assert!(
+        resp.diagnostics
+            .iter()
+            .any(|d| matches!(d.code, DiagnosticCode::Other(s) if s == "engine-error")),
+        "expected engine-error diagnostic for arity mismatch"
+    );
+}
+
+#[test]
+fn curl_three_dim_planar_field() {
+    // F = (y, -x, 0). ∇×F = (0, 0, -2).
+    let neg_x = sub(int(0), var("x"));
+    let resp = execute(request(Command::Curl {
+        field: vec![var("y"), neg_x, int(0)],
+        vars: vec!["x".to_string(), "y".to_string(), "z".to_string()],
+    }))
+    .unwrap();
+    let entry = &resp.results[0].1;
+    assert_eq!(entry.engine, EngineId::Differentiation);
+    assert_eq!(entry.alternatives.len(), 2);
+    if let ResultValue::Symbolic(primary) = &entry.value {
+        assert_eq!(
+            *primary,
+            int(0),
+            "curl x-component expected 0, got {}",
+            primary
+        );
+    }
+    assert_eq!(
+        entry.alternatives[0],
+        int(0),
+        "curl y-component expected 0, got {}",
+        entry.alternatives[0]
+    );
+    // z-component: -2 (could be Integer(-2) or Unary(Neg, Integer(2)) — accept either).
+    let cz = format!("{}", entry.alternatives[1]);
+    assert!(
+        cz.contains("2") && cz.contains('-'),
+        "curl z-component expected -2, got {}",
+        cz
+    );
+}
+
+#[test]
+fn curl_arity_mismatch_returns_engine_error() {
+    let resp = execute(request(Command::Curl {
+        field: vec![var("x"), var("y")],
+        vars: vec!["x".to_string(), "y".to_string()],
+    }))
+    .unwrap();
+    assert!(
+        resp.diagnostics
+            .iter()
+            .any(|d| matches!(d.code, DiagnosticCode::Other(s) if s == "engine-error")),
+        "expected engine-error diagnostic for non-3D curl"
+    );
+}
+
+#[test]
+fn laplacian_two_dim_quadratic() {
+    // ∇²(x² + y²) = 4.
+    let expr = add(pow(var("x"), int(2)), pow(var("y"), int(2)));
+    let resp = execute(request(Command::Laplacian {
+        expr,
+        vars: vec!["x".to_string(), "y".to_string()],
+    }))
+    .unwrap();
+    assert_single_symbolic(&resp, EngineId::Differentiation);
+    if let ResultValue::Symbolic(e) = &resp.results[0].1.value {
+        assert_eq!(*e, int(4), "expected laplacian == 4, got {}", e);
+    }
+}
+
+#[test]
+fn jacobian_two_two_polynomial() {
+    // F = (x², x*y); J = [[2x, 0], [y, x]].
+    let resp = execute(request(Command::Jacobian {
+        fields: vec![pow(var("x"), int(2)), mul(var("x"), var("y"))],
+        vars: vec!["x".to_string(), "y".to_string()],
+    }))
+    .unwrap();
+    let entry = &resp.results[0].1;
+    assert_eq!(entry.engine, EngineId::Differentiation);
+    // 2×2 Jacobian: primary J[0][0] + 3 alternatives.
+    assert_eq!(entry.alternatives.len(), 3);
+    assert_eq!(entry.alternatives[0], int(0), "J[0][1] expected 0");
+    assert_eq!(entry.alternatives[1], var("y"), "J[1][0] expected y");
+    assert_eq!(entry.alternatives[2], var("x"), "J[1][1] expected x");
+}
+
+#[test]
+fn hessian_two_two_quadratic() {
+    // f = x² + y²; H = [[2, 0], [0, 2]].
+    let expr = add(pow(var("x"), int(2)), pow(var("y"), int(2)));
+    let resp = execute(request(Command::Hessian {
+        expr,
+        vars: vec!["x".to_string(), "y".to_string()],
+    }))
+    .unwrap();
+    let entry = &resp.results[0].1;
+    assert_eq!(entry.engine, EngineId::Differentiation);
+    // 2×2 Hessian: primary H[0][0] + 3 alternatives.
+    assert_eq!(entry.alternatives.len(), 3);
+    if let ResultValue::Symbolic(primary) = &entry.value {
+        assert_eq!(*primary, int(2), "H[0][0] expected 2");
+    }
+    assert_eq!(entry.alternatives[0], int(0), "H[0][1] expected 0");
+    assert_eq!(entry.alternatives[1], int(0), "H[1][0] expected 0");
+    assert_eq!(entry.alternatives[2], int(2), "H[1][1] expected 2");
+}
+
+#[test]
+fn directional_diff_unit_diagonal() {
+    // ∇(x²+y²) · (1, 1) = 2x + 2y.
+    let expr = add(pow(var("x"), int(2)), pow(var("y"), int(2)));
+    let resp = execute(request(Command::DirectionalDiff {
+        expr,
+        vars: vec!["x".to_string(), "y".to_string()],
+        direction: vec![int(1), int(1)],
+    }))
+    .unwrap();
+    assert_single_symbolic(&resp, EngineId::Differentiation);
+    if let ResultValue::Symbolic(e) = &resp.results[0].1.value {
+        let s = format!("{}", e);
+        assert!(
+            s.contains("2") && s.contains("x") && s.contains("y"),
+            "expected 2x + 2y form, got {}",
+            s
+        );
+    }
+}
+
 // ── Integration ──────────────────────────────────────────────────────────────
 
 #[test]
@@ -554,11 +732,12 @@ fn dispatch_resolves_step_generic_narrative() {
 #[test]
 fn dispatch_resolves_not_implemented_diagnostic_narrative() {
     // A NotImplemented dispatch emits a diagnostic whose narrative renders
-    // against the matching template id.  TotalDiff is not yet wired.
-    let resp = execute(request(Command::TotalDiff {
+    // against the matching template id.  Taylor is not yet wired.
+    let resp = execute(request(Command::Taylor {
         expr: var("x"),
-        var: "t".to_string(),
-        deps: vec![],
+        var: "x".to_string(),
+        center: int(0),
+        order: 3,
     }))
     .unwrap();
     let diag = resp
@@ -567,7 +746,7 @@ fn dispatch_resolves_not_implemented_diagnostic_narrative() {
         .find(|d| d.code == DiagnosticCode::NotImplemented)
         .expect("expected NotImplemented diagnostic");
     let body = &diag.narrative.fallback_md;
-    assert_eq!(body, dict_entry("command.total_diff"));
+    assert_eq!(body, dict_entry("command.taylor"));
     // Must not still carry the raw stub.
     assert_ne!(body, "command not yet implemented in v0.8.1");
 }
