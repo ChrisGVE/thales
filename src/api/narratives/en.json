@@ -1,6 +1,6 @@
 {
   "command.noop": "No operation — empty response.",
-  "command.conjugate": "Complex conjugation is not yet wired into the dispatcher.",
+  "command.conjugate": "Compute the complex conjugate of {expr}.",
   "command.inverse_fn": "Generalised inverse-function computation is not yet wired into the dispatcher.",
   "command.apply_identity": "Named-identity application is not yet wired into the dispatcher.",
   "command.total_diff": "Total derivative with explicit dependencies is not yet wired into the dispatcher.",

@@ -1,14 +1,15 @@
 //! Algebraic command dispatchers (Simplify, Expand, Factor, Substitute,
-//! PartialFractions, Rearrange).
+//! PartialFractions, Rearrange, Conjugate).
 
 use crate::api::command::SimplifyRules;
 use crate::api::diagnostic::{Diagnostic, DiagnosticCode};
 use crate::api::narrative::Narrative;
 use crate::api::response::{EngineId, Response, ResultKey};
-use crate::ast::{Expression, Variable};
+use crate::ast::{Expression, Function, Variable};
 use crate::numeric::compile::compile;
 use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::solver::Solver as _;
+use num_complex::Complex64;
 
 use super::helpers::{
     engine_error, expression_to_equation, solution_to_response, split_rational, steps_from_trace,
@@ -155,5 +156,95 @@ pub(super) fn rearrange_cmd(equation: &Expression, solve_for: &str, narrate: boo
             "command.rearrange",
         ),
         Err(e) => engine_error("command.rearrange", format!("{:?}", e)),
+    }
+}
+
+/// Compute the complex conjugate of `expr`.
+///
+/// - `Complex(a + bi)` → `Complex(a - bi)` (literal complex conjugate)
+/// - `Integer | Float | Rational` → self (real numbers are their own conjugate)
+/// - Symbolic / unknown → `Conj(expr)` wrapper for later evaluation
+pub(super) fn conjugate_cmd(expr: &Expression, narrate: bool) -> Response {
+    let result = match expr {
+        Expression::Complex(c) => Expression::Complex(Complex64::new(c.re, -c.im)),
+        Expression::Integer(_) | Expression::Float(_) | Expression::Rational(_) => expr.clone(),
+        _ => Expression::Function(Function::Conj, vec![expr.clone()]),
+    };
+    let mut trace = Trace::new();
+    if narrate {
+        trace.push(
+            Step::new(TechniqueTag::Simplification, "Complex conjugate")
+                .with_input(compile(expr))
+                .with_output(compile(&result)),
+        );
+    }
+    let mut r = Response::default();
+    r.results.push((
+        ResultKey::Single,
+        symbolic_entry(result, EngineId::Simplify, steps_from_trace(&trace)),
+    ));
+    r.meta.engine_trace.push(EngineId::Simplify);
+    r
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::{Expression, Function, Variable};
+    use num_complex::Complex64;
+
+    fn var(name: &str) -> Expression {
+        Expression::Variable(Variable::new(name))
+    }
+
+    fn int(n: i64) -> Expression {
+        Expression::Integer(n)
+    }
+
+    // ── Conjugate tests ──────────────────────────────────────────────────────
+
+    #[test]
+    fn conjugate_complex_literal() {
+        // conj(3 + 4i) = 3 - 4i
+        let expr = Expression::Complex(Complex64::new(3.0, 4.0));
+        let resp = conjugate_cmd(&expr, false);
+        assert_eq!(resp.results.len(), 1);
+        let (_, entry) = &resp.results[0];
+        match &entry.value {
+            crate::api::response::ResultValue::Symbolic(e) => {
+                assert_eq!(*e, Expression::Complex(Complex64::new(3.0, -4.0)));
+            }
+            other => panic!("expected Symbolic, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn conjugate_real_integer_is_identity() {
+        // conj(5) = 5
+        let expr = int(5);
+        let resp = conjugate_cmd(&expr, false);
+        assert_eq!(resp.results.len(), 1);
+        let (_, entry) = &resp.results[0];
+        match &entry.value {
+            crate::api::response::ResultValue::Symbolic(e) => {
+                assert_eq!(*e, int(5));
+            }
+            other => panic!("expected Symbolic, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn conjugate_symbolic_wraps_in_conj_function() {
+        // conj(x) = Conj(x) (symbolic fallback)
+        let expr = var("x");
+        let resp = conjugate_cmd(&expr, false);
+        assert_eq!(resp.results.len(), 1);
+        let (_, entry) = &resp.results[0];
+        match &entry.value {
+            crate::api::response::ResultValue::Symbolic(e) => {
+                assert_eq!(*e, Expression::Function(Function::Conj, vec![var("x")]));
+            }
+            other => panic!("expected Symbolic, got {:?}", other),
+        }
     }
 }
