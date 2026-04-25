@@ -1189,4 +1189,43 @@ mod tests {
         let ml = mathlex::parse_latex(r#"x + y = 0"#).unwrap();
         assert!(try_extract_ode(&ml).is_none());
     }
+
+    // ── match_function_name for Re/Im/Conj ───────────────────────────────
+
+    #[test]
+    fn test_match_function_name_re_lowercase() {
+        use crate::ast::Function;
+        assert!(matches!(match_function_name("re"), Function::Re));
+    }
+
+    #[test]
+    fn test_match_function_name_re_capitalized() {
+        use crate::ast::Function;
+        assert!(matches!(match_function_name("Re"), Function::Re));
+    }
+
+    #[test]
+    fn test_match_function_name_im_lowercase() {
+        use crate::ast::Function;
+        assert!(matches!(match_function_name("im"), Function::Im));
+    }
+
+    #[test]
+    fn test_match_function_name_im_capitalized() {
+        use crate::ast::Function;
+        assert!(matches!(match_function_name("Im"), Function::Im));
+    }
+
+    #[test]
+    fn test_match_function_name_conj() {
+        use crate::ast::Function;
+        assert!(matches!(match_function_name("conj"), Function::Conj));
+        assert!(matches!(match_function_name("Conj"), Function::Conj));
+    }
+
+    #[test]
+    fn test_match_function_name_conj_uppercase() {
+        use crate::ast::Function;
+        assert!(matches!(match_function_name("CONJ"), Function::Conj));
+    }
 }
