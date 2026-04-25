@@ -161,6 +161,22 @@ pub enum TechniqueTag {
     /// Synthetic division for polynomial factorisation.
     SyntheticDivision,
 
+    // ── Higher-dimensional calculus ──────────────────────────────────────
+    /// Total derivative via chain rule over declared dependencies.
+    TotalDifferential,
+    /// Divergence of a vector field `∇·F`.
+    Divergence,
+    /// Curl of a 3-D vector field `∇×F`.
+    Curl,
+    /// Laplacian `∇²f = Σ ∂²f/∂xᵢ²`.
+    Laplacian,
+    /// Jacobian matrix `J[i][j] = ∂fᵢ/∂xⱼ`.
+    Jacobian,
+    /// Hessian matrix `H[i][j] = ∂²f/(∂xᵢ ∂xⱼ)`.
+    Hessian,
+    /// Directional derivative `∇f · v̂`.
+    DirectionalDerivative,
+
     // ── Differentiation rules ────────────────────────────────────────────
     /// Power rule `d/dx xⁿ = n xⁿ⁻¹`.
     PowerRule,
@@ -310,6 +326,13 @@ impl TechniqueTag {
             TechniqueTag::CompleteTheSquare => "Complete the square",
             TechniqueTag::RationalRootTheorem => "Rational root theorem",
             TechniqueTag::SyntheticDivision => "Synthetic division",
+            TechniqueTag::TotalDifferential => "Total differential",
+            TechniqueTag::Divergence => "Divergence",
+            TechniqueTag::Curl => "Curl",
+            TechniqueTag::Laplacian => "Laplacian",
+            TechniqueTag::Jacobian => "Jacobian",
+            TechniqueTag::Hessian => "Hessian",
+            TechniqueTag::DirectionalDerivative => "Directional derivative",
             TechniqueTag::PowerRule => "Power rule",
             TechniqueTag::ProductRule => "Product rule",
             TechniqueTag::QuotientRule => "Quotient rule",
@@ -401,6 +424,15 @@ impl TechniqueTag {
             | TechniqueTag::HyperbolicIdentity
             | TechniqueTag::EulerFormula
             | TechniqueTag::DeMoivre => Transcendental,
+
+            // Higher-dimensional calculus — intermediate.
+            TechniqueTag::TotalDifferential
+            | TechniqueTag::Divergence
+            | TechniqueTag::Laplacian
+            | TechniqueTag::DirectionalDerivative => Calculus,
+
+            // Higher-dimensional calculus — advanced.
+            TechniqueTag::Curl | TechniqueTag::Jacobian | TechniqueTag::Hessian => Advanced,
 
             // Calculus.
             TechniqueTag::PowerRule
