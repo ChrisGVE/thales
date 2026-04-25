@@ -6,10 +6,9 @@
 
 use std::sync::Arc;
 
-use num_complex::Complex64;
-
-use crate::ast::{Equation, Expression, Variable};
+use crate::ast::{Equation, Variable};
 use crate::numeric::compile::compile;
+use crate::numeric::expr::FuncId;
 use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::{normalize, Expr, SymbolId};
 
@@ -120,8 +119,12 @@ impl Solver for QuadraticSolver {
         } else {
             let real_part = -b / (2.0 * a);
             let imag_part = (-discriminant).sqrt() / (2.0 * a);
-            let root1 = Expression::Complex(Complex64::new(real_part, imag_part));
-            let root2 = Expression::Complex(Complex64::new(real_part, -imag_part));
+            // Build symbolic roots: real_part ± imag_part * i
+            let shift = Expr::float(real_part);
+            let im_expr = Expr::float(imag_part);
+            let i_times_im = normalize::mul(Expr::i_unit(), im_expr);
+            let root1_arc = normalize::add(shift.clone(), i_times_im.clone());
+            let root2_arc = normalize::sub(shift, i_times_im);
             trace.push(
                 Step::new(
                     TechniqueTag::QuadraticFormula,
@@ -130,19 +133,26 @@ impl Solver for QuadraticSolver {
                         real_part, imag_part
                     ),
                 )
-                .with_output(compile(&root1)),
+                .with_output(root1_arc.clone()),
+            );
+            // Trace Re/Im decomposition using FuncId::Re and FuncId::Im.
+            let re_root1 = Expr::func(FuncId::Re, vec![root1_arc.clone()]);
+            let im_root1 = Expr::func(FuncId::Im, vec![root1_arc.clone()]);
+            trace.push(
+                Step::new(
+                    TechniqueTag::Custom("ComplexDecomposition"),
+                    format!("Complex roots: Re = {}, Im = ±{}", real_part, imag_part),
+                )
+                .with_output(re_root1),
             );
             trace.push(
                 Step::new(
                     TechniqueTag::Custom("ComplexDecomposition"),
-                    format!(
-                        "original_var={}, real_var={}_re, imag_var={}_im; Complex Roots: real part = {}, imaginary part = ±{}",
-                        var_name, var_name, var_name, real_part, imag_part,
-                    ),
+                    format!("Im(root) = {}", imag_part),
                 )
-                .with_output(compile(&root1)),
+                .with_output(im_root1),
             );
-            Ok((Solution::Multiple(vec![root1, root2]), trace))
+            Ok((Solution::multiple_from_expr(&[root1_arc, root2_arc]), trace))
         }
     }
 
