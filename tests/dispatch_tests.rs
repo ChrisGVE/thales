@@ -554,10 +554,11 @@ fn dispatch_resolves_step_generic_narrative() {
 #[test]
 fn dispatch_resolves_not_implemented_diagnostic_narrative() {
     // A NotImplemented dispatch emits a diagnostic whose narrative renders
-    // against the matching template id.
-    let resp = execute(request(Command::Conjugate {
+    // against the matching template id.  TotalDiff is not yet wired.
+    let resp = execute(request(Command::TotalDiff {
         expr: var("x"),
-        target: None,
+        var: "t".to_string(),
+        deps: vec![],
     }))
     .unwrap();
     let diag = resp
@@ -566,7 +567,7 @@ fn dispatch_resolves_not_implemented_diagnostic_narrative() {
         .find(|d| d.code == DiagnosticCode::NotImplemented)
         .expect("expected NotImplemented diagnostic");
     let body = &diag.narrative.fallback_md;
-    assert_eq!(body, dict_entry("command.conjugate"));
+    assert_eq!(body, dict_entry("command.total_diff"));
     // Must not still carry the raw stub.
     assert_ne!(body, "command not yet implemented in v0.8.1");
 }
@@ -623,11 +624,12 @@ fn dispatch_resolves_noop_diagnostic_narrative() {
 fn ffi_round_trip_carries_resolved_narrative() {
     // The FFI surface goes through dispatch::execute and therefore inherits
     // render_response. The resolved Markdown must reach the JSON.
-    let req = r#"{"command":{"type":"Conjugate","expr":"x"}}"#;
+    // SpecialFn (Gamma) is not yet wired; use it to test the narrative path.
+    let req = r#"{"command":{"type":"SpecialFn","kind":"Gamma","args":["x"]}}"#;
     let resp = execute_ffi(req).unwrap();
     let v: serde_json::Value = serde_json::from_str(&resp).unwrap();
     let diag_md = v["diagnostics"][0]["fallback_md"]
         .as_str()
         .expect("diagnostic fallback_md must serialise as a string");
-    assert_eq!(diag_md, dict_entry("command.conjugate"));
+    assert_eq!(diag_md, dict_entry("command.special_fn"));
 }
