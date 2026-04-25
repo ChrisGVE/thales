@@ -17,7 +17,7 @@
   "command.revert": "Lagrange reversion of the Taylor series of {expr} in {var} to order {order}.",
   "command.residue": "Compute the residue of {expr} at {point} in {var}.",
   "command.special_fn": "Evaluate the special function {kind} on {args}.",
-  "command.matrix": "Matrix operations are not yet wired into the dispatcher.",
+  "command.matrix": "Apply matrix operation {op} to operands.",
   "command.optimize": "Constrained optimisation is not yet wired into the dispatcher.",
   "command.lagrange_mult": "Lagrange-multiplier specialisation is not yet wired into the dispatcher.",
 
