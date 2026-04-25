@@ -1307,6 +1307,21 @@ pub enum Function {
     /// max(x₁, x₂, ..., xₙ)
     Max,
 
+    /// Real part of a complex expression: Re(z).
+    ///
+    /// For real inputs, Re(x) = x.
+    Re,
+
+    /// Imaginary part of a complex expression: Im(z).
+    ///
+    /// For real inputs, Im(x) = 0.
+    Im,
+
+    /// Complex conjugate: Conj(z) = Re(z) - i·Im(z).
+    ///
+    /// For real inputs, Conj(x) = x.
+    Conj,
+
     /// User-defined custom function.
     ///
     /// Represents a function not built into the standard set.
@@ -1343,6 +1358,9 @@ impl fmt::Display for Function {
             Function::Sign => write!(f, "sign"),
             Function::Min => write!(f, "min"),
             Function::Max => write!(f, "max"),
+            Function::Re => write!(f, "Re"),
+            Function::Im => write!(f, "Im"),
+            Function::Conj => write!(f, "Conj"),
             Function::Custom(name) => write!(f, "{}", name),
         }
     }

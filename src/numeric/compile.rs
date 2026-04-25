@@ -136,6 +136,9 @@ pub fn map_func_id(f: &Function) -> FuncId {
         Function::Sign => FuncId::Sign,
         Function::Min => FuncId::Min,
         Function::Max => FuncId::Max,
+        Function::Re => FuncId::Re,
+        Function::Im => FuncId::Im,
+        Function::Conj => FuncId::Conj,
         // Pow → sentinel so compile() can route to normalize::pow
         Function::Pow => FuncId::Other(SymbolId::intern("__pow__")),
         Function::Custom(name) => FuncId::Other(SymbolId::intern(name)),
@@ -242,6 +245,9 @@ pub fn reverse_map_func_id(id: &FuncId) -> Function {
         FuncId::Sign => Function::Sign,
         FuncId::Min => Function::Min,
         FuncId::Max => Function::Max,
+        FuncId::Re => Function::Re,
+        FuncId::Im => Function::Im,
+        FuncId::Conj => Function::Conj,
         FuncId::Other(sym) => {
             let name = sym.as_str();
             if name == "__pow__" {
@@ -1759,5 +1765,53 @@ mod tests {
     fn round_trip_dc_func_sqrt() {
         let expr = Expr::Func(crate::numeric::expr::FuncId::Sqrt, vec![Expr::float(16.0)]);
         assert_decompile_compile_match(&expr, &[], 1e-10);
+    }
+
+    #[test]
+    fn test_re_compile_decompile_roundtrip() {
+        use crate::ast::Function;
+        use crate::numeric::compile::{compile, decompile};
+        use crate::numeric::expr::FuncId;
+        let x = crate::ast::Expression::Variable(crate::ast::Variable::new("z"));
+        let re_x = crate::ast::Expression::Function(Function::Re, vec![x]);
+        let compiled = compile(&re_x);
+        match compiled.as_ref() {
+            Expr::Func(FuncId::Re, _) => {}
+            _ => panic!("expected Func(Re, ...) after compile"),
+        }
+        let back = decompile(&compiled);
+        assert_eq!(back.to_string(), "Re(z)");
+    }
+
+    #[test]
+    fn test_im_compile_decompile_roundtrip() {
+        use crate::ast::Function;
+        use crate::numeric::compile::{compile, decompile};
+        use crate::numeric::expr::FuncId;
+        let x = crate::ast::Expression::Variable(crate::ast::Variable::new("z"));
+        let im_x = crate::ast::Expression::Function(Function::Im, vec![x]);
+        let compiled = compile(&im_x);
+        match compiled.as_ref() {
+            Expr::Func(FuncId::Im, _) => {}
+            _ => panic!("expected Func(Im, ...) after compile"),
+        }
+        let back = decompile(&compiled);
+        assert_eq!(back.to_string(), "Im(z)");
+    }
+
+    #[test]
+    fn test_conj_compile_decompile_roundtrip() {
+        use crate::ast::Function;
+        use crate::numeric::compile::{compile, decompile};
+        use crate::numeric::expr::FuncId;
+        let x = crate::ast::Expression::Variable(crate::ast::Variable::new("z"));
+        let conj_x = crate::ast::Expression::Function(Function::Conj, vec![x]);
+        let compiled = compile(&conj_x);
+        match compiled.as_ref() {
+            Expr::Func(FuncId::Conj, _) => {}
+            _ => panic!("expected Func(Conj, ...) after compile"),
+        }
+        let back = decompile(&compiled);
+        assert_eq!(back.to_string(), "Conj(z)");
     }
 }

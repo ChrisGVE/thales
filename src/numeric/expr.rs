@@ -80,6 +80,12 @@ pub enum FuncId {
     Min,
     /// Maximum of two arguments.
     Max,
+    /// Real part of a complex expression: Re(z).
+    Re,
+    /// Imaginary part of a complex expression: Im(z).
+    Im,
+    /// Complex conjugate: Conj(z).
+    Conj,
     /// User-defined or extension function identified by a [`SymbolId`].
     Other(SymbolId),
 }
@@ -127,7 +133,10 @@ fn func_id_rank(f: &FuncId) -> u8 {
         FuncId::Sign => 21,
         FuncId::Min => 22,
         FuncId::Max => 23,
-        FuncId::Other(_) => 24,
+        FuncId::Re => 25,
+        FuncId::Im => 26,
+        FuncId::Conj => 27,
+        FuncId::Other(_) => 28,
     }
 }
 
@@ -158,6 +167,9 @@ impl fmt::Display for FuncId {
             FuncId::Sign => write!(f, "sign"),
             FuncId::Min => write!(f, "min"),
             FuncId::Max => write!(f, "max"),
+            FuncId::Re => write!(f, "Re"),
+            FuncId::Im => write!(f, "Im"),
+            FuncId::Conj => write!(f, "Conj"),
             FuncId::Other(s) => write!(f, "{s}"),
         }
     }
@@ -925,7 +937,10 @@ mod tests {
         assert!(FuncId::Abs < FuncId::Sign);
         assert!(FuncId::Sign < FuncId::Min);
         assert!(FuncId::Min < FuncId::Max);
-        assert!(FuncId::Max < FuncId::Other(SymbolId::intern("ord_z")));
+        assert!(FuncId::Max < FuncId::Re);
+        assert!(FuncId::Re < FuncId::Im);
+        assert!(FuncId::Im < FuncId::Conj);
+        assert!(FuncId::Conj < FuncId::Other(SymbolId::intern("ord_z")));
     }
 
     #[test]
@@ -1334,6 +1349,40 @@ mod tests {
         node.add_factor(x, Expr::int(1));
         let s = Expr::Mul(node).to_string();
         assert_eq!(s, "-x");
+    }
+
+    #[test]
+    fn test_re_funcid_ordering() {
+        // Re, Im, Conj slot between Max and Other
+        assert!(FuncId::Max < FuncId::Re);
+        assert!(FuncId::Re < FuncId::Im);
+        assert!(FuncId::Im < FuncId::Conj);
+        assert!(FuncId::Conj < FuncId::Other(SymbolId::intern("z")));
+    }
+
+    #[test]
+    fn test_re_funcid_construct_and_display() {
+        let x = Expr::symbol("z");
+        let re_x = Expr::func(FuncId::Re, vec![x]);
+        assert_eq!(re_x.to_string(), "Re(z)");
+        match re_x.as_ref() {
+            Expr::Func(FuncId::Re, args) => assert_eq!(args.len(), 1),
+            _ => panic!("expected Func(Re, ...)"),
+        }
+    }
+
+    #[test]
+    fn test_im_funcid_construct_and_display() {
+        let x = Expr::symbol("z");
+        let im_x = Expr::func(FuncId::Im, vec![x]);
+        assert_eq!(im_x.to_string(), "Im(z)");
+    }
+
+    #[test]
+    fn test_conj_funcid_construct_and_display() {
+        let x = Expr::symbol("z");
+        let conj_x = Expr::func(FuncId::Conj, vec![x]);
+        assert_eq!(conj_x.to_string(), "Conj(z)");
     }
 
     /// `x/y` — MulNode with y^(-1) renders as `x/y`.

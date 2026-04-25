@@ -139,8 +139,65 @@ fn eval_func(
             Some(apply_binary(id, a, b))
         }
 
+        // ── Complex-projection functions ─────────────────────────────────────
+        // Re(z): for real args (or Expr::Complex), extract real part.
+        FuncId::Re => {
+            if args.len() != 1 {
+                return None;
+            }
+            evaluate_as_real_part(&args[0], bindings)
+        }
+
+        // Im(z): for real args returns 0; for Expr::Complex extracts im.
+        FuncId::Im => {
+            if args.len() != 1 {
+                return None;
+            }
+            evaluate_as_imag_part(&args[0], bindings)
+        }
+
+        // Conj(z): for real args returns the value unchanged (conjugate of real = real).
+        FuncId::Conj => {
+            if args.len() != 1 {
+                return None;
+            }
+            // Conj of a real is itself; we can only return f64, so only handle real args.
+            evaluate(&args[0], bindings)
+        }
+
         // ── Unknown / user-defined ───────────────────────────────────────────
         FuncId::Other(_) => None,
+    }
+}
+
+/// Extract the real part of an expression for f64 evaluation.
+///
+/// Returns `Some(re)` when the argument evaluates to a known real or complex literal.
+/// Returns `None` for symbolic unknowns.
+fn evaluate_as_real_part(
+    arg: &std::sync::Arc<Expr>,
+    bindings: &HashMap<SymbolId, f64>,
+) -> Option<f64> {
+    match arg.as_ref() {
+        Expr::Complex(c) => Some(c.re),
+        _ => evaluate(arg, bindings),
+    }
+}
+
+/// Extract the imaginary part of an expression for f64 evaluation.
+///
+/// Returns `Some(im)` when the argument is a complex literal (extracts `im`)
+/// or a purely real expression (returns `0.0`). Returns `None` for unknowns.
+fn evaluate_as_imag_part(
+    arg: &std::sync::Arc<Expr>,
+    bindings: &HashMap<SymbolId, f64>,
+) -> Option<f64> {
+    match arg.as_ref() {
+        Expr::Complex(c) => Some(c.im),
+        _ => {
+            // If the arg evaluates as a real f64, its imaginary part is 0.
+            evaluate(arg, bindings).map(|_| 0.0)
+        }
     }
 }
 

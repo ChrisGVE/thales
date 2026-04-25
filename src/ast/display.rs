@@ -364,6 +364,14 @@ impl Expression {
                         }
                         r"\log"
                     }
+                    Function::Re => r"\operatorname{Re}",
+                    Function::Im => r"\operatorname{Im}",
+                    Function::Conj => {
+                        if args.len() == 1 {
+                            return format!(r"\overline{{{}}}", args[0].to_latex_inner(0));
+                        }
+                        r"\operatorname{Conj}"
+                    }
                     Function::Custom(name) => {
                         // Custom functions use \text{name}
                         let args_str: Vec<String> =

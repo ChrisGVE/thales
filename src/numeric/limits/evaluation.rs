@@ -209,6 +209,7 @@ fn eval_f64(expr: &Arc<Expr>) -> Option<f64> {
                 FuncId::Sign => a.signum(),
                 // multi-arg functions not handled by the single-arg path above
                 FuncId::Atan2 | FuncId::Log | FuncId::Min | FuncId::Max => return None,
+                FuncId::Re | FuncId::Im | FuncId::Conj => return None,
                 FuncId::Other(_) => return None,
             })
         }

@@ -435,6 +435,11 @@ fn differentiate_function(func: &Function, args: &[Expression], wrt: &str) -> Ex
         Function::Sign | Function::Min | Function::Max | Function::Custom(_) => {
             Expression::Integer(0)
         }
+        // Re/Im/Conj are linear: d/dx Re(f) = Re(df/dx), etc.
+        Function::Re | Function::Im | Function::Conj => {
+            let arg_deriv = args[0].differentiate(wrt);
+            Expression::Function(func.clone(), vec![arg_deriv])
+        }
     }
 }
 

@@ -150,6 +150,7 @@ fn try_eval_func(id: FuncId, arg: &Arc<Expr>) -> Option<Arc<Expr>> {
         FuncId::Abs => v.abs(),
         FuncId::Sign => v.signum(),
         FuncId::Atan2 | FuncId::Log | FuncId::Min | FuncId::Max => return None,
+        FuncId::Re | FuncId::Im | FuncId::Conj => return None,
         FuncId::Other(_) => return None,
     };
     if result == 0.0 {

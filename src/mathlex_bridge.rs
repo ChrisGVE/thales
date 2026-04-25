@@ -710,6 +710,11 @@ fn match_function_name(name: &str) -> Function {
         "min" => Function::Min,
         "max" => Function::Max,
 
+        // Complex projections
+        "re" | "Re" | "RE" => Function::Re,
+        "im" | "Im" | "IM" => Function::Im,
+        "conj" | "Conj" | "CONJ" => Function::Conj,
+
         // Everything else → Custom
         other => Function::Custom(other.to_string()),
     }

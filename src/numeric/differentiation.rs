@@ -254,6 +254,17 @@ fn is_numeric_const(expr: &Arc<Expr>) -> bool {
 // ── Differentiation of Func ──────────────────────────────────────────────────
 
 fn diff_func(id: FuncId, args: &[Arc<Expr>], _full: &Arc<Expr>, var: SymbolId) -> Arc<Expr> {
+    // Re/Im/Conj are linear functionals: d/dx Re(f) = Re(df/dx), etc.
+    if args.len() == 1 {
+        match id {
+            FuncId::Re | FuncId::Im | FuncId::Conj => {
+                let du = diff_arc(&args[0], var);
+                return Expr::func(id, vec![du]);
+            }
+            _ => {}
+        }
+    }
+
     // Single-argument built-in functions: chain rule f'(u)*u'
     if args.len() == 1 {
         let u = &args[0];
@@ -366,6 +377,9 @@ fn diff_builtin_single(id: FuncId, u: &Arc<Expr>) -> Arc<Expr> {
 
         // Rounding and sign: not classically differentiable; return 0
         FuncId::Floor | FuncId::Ceil | FuncId::Round | FuncId::Sign => Expr::int(0),
+
+        // Re/Im/Conj intercepted by diff_func — unreachable at runtime via this path.
+        FuncId::Re | FuncId::Im | FuncId::Conj => Expr::int(0),
 
         // Unknown/user function: produce opaque derivative marker (zero — caller
         // should not use the result as authoritative)

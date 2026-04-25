@@ -522,6 +522,9 @@ impl EvalContext {
                     0.0
                 }
             }
+            // Re/Im/Conj: in real-valued precision context, Re(x)=x, Im(x)=0, Conj(x)=x
+            Function::Re | Function::Conj => x,
+            Function::Im => 0.0,
             Function::Custom(name) => {
                 return Err(EvalError::CannotEvaluate(format!(
                     "Unknown function: {}",

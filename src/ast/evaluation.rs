@@ -375,6 +375,9 @@ impl Expression {
                     Function::Sign => Some(arg_vals.get(0)?.signum()),
                     Function::Min => arg_vals.iter().copied().reduce(f64::min),
                     Function::Max => arg_vals.iter().copied().reduce(f64::max),
+                    // Re/Im/Conj: real context — Re(x)=x, Im(x)=0, Conj(x)=x
+                    Function::Re | Function::Conj => arg_vals.first().copied(),
+                    Function::Im => Some(0.0),
                     Function::Custom(_) => None,
                 }
             }
