@@ -18,8 +18,8 @@
   "command.residue": "Compute the residue of {expr} at {point} in {var}.",
   "command.special_fn": "Evaluate the special function {kind} on {args}.",
   "command.matrix": "Apply matrix operation {op} to operands.",
-  "command.optimize": "Constrained optimisation is not yet wired into the dispatcher.",
-  "command.lagrange_mult": "Lagrange-multiplier specialisation is not yet wired into the dispatcher.",
+  "command.optimize": "Optimise {objective} over {vars} subject to constraints; sense {sense}.",
+  "command.lagrange_mult": "Apply Lagrange multipliers to {objective} over {vars} with equality constraints.",
 
   "command.factor.partial": "Full factoring engine is not yet wired into the API; result is the canonical simplification.",
 
