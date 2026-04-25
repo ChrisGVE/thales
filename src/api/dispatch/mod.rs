@@ -35,6 +35,7 @@ mod ode;
 mod series;
 mod series_expand;
 mod solver;
+mod special;
 
 use helpers::unsolved_entry;
 
@@ -149,10 +150,10 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
             period,
             terms,
         } => series::fourier_series_cmd(&expr, &var, &period, terms, narrate),
-        Command::Residue { .. } => not_implemented("command.residue"),
+        Command::Residue { expr, var, point } => special::residue_cmd(&expr, &var, &point, narrate),
 
         // ── Special functions ────────────────────────────────────────────
-        Command::SpecialFn { .. } => not_implemented("command.special_fn"),
+        Command::SpecialFn { kind, args } => special::special_fn_cmd(kind, &args, narrate),
 
         // ── ODE ─────────────────────────────────────────────────────────
         Command::Ode {
