@@ -1,13 +1,14 @@
 //! Algebraic command dispatchers (Simplify, Expand, Factor, Substitute,
-//! PartialFractions, Rearrange, Conjugate, InverseFn).
+//! PartialFractions, Rearrange, Conjugate, InverseFn, ApplyIdentity).
 
-use crate::api::command::SimplifyRules;
+use crate::api::command::{IdentityId, SimplifyRules};
 use crate::api::diagnostic::{Diagnostic, DiagnosticCode};
 use crate::api::narrative::Narrative;
 use crate::api::response::{EngineId, Response, ResultKey};
 use crate::ast::{Expression, Function, Variable};
 use crate::numeric::compile::compile;
 use crate::numeric::trace::{Step, TechniqueTag, Trace};
+use crate::pattern::{apply_rule, Pattern, Rule};
 use crate::solver::Solver as _;
 use num_complex::Complex64;
 
@@ -215,9 +216,104 @@ pub(super) fn inverse_fn_cmd(expr: &Expression, var: &str, narrate: bool) -> Res
     }
 }
 
+/// Apply a named algebraic identity to `expr`.
+///
+/// Supported identities:
+/// - `IdentityId::DifferenceOfSquares`: a² − b² → (a+b)(a−b)
+/// - `IdentityId::SumOfCubes`: a³ + b³ → (a+b)(a² − ab + b²)
+///
+/// Unknown or unrecognised identity labels return `DiagnosticCode::NotImplemented`.
+/// A recognised identity whose pattern does not match the expression returns a
+/// `DiagnosticCode::Other("pattern-no-match")` diagnostic.
+pub(super) fn apply_identity_cmd(
+    expr: &Expression,
+    identity: &IdentityId,
+    narrate: bool,
+) -> Response {
+    let rule_opt: Option<Rule> = match identity {
+        IdentityId::DifferenceOfSquares => {
+            // Pattern: a^2 - b^2  →  (a + b) * (a - b)
+            let pat = Pattern::sub(
+                Pattern::power(Pattern::wildcard("a"), Pattern::Integer(2)),
+                Pattern::power(Pattern::wildcard("b"), Pattern::Integer(2)),
+            );
+            let rep = Pattern::mul(
+                Pattern::add(Pattern::wildcard("a"), Pattern::wildcard("b")),
+                Pattern::sub(Pattern::wildcard("a"), Pattern::wildcard("b")),
+            );
+            Some(Rule::new(pat, rep).named("difference-of-squares"))
+        }
+        IdentityId::SumOfCubes => {
+            // Pattern: a^3 + b^3  →  (a + b) * (a^2 - a*b + b^2)
+            let pat = Pattern::add(
+                Pattern::power(Pattern::wildcard("a"), Pattern::Integer(3)),
+                Pattern::power(Pattern::wildcard("b"), Pattern::Integer(3)),
+            );
+            let rep = Pattern::mul(
+                Pattern::add(Pattern::wildcard("a"), Pattern::wildcard("b")),
+                Pattern::add(
+                    Pattern::sub(
+                        Pattern::power(Pattern::wildcard("a"), Pattern::Integer(2)),
+                        Pattern::mul(Pattern::wildcard("a"), Pattern::wildcard("b")),
+                    ),
+                    Pattern::power(Pattern::wildcard("b"), Pattern::Integer(2)),
+                ),
+            );
+            Some(Rule::new(pat, rep).named("sum-of-cubes"))
+        }
+        _ => None,
+    };
+
+    match rule_opt {
+        None => {
+            let name = format!("{:?}", identity);
+            let mut r = Response::default();
+            r.diagnostics.push(Diagnostic::of(
+                DiagnosticCode::NotImplemented,
+                Narrative::new(
+                    "command.apply_identity",
+                    format!("identity '{name}' is not supported"),
+                ),
+            ));
+            r
+        }
+        Some(rule) => match apply_rule(expr, &rule) {
+            None => {
+                let mut r = Response::default();
+                r.diagnostics.push(Diagnostic::of(
+                    DiagnosticCode::Other("pattern-no-match"),
+                    Narrative::new(
+                        "command.apply_identity",
+                        "identity pattern did not match the expression",
+                    ),
+                ));
+                r
+            }
+            Some(result) => {
+                let mut trace = Trace::new();
+                if narrate {
+                    trace.push(
+                        Step::new(TechniqueTag::Factoring, "Apply algebraic identity")
+                            .with_input(compile(expr))
+                            .with_output(compile(&result)),
+                    );
+                }
+                let mut r = Response::default();
+                r.results.push((
+                    ResultKey::Single,
+                    symbolic_entry(result, EngineId::Simplify, steps_from_trace(&trace)),
+                ));
+                r.meta.engine_trace.push(EngineId::Simplify);
+                r
+            }
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::command::IdentityId;
     use crate::ast::{BinaryOp, Expression, Function, Variable};
     use num_complex::Complex64;
 
@@ -231,6 +327,14 @@ mod tests {
 
     fn add(a: Expression, b: Expression) -> Expression {
         Expression::Binary(BinaryOp::Add, Box::new(a), Box::new(b))
+    }
+
+    fn sub(a: Expression, b: Expression) -> Expression {
+        Expression::Binary(BinaryOp::Sub, Box::new(a), Box::new(b))
+    }
+
+    fn pow(base: Expression, exp: i64) -> Expression {
+        Expression::Power(Box::new(base), Box::new(int(exp)))
     }
 
     // ── Conjugate tests ──────────────────────────────────────────────────────
@@ -315,6 +419,59 @@ mod tests {
         assert!(
             !resp.diagnostics.is_empty() || !resp.results.is_empty(),
             "expected diagnostic or result for non-invertible function"
+        );
+    }
+
+    // ── ApplyIdentity tests ──────────────────────────────────────────────────
+
+    #[test]
+    fn apply_identity_difference_of_squares() {
+        // x^2 - y^2  →  (x + y)(x - y)
+        let expr = sub(pow(var("x"), 2), pow(var("y"), 2));
+        let resp = apply_identity_cmd(&expr, &IdentityId::DifferenceOfSquares, false);
+        assert_eq!(resp.results.len(), 1, "expected factored result");
+        let (_, entry) = &resp.results[0];
+        match &entry.value {
+            crate::api::response::ResultValue::Symbolic(e) => {
+                assert!(
+                    matches!(e, Expression::Binary(BinaryOp::Mul, _, _)),
+                    "expected Mul at top level, got {:?}",
+                    e
+                );
+            }
+            other => panic!("expected Symbolic result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn apply_identity_sum_of_cubes() {
+        // x^3 + y^3  →  (x+y)(x^2 - xy + y^2)
+        let expr = add(pow(var("x"), 3), pow(var("y"), 3));
+        let resp = apply_identity_cmd(&expr, &IdentityId::SumOfCubes, false);
+        assert_eq!(resp.results.len(), 1, "expected factored result");
+        let (_, entry) = &resp.results[0];
+        match &entry.value {
+            crate::api::response::ResultValue::Symbolic(e) => {
+                assert!(
+                    matches!(e, Expression::Binary(BinaryOp::Mul, _, _)),
+                    "expected Mul at top level, got {:?}",
+                    e
+                );
+            }
+            other => panic!("expected Symbolic result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn apply_identity_unknown_name_returns_not_implemented() {
+        // An unsupported identity label returns NotImplemented
+        let expr = var("x");
+        let resp = apply_identity_cmd(&expr, &IdentityId::Other("no-such-identity"), false);
+        assert!(
+            resp.diagnostics
+                .iter()
+                .any(|d| d.code == DiagnosticCode::NotImplemented),
+            "expected NotImplemented diagnostic"
         );
     }
 }

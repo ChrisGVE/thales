@@ -462,6 +462,10 @@ pub enum IdentityId {
     Euler,
     /// De Moivre `(cos θ + i sin θ)^n = cos(nθ) + i sin(nθ)`.
     DeMoivre,
+    /// `a² − b² = (a+b)(a−b)`.
+    DifferenceOfSquares,
+    /// `a³ + b³ = (a+b)(a² − ab + b²)`.
+    SumOfCubes,
     /// Other named identity carried as a stable label.
     Other(&'static str),
 }

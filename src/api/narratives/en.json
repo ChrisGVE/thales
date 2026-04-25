@@ -2,7 +2,7 @@
   "command.noop": "No operation — empty response.",
   "command.conjugate": "Compute the complex conjugate of {expr}.",
   "command.inverse_fn": "Compute the inverse function by solving y = f(var) for var.",
-  "command.apply_identity": "Named-identity application is not yet wired into the dispatcher.",
+  "command.apply_identity": "Apply the named algebraic identity to the expression.",
   "command.total_diff": "Total derivative with explicit dependencies is not yet wired into the dispatcher.",
   "command.divergence": "Divergence of a vector field is not yet wired into the dispatcher.",
   "command.curl": "Curl of a vector field is not yet wired into the dispatcher.",

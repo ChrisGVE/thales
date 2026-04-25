@@ -70,7 +70,9 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
             equation,
             solve_for,
         } => algebra::rearrange_cmd(&equation, &solve_for, narrate),
-        Command::ApplyIdentity { .. } => not_implemented("command.apply_identity"),
+        Command::ApplyIdentity { expr, identity, .. } => {
+            algebra::apply_identity_cmd(&expr, &identity, narrate)
+        }
 
         // ── Solve ────────────────────────────────────────────────────────
         Command::SolveFor { relation, var, .. } => solver::solve_for_cmd(&relation, &var, narrate),
