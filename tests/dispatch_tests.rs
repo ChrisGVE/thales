@@ -6,7 +6,7 @@
 //! for commands that still route to the `NotImplemented` diagnostic
 //! assert on the diagnostic shape rather than a symbolic value.
 
-use thales::api::command::{Command, IvpData, LimitPoint, SimplifyRules};
+use thales::api::command::{Command, IvpData, LimitPoint, SimplifyRules, SpecialKind};
 use thales::api::diagnostic::{DiagnosticCode, Severity};
 use thales::api::dispatch::execute;
 use thales::api::domain::Domain;
@@ -651,7 +651,71 @@ fn taylor_returns_taylor_engine() {
 }
 
 #[test]
-fn residue_emits_not_implemented() {
+fn special_fn_gamma_integer() {
+    // Γ(5) = 24.
+    let resp = execute(request(Command::SpecialFn {
+        kind: SpecialKind::Gamma,
+        args: vec![int(5)],
+    }))
+    .unwrap();
+    assert_eq!(resp.results[0].1.engine, EngineId::SpecialFunctions);
+    if let ResultValue::Symbolic(e) = &resp.results[0].1.value {
+        assert_eq!(*e, int(24), "Γ(5) expected 24, got {}", e);
+    }
+}
+
+#[test]
+fn special_fn_beta_integers() {
+    // B(2, 3) = 1/12.
+    let resp = execute(request(Command::SpecialFn {
+        kind: SpecialKind::Beta,
+        args: vec![int(2), int(3)],
+    }))
+    .unwrap();
+    assert_eq!(resp.results[0].1.engine, EngineId::SpecialFunctions);
+}
+
+#[test]
+fn special_fn_erf_zero() {
+    // erf(0) = 0.
+    let resp = execute(request(Command::SpecialFn {
+        kind: SpecialKind::Erf,
+        args: vec![int(0)],
+    }))
+    .unwrap();
+    assert_eq!(resp.results[0].1.engine, EngineId::SpecialFunctions);
+}
+
+#[test]
+fn special_fn_erfc_zero() {
+    // erfc(0) = 1.
+    let resp = execute(request(Command::SpecialFn {
+        kind: SpecialKind::Erfc,
+        args: vec![int(0)],
+    }))
+    .unwrap();
+    assert_eq!(resp.results[0].1.engine, EngineId::SpecialFunctions);
+}
+
+#[test]
+fn special_fn_arity_mismatch_returns_engine_error() {
+    // Gamma takes 1 arg; supplying 2 must trip the arity check.
+    let resp = execute(request(Command::SpecialFn {
+        kind: SpecialKind::Gamma,
+        args: vec![int(1), int(2)],
+    }))
+    .unwrap();
+    assert!(
+        resp.diagnostics
+            .iter()
+            .any(|d| matches!(d.code, DiagnosticCode::Other(s) if s == "engine-error")),
+        "expected engine-error diagnostic for SpecialFn arity mismatch"
+    );
+}
+
+#[test]
+fn residue_simple_pole() {
+    // Residue of 1/z at z=0 is 1.
     let expr = Expression::Binary(BinaryOp::Div, Box::new(int(1)), Box::new(var("z")));
     let resp = execute(request(Command::Residue {
         expr,
@@ -659,7 +723,39 @@ fn residue_emits_not_implemented() {
         point: int(0),
     }))
     .unwrap();
-    assert_not_implemented(&resp);
+    assert_eq!(resp.results[0].1.engine, EngineId::Residue);
+    if let ResultValue::Symbolic(e) = &resp.results[0].1.value {
+        assert_eq!(*e, int(1), "residue of 1/z at 0 expected 1, got {}", e);
+    }
+}
+
+#[test]
+fn residue_at_regular_point() {
+    // Residue at a regular point is 0.  1/z at z=2 is regular.
+    let expr = Expression::Binary(BinaryOp::Div, Box::new(int(1)), Box::new(var("z")));
+    let resp = execute(request(Command::Residue {
+        expr,
+        var: "z".to_string(),
+        point: int(2),
+    }))
+    .unwrap();
+    assert_eq!(resp.results[0].1.engine, EngineId::Residue);
+    if let ResultValue::Symbolic(e) = &resp.results[0].1.value {
+        assert_eq!(*e, int(0), "residue at regular point expected 0, got {}", e);
+    }
+}
+
+#[test]
+fn residue_returns_residue_engine() {
+    // Residue is now wired; routing must surface the Residue engine.
+    let expr = Expression::Binary(BinaryOp::Div, Box::new(int(1)), Box::new(var("z")));
+    let resp = execute(request(Command::Residue {
+        expr,
+        var: "z".to_string(),
+        point: int(0),
+    }))
+    .unwrap();
+    assert_eq!(resp.results[0].1.engine, EngineId::Residue);
 }
 
 // ── ODE ─────────────────────────────────────────────────────────────────────
@@ -870,11 +966,11 @@ fn dispatch_resolves_step_generic_narrative() {
 #[test]
 fn dispatch_resolves_not_implemented_diagnostic_narrative() {
     // A NotImplemented dispatch emits a diagnostic whose narrative renders
-    // against the matching template id.  Residue is not yet wired.
-    let resp = execute(request(Command::Residue {
-        expr: var("x"),
-        var: "x".to_string(),
-        point: int(0),
+    // against the matching template id.  LagrangeMult is not yet wired.
+    let resp = execute(request(Command::LagrangeMult {
+        objective: var("x"),
+        vars: vec!["x".to_string()],
+        equality_constraints: vec![],
     }))
     .unwrap();
     let diag = resp
@@ -883,7 +979,7 @@ fn dispatch_resolves_not_implemented_diagnostic_narrative() {
         .find(|d| d.code == DiagnosticCode::NotImplemented)
         .expect("expected NotImplemented diagnostic");
     let body = &diag.narrative.fallback_md;
-    assert_eq!(body, dict_entry("command.residue"));
+    assert_eq!(body, dict_entry("command.lagrange_mult"));
     // Must not still carry the raw stub.
     assert_ne!(body, "command not yet implemented in v0.8.1");
 }
@@ -912,10 +1008,10 @@ fn dispatch_resolves_factor_partial_diagnostic_narrative() {
 fn dispatch_resolves_unsolved_value_narrative() {
     // NotImplemented commands emit a ResultValue::Unsolved whose nested
     // narrative also resolves through render_response.
-    let resp = execute(request(Command::Residue {
-        expr: var("x"),
-        var: "x".to_string(),
-        point: int(0),
+    let resp = execute(request(Command::LagrangeMult {
+        objective: var("x"),
+        vars: vec!["x".to_string()],
+        equality_constraints: vec![],
     }))
     .unwrap();
     let entry = &resp.results[0].1;
@@ -923,7 +1019,7 @@ fn dispatch_resolves_unsolved_value_narrative() {
         ResultValue::Unsolved { reason } => reason.fallback_md.clone(),
         other => panic!("expected Unsolved, got {:?}", other),
     };
-    assert_eq!(resolved_body, dict_entry("command.residue"));
+    assert_eq!(resolved_body, dict_entry("command.lagrange_mult"));
 }
 
 #[test]
@@ -939,12 +1035,12 @@ fn dispatch_resolves_noop_diagnostic_narrative() {
 fn ffi_round_trip_carries_resolved_narrative() {
     // The FFI surface goes through dispatch::execute and therefore inherits
     // render_response. The resolved Markdown must reach the JSON.
-    // SpecialFn (Gamma) is not yet wired; use it to test the narrative path.
-    let req = r#"{"command":{"type":"SpecialFn","kind":"Gamma","args":["x"]}}"#;
+    // Matrix (Determinant) is not yet wired; use it to test the narrative path.
+    let req = r#"{"command":{"type":"Matrix","op":"Determinant"}}"#;
     let resp = execute_ffi(req).unwrap();
     let v: serde_json::Value = serde_json::from_str(&resp).unwrap();
     let diag_md = v["diagnostics"][0]["fallback_md"]
         .as_str()
         .expect("diagnostic fallback_md must serialise as a string");
-    assert_eq!(diag_md, dict_entry("command.special_fn"));
+    assert_eq!(diag_md, dict_entry("command.matrix"));
 }
