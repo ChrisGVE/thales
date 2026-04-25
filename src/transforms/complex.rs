@@ -1,8 +1,10 @@
 //! Complex number operations and transformations.
 
+use std::sync::Arc;
+
 use num_complex::Complex64;
 
-use crate::ast::{BinaryOp, Equation, Expression, Variable};
+use crate::numeric::expr::{Expr, FuncId};
 
 use super::Polar;
 
@@ -313,319 +315,89 @@ impl ComplexOps {
     }
 }
 
-/// Decompose an expression into its real and imaginary parts.
+/// Extract the symbolic real part of an [`Arc<Expr>`] expression.
 ///
-/// Given an expression representing a complex quantity z = x + iy, returns a pair
-/// `(real_part, imag_part)` as symbolic [`Expression`] values.
-///
-/// The `complex_vars` slice maps each complex variable name to its real and imaginary
-/// component names: `(z, z_re, z_im)`.  For expressions that are not recognised as
-/// complex (e.g. a plain real float), the imaginary part is [`Expression::Float`]`(0.0)`.
-///
-/// # Handled cases
-///
-/// | Input                      | Real part            | Imaginary part       |
-/// |----------------------------|----------------------|----------------------|
-/// | `Complex(a + bi)`          | `Float(a)`           | `Float(b)`           |
-/// | `Variable("z")` (mapped)   | `Variable("z_re")`   | `Variable("z_im")`   |
-/// | `Variable("x")` (unmapped) | `Variable("x")`      | `Float(0.0)`         |
-/// | `Binary(Add, e1, e2)`      | `Add(re1, re2)`      | `Add(im1, im2)`      |
-/// | `Binary(Sub, e1, e2)`      | `Sub(re1, re2)`      | `Sub(im1, im2)`      |
-/// | `Binary(Mul, e1, e2)`      | `re1*re2 - im1*im2`  | `re1*im2 + im1*re2`  |
-/// | `Integer(n)`               | `Integer(n)`         | `Float(0.0)`         |
-/// | `Float(f)`                 | `Float(f)`           | `Float(0.0)`         |
-///
-/// # Arguments
-///
-/// * `expr` - The expression to decompose.
-/// * `complex_vars` - Triples `(z_name, re_name, im_name)` naming each complex variable
-///   and its real/imaginary counterparts.
+/// Wraps the expression in a `Re(...)` node, allowing the simplifier to
+/// reduce it when the structure is known (e.g. `Re(n) = n` for real `n`).
 ///
 /// # Examples
 ///
 /// ```
-/// use thales::transforms::separate_real_imag;
-/// use thales::ast::{Expression, Variable};
-/// use num_complex::Complex64;
+/// use thales::transforms::arc_real_part;
+/// use thales::numeric::expr::Expr;
 ///
-/// // Constant complex number
-/// let z = Expression::Complex(Complex64::new(3.0, 4.0));
-/// let (re, im) = separate_real_imag(&z, &[]);
-/// assert_eq!(re, Expression::Float(3.0));
-/// assert_eq!(im, Expression::Float(4.0));
-///
-/// // Variable mapped to real/imaginary parts
-/// let z = Expression::Variable(Variable::new("z"));
-/// let mapping = [("z".to_string(), "z_re".to_string(), "z_im".to_string())];
-/// let (re, im) = separate_real_imag(&z, &mapping);
-/// assert_eq!(re, Expression::Variable(Variable::new("z_re")));
-/// assert_eq!(im, Expression::Variable(Variable::new("z_im")));
+/// let x = Expr::symbol("z");
+/// let re_z = arc_real_part(&x);
+/// assert_eq!(re_z.to_string(), "Re(z)");
 /// ```
-pub fn separate_real_imag(
-    expr: &Expression,
-    complex_vars: &[(String, String, String)],
-) -> (Expression, Expression) {
-    match expr {
-        Expression::Complex(c) => (Expression::Float(c.re), Expression::Float(c.im)),
-        Expression::Integer(n) => (Expression::Integer(*n), Expression::Float(0.0)),
-        Expression::Float(f) => (Expression::Float(*f), Expression::Float(0.0)),
-        Expression::Variable(v) => {
-            if let Some((_, re_name, im_name)) = complex_vars.iter().find(|(z, _, _)| z == &v.name)
-            {
-                (
-                    Expression::Variable(Variable::new(re_name.clone())),
-                    Expression::Variable(Variable::new(im_name.clone())),
-                )
-            } else {
-                (Expression::Variable(v.clone()), Expression::Float(0.0))
-            }
-        }
-        Expression::Binary(op, lhs, rhs) => separate_binary(*op, lhs, rhs, complex_vars),
-        // All other variants are treated as purely real.
-        other => (other.clone(), Expression::Float(0.0)),
-    }
+pub fn arc_real_part(expr: &Arc<Expr>) -> Arc<Expr> {
+    Expr::func(FuncId::Re, vec![expr.clone()])
 }
 
-/// Internal helper: decompose a binary expression into real and imaginary parts.
-fn separate_binary(
-    op: BinaryOp,
-    lhs: &Expression,
-    rhs: &Expression,
-    vars: &[(String, String, String)],
-) -> (Expression, Expression) {
-    let (re1, im1) = separate_real_imag(lhs, vars);
-    let (re2, im2) = separate_real_imag(rhs, vars);
-    match op {
-        BinaryOp::Add | BinaryOp::Sub => (
-            Expression::Binary(op, Box::new(re1), Box::new(re2)),
-            Expression::Binary(op, Box::new(im1), Box::new(im2)),
-        ),
-        BinaryOp::Mul => {
-            // (a + bi)(c + di) = (ac - bd) + (ad + bc)i
-            let ac =
-                Expression::Binary(BinaryOp::Mul, Box::new(re1.clone()), Box::new(re2.clone()));
-            let bd =
-                Expression::Binary(BinaryOp::Mul, Box::new(im1.clone()), Box::new(im2.clone()));
-            let ad = Expression::Binary(BinaryOp::Mul, Box::new(re1), Box::new(im2));
-            let bc = Expression::Binary(BinaryOp::Mul, Box::new(im1), Box::new(re2));
-            (
-                Expression::Binary(BinaryOp::Sub, Box::new(ac), Box::new(bd)),
-                Expression::Binary(BinaryOp::Add, Box::new(ad), Box::new(bc)),
-            )
-        }
-        // For Div and Mod fall back to treating the whole expression as real.
-        _ => {
-            let full = Expression::Binary(op, Box::new(lhs.clone()), Box::new(rhs.clone()));
-            (full, Expression::Float(0.0))
-        }
-    }
-}
-
-/// Decompose a complex equation into two real equations.
+/// Extract the symbolic imaginary part of an [`Arc<Expr>`] expression.
 ///
-/// Given a complex equation `lhs = rhs` in terms of complex variable(s), produces two
-/// real equations by separating real and imaginary parts:
-///
-/// - The **first** returned equation captures the real part: `Re(lhs) = Re(rhs)`.
-/// - The **second** returned equation captures the imaginary part: `Im(lhs) = Im(rhs)`.
-///
-/// The IDs of the returned equations are derived from the original by appending `_re`
-/// and `_im` respectively.
-///
-/// # Arguments
-///
-/// * `equation` - The complex equation to decompose.
-/// * `complex_vars` - Triples `(z_name, re_name, im_name)` naming each complex variable
-///   and its real/imaginary counterparts (forwarded to [`separate_real_imag`]).
+/// Wraps the expression in an `Im(...)` node.
 ///
 /// # Examples
 ///
 /// ```
-/// use thales::transforms::decompose_complex_equation;
-/// use thales::ast::{Equation, Expression, Variable, BinaryOp};
-/// use num_complex::Complex64;
+/// use thales::transforms::arc_imag_part;
+/// use thales::numeric::expr::Expr;
 ///
-/// // z + 1 = 2i  (with z = x + iy)
-/// let z = Expression::Variable(Variable::new("z"));
-/// let one = Expression::Integer(1);
-/// let two_i = Expression::Complex(Complex64::new(0.0, 2.0));
-/// let lhs = Expression::Binary(BinaryOp::Add, Box::new(z), Box::new(one));
-/// let eq = Equation::new("test", lhs, two_i);
-///
-/// let mapping = [("z".to_string(), "x".to_string(), "y".to_string())];
-/// let (real_eq, imag_eq) = decompose_complex_equation(&eq, &mapping);
-///
-/// // Real part: x + 1 = 0.0
-/// assert_eq!(real_eq.id, "test_re");
-/// // Imaginary part: y + 0.0 = 2.0
-/// assert_eq!(imag_eq.id, "test_im");
+/// let x = Expr::symbol("z");
+/// let im_z = arc_imag_part(&x);
+/// assert_eq!(im_z.to_string(), "Im(z)");
 /// ```
-pub fn decompose_complex_equation(
-    equation: &Equation,
-    complex_vars: &[(String, String, String)],
-) -> (Equation, Equation) {
-    let (lhs_re, lhs_im) = separate_real_imag(&equation.left, complex_vars);
-    let (rhs_re, rhs_im) = separate_real_imag(&equation.right, complex_vars);
-    let real_eq = Equation::new(format!("{}_re", equation.id), lhs_re, rhs_re);
-    let imag_eq = Equation::new(format!("{}_im", equation.id), lhs_im, rhs_im);
-    (real_eq, imag_eq)
+pub fn arc_imag_part(expr: &Arc<Expr>) -> Arc<Expr> {
+    Expr::func(FuncId::Im, vec![expr.clone()])
 }
 
 #[cfg(test)]
 mod tests {
-    use num_complex::Complex64;
+    use super::*;
+    use crate::numeric::expr::{Expr, FuncId};
 
-    use crate::ast::{BinaryOp, Equation, Expression, Variable};
-
-    use super::{decompose_complex_equation, separate_real_imag};
-
-    fn mapping() -> Vec<(String, String, String)> {
-        vec![("z".to_string(), "x".to_string(), "y".to_string())]
-    }
-
-    // --- separate_real_imag ---
+    // --- arc_real_part / arc_imag_part ---
 
     #[test]
-    fn separate_constant_complex() {
-        let z = Expression::Complex(Complex64::new(3.0, 4.0));
-        let (re, im) = separate_real_imag(&z, &[]);
-        assert_eq!(re, Expression::Float(3.0));
-        assert_eq!(im, Expression::Float(4.0));
+    fn arc_real_part_wraps_in_re_node() {
+        let x = Expr::symbol("arc_re_x");
+        let result = arc_real_part(&x);
+        match result.as_ref() {
+            Expr::Func(FuncId::Re, args) if args.len() == 1 => {
+                assert_eq!(*args[0], *x);
+            }
+            _ => panic!("expected Re(x), got {:?}", result),
+        }
     }
 
     #[test]
-    fn separate_variable_with_mapping() {
-        let z = Expression::Variable(Variable::new("z"));
-        let (re, im) = separate_real_imag(&z, &mapping());
-        assert_eq!(re, Expression::Variable(Variable::new("x")));
-        assert_eq!(im, Expression::Variable(Variable::new("y")));
+    fn arc_imag_part_wraps_in_im_node() {
+        let x = Expr::symbol("arc_im_x");
+        let result = arc_imag_part(&x);
+        match result.as_ref() {
+            Expr::Func(FuncId::Im, args) if args.len() == 1 => {
+                assert_eq!(*args[0], *x);
+            }
+            _ => panic!("expected Im(x), got {:?}", result),
+        }
     }
 
     #[test]
-    fn separate_variable_without_mapping_is_real() {
-        let v = Expression::Variable(Variable::new("a"));
-        let (re, im) = separate_real_imag(&v, &[]);
-        assert_eq!(re, Expression::Variable(Variable::new("a")));
-        assert_eq!(im, Expression::Float(0.0));
+    fn arc_real_part_of_real_literal_simplifies() {
+        use crate::numeric::simplify::simplify;
+        let n = Expr::int(7);
+        let re_n = arc_real_part(&n);
+        let simplified = simplify(&re_n);
+        assert_eq!(*simplified, *n, "Re(7) should simplify to 7");
     }
 
     #[test]
-    fn separate_add_distributes() {
-        // (z + 1) -> (x + 1, y + 0.0)
-        let z = Expression::Variable(Variable::new("z"));
-        let one = Expression::Integer(1);
-        let expr = Expression::Binary(BinaryOp::Add, Box::new(z), Box::new(one));
-        let (re, im) = separate_real_imag(&expr, &mapping());
-        assert_eq!(
-            re,
-            Expression::Binary(
-                BinaryOp::Add,
-                Box::new(Expression::Variable(Variable::new("x"))),
-                Box::new(Expression::Integer(1))
-            )
-        );
-        assert_eq!(
-            im,
-            Expression::Binary(
-                BinaryOp::Add,
-                Box::new(Expression::Variable(Variable::new("y"))),
-                Box::new(Expression::Float(0.0))
-            )
-        );
-    }
-
-    #[test]
-    fn separate_mul_uses_complex_product_rule() {
-        // z * z = (x*x - y*y) + (x*y + y*x)i
-        let z1 = Expression::Variable(Variable::new("z"));
-        let z2 = Expression::Variable(Variable::new("z"));
-        let expr = Expression::Binary(BinaryOp::Mul, Box::new(z1), Box::new(z2));
-        let (re, im) = separate_real_imag(&expr, &mapping());
-        // Re: x*x - y*y
-        assert_eq!(
-            re,
-            Expression::Binary(
-                BinaryOp::Sub,
-                Box::new(Expression::Binary(
-                    BinaryOp::Mul,
-                    Box::new(Expression::Variable(Variable::new("x"))),
-                    Box::new(Expression::Variable(Variable::new("x")))
-                )),
-                Box::new(Expression::Binary(
-                    BinaryOp::Mul,
-                    Box::new(Expression::Variable(Variable::new("y"))),
-                    Box::new(Expression::Variable(Variable::new("y")))
-                ))
-            )
-        );
-        // Im: x*y + y*x
-        assert_eq!(
-            im,
-            Expression::Binary(
-                BinaryOp::Add,
-                Box::new(Expression::Binary(
-                    BinaryOp::Mul,
-                    Box::new(Expression::Variable(Variable::new("x"))),
-                    Box::new(Expression::Variable(Variable::new("y")))
-                )),
-                Box::new(Expression::Binary(
-                    BinaryOp::Mul,
-                    Box::new(Expression::Variable(Variable::new("y"))),
-                    Box::new(Expression::Variable(Variable::new("x")))
-                ))
-            )
-        );
-    }
-
-    // --- decompose_complex_equation ---
-
-    #[test]
-    fn decompose_z_plus_one_eq_two_i() {
-        // z + 1 = 2i  =>  real: x + 1 = 0.0,  imag: y + 0.0 = 2.0
-        let z = Expression::Variable(Variable::new("z"));
-        let one = Expression::Integer(1);
-        let two_i = Expression::Complex(Complex64::new(0.0, 2.0));
-        let lhs = Expression::Binary(BinaryOp::Add, Box::new(z), Box::new(one));
-        let eq = Equation::new("eq1", lhs, two_i);
-        let (real_eq, imag_eq) = decompose_complex_equation(&eq, &mapping());
-        assert_eq!(real_eq.id, "eq1_re");
-        assert_eq!(imag_eq.id, "eq1_im");
-        // Real equation LHS: x + 1
-        assert_eq!(
-            real_eq.left,
-            Expression::Binary(
-                BinaryOp::Add,
-                Box::new(Expression::Variable(Variable::new("x"))),
-                Box::new(Expression::Integer(1))
-            )
-        );
-        assert_eq!(real_eq.right, Expression::Float(0.0));
-        // Imaginary equation LHS: y + 0.0
-        assert_eq!(
-            imag_eq.left,
-            Expression::Binary(
-                BinaryOp::Add,
-                Box::new(Expression::Variable(Variable::new("y"))),
-                Box::new(Expression::Float(0.0))
-            )
-        );
-        assert_eq!(imag_eq.right, Expression::Float(2.0));
-    }
-
-    #[test]
-    fn decompose_z_squared_eq_minus_one() {
-        // z² = -1  (represented as z*z = Complex(-1+0i))
-        // Real part:  x*x - y*y = -1.0
-        // Imag part:  x*y + y*x = 0.0
-        let z1 = Expression::Variable(Variable::new("z"));
-        let z2 = Expression::Variable(Variable::new("z"));
-        let z_sq = Expression::Binary(BinaryOp::Mul, Box::new(z1), Box::new(z2));
-        let minus_one = Expression::Complex(Complex64::new(-1.0, 0.0));
-        let eq = Equation::new("z_sq", z_sq, minus_one);
-        let (real_eq, imag_eq) = decompose_complex_equation(&eq, &mapping());
-        assert_eq!(real_eq.id, "z_sq_re");
-        assert_eq!(imag_eq.id, "z_sq_im");
-        assert_eq!(real_eq.right, Expression::Float(-1.0));
-        assert_eq!(imag_eq.right, Expression::Float(0.0));
+    fn arc_imag_part_of_real_literal_simplifies_to_zero() {
+        use crate::numeric::simplify::simplify;
+        let n = Expr::int(7);
+        let im_n = arc_imag_part(&n);
+        let simplified = simplify(&im_n);
+        assert!(simplified.is_zero(), "Im(7) should simplify to 0");
     }
 }
