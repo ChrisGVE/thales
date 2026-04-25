@@ -18,6 +18,25 @@ use super::quadratic::QuadraticSolver;
 use super::types::{Solution, SolverError, SolverResult};
 use super::Solver;
 
+/// Build a symbolic complex number `re ± im*i` as an `Arc<Expr>`.
+///
+/// For `im == 0` returns `Expr::float(re)`.
+/// For `im > 0` returns `re + im*i`.
+/// For `im < 0` returns `re - |im|*i`.
+fn symbolic_complex(re: f64, im: f64) -> Arc<Expr> {
+    if im == 0.0 {
+        return Expr::float(re);
+    }
+    let shift = Expr::float(re);
+    let im_abs = Expr::float(im.abs());
+    let i_times_im = normalize::mul(Expr::i_unit(), im_abs);
+    if im > 0.0 {
+        normalize::add(shift, i_times_im)
+    } else {
+        normalize::sub(shift, i_times_im)
+    }
+}
+
 /// Solve cubic equation ax³ + bx² + cx + d = 0 using Cardano's formula.
 /// coeffs = [d, c, b, a] (constant term first)
 fn solve_cubic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<Solution> {
@@ -119,8 +138,8 @@ fn solve_cubic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<So
 
         roots = vec![
             compile(&simplify_numeric_expression(t_real + shift)),
-            Expr::complex(real_part, imag_part),
-            Expr::complex(real_part, -imag_part),
+            symbolic_complex(real_part, imag_part),
+            symbolic_complex(real_part, -imag_part),
         ];
     }
 
@@ -204,8 +223,8 @@ fn solve_quartic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<
                 let r = (u_real * u_real + u_imag * u_imag).sqrt();
                 let sqrt_real = ((r + u_real) / 2.0).sqrt();
                 let sqrt_imag = u_imag.signum() * ((r - u_real) / 2.0).sqrt();
-                roots.push(Expr::complex(sqrt_real + shift, sqrt_imag));
-                roots.push(Expr::complex(-sqrt_real + shift, -sqrt_imag));
+                roots.push(symbolic_complex(sqrt_real + shift, sqrt_imag));
+                roots.push(symbolic_complex(-sqrt_real + shift, -sqrt_imag));
             }
             trace.push(
                 Step::new(
@@ -226,8 +245,8 @@ fn solve_quartic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<
                     roots.push(compile(&simplify_numeric_expression(-u.sqrt() + shift)));
                 } else {
                     let imag = (-u).sqrt();
-                    roots.push(Expr::complex(shift, imag));
-                    roots.push(Expr::complex(shift, -imag));
+                    roots.push(symbolic_complex(shift, imag));
+                    roots.push(symbolic_complex(shift, -imag));
                 }
             }
             trace.push(
@@ -313,8 +332,8 @@ fn solve_quartic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<
     } else {
         let real = -b1 / 2.0 + shift;
         let imag = (-disc1).sqrt() / 2.0;
-        roots.push(Expr::complex(real, imag));
-        roots.push(Expr::complex(real, -imag));
+        roots.push(symbolic_complex(real, imag));
+        roots.push(symbolic_complex(real, -imag));
     }
 
     // Second quadratic: y² - sqrt(2m+α)y + (m - term) = 0
@@ -332,8 +351,8 @@ fn solve_quartic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<
     } else {
         let real = -b2 / 2.0 + shift;
         let imag = (-disc2).sqrt() / 2.0;
-        roots.push(Expr::complex(real, imag));
-        roots.push(Expr::complex(real, -imag));
+        roots.push(symbolic_complex(real, imag));
+        roots.push(symbolic_complex(real, -imag));
     }
 
     trace.push(
@@ -431,7 +450,7 @@ fn solve_polynomial_numerically(
             if r.im.abs() < 1e-10 {
                 compile(&simplify_numeric_expression(r.re))
             } else {
-                Expr::complex(r.re, r.im)
+                symbolic_complex(r.re, r.im)
             }
         })
         .collect();
