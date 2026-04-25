@@ -31,6 +31,7 @@ mod algebra;
 mod calculus;
 mod helpers;
 mod limits;
+mod matrix;
 mod ode;
 mod series;
 mod series_expand;
@@ -164,7 +165,7 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
         } => ode::ode_cmd(&equation, &fn_name, &var, ic, narrate),
 
         // ── Matrix ───────────────────────────────────────────────────────
-        Command::Matrix { .. } => not_implemented("command.matrix"),
+        Command::Matrix { op, operands } => matrix::matrix_cmd(op, &operands, narrate),
 
         // ── Optimization ─────────────────────────────────────────────────
         Command::Optimize { .. } => not_implemented("command.optimize"),
