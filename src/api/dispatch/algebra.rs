@@ -1,0 +1,159 @@
+//! Algebraic command dispatchers (Simplify, Expand, Factor, Substitute,
+//! PartialFractions, Rearrange).
+
+use crate::api::command::SimplifyRules;
+use crate::api::diagnostic::{Diagnostic, DiagnosticCode};
+use crate::api::narrative::Narrative;
+use crate::api::response::{EngineId, Response, ResultKey};
+use crate::ast::{Expression, Variable};
+use crate::numeric::compile::compile;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
+use crate::solver::Solver as _;
+
+use super::helpers::{
+    engine_error, expression_to_equation, solution_to_response, split_rational, steps_from_trace,
+    substitute_in_expr, symbolic_entry,
+};
+
+pub(super) fn simplify_cmd(expr: &Expression, _rules: SimplifyRules, narrate: bool) -> Response {
+    let simplified = expr.simplify();
+    let mut trace = Trace::new();
+    if narrate {
+        trace.push(
+            Step::new(TechniqueTag::Simplification, "Canonical simplification")
+                .with_input(compile(expr))
+                .with_output(compile(&simplified)),
+        );
+    }
+    let mut r = Response::default();
+    r.results.push((
+        ResultKey::Single,
+        symbolic_entry(simplified, EngineId::Simplify, steps_from_trace(&trace)),
+    ));
+    r.meta.engine_trace.push(EngineId::Simplify);
+    r
+}
+
+pub(super) fn expand_cmd(expr: &Expression, narrate: bool) -> Response {
+    // No standalone expand engine: simplification rules include distribution.
+    let expanded = expr.simplify();
+    let mut trace = Trace::new();
+    if narrate {
+        trace.push(
+            Step::new(TechniqueTag::Expansion, "Distribute products over sums")
+                .with_input(compile(expr))
+                .with_output(compile(&expanded)),
+        );
+    }
+    let mut r = Response::default();
+    r.results.push((
+        ResultKey::Single,
+        symbolic_entry(expanded, EngineId::Simplify, steps_from_trace(&trace)),
+    ));
+    r.meta.engine_trace.push(EngineId::Simplify);
+    r
+}
+
+pub(super) fn factor_cmd(expr: &Expression, narrate: bool) -> Response {
+    // No standalone factor engine at the Expression layer yet.
+    let factored = expr.simplify();
+    let mut trace = Trace::new();
+    if narrate {
+        trace.push(
+            Step::new(
+                TechniqueTag::Factoring,
+                "Attempted factoring via simplification",
+            )
+            .with_input(compile(expr))
+            .with_output(compile(&factored)),
+        );
+    }
+    let mut r = Response::default();
+    r.results.push((
+        ResultKey::Single,
+        symbolic_entry(factored, EngineId::Simplify, steps_from_trace(&trace)),
+    ));
+    r.diagnostics.push(Diagnostic::of(
+        DiagnosticCode::NotImplemented,
+        Narrative::new(
+            "command.factor.partial",
+            "Full factoring engine is not yet wired into the API; result is the \
+             canonical simplification.",
+        ),
+    ));
+    r.meta.engine_trace.push(EngineId::Simplify);
+    r
+}
+
+pub(super) fn substitute_cmd(
+    expr: &Expression,
+    bindings: &[(Expression, Expression)],
+    narrate: bool,
+) -> Response {
+    let mut current = expr.clone();
+    let mut trace = Trace::new();
+    for (old, new) in bindings {
+        current = substitute_in_expr(&current, old, new);
+        if narrate {
+            trace.push(
+                Step::new(
+                    TechniqueTag::Substitution,
+                    format!("Substitute {} with {}", old, new),
+                )
+                .with_output(compile(&current)),
+            );
+        }
+    }
+    let simplified = current.simplify();
+    let mut r = Response::default();
+    r.results.push((
+        ResultKey::Single,
+        symbolic_entry(simplified, EngineId::Simplify, steps_from_trace(&trace)),
+    ));
+    r.meta.engine_trace.push(EngineId::Simplify);
+    r
+}
+
+pub(super) fn partial_fractions_cmd(expr: &Expression, var: &str, narrate: bool) -> Response {
+    let (num, denom) = split_rational(expr);
+    let variable = Variable::new(var);
+    match crate::partial_fractions::decompose(&num, &denom, &variable) {
+        Ok(result) => {
+            let value = result.to_expression();
+            let mut trace = Trace::new();
+            if narrate {
+                trace.push(
+                    Step::new(
+                        TechniqueTag::PartialFractionDecomp,
+                        "Partial fraction decomposition",
+                    )
+                    .with_output(compile(&value)),
+                );
+            }
+            let mut r = Response::default();
+            r.results.push((
+                ResultKey::Single,
+                symbolic_entry(value, EngineId::PartialFractions, steps_from_trace(&trace)),
+            ));
+            r.meta.engine_trace.push(EngineId::PartialFractions);
+            r
+        }
+        Err(e) => engine_error("command.partial_fractions", format!("{:?}", e)),
+    }
+}
+
+pub(super) fn rearrange_cmd(equation: &Expression, solve_for: &str, narrate: bool) -> Response {
+    let eq = expression_to_equation(equation);
+    let solver = crate::solver::SmartSolver::new();
+    let variable = Variable::new(solve_for);
+    match solver.solve(&eq, &variable) {
+        Ok((sol, trace)) => solution_to_response(
+            sol,
+            &trace,
+            EngineId::EquationSolver,
+            narrate,
+            "command.rearrange",
+        ),
+        Err(e) => engine_error("command.rearrange", format!("{:?}", e)),
+    }
+}
