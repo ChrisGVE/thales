@@ -80,6 +80,11 @@ fn simplify_func(id: FuncId, args: &[Arc<Expr>]) -> Arc<Expr> {
     // Recursively simplify each argument first.
     let simplified: Vec<Arc<Expr>> = args.iter().map(simplify).collect();
 
+    // Dispatch Re/Im/Conj to their dedicated simplifier.
+    if matches!(id, FuncId::Re | FuncId::Im | FuncId::Conj) {
+        return super::complex_simplify::simplify_complex_func(id, &simplified);
+    }
+
     match id {
         // ── Single-argument known-value rules ────────────────────────────────
         FuncId::Sin if simplified.len() == 1 && simplified[0].is_zero() => Expr::int(0),

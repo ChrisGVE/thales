@@ -13,6 +13,7 @@
 
 mod big_rational;
 pub mod compile;
+pub(crate) mod complex_simplify;
 pub mod expr;
 pub mod ring;
 mod small_int;
