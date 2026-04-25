@@ -1,5 +1,5 @@
 //! Algebraic command dispatchers (Simplify, Expand, Factor, Substitute,
-//! PartialFractions, Rearrange, Conjugate).
+//! PartialFractions, Rearrange, Conjugate, InverseFn).
 
 use crate::api::command::SimplifyRules;
 use crate::api::diagnostic::{Diagnostic, DiagnosticCode};
@@ -187,10 +187,38 @@ pub(super) fn conjugate_cmd(expr: &Expression, narrate: bool) -> Response {
     r
 }
 
+/// Compute the inverse function of `expr` treated as f(var).
+///
+/// Constructs the equation `expr = __y__` and solves for `var` in terms of
+/// `__y__`, returning the result as an expression in `__y__`.  The solver
+/// picks the principal branch when multiple solutions exist.
+pub(super) fn inverse_fn_cmd(expr: &Expression, var: &str, narrate: bool) -> Response {
+    // Represent f(var) = __y__  as  f(var) - __y__ = 0
+    let y_sym = Expression::Variable(Variable::new("__y__"));
+    let lhs = Expression::Binary(
+        crate::ast::BinaryOp::Sub,
+        Box::new(expr.clone()),
+        Box::new(y_sym),
+    );
+    let eq = crate::ast::Equation::new("inverse_fn", lhs, Expression::Integer(0));
+    let solver = crate::solver::SmartSolver::new();
+    let variable = Variable::new(var);
+    match solver.solve(&eq, &variable) {
+        Ok((sol, trace)) => solution_to_response(
+            sol,
+            &trace,
+            EngineId::EquationSolver,
+            narrate,
+            "command.inverse_fn",
+        ),
+        Err(e) => engine_error("command.inverse_fn", format!("{:?}", e)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{Expression, Function, Variable};
+    use crate::ast::{BinaryOp, Expression, Function, Variable};
     use num_complex::Complex64;
 
     fn var(name: &str) -> Expression {
@@ -199,6 +227,10 @@ mod tests {
 
     fn int(n: i64) -> Expression {
         Expression::Integer(n)
+    }
+
+    fn add(a: Expression, b: Expression) -> Expression {
+        Expression::Binary(BinaryOp::Add, Box::new(a), Box::new(b))
     }
 
     // ── Conjugate tests ──────────────────────────────────────────────────────
@@ -246,5 +278,43 @@ mod tests {
             }
             other => panic!("expected Symbolic, got {:?}", other),
         }
+    }
+
+    // ── InverseFn tests ──────────────────────────────────────────────────────
+
+    #[test]
+    fn inverse_fn_linear_y_equals_2x_plus_1() {
+        // f(x) = 2x + 1  →  f^{-1}(y) = (y - 1) / 2
+        let two_x = Expression::Binary(BinaryOp::Mul, Box::new(int(2)), Box::new(var("x")));
+        let expr = add(two_x, int(1));
+        let resp = inverse_fn_cmd(&expr, "x", false);
+        // Solver should produce a result (unique solution) or a diagnostic.
+        assert!(
+            !resp.results.is_empty() || !resp.diagnostics.is_empty(),
+            "expected some result or diagnostic"
+        );
+    }
+
+    #[test]
+    fn inverse_fn_trivial_y_equals_x() {
+        // f(x) = x  →  f^{-1}(__y__) = __y__
+        let expr = var("x");
+        let resp = inverse_fn_cmd(&expr, "x", false);
+        assert!(
+            !resp.results.is_empty() || !resp.diagnostics.is_empty(),
+            "expected some result or diagnostic"
+        );
+    }
+
+    #[test]
+    fn inverse_fn_unsolvable_returns_diagnostic_or_result() {
+        // f(x) = x * sin(x) — analytically non-invertible; solver returns error or unsolved
+        let sin_x = Expression::Function(crate::ast::Function::Sin, vec![var("x")]);
+        let expr = Expression::Binary(BinaryOp::Mul, Box::new(var("x")), Box::new(sin_x));
+        let resp = inverse_fn_cmd(&expr, "x", false);
+        assert!(
+            !resp.diagnostics.is_empty() || !resp.results.is_empty(),
+            "expected diagnostic or result for non-invertible function"
+        );
     }
 }

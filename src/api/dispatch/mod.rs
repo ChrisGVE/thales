@@ -65,7 +65,7 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
             algebra::simplify_cmd(&expr, SimplifyRules::all(), narrate)
         }
         Command::Conjugate { expr, .. } => algebra::conjugate_cmd(&expr, narrate),
-        Command::InverseFn { .. } => not_implemented("command.inverse_fn"),
+        Command::InverseFn { expr, var } => algebra::inverse_fn_cmd(&expr, &var, narrate),
         Command::Rearrange {
             equation,
             solve_for,
