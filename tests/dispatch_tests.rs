@@ -520,3 +520,114 @@ fn narrative_resolver_covers_all_not_implemented_templates() {
         );
     }
 }
+
+// ── Narrative resolution (post-render_response) ─────────────────────────────
+//
+// The dispatcher applies api::render::render_response before returning so
+// every Narrative leaving the crate carries its resolved Markdown in
+// fallback_md. These tests assert the rewritten text matches the dictionary
+// entry rather than the engine-supplied stub string.
+
+fn dict_entry(template_id: &str) -> &'static str {
+    thales::api::narratives::resolve_template(template_id).expect("template id must be in en.json")
+}
+
+#[test]
+fn dispatch_resolves_step_generic_narrative() {
+    // A successful narrated dispatch produces step.generic narratives. After
+    // render_response the fallback_md should match the dictionary entry.
+    let resp = execute(request(Command::Diff {
+        expr: pow(var("x"), int(2)),
+        var: "x".to_string(),
+        order: 1,
+    }))
+    .unwrap();
+    let entry = &resp.results[0].1;
+    assert!(
+        !entry.steps.is_empty(),
+        "diff with default narrate should emit steps"
+    );
+    let body = &entry.steps[0].narrative.fallback_md;
+    assert_eq!(body, dict_entry("step.generic"));
+}
+
+#[test]
+fn dispatch_resolves_not_implemented_diagnostic_narrative() {
+    // A NotImplemented dispatch emits a diagnostic whose narrative renders
+    // against the matching template id.
+    let resp = execute(request(Command::Conjugate {
+        expr: var("x"),
+        target: None,
+    }))
+    .unwrap();
+    let diag = resp
+        .diagnostics
+        .iter()
+        .find(|d| d.code == DiagnosticCode::NotImplemented)
+        .expect("expected NotImplemented diagnostic");
+    let body = &diag.narrative.fallback_md;
+    assert_eq!(body, dict_entry("command.conjugate"));
+    // Must not still carry the raw stub.
+    assert_ne!(body, "command not yet implemented in v0.8.1");
+}
+
+#[test]
+fn dispatch_resolves_factor_partial_diagnostic_narrative() {
+    // Factor returns a partial-fallback diagnostic with a specific template id.
+    let resp = execute(request(Command::Factor {
+        expr: add(mul(var("x"), var("x")), int(-1)),
+        over: Domain::real(),
+        target: None,
+    }))
+    .unwrap();
+    let diag = resp
+        .diagnostics
+        .iter()
+        .find(|d| d.code == DiagnosticCode::NotImplemented)
+        .expect("expected partial-factor diagnostic");
+    assert_eq!(
+        diag.narrative.fallback_md,
+        dict_entry("command.factor.partial")
+    );
+}
+
+#[test]
+fn dispatch_resolves_unsolved_value_narrative() {
+    // NotImplemented commands emit a ResultValue::Unsolved whose nested
+    // narrative also resolves through render_response.
+    let resp = execute(request(Command::Taylor {
+        expr: var("x"),
+        var: "x".to_string(),
+        center: int(0),
+        order: 3,
+    }))
+    .unwrap();
+    let entry = &resp.results[0].1;
+    let resolved_body = match &entry.value {
+        ResultValue::Unsolved { reason } => reason.fallback_md.clone(),
+        other => panic!("expected Unsolved, got {:?}", other),
+    };
+    assert_eq!(resolved_body, dict_entry("command.taylor"));
+}
+
+#[test]
+fn dispatch_resolves_noop_diagnostic_narrative() {
+    let resp = execute(Request::default()).unwrap();
+    let diag = &resp.diagnostics[0];
+    assert_eq!(diag.code, DiagnosticCode::NotImplemented);
+    assert_eq!(diag.severity, Severity::Error);
+    assert_eq!(diag.narrative.fallback_md, dict_entry("command.noop"));
+}
+
+#[test]
+fn ffi_round_trip_carries_resolved_narrative() {
+    // The FFI surface goes through dispatch::execute and therefore inherits
+    // render_response. The resolved Markdown must reach the JSON.
+    let req = r#"{"command":{"type":"Conjugate","expr":"x"}}"#;
+    let resp = execute_ffi(req).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&resp).unwrap();
+    let diag_md = v["diagnostics"][0]["fallback_md"]
+        .as_str()
+        .expect("diagnostic fallback_md must serialise as a string");
+    assert_eq!(diag_md, dict_entry("command.conjugate"));
+}
