@@ -894,6 +894,70 @@ fn matrix_rank_returns_engine_error() {
     );
 }
 
+// ── Optimization (F1f) ───────────────────────────────────────────────────────
+
+#[test]
+fn optimize_unconstrained_paraboloid_minimum() {
+    // f(x,y) = x² + y² has its global minimum 0 at (0,0).
+    let objective = add(pow(var("x"), int(2)), pow(var("y"), int(2)));
+    let resp = execute(request(Command::Optimize {
+        objective,
+        vars: vec!["x".to_string(), "y".to_string()],
+        constraints: Vec::new(),
+        sense: thales::api::command::OptSense::Minimize,
+    }))
+    .unwrap();
+    assert_eq!(resp.results[0].1.engine, EngineId::Optimizer);
+    if let ResultValue::Symbolic(Expression::Float(obj)) = &resp.results[0].1.value {
+        assert!(
+            obj.abs() < 1e-3,
+            "expected minimum near 0, got objective {}",
+            obj
+        );
+    }
+}
+
+#[test]
+fn optimize_inequality_constraint_returns_engine_error() {
+    // The v0.9.0 optimiser handles equality KKT only; an inequality
+    // constraint must surface as an engine error.
+    let resp = execute(request(Command::Optimize {
+        objective: pow(var("x"), int(2)),
+        vars: vec!["x".to_string()],
+        constraints: vec![thales::api::command::Constraint::LessEq(var("x"))],
+        sense: thales::api::command::OptSense::Minimize,
+    }))
+    .unwrap();
+    assert!(
+        resp.diagnostics
+            .iter()
+            .any(|d| matches!(d.code, DiagnosticCode::Other(s) if s == "engine-error")),
+        "expected engine-error diagnostic for inequality constraint"
+    );
+}
+
+#[test]
+fn lagrange_mult_paraboloid_on_line() {
+    // Minimise x²+y² subject to x+y-1 = 0 → optimum at (1/2, 1/2),
+    // objective value 1/2.
+    let objective = add(pow(var("x"), int(2)), pow(var("y"), int(2)));
+    let constraint = add(add(var("x"), var("y")), int(-1));
+    let resp = execute(request(Command::LagrangeMult {
+        objective,
+        vars: vec!["x".to_string(), "y".to_string()],
+        equality_constraints: vec![constraint],
+    }))
+    .unwrap();
+    assert_eq!(resp.results[0].1.engine, EngineId::Optimizer);
+    if let ResultValue::Symbolic(Expression::Float(obj)) = &resp.results[0].1.value {
+        assert!(
+            (*obj - 0.5).abs() < 1e-3,
+            "expected objective 1/2, got {}",
+            obj
+        );
+    }
+}
+
 // ── ODE ─────────────────────────────────────────────────────────────────────
 
 #[test]
@@ -943,15 +1007,18 @@ fn matrix_returns_matrix_engine() {
 }
 
 #[test]
-fn optimize_emits_not_implemented() {
+fn optimize_returns_optimizer_engine() {
+    // Optimize is now wired; routing must surface the Optimizer engine.
+    // f(x,y) = x² + y² has its global minimum at the origin.
+    let objective = add(pow(var("x"), int(2)), pow(var("y"), int(2)));
     let resp = execute(request(Command::Optimize {
-        objective: var("x"),
-        vars: vec!["x".to_string()],
+        objective,
+        vars: vec!["x".to_string(), "y".to_string()],
         constraints: Vec::new(),
         sense: thales::api::command::OptSense::Minimize,
     }))
     .unwrap();
-    assert_not_implemented(&resp);
+    assert_eq!(resp.results[0].1.engine, EngineId::Optimizer);
 }
 
 // ── Noop + diagnostic shape ──────────────────────────────────────────────────
@@ -1104,27 +1171,6 @@ fn dispatch_resolves_step_generic_narrative() {
 }
 
 #[test]
-fn dispatch_resolves_not_implemented_diagnostic_narrative() {
-    // A NotImplemented dispatch emits a diagnostic whose narrative renders
-    // against the matching template id.  LagrangeMult is not yet wired.
-    let resp = execute(request(Command::LagrangeMult {
-        objective: var("x"),
-        vars: vec!["x".to_string()],
-        equality_constraints: vec![],
-    }))
-    .unwrap();
-    let diag = resp
-        .diagnostics
-        .iter()
-        .find(|d| d.code == DiagnosticCode::NotImplemented)
-        .expect("expected NotImplemented diagnostic");
-    let body = &diag.narrative.fallback_md;
-    assert_eq!(body, dict_entry("command.lagrange_mult"));
-    // Must not still carry the raw stub.
-    assert_ne!(body, "command not yet implemented in v0.8.1");
-}
-
-#[test]
 fn dispatch_resolves_factor_partial_diagnostic_narrative() {
     // Factor returns a partial-fallback diagnostic with a specific template id.
     let resp = execute(request(Command::Factor {
@@ -1142,24 +1188,6 @@ fn dispatch_resolves_factor_partial_diagnostic_narrative() {
         diag.narrative.fallback_md,
         dict_entry("command.factor.partial")
     );
-}
-
-#[test]
-fn dispatch_resolves_unsolved_value_narrative() {
-    // NotImplemented commands emit a ResultValue::Unsolved whose nested
-    // narrative also resolves through render_response.
-    let resp = execute(request(Command::LagrangeMult {
-        objective: var("x"),
-        vars: vec!["x".to_string()],
-        equality_constraints: vec![],
-    }))
-    .unwrap();
-    let entry = &resp.results[0].1;
-    let resolved_body = match &entry.value {
-        ResultValue::Unsolved { reason } => reason.fallback_md.clone(),
-        other => panic!("expected Unsolved, got {:?}", other),
-    };
-    assert_eq!(resolved_body, dict_entry("command.lagrange_mult"));
 }
 
 #[test]
