@@ -1198,6 +1198,124 @@ mod handoff_tests {
 
     /// Test that a normal linear equation does NOT trigger the handoff —
     /// it should be solved purely symbolically.
+    // ── Complex root tests ───────────────────────────────────────────────
+
+    #[test]
+    fn test_quadratic_complex_roots_symbolic_re_im() {
+        // x^2 + 1 = 0 has roots ±i (complex, symbolic form expected)
+        let x = Expression::Variable(Variable::new("x"));
+        let x_sq = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(2)));
+        let left = Expression::Binary(
+            BinaryOp::Add,
+            Box::new(x_sq),
+            Box::new(Expression::Integer(1)),
+        );
+        let right = Expression::Integer(0);
+        let equation = Equation::new("x2plus1", left, right);
+
+        let solver = SmartSolver::new();
+        let result = solver.solve(&equation, &Variable::new("x"));
+        assert!(result.is_ok(), "QuadraticSolver should handle x^2+1=0");
+
+        let (solution, _trace) = result.unwrap();
+        match &solution {
+            Solution::Multiple(roots) => {
+                assert_eq!(roots.len(), 2, "x^2+1=0 should have 2 roots");
+                // Roots should not be real — they contain 'i' in their display
+                for root in roots {
+                    let s = root.to_string();
+                    assert!(
+                        s.contains('i') || s.contains('I'),
+                        "Root should contain imaginary unit, got: {}",
+                        s
+                    );
+                }
+            }
+            Solution::Unique(root) => {
+                let s = root.to_string();
+                assert!(
+                    s.contains('i') || s.contains('I'),
+                    "Complex root should contain i, got: {}",
+                    s
+                );
+            }
+            _ => panic!("Expected complex roots for x^2+1=0, got {:?}", solution),
+        }
+    }
+
+    #[test]
+    fn test_polynomial_cubic_complex_roots_form() {
+        // x^3 - 1 = 0 has one real root (1) and two complex roots
+        let x = Expression::Variable(Variable::new("x"));
+        let x_cubed = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(3)));
+        let left = Expression::Binary(
+            BinaryOp::Sub,
+            Box::new(x_cubed),
+            Box::new(Expression::Integer(1)),
+        );
+        let right = Expression::Integer(0);
+        let equation = Equation::new("x3minus1", left, right);
+
+        let solver = SmartSolver::new();
+        let result = solver.solve(&equation, &Variable::new("x"));
+        assert!(result.is_ok(), "PolynomialSolver should handle x^3-1=0");
+
+        let (solution, _trace) = result.unwrap();
+        match &solution {
+            Solution::Multiple(roots) => {
+                assert!(roots.len() >= 1, "x^3-1=0 should have roots");
+                // At least one root evaluates to 1.0
+                let has_real_one = roots.iter().any(|r| {
+                    r.evaluate(&HashMap::new())
+                        .map(|v| (v - 1.0).abs() < 1e-10)
+                        .unwrap_or(false)
+                });
+                assert!(has_real_one, "x^3-1=0 should include root x=1");
+            }
+            Solution::Unique(root) => {
+                let val = root.evaluate(&HashMap::new());
+                assert!(
+                    val.map(|v| (v - 1.0).abs() < 1e-10).unwrap_or(false),
+                    "Expected root 1, got {:?}",
+                    root
+                );
+            }
+            _ => panic!("Expected roots for x^3-1=0, got {:?}", solution),
+        }
+    }
+
+    #[test]
+    fn test_smart_solver_complex_root_symbolic_form() {
+        // x^2 + 4 = 0 has roots ±2i
+        let x = Expression::Variable(Variable::new("x"));
+        let x_sq = Expression::Power(Box::new(x), Box::new(Expression::Integer(2)));
+        let left = Expression::Binary(
+            BinaryOp::Add,
+            Box::new(x_sq),
+            Box::new(Expression::Integer(4)),
+        );
+        let equation = Equation::new("x2p4", left, Expression::Integer(0));
+
+        let solver = SmartSolver::new();
+        let (solution, _trace) = solver.solve(&equation, &Variable::new("x")).unwrap();
+
+        match &solution {
+            Solution::Multiple(roots) => {
+                assert_eq!(roots.len(), 2, "x^2+4=0 should have 2 roots");
+                // Neither root should evaluate to a real number
+                for root in roots {
+                    let val = root.evaluate(&HashMap::new());
+                    assert!(
+                        val.is_none(),
+                        "Complex root should not evaluate to f64, got {:?}",
+                        val
+                    );
+                }
+            }
+            _ => panic!("Expected 2 complex roots for x^2+4=0, got {:?}", solution),
+        }
+    }
+
     #[test]
     fn test_linear_no_handoff() {
         // Equation: 3x + 6 = 15
