@@ -177,6 +177,10 @@ pub enum TechniqueTag {
     /// Directional derivative `∇f · v̂`.
     DirectionalDerivative,
 
+    // ── Special functions ────────────────────────────────────────────────
+    /// Special-function evaluation step (Gamma, Beta, Erf, Erfc, …).
+    SpecialFunction,
+
     // ── Differentiation rules ────────────────────────────────────────────
     /// Power rule `d/dx xⁿ = n xⁿ⁻¹`.
     PowerRule,
@@ -333,6 +337,7 @@ impl TechniqueTag {
             TechniqueTag::Jacobian => "Jacobian",
             TechniqueTag::Hessian => "Hessian",
             TechniqueTag::DirectionalDerivative => "Directional derivative",
+            TechniqueTag::SpecialFunction => "Special function",
             TechniqueTag::PowerRule => "Power rule",
             TechniqueTag::ProductRule => "Product rule",
             TechniqueTag::QuotientRule => "Quotient rule",
@@ -433,6 +438,9 @@ impl TechniqueTag {
 
             // Higher-dimensional calculus — advanced.
             TechniqueTag::Curl | TechniqueTag::Jacobian | TechniqueTag::Hessian => Advanced,
+
+            // Special functions — advanced.
+            TechniqueTag::SpecialFunction => Advanced,
 
             // Calculus.
             TechniqueTag::PowerRule
