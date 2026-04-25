@@ -83,14 +83,20 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
         // ── Differentiation ──────────────────────────────────────────────
         Command::Diff { expr, var, order } => calculus::diff_cmd(&expr, &var, order, narrate),
         Command::PartialDiff { expr, vars } => calculus::partial_diff_cmd(&expr, &vars, narrate),
-        Command::TotalDiff { .. } => not_implemented("command.total_diff"),
+        Command::TotalDiff { expr, var, deps } => {
+            calculus::total_diff_cmd(&expr, &var, &deps, narrate)
+        }
         Command::Gradient { expr, vars } => calculus::gradient_cmd(&expr, &vars, narrate),
-        Command::Divergence { .. } => not_implemented("command.divergence"),
-        Command::Curl { .. } => not_implemented("command.curl"),
-        Command::Laplacian { .. } => not_implemented("command.laplacian"),
-        Command::Jacobian { .. } => not_implemented("command.jacobian"),
-        Command::Hessian { .. } => not_implemented("command.hessian"),
-        Command::DirectionalDiff { .. } => not_implemented("command.directional_diff"),
+        Command::Divergence { field, vars } => calculus::divergence_cmd(&field, &vars, narrate),
+        Command::Curl { field, vars } => calculus::curl_cmd(&field, &vars, narrate),
+        Command::Laplacian { expr, vars } => calculus::laplacian_cmd(&expr, &vars, narrate),
+        Command::Jacobian { fields, vars } => calculus::jacobian_cmd(&fields, &vars, narrate),
+        Command::Hessian { expr, vars } => calculus::hessian_cmd(&expr, &vars, narrate),
+        Command::DirectionalDiff {
+            expr,
+            vars,
+            direction,
+        } => calculus::directional_diff_cmd(&expr, &vars, &direction, narrate),
 
         // ── Integration ──────────────────────────────────────────────────
         Command::Integrate { expr, var } => calculus::integrate_cmd(&expr, &var, narrate),
