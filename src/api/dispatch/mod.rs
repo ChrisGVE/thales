@@ -33,6 +33,7 @@ mod helpers;
 mod limits;
 mod ode;
 mod series;
+mod series_expand;
 mod solver;
 
 use helpers::unsolved_entry;
@@ -116,11 +117,30 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
         } => limits::limit_cmd(&expr, &var, point, side, narrate),
 
         // ── Expansions ───────────────────────────────────────────────────
-        Command::Taylor { .. } => not_implemented("command.taylor"),
-        Command::Laurent { .. } => not_implemented("command.laurent"),
-        Command::Asymptotic { .. } => not_implemented("command.asymptotic"),
-        Command::Compose { .. } => not_implemented("command.compose"),
-        Command::Revert { .. } => not_implemented("command.revert"),
+        Command::Taylor {
+            expr,
+            var,
+            center,
+            order,
+        } => series_expand::taylor_cmd(&expr, &var, &center, order, narrate),
+        Command::Laurent {
+            expr,
+            var,
+            center,
+            order,
+        } => series_expand::laurent_cmd(&expr, &var, &center, order, narrate),
+        Command::Asymptotic { expr, var, order } => {
+            series_expand::asymptotic_cmd(&expr, &var, order, narrate)
+        }
+        Command::Compose {
+            outer,
+            inner,
+            var,
+            order,
+        } => series_expand::compose_cmd(&outer, &inner, &var, order, narrate),
+        Command::Revert { expr, var, order } => {
+            series_expand::revert_cmd(&expr, &var, order, narrate)
+        }
 
         // ── Transforms ───────────────────────────────────────────────────
         Command::FourierSeries {
