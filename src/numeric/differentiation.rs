@@ -759,4 +759,78 @@ mod tests {
             "expected 0 for d/dx(asin(5)), got {result}"
         );
     }
+
+    // ── Re/Im/Conj differentiation ────────────────────────────────────────
+
+    #[test]
+    fn test_diff_re_of_sin() {
+        // d/dx Re(sin(x)) = Re(cos(x))  — Re distributes linearly
+        let xid = x_id("dre_sin");
+        let x = sym("dre_sin");
+        let sin_x = Expr::func(FuncId::Sin, vec![x.clone()]);
+        let re_sin_x = Expr::func(FuncId::Re, vec![sin_x]);
+        let result = diff(&re_sin_x, xid);
+        // Result should be Re(cos(x))
+        match result.as_ref() {
+            Expr::Func(FuncId::Re, inner) if inner.len() == 1 => {
+                assert!(
+                    matches!(inner[0].as_ref(), Expr::Func(FuncId::Cos, _)),
+                    "expected Re(cos(x)), got Re({:?})",
+                    inner[0]
+                );
+            }
+            _ => panic!("expected Re(cos(x)), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn test_diff_im_of_exp() {
+        // d/dx Im(exp(x)) = Im(exp(x))  — Im distributes linearly
+        let xid = x_id("dim_exp");
+        let x = sym("dim_exp");
+        let exp_x = Expr::func(FuncId::Exp, vec![x.clone()]);
+        let im_exp_x = Expr::func(FuncId::Im, vec![exp_x]);
+        let result = diff(&im_exp_x, xid);
+        match result.as_ref() {
+            Expr::Func(FuncId::Im, inner) if inner.len() == 1 => {
+                assert!(
+                    matches!(inner[0].as_ref(), Expr::Func(FuncId::Exp, _)),
+                    "expected Im(exp(x)), got Im({:?})",
+                    inner[0]
+                );
+            }
+            _ => panic!("expected Im(exp(x)), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn test_diff_conj_of_poly() {
+        // d/dx Conj(x^2 + 3) = Conj(2x)
+        let xid = x_id("dconj_poly");
+        let x = sym("dconj_poly");
+        let x_sq = normalize::pow(x.clone(), Expr::int(2));
+        let poly = normalize::add(x_sq, Expr::int(3));
+        let conj_poly = Expr::func(FuncId::Conj, vec![poly]);
+        let result = diff(&conj_poly, xid);
+        // Result should be Conj(2*x) or Conj(derivative)
+        assert!(
+            matches!(result.as_ref(), Expr::Func(FuncId::Conj, _)),
+            "expected Conj(...), got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_diff_re_constant() {
+        // d/dx Re(5) = Re(0) = 0
+        let xid = x_id("dre_const");
+        let re_5 = Expr::func(FuncId::Re, vec![Expr::int(5)]);
+        let result = diff(&re_5, xid);
+        // Re(0) should simplify to 0
+        assert!(
+            result.is_zero() || matches!(result.as_ref(), Expr::Func(FuncId::Re, _)),
+            "expected 0 or Re(0), got {:?}",
+            result
+        );
+    }
 }

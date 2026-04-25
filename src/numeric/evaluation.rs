@@ -676,4 +676,77 @@ mod tests {
         let v = evaluate(&e, &no_bindings()).unwrap();
         assert!((v - 2.0).abs() < 1e-12);
     }
+
+    // ── Re/Im/Conj evaluation ────────────────────────────────────────────
+
+    #[test]
+    fn test_eval_re_of_real_binding() {
+        // Re(x) where x=3.0 → 3.0
+        let e = Expr::Func(FuncId::Re, vec![Expr::symbol("ev_re_x")]);
+        let mut b = HashMap::new();
+        b.insert(SymbolId::intern("ev_re_x"), 3.0_f64);
+        let v = evaluate(&e, &b).unwrap();
+        assert!((v - 3.0).abs() < 1e-15);
+    }
+
+    #[test]
+    fn test_eval_im_of_real_binding() {
+        // Im(x) where x=3.0 → 0.0
+        let e = Expr::Func(FuncId::Im, vec![Expr::symbol("ev_im_x")]);
+        let mut b = HashMap::new();
+        b.insert(SymbolId::intern("ev_im_x"), 3.0_f64);
+        let v = evaluate(&e, &b).unwrap();
+        assert!((v - 0.0).abs() < 1e-15);
+    }
+
+    #[test]
+    fn test_eval_conj_of_real_binding() {
+        // Conj(x) where x=3.0 → 3.0
+        let e = Expr::Func(FuncId::Conj, vec![Expr::symbol("ev_conj_x")]);
+        let mut b = HashMap::new();
+        b.insert(SymbolId::intern("ev_conj_x"), 3.0_f64);
+        let v = evaluate(&e, &b).unwrap();
+        assert!((v - 3.0).abs() < 1e-15);
+    }
+
+    #[test]
+    fn test_eval_re_of_complex_literal() {
+        // Re(3+4i) → 3.0
+        use num_complex::Complex64;
+        let c = Arc::new(Expr::Complex(Complex64::new(3.0, 4.0)));
+        let e = Expr::Func(FuncId::Re, vec![c]);
+        let v = evaluate(&e, &no_bindings()).unwrap();
+        assert!((v - 3.0).abs() < 1e-15);
+    }
+
+    #[test]
+    fn test_eval_im_of_complex_literal() {
+        // Im(3+4i) → 4.0
+        use num_complex::Complex64;
+        let c = Arc::new(Expr::Complex(Complex64::new(3.0, 4.0)));
+        let e = Expr::Func(FuncId::Im, vec![c]);
+        let v = evaluate(&e, &no_bindings()).unwrap();
+        assert!((v - 4.0).abs() < 1e-15);
+    }
+
+    #[test]
+    fn test_eval_conj_of_complex_returns_none() {
+        // Conj(3+4i) cannot be represented as f64 (has nonzero imaginary part)
+        use num_complex::Complex64;
+        let c = Arc::new(Expr::Complex(Complex64::new(3.0, 4.0)));
+        let conj_c = Arc::new(Expr::Complex(Complex64::new(3.0, -4.0)));
+        // The Conj node wraps the original; evaluate walks the arg first.
+        // evaluate(3+4i) returns None (nonzero imaginary), so Conj also returns None.
+        let e = Expr::Func(FuncId::Conj, vec![c]);
+        let result = evaluate(&e, &no_bindings());
+        // evaluate(Conj(3+4i)) follows: evaluate(3+4i) → None → Conj → None
+        assert!(
+            result.is_none(),
+            "expected None for Conj(3+4i), got {:?}",
+            result
+        );
+        // But Conj of the conjugate (3-4i) should also be None
+        let e2 = Expr::Func(FuncId::Conj, vec![conj_c]);
+        assert!(evaluate(&e2, &no_bindings()).is_none());
+    }
 }
