@@ -33,12 +33,11 @@ mod helpers;
 mod limits;
 mod matrix;
 mod ode;
+mod optimize;
 mod series;
 mod series_expand;
 mod solver;
 mod special;
-
-use helpers::unsolved_entry;
 
 /// Execute a [`Request`]. Single entry point for thales.
 pub fn execute(request: Request) -> Result<Response, ThalesError> {
@@ -168,8 +167,17 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
         Command::Matrix { op, operands } => matrix::matrix_cmd(op, &operands, narrate),
 
         // ── Optimization ─────────────────────────────────────────────────
-        Command::Optimize { .. } => not_implemented("command.optimize"),
-        Command::LagrangeMult { .. } => not_implemented("command.lagrange_mult"),
+        Command::Optimize {
+            objective,
+            vars,
+            constraints,
+            sense,
+        } => optimize::optimize_cmd(&objective, &vars, &constraints, sense, narrate),
+        Command::LagrangeMult {
+            objective,
+            vars,
+            equality_constraints,
+        } => optimize::lagrange_mult_cmd(&objective, &vars, &equality_constraints, narrate),
     };
 
     response.meta.elapsed_ms = start.elapsed().as_millis() as u64;
@@ -181,22 +189,6 @@ fn noop_response() -> Response {
     r.diagnostics.push(Diagnostic::of(
         DiagnosticCode::NotImplemented,
         Narrative::new("command.noop", "Noop command produces no result."),
-    ));
-    r
-}
-
-fn not_implemented(template_id: &'static str) -> Response {
-    let mut r = Response::default();
-    r.results.push((
-        ResultKey::Single,
-        unsolved_entry(
-            Narrative::new(template_id, "command not yet implemented in v0.8.1"),
-            EngineId::Other("not-implemented"),
-        ),
-    ));
-    r.diagnostics.push(Diagnostic::of(
-        DiagnosticCode::NotImplemented,
-        Narrative::new(template_id, "command not yet implemented in v0.8.1"),
     ));
     r
 }
