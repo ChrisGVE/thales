@@ -6,7 +6,9 @@
 //! for commands that still route to the `NotImplemented` diagnostic
 //! assert on the diagnostic shape rather than a symbolic value.
 
-use thales::api::command::{Command, IvpData, LimitPoint, SimplifyRules, SpecialKind};
+use thales::api::command::{
+    Command, IvpData, LimitPoint, MatrixExpr as ApiMatrixExpr, MatrixOp, SimplifyRules, SpecialKind,
+};
 use thales::api::diagnostic::{DiagnosticCode, Severity};
 use thales::api::dispatch::execute;
 use thales::api::domain::Domain;
@@ -758,6 +760,140 @@ fn residue_returns_residue_engine() {
     assert_eq!(resp.results[0].1.engine, EngineId::Residue);
 }
 
+// ── Matrix operations (F1e) ──────────────────────────────────────────────────
+
+fn m22(a: i64, b: i64, c: i64, d: i64) -> ApiMatrixExpr {
+    ApiMatrixExpr::Matrix(vec![vec![int(a), int(b)], vec![int(c), int(d)]])
+}
+
+#[test]
+fn matrix_determinant_identity() {
+    // det([[1,0],[0,1]]) = 1.
+    let resp = execute(request(Command::Matrix {
+        op: MatrixOp::Determinant,
+        operands: vec![m22(1, 0, 0, 1)],
+    }))
+    .unwrap();
+    assert_single_symbolic(&resp, EngineId::Matrix);
+    if let ResultValue::Symbolic(e) = &resp.results[0].1.value {
+        assert_eq!(*e, int(1), "expected determinant == 1, got {}", e);
+    }
+}
+
+#[test]
+fn matrix_transpose_two_two() {
+    // [[1,2],[3,4]]ᵀ = [[1,3],[2,4]]; primary=1, alternatives=[3,2,4].
+    let resp = execute(request(Command::Matrix {
+        op: MatrixOp::Transpose,
+        operands: vec![m22(1, 2, 3, 4)],
+    }))
+    .unwrap();
+    let entry = &resp.results[0].1;
+    assert_eq!(entry.engine, EngineId::Matrix);
+    assert_eq!(entry.alternatives.len(), 3);
+}
+
+#[test]
+fn matrix_addition() {
+    // [[1,2],[3,4]] + [[5,6],[7,8]] = [[6,8],[10,12]]
+    let resp = execute(request(Command::Matrix {
+        op: MatrixOp::Add,
+        operands: vec![m22(1, 2, 3, 4), m22(5, 6, 7, 8)],
+    }))
+    .unwrap();
+    let entry = &resp.results[0].1;
+    assert_eq!(entry.engine, EngineId::Matrix);
+    assert_eq!(entry.alternatives.len(), 3);
+}
+
+#[test]
+fn matrix_multiplication() {
+    // [[1,2],[3,4]] * [[1,0],[0,1]] = [[1,2],[3,4]]
+    let resp = execute(request(Command::Matrix {
+        op: MatrixOp::Multiply,
+        operands: vec![m22(1, 2, 3, 4), m22(1, 0, 0, 1)],
+    }))
+    .unwrap();
+    let entry = &resp.results[0].1;
+    assert_eq!(entry.engine, EngineId::Matrix);
+    if let ResultValue::Symbolic(primary) = &entry.value {
+        assert_eq!(*primary, int(1), "(0,0) entry expected 1, got {}", primary);
+    }
+}
+
+#[test]
+fn matrix_trace() {
+    // trace([[1,2],[3,4]]) = 5.
+    let resp = execute(request(Command::Matrix {
+        op: MatrixOp::Trace,
+        operands: vec![m22(1, 2, 3, 4)],
+    }))
+    .unwrap();
+    assert_single_symbolic(&resp, EngineId::Matrix);
+    if let ResultValue::Symbolic(e) = &resp.results[0].1.value {
+        assert_eq!(*e, int(5), "expected trace == 5, got {}", e);
+    }
+}
+
+#[test]
+fn matrix_inverse_two_two() {
+    // [[1,2],[3,4]]⁻¹ exists (det = -2). The result is a 2x2 matrix; we
+    // verify routing rather than exact symbolic form (which depends on
+    // simplifier output).
+    let resp = execute(request(Command::Matrix {
+        op: MatrixOp::Inverse,
+        operands: vec![m22(1, 2, 3, 4)],
+    }))
+    .unwrap();
+    let entry = &resp.results[0].1;
+    assert_eq!(entry.engine, EngineId::Matrix);
+    assert_eq!(entry.alternatives.len(), 3);
+}
+
+#[test]
+fn matrix_eigenvalues_diagonal() {
+    // Eigenvalues of diag(2, 3) are {2, 3}.
+    let resp = execute(request(Command::Matrix {
+        op: MatrixOp::Eigenvalues,
+        operands: vec![m22(2, 0, 0, 3)],
+    }))
+    .unwrap();
+    let entry = &resp.results[0].1;
+    assert_eq!(entry.engine, EngineId::Matrix);
+    // Two eigenvalues: primary + 1 alternative.
+    assert_eq!(entry.alternatives.len(), 1);
+}
+
+#[test]
+fn matrix_lu_decomposition() {
+    // LU of [[4,3],[6,3]]: returned as (L, U) flattened.
+    let resp = execute(request(Command::Matrix {
+        op: MatrixOp::Lu,
+        operands: vec![m22(4, 3, 6, 3)],
+    }))
+    .unwrap();
+    let entry = &resp.results[0].1;
+    assert_eq!(entry.engine, EngineId::Matrix);
+    // 2x2 L (4 cells) + 2x2 U (4 cells) = 8 cells; primary + 7 alternatives.
+    assert_eq!(entry.alternatives.len(), 7);
+}
+
+#[test]
+fn matrix_rank_returns_engine_error() {
+    // Rank engine not yet implemented; must surface an engine error.
+    let resp = execute(request(Command::Matrix {
+        op: MatrixOp::Rank,
+        operands: vec![m22(1, 2, 3, 4)],
+    }))
+    .unwrap();
+    assert!(
+        resp.diagnostics
+            .iter()
+            .any(|d| matches!(d.code, DiagnosticCode::Other(s) if s == "engine-error")),
+        "expected engine-error diagnostic for unimplemented Rank"
+    );
+}
+
 // ── ODE ─────────────────────────────────────────────────────────────────────
 
 #[test]
@@ -793,13 +929,17 @@ fn ode_with_ivp() {
 // ── Not-yet-implemented surface ──────────────────────────────────────────────
 
 #[test]
-fn matrix_emits_not_implemented() {
+fn matrix_returns_matrix_engine() {
+    // Matrix is now wired; routing must surface the Matrix engine.
+    // Determinant of [[1,0],[0,1]] = 1.
+    let i2 =
+        thales::api::command::MatrixExpr::Matrix(vec![vec![int(1), int(0)], vec![int(0), int(1)]]);
     let resp = execute(request(Command::Matrix {
         op: thales::api::command::MatrixOp::Determinant,
-        operands: Vec::new(),
+        operands: vec![i2],
     }))
     .unwrap();
-    assert_not_implemented(&resp);
+    assert_eq!(resp.results[0].1.engine, EngineId::Matrix);
 }
 
 #[test]
