@@ -404,6 +404,143 @@ fn directional_diff_unit_diagonal() {
     }
 }
 
+// ── Series expansions (F1c) ──────────────────────────────────────────────────
+
+#[test]
+fn taylor_exp_around_zero_order_4() {
+    // exp(x) = 1 + x + x²/2 + x³/6 + x⁴/24 truncated at order 4.
+    let expr = Expression::Function(Function::Exp, vec![var("x")]);
+    let resp = execute(request(Command::Taylor {
+        expr,
+        var: "x".to_string(),
+        center: int(0),
+        order: 4,
+    }))
+    .unwrap();
+    assert_single_symbolic(&resp, EngineId::TaylorExpansion);
+    if let ResultValue::Symbolic(e) = &resp.results[0].1.value {
+        // The reassembled series carries powers of x up to 4 plus a constant 1.
+        let s = format!("{}", e);
+        assert!(s.contains("x"), "expected polynomial in x, got {}", s);
+    }
+}
+
+#[test]
+fn taylor_sin_around_zero_order_3() {
+    // sin(x) = x - x³/6 + O(x⁵). Truncated at order 3 reproduces x - x³/6.
+    let expr = Expression::Function(Function::Sin, vec![var("x")]);
+    let resp = execute(request(Command::Taylor {
+        expr,
+        var: "x".to_string(),
+        center: int(0),
+        order: 3,
+    }))
+    .unwrap();
+    assert_single_symbolic(&resp, EngineId::TaylorExpansion);
+}
+
+#[test]
+fn laurent_around_zero() {
+    // 1/x at center 0 with neg/pos order 2 should produce a series whose
+    // reassembled expression contains a 1/x term.
+    let expr = Expression::Binary(
+        thales::ast::BinaryOp::Div,
+        Box::new(int(1)),
+        Box::new(var("x")),
+    );
+    let resp = execute(request(Command::Laurent {
+        expr,
+        var: "x".to_string(),
+        center: int(0),
+        order: 2,
+    }))
+    .unwrap();
+    assert_eq!(resp.results[0].1.engine, EngineId::LaurentExpansion);
+}
+
+#[test]
+fn asymptotic_polynomial_to_infinity() {
+    // x² + x as x → ∞ — leading term is x²; series reassembly should expose
+    // a power of x.
+    let expr = add(pow(var("x"), int(2)), var("x"));
+    let resp = execute(request(Command::Asymptotic {
+        expr,
+        var: "x".to_string(),
+        order: 3,
+    }))
+    .unwrap();
+    assert_single_symbolic(&resp, EngineId::AsymptoticExpansion);
+}
+
+#[test]
+fn compose_taylor_series() {
+    // outer = exp(x), inner = x (with a_0=0). exp(x) ∘ x = exp(x), still a
+    // valid Taylor series of order 4.
+    let outer = Expression::Function(Function::Exp, vec![var("x")]);
+    let inner = var("x");
+    let resp = execute(request(Command::Compose {
+        outer,
+        inner,
+        var: "x".to_string(),
+        order: 4,
+    }))
+    .unwrap();
+    assert_single_symbolic(&resp, EngineId::SeriesComposition);
+}
+
+#[test]
+fn compose_rejects_nonzero_inner_constant() {
+    // inner = 1 has a_0 = 1 ≠ 0, so composition must fail with an engine
+    // error.
+    let outer = Expression::Function(Function::Exp, vec![var("x")]);
+    let inner = int(1);
+    let resp = execute(request(Command::Compose {
+        outer,
+        inner,
+        var: "x".to_string(),
+        order: 3,
+    }))
+    .unwrap();
+    assert!(
+        resp.diagnostics
+            .iter()
+            .any(|d| matches!(d.code, DiagnosticCode::Other(s) if s == "engine-error")),
+        "expected engine-error for non-zero inner constant"
+    );
+}
+
+#[test]
+fn revert_sin_series() {
+    // sin(x) Taylor series has a_0=0, a_1=1, so reversion succeeds. The
+    // inverse is arcsin(x) ≈ x + x³/6 + 3x⁵/40 + ...
+    let expr = Expression::Function(Function::Sin, vec![var("x")]);
+    let resp = execute(request(Command::Revert {
+        expr,
+        var: "x".to_string(),
+        order: 3,
+    }))
+    .unwrap();
+    assert_single_symbolic(&resp, EngineId::SeriesReversion);
+}
+
+#[test]
+fn revert_rejects_nonzero_constant() {
+    // Reversion requires a_0 = 0; `x + 1` has a_0 = 1 → engine error.
+    let expr = add(var("x"), int(1));
+    let resp = execute(request(Command::Revert {
+        expr,
+        var: "x".to_string(),
+        order: 3,
+    }))
+    .unwrap();
+    assert!(
+        resp.diagnostics
+            .iter()
+            .any(|d| matches!(d.code, DiagnosticCode::Other(s) if s == "engine-error")),
+        "expected engine-error for non-revertible series"
+    );
+}
+
 // ── Integration ──────────────────────────────────────────────────────────────
 
 #[test]
@@ -501,7 +638,8 @@ fn fourier_series_sin() {
 }
 
 #[test]
-fn taylor_emits_not_implemented() {
+fn taylor_returns_taylor_engine() {
+    // Taylor is now wired; routing must surface the Taylor engine.
     let resp = execute(request(Command::Taylor {
         expr: Expression::Function(Function::Sin, vec![var("x")]),
         var: "x".to_string(),
@@ -509,7 +647,7 @@ fn taylor_emits_not_implemented() {
         order: 5,
     }))
     .unwrap();
-    assert_not_implemented(&resp);
+    assert_eq!(resp.results[0].1.engine, EngineId::TaylorExpansion);
 }
 
 #[test]
@@ -732,12 +870,11 @@ fn dispatch_resolves_step_generic_narrative() {
 #[test]
 fn dispatch_resolves_not_implemented_diagnostic_narrative() {
     // A NotImplemented dispatch emits a diagnostic whose narrative renders
-    // against the matching template id.  Taylor is not yet wired.
-    let resp = execute(request(Command::Taylor {
+    // against the matching template id.  Residue is not yet wired.
+    let resp = execute(request(Command::Residue {
         expr: var("x"),
         var: "x".to_string(),
-        center: int(0),
-        order: 3,
+        point: int(0),
     }))
     .unwrap();
     let diag = resp
@@ -746,7 +883,7 @@ fn dispatch_resolves_not_implemented_diagnostic_narrative() {
         .find(|d| d.code == DiagnosticCode::NotImplemented)
         .expect("expected NotImplemented diagnostic");
     let body = &diag.narrative.fallback_md;
-    assert_eq!(body, dict_entry("command.taylor"));
+    assert_eq!(body, dict_entry("command.residue"));
     // Must not still carry the raw stub.
     assert_ne!(body, "command not yet implemented in v0.8.1");
 }
@@ -775,11 +912,10 @@ fn dispatch_resolves_factor_partial_diagnostic_narrative() {
 fn dispatch_resolves_unsolved_value_narrative() {
     // NotImplemented commands emit a ResultValue::Unsolved whose nested
     // narrative also resolves through render_response.
-    let resp = execute(request(Command::Taylor {
+    let resp = execute(request(Command::Residue {
         expr: var("x"),
         var: "x".to_string(),
-        center: int(0),
-        order: 3,
+        point: int(0),
     }))
     .unwrap();
     let entry = &resp.results[0].1;
@@ -787,7 +923,7 @@ fn dispatch_resolves_unsolved_value_narrative() {
         ResultValue::Unsolved { reason } => reason.fallback_md.clone(),
         other => panic!("expected Unsolved, got {:?}", other),
     };
-    assert_eq!(resolved_body, dict_entry("command.taylor"));
+    assert_eq!(resolved_body, dict_entry("command.residue"));
 }
 
 #[test]
