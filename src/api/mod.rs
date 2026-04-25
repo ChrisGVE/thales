@@ -33,6 +33,7 @@ pub mod json;
 pub mod narrative;
 pub mod narratives;
 pub mod path;
+pub mod render;
 pub mod request;
 pub mod response;
 
@@ -42,6 +43,7 @@ pub use diagnostic::{Assumption, Diagnostic, DiagnosticCode, Severity};
 pub use domain::{BaseDomain, Domain, DomainExpr, DomainPolicy, Inclusion, Qualifier};
 pub use narrative::{Narrative, NarrativeValue, TheoremId};
 pub use path::{ExprPath, PathSegment};
+pub use render::render_response;
 pub use request::{Budget, Precision, Request, SolveMode, UnitSystem};
 pub use response::{
     EngineId, ExecutionMeta, NarratedStep, NumericMethod, Response, ResultEntry, ResultKey,

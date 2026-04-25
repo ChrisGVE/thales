@@ -143,7 +143,7 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
     };
 
     response.meta.elapsed_ms = start.elapsed().as_millis() as u64;
-    Ok(response)
+    Ok(crate::api::render::render_response(response))
 }
 
 fn noop_response() -> Response {
