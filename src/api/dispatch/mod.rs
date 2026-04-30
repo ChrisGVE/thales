@@ -41,6 +41,7 @@ mod series;
 mod series_expand;
 mod solver;
 mod special;
+mod transforms;
 
 /// Execute a [`Request`]. Single entry point for thales.
 pub fn execute(request: Request) -> Result<Response, ThalesError> {
@@ -213,22 +214,31 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
         } => series::fourier_series_cmd(&expr, &var, &period, terms, narrate),
         Command::Residue { expr, var, point } => special::residue_cmd(&expr, &var, &point, narrate),
 
-        // ── Integral transforms (stubs — dispatch/transforms.rs coming next) ──
-        Command::LaplaceTransform { .. }
-        | Command::InverseLaplace { .. }
-        | Command::FourierTransform { .. }
-        | Command::InverseFourier { .. }
-        | Command::ZTransform { .. }
-        | Command::InverseZTransform { .. }
-        | Command::MellinTransform { .. }
-        | Command::InverseMellin { .. } => {
-            let mut r = Response::default();
-            r.diagnostics.push(Diagnostic::of(
-                DiagnosticCode::NotImplemented,
-                Narrative::new("command.transform", "Integral transform dispatch pending."),
-            ));
-            r
-        }
+        // ── Integral transforms ───────────────────────────────────────────
+        Command::LaplaceTransform {
+            expr,
+            time_var,
+            freq_var,
+        } => transforms::laplace_transform_cmd(&expr, &time_var, &freq_var, narrate),
+        Command::InverseLaplace {
+            expr,
+            freq_var,
+            time_var,
+        } => transforms::inverse_laplace_cmd(&expr, &freq_var, &time_var, narrate),
+        Command::FourierTransform {
+            expr,
+            time_var,
+            freq_var,
+        } => transforms::fourier_transform_cmd(&expr, &time_var, &freq_var, narrate),
+        Command::InverseFourier {
+            expr,
+            freq_var,
+            time_var,
+        } => transforms::inverse_fourier_cmd(&expr, &freq_var, &time_var, narrate),
+        Command::ZTransform { .. } => transforms::z_transform_stub(narrate),
+        Command::InverseZTransform { .. } => transforms::inverse_z_transform_stub(narrate),
+        Command::MellinTransform { .. } => transforms::mellin_transform_stub(narrate),
+        Command::InverseMellin { .. } => transforms::inverse_mellin_stub(narrate),
 
         // ── Special functions ────────────────────────────────────────────
         Command::SpecialFn { kind, args } => special::special_fn_cmd(kind, &args, narrate),
