@@ -413,6 +413,28 @@ pub enum Command {
         ic: Option<IvpData>,
     },
 
+    /// System of ODEs: y'_i = f_i(t, y_1, ..., y_n).
+    OdeSystem {
+        /// RHS expressions for each equation.
+        equations: Vec<Expression>,
+        /// Names of the unknown functions (e.g., ["y1", "y2"]).
+        fn_names: Vec<String>,
+        /// Independent variable.
+        var: String,
+        /// Initial conditions (optional).
+        ic: Option<SystemIvpData>,
+    },
+
+    /// Partial differential equation (stub for v0.12.0).
+    Pde {
+        /// The PDE expression.
+        equation: Expression,
+        /// Name of the unknown function.
+        fn_name: String,
+        /// Independent variables (e.g., ["x", "t"]).
+        vars: Vec<String>,
+    },
+
     // ── Matrix / linear algebra ─────────────────────────────────────────────
     /// Matrix / linear algebra operation.
     Matrix {
@@ -599,6 +621,15 @@ pub enum SpecialKind {
     Erf,
     /// Complementary error function `erfc(x)`.
     Erfc,
+}
+
+/// Initial-value data for [`Command::OdeSystem`].
+#[derive(Debug, Clone)]
+pub struct SystemIvpData {
+    /// Value of the independent variable at the initial point.
+    pub var_at: Expression,
+    /// Initial values of each unknown function.
+    pub values_at: Vec<Expression>,
 }
 
 /// Initial-value data for [`Command::Ode`].

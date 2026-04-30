@@ -224,6 +224,27 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
             ic,
         } => ode::ode_cmd(&equation, &fn_name, &var, ic, narrate),
 
+        Command::OdeSystem { .. } => {
+            let mut r = noop_response();
+            r.diagnostics.push(Diagnostic::of(
+                DiagnosticCode::NotImplemented,
+                Narrative::new(
+                    "command.ode_system",
+                    "ODE system solver not yet implemented (v0.9.0).",
+                ),
+            ));
+            r
+        }
+
+        Command::Pde { .. } => {
+            let mut r = noop_response();
+            r.diagnostics.push(Diagnostic::of(
+                DiagnosticCode::NotImplemented,
+                Narrative::new("command.pde", "PDE solving not yet supported (v0.12.0)."),
+            ));
+            r
+        }
+
         // ── Matrix ───────────────────────────────────────────────────────
         Command::Matrix { op, operands } => matrix::matrix_cmd(op, &operands, narrate),
 
