@@ -1,12 +1,17 @@
 //! Eigenvalue and eigenvector computation for matrices.
 
+use num_complex::Complex64;
+
 use super::{MatrixError, MatrixExpr, MatrixResult};
 
 impl MatrixExpr {
     /// Compute eigenvalues of the matrix numerically.
     ///
+    /// Returns complex eigenvalues. For matrices with purely real eigenvalues
+    /// the imaginary part is zero.
+    ///
     /// For 2x2 matrices, uses the quadratic formula.
-    /// For larger matrices, uses numerical methods (power iteration or similar).
+    /// For larger matrices, uses numerical methods (QR iteration).
     ///
     /// # Errors
     ///
@@ -24,9 +29,9 @@ impl MatrixExpr {
     /// ]).unwrap();
     ///
     /// let eigenvalues = m.eigenvalues_numeric().unwrap();
-    /// // Eigenvalues should be 1 and 3
+    /// // Eigenvalues should be 1 and 3 (real)
     /// ```
-    pub fn eigenvalues_numeric(&self) -> MatrixResult<Vec<f64>> {
+    pub fn eigenvalues_numeric(&self) -> MatrixResult<Vec<Complex64>> {
         if !self.is_square() {
             return Err(MatrixError::InvalidOperation(
                 "Eigenvalues require a square matrix".to_string(),
@@ -46,7 +51,7 @@ impl MatrixExpr {
         #[cfg(not(feature = "lapack"))]
         {
             match self.rows {
-                1 => Ok(vec![elements[0][0]]),
+                1 => Ok(vec![Complex64::new(elements[0][0], 0.0)]),
                 2 => eigenvalues_2x2(&elements),
                 3 => eigenvalues_3x3(&elements),
                 _ => eigenvalues_qr(&elements),
@@ -56,7 +61,9 @@ impl MatrixExpr {
 
     /// Compute eigenvector for a given eigenvalue numerically.
     ///
-    /// Returns the eigenvector as a column matrix.
+    /// Returns the eigenvector as a column of real values. For complex
+    /// eigenvalues only the real part is used in the power iteration; the
+    /// limitation is documented on the caller side.
     ///
     /// # Errors
     ///
@@ -86,10 +93,15 @@ impl MatrixExpr {
 
     /// Compute all eigenpairs (eigenvalue, eigenvector) numerically.
     ///
+    /// The eigenvalue component is `Complex64`. For complex eigenvalues the
+    /// eigenvector is computed using the real part of the eigenvalue, which
+    /// gives an approximation; a full complex eigenvector solver is not yet
+    /// implemented.
+    ///
     /// # Errors
     ///
     /// Returns an error if the matrix is not square.
-    pub fn eigenpairs_numeric(&self) -> MatrixResult<Vec<(f64, Vec<f64>)>> {
+    pub fn eigenpairs_numeric(&self) -> MatrixResult<Vec<(Complex64, Vec<f64>)>> {
         #[cfg(feature = "lapack")]
         {
             if !self.is_square() {
@@ -112,7 +124,10 @@ impl MatrixExpr {
             let mut pairs = Vec::with_capacity(eigenvalues.len());
 
             for eigenvalue in eigenvalues {
-                let eigenvector = self.eigenvector_numeric(eigenvalue)?;
+                // eigenvector_numeric operates on a real matrix with a real shift;
+                // for complex eigenvalues we pass the real part as the best available
+                // approximation until a full complex eigenvector path is added.
+                let eigenvector = self.eigenvector_numeric(eigenvalue.re)?;
                 pairs.push((eigenvalue, eigenvector));
             }
 
@@ -122,7 +137,11 @@ impl MatrixExpr {
 
     /// Check if the matrix is diagonalizable.
     ///
-    /// A matrix is diagonalizable if it has n linearly independent eigenvectors.
+    /// A matrix is diagonalizable if and only if for every eigenvalue its
+    /// geometric multiplicity equals its algebraic multiplicity. This
+    /// implementation checks that directly: it groups eigenvalues by value
+    /// (within tolerance), and for any repeated eigenvalue it computes the
+    /// rank of (A − λI) to determine the geometric multiplicity.
     pub fn is_diagonalizable(&self) -> MatrixResult<bool> {
         if !self.is_square() {
             return Err(MatrixError::InvalidOperation(
@@ -130,7 +149,7 @@ impl MatrixExpr {
             ));
         }
 
-        // A simple check: symmetric matrices are always diagonalizable
+        // Symmetric matrices are always diagonalizable (spectral theorem).
         let transpose = self.transpose();
         let empty = std::collections::HashMap::new();
 
@@ -147,19 +166,50 @@ impl MatrixExpr {
             }
         }
 
-        // For non-symmetric matrices, we would need to check algebraic vs geometric multiplicity.
-        // This is a simplified check — return true if we can compute distinct eigenvalues.
+        let elements = self.evaluate(&empty).ok_or_else(|| {
+            MatrixError::InvalidOperation("Cannot evaluate matrix numerically".to_string())
+        })?;
+        let n = self.rows;
+
         let eigenvalues = self.eigenvalues_numeric()?;
 
-        // Check if all eigenvalues are distinct (sufficient condition)
-        for (i, &ev1) in eigenvalues.iter().enumerate() {
-            for (j, &ev2) in eigenvalues.iter().enumerate() {
-                if i != j && (ev1 - ev2).abs() < 1e-10 {
-                    // Repeated eigenvalue - would need to check geometric multiplicity.
-                    // For simplicity, assume diagonalizable.
-                    return Ok(true);
+        // Group eigenvalues — only the real part matters for the shift because
+        // eigenvector_numeric already works on a real system. We group by the
+        // full complex value so that conjugate pairs are not accidentally merged.
+        // Two eigenvalues are considered equal if both real and imaginary parts
+        // agree within 1e-8.
+        let mut processed: Vec<Complex64> = Vec::new();
+
+        for &ev in &eigenvalues {
+            if processed
+                .iter()
+                .any(|&p| (ev.re - p.re).abs() < 1e-8 && (ev.im - p.im).abs() < 1e-8)
+            {
+                continue;
+            }
+
+            // Count algebraic multiplicity (number of eigenvalues equal to ev).
+            let alg_mult = eigenvalues
+                .iter()
+                .filter(|&&e| (e.re - ev.re).abs() < 1e-8 && (e.im - ev.im).abs() < 1e-8)
+                .count();
+
+            if alg_mult > 1 {
+                // Geometric multiplicity = n − rank(A − λI).
+                let shift = ev.re; // real shift; adequate for real matrices
+                let mut a_minus_lambda = elements.clone();
+                for i in 0..n {
+                    a_minus_lambda[i][i] -= shift;
+                }
+                let rank = compute_rank(&a_minus_lambda);
+                let geo_mult = n - rank;
+
+                if geo_mult < alg_mult {
+                    return Ok(false);
                 }
             }
+
+            processed.push(ev);
         }
 
         Ok(true)
@@ -172,7 +222,7 @@ impl MatrixExpr {
 
 /// Compute eigenvalues for a 2x2 matrix using the quadratic formula.
 #[cfg(not(feature = "lapack"))]
-fn eigenvalues_2x2(elements: &[Vec<f64>]) -> MatrixResult<Vec<f64>> {
+fn eigenvalues_2x2(elements: &[Vec<f64>]) -> MatrixResult<Vec<Complex64>> {
     let a = elements[0][0];
     let b = elements[0][1];
     let c = elements[1][0];
@@ -185,20 +235,27 @@ fn eigenvalues_2x2(elements: &[Vec<f64>]) -> MatrixResult<Vec<f64>> {
     let discriminant = trace * trace - 4.0 * det;
 
     if discriminant < 0.0 {
-        // Complex eigenvalues - return just the real parts for now
+        // Complex conjugate pair.
         let real_part = trace / 2.0;
-        Ok(vec![real_part, real_part])
+        let imag_part = (-discriminant).sqrt() / 2.0;
+        Ok(vec![
+            Complex64::new(real_part, imag_part),
+            Complex64::new(real_part, -imag_part),
+        ])
     } else {
         let sqrt_disc = discriminant.sqrt();
         let lambda1 = (trace + sqrt_disc) / 2.0;
         let lambda2 = (trace - sqrt_disc) / 2.0;
-        Ok(vec![lambda1, lambda2])
+        Ok(vec![
+            Complex64::new(lambda1, 0.0),
+            Complex64::new(lambda2, 0.0),
+        ])
     }
 }
 
 /// Compute eigenvalues for a 3x3 matrix using Cardano's formula.
 #[cfg(not(feature = "lapack"))]
-fn eigenvalues_3x3(elements: &[Vec<f64>]) -> MatrixResult<Vec<f64>> {
+fn eigenvalues_3x3(elements: &[Vec<f64>]) -> MatrixResult<Vec<Complex64>> {
     let a11 = elements[0][0];
     let a12 = elements[0][1];
     let a13 = elements[0][2];
@@ -229,7 +286,7 @@ fn eigenvalues_3x3(elements: &[Vec<f64>]) -> MatrixResult<Vec<f64>> {
 
 /// Compute eigenvalues using QR algorithm for larger matrices.
 #[cfg(not(feature = "lapack"))]
-fn eigenvalues_qr(elements: &[Vec<f64>]) -> MatrixResult<Vec<f64>> {
+fn eigenvalues_qr(elements: &[Vec<f64>]) -> MatrixResult<Vec<Complex64>> {
     let n = elements.len();
     let mut a = elements.to_vec();
 
@@ -255,7 +312,7 @@ fn eigenvalues_qr(elements: &[Vec<f64>]) -> MatrixResult<Vec<f64>> {
         }
     }
 
-    Ok((0..n).map(|i| a[i][i]).collect())
+    Ok((0..n).map(|i| Complex64::new(a[i][i], 0.0)).collect())
 }
 
 /// Find eigenvector using inverse iteration.
@@ -312,8 +369,12 @@ fn eigenvector_inverse_iteration(elements: &[Vec<f64>], eigenvalue: f64) -> Matr
 }
 
 /// Solve cubic equation x³ + p*x² + q*x + r = 0 using Cardano's formula.
+///
+/// Returns all three roots as `Complex64`. When the discriminant indicates
+/// one real root and two complex conjugates, the imaginary parts are
+/// preserved rather than discarded.
 #[cfg(not(feature = "lapack"))]
-fn solve_cubic(p: f64, q: f64, r: f64) -> MatrixResult<Vec<f64>> {
+fn solve_cubic(p: f64, q: f64, r: f64) -> MatrixResult<Vec<Complex64>> {
     // Depress the cubic: substitute x = t - p/3
     // t³ + at + b = 0 where a = q - p²/3, b = r - pq/3 + 2p³/27
     let a = q - p * p / 3.0;
@@ -323,7 +384,7 @@ fn solve_cubic(p: f64, q: f64, r: f64) -> MatrixResult<Vec<f64>> {
     let offset = -p / 3.0;
 
     if discriminant > 0.0 {
-        // Three distinct real roots
+        // Three distinct real roots.
         let acos_arg = (-b / 2.0 / ((-a / 3.0).powi(3).sqrt())).clamp(-1.0, 1.0);
         let theta = acos_arg.acos();
         let r_cubed = (-a / 3.0).sqrt();
@@ -332,28 +393,42 @@ fn solve_cubic(p: f64, q: f64, r: f64) -> MatrixResult<Vec<f64>> {
         let t2 = 2.0 * r_cubed * ((theta + 2.0 * std::f64::consts::PI) / 3.0).cos();
         let t3 = 2.0 * r_cubed * ((theta + 4.0 * std::f64::consts::PI) / 3.0).cos();
 
-        Ok(vec![t1 + offset, t2 + offset, t3 + offset])
+        Ok(vec![
+            Complex64::new(t1 + offset, 0.0),
+            Complex64::new(t2 + offset, 0.0),
+            Complex64::new(t3 + offset, 0.0),
+        ])
     } else if discriminant.abs() < 1e-10 {
-        // Multiple roots
+        // Multiple roots (all real).
         if b.abs() < 1e-10 {
-            Ok(vec![offset, offset, offset])
+            Ok(vec![
+                Complex64::new(offset, 0.0),
+                Complex64::new(offset, 0.0),
+                Complex64::new(offset, 0.0),
+            ])
         } else {
             let double_root = 3.0 * b / a;
             let simple_root = -3.0 * b / (2.0 * a);
             Ok(vec![
-                double_root + offset,
-                simple_root + offset,
-                simple_root + offset,
+                Complex64::new(double_root + offset, 0.0),
+                Complex64::new(simple_root + offset, 0.0),
+                Complex64::new(simple_root + offset, 0.0),
             ])
         }
     } else {
-        // One real root, two complex conjugates
+        // One real root and two complex conjugates.
         let sqrt_disc = (b * b / 4.0 + a * a * a / 27.0).sqrt();
         let u = (-b / 2.0 + sqrt_disc).cbrt();
         let v = (-b / 2.0 - sqrt_disc).cbrt();
         let real_root = u + v + offset;
-        let complex_real = -(u + v) / 2.0 + offset;
-        Ok(vec![real_root, complex_real, complex_real])
+        // Complex pair: -(u+v)/2 ± i*(u-v)*sqrt(3)/2
+        let complex_re = -(u + v) / 2.0 + offset;
+        let complex_im = (u - v) * (3.0_f64).sqrt() / 2.0;
+        Ok(vec![
+            Complex64::new(real_root, 0.0),
+            Complex64::new(complex_re, complex_im),
+            Complex64::new(complex_re, -complex_im),
+        ])
     }
 }
 
@@ -454,4 +529,53 @@ fn solve_linear_system(a: &[Vec<f64>], b: &[f64]) -> Vec<f64> {
     }
 
     x
+}
+
+/// Compute the rank of a matrix using Gaussian elimination with partial pivoting.
+///
+/// Used by `is_diagonalizable` to determine geometric multiplicity of eigenvalues.
+fn compute_rank(a: &[Vec<f64>]) -> usize {
+    let m = a.len();
+    if m == 0 {
+        return 0;
+    }
+    let n = a[0].len();
+    let mut mat = a.to_vec();
+    let mut rank = 0;
+    let mut row = 0;
+
+    for col in 0..n {
+        // Find pivot in this column from current row downward.
+        let pivot_row =
+            (row..m).max_by(|&i, &j| mat[i][col].abs().partial_cmp(&mat[j][col].abs()).unwrap());
+
+        let pivot_row = match pivot_row {
+            Some(r) if mat[r][col].abs() > 1e-10 => r,
+            _ => continue,
+        };
+
+        mat.swap(row, pivot_row);
+        rank += 1;
+
+        let pivot = mat[row][col];
+        for j in col..n {
+            mat[row][j] /= pivot;
+        }
+
+        for i in 0..m {
+            if i != row && mat[i][col].abs() > 1e-14 {
+                let factor = mat[i][col];
+                for j in col..n {
+                    mat[i][j] -= factor * mat[row][j];
+                }
+            }
+        }
+
+        row += 1;
+        if row == m {
+            break;
+        }
+    }
+
+    rank
 }
