@@ -12,6 +12,8 @@
 //! - **Complementary error function**: `erfc(x) = 1 - erf(x)`
 //! - **Log-Gamma**: `lngamma(x)` - ln(Γ(x)), numerically stable
 //! - **Digamma**: `digamma(x)` - ψ(x) = d/dx ln(Γ(x))
+//! - **Bessel functions**: `bessel_j`, `bessel_y`, `bessel_i`, `bessel_k`
+//! - **Airy functions**: `airy_ai`, `airy_bi`
 //!
 //! # Examples
 //!
@@ -25,7 +27,12 @@
 //! assert!(!result.derivation_steps.is_empty());
 //! ```
 
+pub mod airy;
+pub mod bessel;
 pub mod lngamma_digamma;
+
+pub use airy::{airy_ai, airy_bi};
+pub use bessel::{bessel_i, bessel_j, bessel_k, bessel_y};
 pub use lngamma_digamma::{digamma, lngamma};
 
 use crate::ast::{BinaryOp, Expression, Function, SymbolicConstant};
@@ -562,7 +569,7 @@ fn format_expr(expr: &Expression) -> String {
 }
 
 /// Numerical approximation of Gamma function using Lanczos approximation.
-fn gamma_numeric(x: f64) -> f64 {
+pub(super) fn gamma_numeric(x: f64) -> f64 {
     // Lanczos coefficients for g=7
     const G: f64 = 7.0;
     const COEF: [f64; 9] = [
