@@ -1,8 +1,8 @@
 //! Special mathematical functions with step-by-step derivation.
 //!
 //! This module provides special mathematical functions including Gamma, Beta,
-//! and error functions. Each computation includes detailed derivation steps
-//! for educational purposes.
+//! error functions, log-gamma, and digamma. Each computation includes detailed
+//! derivation steps for educational purposes.
 //!
 //! # Functions
 //!
@@ -10,6 +10,8 @@
 //! - **Beta function**: `beta(a, b)` - Related to Gamma via B(a,b) = Γ(a)Γ(b)/Γ(a+b)
 //! - **Error function**: `erf(x)` - Probability function
 //! - **Complementary error function**: `erfc(x) = 1 - erf(x)`
+//! - **Log-Gamma**: `lngamma(x)` - ln(Γ(x)), numerically stable
+//! - **Digamma**: `digamma(x)` - ψ(x) = d/dx ln(Γ(x))
 //!
 //! # Examples
 //!
@@ -22,6 +24,9 @@
 //! assert_eq!(result.numeric_value, Some(24.0));
 //! assert!(!result.derivation_steps.is_empty());
 //! ```
+
+pub mod lngamma_digamma;
+pub use lngamma_digamma::{digamma, lngamma};
 
 use crate::ast::{BinaryOp, Expression, Function, SymbolicConstant};
 use std::f64::consts::{E, PI};
