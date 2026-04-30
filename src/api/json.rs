@@ -15,7 +15,9 @@ use crate::ast::{Expression, Variable};
 use crate::parser::parse_equation;
 use crate::ThalesError;
 
-use super::command::{Command, IvpData, LimitPoint, MatrixOp, SimplifyRules, SpecialKind};
+use super::command::{
+    Command, IvpData, LimitPoint, MatrixExpr, MatrixOp, SimplifyRules, SpecialKind,
+};
 use super::domain::Domain;
 use super::request::{Request, SolveMode};
 use super::response::{NarratedStep, Response, ResultEntry, ResultKey, ResultValue};
@@ -202,14 +204,22 @@ fn command_from_json(val: &Value) -> Result<Command, String> {
             args: get_expr_list(val, "args")?,
         }),
 
-        "Matrix" => Ok(Command::Matrix {
-            op: parse_matrix_op(
+        "Matrix" => {
+            let op = parse_matrix_op(
                 val.get("op")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| "Matrix: missing `op`".to_string())?,
-            )?,
-            operands: Vec::new(),
-        }),
+            )?;
+            let operands = match val.get("operands").and_then(|v| v.as_array()) {
+                Some(arr) => arr
+                    .iter()
+                    .enumerate()
+                    .map(|(i, v)| parse_matrix_expr(v, i))
+                    .collect::<Result<Vec<_>, _>>()?,
+                None => Vec::new(),
+            };
+            Ok(Command::Matrix { op, operands })
+        }
 
         other => Err(format!(
             "unsupported command type `{}` in v0.8.1 JSON transport",
@@ -387,6 +397,52 @@ fn get_string_list(val: &Value, key: &str) -> Result<Vec<String>, String> {
                 .ok_or_else(|| format!("`{}` entries must be strings", key))
         })
         .collect()
+}
+
+fn parse_matrix_expr(val: &Value, index: usize) -> Result<MatrixExpr, String> {
+    if let Some(s) = val.as_str() {
+        return Ok(MatrixExpr::Scalar(parse_expr_str(s)?));
+    }
+    if let Some(obj) = val.as_object() {
+        if let Some(rows) = obj.get("rows").and_then(|v| v.as_array()) {
+            let parsed_rows: Result<Vec<Vec<Expression>>, String> = rows
+                .iter()
+                .enumerate()
+                .map(|(r, row)| {
+                    let cols = row.as_array().ok_or_else(|| {
+                        format!("operands[{}].rows[{}]: expected array", index, r)
+                    })?;
+                    cols.iter()
+                        .enumerate()
+                        .map(|(c, cell)| {
+                            let s = cell.as_str().ok_or_else(|| {
+                                format!("operands[{}].rows[{}][{}]: expected string", index, r, c)
+                            })?;
+                            parse_expr_str(s)
+                        })
+                        .collect()
+                })
+                .collect();
+            return Ok(MatrixExpr::Matrix(parsed_rows?));
+        }
+        if let Some(elems) = obj.get("elements").and_then(|v| v.as_array()) {
+            let parsed: Result<Vec<Expression>, String> = elems
+                .iter()
+                .enumerate()
+                .map(|(i, e)| {
+                    let s = e.as_str().ok_or_else(|| {
+                        format!("operands[{}].elements[{}]: expected string", index, i)
+                    })?;
+                    parse_expr_str(s)
+                })
+                .collect();
+            return Ok(MatrixExpr::Vector(parsed?));
+        }
+    }
+    Err(format!(
+        "operands[{}]: expected string (scalar), or object with 'rows' or 'elements'",
+        index
+    ))
 }
 
 fn json_u64_to_u32(val: Option<&Value>, field: &str, default: u32) -> Result<u32, String> {

@@ -1298,3 +1298,19 @@ fn json_ode_missing_ic_is_ok() {
     let result = execute_ffi(json);
     assert!(result.is_ok());
 }
+
+// ── Phase 0A: C-15 JSON Matrix operands ────────────────────────────────────
+
+#[test]
+fn json_matrix_determinant_with_operand() {
+    let json = r#"{"command":{"type":"Matrix","op":"Determinant","operands":[{"rows":[["1","2"],["3","4"]]}]}}"#;
+    let result = execute_ffi(json);
+    assert!(result.is_ok(), "should parse matrix operand: {:?}", result);
+}
+
+#[test]
+fn json_matrix_no_operands_still_works() {
+    let json = r#"{"command":{"type":"Matrix","op":"Determinant"}}"#;
+    let result = execute_ffi(json);
+    assert!(result.is_ok());
+}
