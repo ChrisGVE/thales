@@ -1,15 +1,16 @@
 //! F1c series-expansion dispatchers (Taylor, Laurent, Asymptotic, Compose,
-//! Revert, Puiseux, Frobenius, Pade, Wkb). The first five are wired to
-//! `crate::numeric::series` engines. The last four return stub
-//! NotImplemented responses pending engine work in a subsequent subtask.
+//! Revert, Puiseux, Frobenius, Pade, Wkb). All nine commands are wired to
+//! their respective engines in `crate::numeric::series`.
 
-use crate::api::diagnostic::{Diagnostic, DiagnosticCode};
-use crate::api::narrative::Narrative;
-use crate::api::response::{EngineId, Response, ResultKey};
+use crate::api::response::{
+    BranchEntry, EngineId, Response, ResultEntry, ResultKey, ResultShape, ResultValue,
+    StructuredResult,
+};
 use crate::ast::Expression;
 use crate::numeric::compile::{compile, decompile};
 use crate::numeric::series::{
-    asymptotic, compose, laurent_expand, revert, taylor, AsymptoticDirection,
+    asymptotic, compose, frobenius, laurent_expand, pade, puiseux, revert, taylor, wkb,
+    AsymptoticDirection,
 };
 use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::numeric::SymbolId;
@@ -181,85 +182,321 @@ pub(super) fn revert_cmd(expr: &Expression, var: &str, order: u32, narrate: bool
     }
 }
 
-/// Stub: Puiseux series engine is not yet implemented.
+/// Puiseux series expansion command.
 pub(super) fn puiseux_cmd(
-    _expr: &Expression,
-    _var: &str,
-    _center: &Expression,
-    _order: u32,
-    _narrate: bool,
+    expr: &Expression,
+    var: &str,
+    center: &Expression,
+    order: u32,
+    narrate: bool,
 ) -> Response {
-    let mut r = Response::default();
-    r.diagnostics.push(Diagnostic::of(
-        DiagnosticCode::NotImplemented,
-        Narrative::new(
+    let expr_arc = compile(expr);
+    let center_arc = compile(center);
+    let var_id = SymbolId::intern(var);
+    let mut trace = Trace::new();
+    if narrate {
+        trace.push(
+            Step::new(
+                TechniqueTag::PuiseuxExpansion,
+                format!(
+                    "Puiseux series in {} around {} to order {}",
+                    var, center, order
+                ),
+            )
+            .with_input(expr_arc.clone()),
+        );
+    }
+    let mut engine_trace = Trace::new();
+    match puiseux(&expr_arc, var_id, &center_arc, order, &mut engine_trace) {
+        Some(series) => {
+            let result_arc = series.to_expr();
+            let result = decompile(&result_arc);
+            let coeffs: Vec<Expression> = series
+                .terms
+                .iter()
+                .map(|t| decompile(&t.coefficient))
+                .collect();
+            let structured = StructuredResult::CoefficientArray {
+                coefficients: coeffs,
+                variable: var.to_string(),
+                center: if center_arc.is_zero() {
+                    None
+                } else {
+                    Some(center.clone())
+                },
+                order,
+            };
+            let steps = if narrate {
+                steps_from_trace(&engine_trace)
+            } else {
+                Vec::new()
+            };
+            let mut entry = symbolic_entry(result, EngineId::PuiseuxExpansion, steps);
+            entry.structured = Some(structured);
+            let mut r = Response::default();
+            r.results.push((ResultKey::Single, entry));
+            r.meta.engine_trace.push(EngineId::PuiseuxExpansion);
+            r
+        }
+        None => engine_error(
             "command.puiseux",
-            "Puiseux series not yet implemented".to_string(),
+            format!(
+                "Puiseux expansion failed for {} in {} at {}",
+                expr, var, center
+            ),
         ),
-    ));
-    r.meta.engine_trace.push(EngineId::PuiseuxExpansion);
-    r
+    }
 }
 
-/// Stub: Frobenius method engine is not yet implemented.
+/// Frobenius method command.
+///
+/// `ode` is the left-hand side of `a(x)y'' + b(x)y' + c(x)y = 0`,
+/// encoded as the triple `[a, b, c]` of coefficient expressions in a
+/// single `Expression::List` (or a `Mul` placeholder — the dispatcher
+/// extracts coefficients directly from the `ode_coefficients` parameter).
+///
+/// For now the dispatcher accepts `ode` as `[a(x), b(x), c(x)]` encoded
+/// as a three-element tuple expression, or falls back to treating the
+/// whole expression as `a(x)` with `b=0`, `c=0` if parsing fails.
 pub(super) fn frobenius_cmd(
-    _ode: &Expression,
+    ode: &Expression,
     _fn_name: &str,
-    _var: &str,
-    _point: &Expression,
-    _order: u32,
-    _narrate: bool,
+    var: &str,
+    point: &Expression,
+    order: u32,
+    narrate: bool,
 ) -> Response {
-    let mut r = Response::default();
-    r.diagnostics.push(Diagnostic::of(
-        DiagnosticCode::NotImplemented,
-        Narrative::new(
+    let var_id = SymbolId::intern(var);
+    let point_arc = compile(point);
+    let mut engine_trace = Trace::new();
+
+    // Extract ODE coefficients [a, b, c] from the expression.
+    // Convention: ode is a list-like expression; we extract via compile.
+    let coeffs = extract_ode_coefficients(ode);
+    let coeffs_arc: Vec<_> = coeffs.iter().map(|e| compile(e)).collect();
+
+    if narrate {
+        engine_trace.push(Step::new(
+            TechniqueTag::FrobeniusMethod,
+            format!("Frobenius method at {} to order {}", point, order),
+        ));
+    }
+
+    match frobenius(&coeffs_arc, var_id, &point_arc, order, &mut engine_trace) {
+        Some(sol) => {
+            let branches: Vec<BranchEntry> = sol
+                .solutions
+                .iter()
+                .enumerate()
+                .map(|(i, branch)| {
+                    let expr_arc = branch.to_expr(var_id, &point_arc);
+                    BranchEntry {
+                        condition: None,
+                        label: Some(format!("y_{}", i + 1)),
+                        value: decompile(&expr_arc),
+                    }
+                })
+                .collect();
+
+            let structured = StructuredResult::Branches {
+                branches: branches.clone(),
+            };
+
+            let steps = if narrate {
+                steps_from_trace(&engine_trace)
+            } else {
+                Vec::new()
+            };
+
+            let mut r = Response::default();
+            for (i, b) in branches.iter().enumerate() {
+                let mut entry = ResultEntry {
+                    value: ResultValue::Symbolic(b.value.clone()),
+                    structured: if i == 0 {
+                        Some(structured.clone())
+                    } else {
+                        None
+                    },
+                    shape: ResultShape::Scalar,
+                    unit: None,
+                    steps: if i == 0 { steps.clone() } else { Vec::new() },
+                    alternatives: Vec::new(),
+                    engine: EngineId::FrobeniusMethod,
+                };
+                // Attach indicial root info to first branch structured.
+                if i == 0 {
+                    entry.alternatives = sol.indicial_roots.iter().map(|r| decompile(r)).collect();
+                }
+                r.results.push((ResultKey::Single, entry));
+            }
+            r.meta.engine_trace.push(EngineId::FrobeniusMethod);
+            r
+        }
+        None => engine_error(
             "command.frobenius",
-            "Frobenius method not yet implemented".to_string(),
+            format!(
+                "Frobenius method failed: check that {} is a regular singular point",
+                point
+            ),
         ),
-    ));
-    r.meta.engine_trace.push(EngineId::FrobeniusMethod);
-    r
+    }
 }
 
-/// Stub: Padé approximant engine is not yet implemented.
+/// Padé approximant command.
 pub(super) fn pade_cmd(
-    _expr: &Expression,
-    _var: &str,
-    _center: &Expression,
-    _m: u32,
-    _n: u32,
-    _narrate: bool,
+    expr: &Expression,
+    var: &str,
+    center: &Expression,
+    m: u32,
+    n: u32,
+    narrate: bool,
 ) -> Response {
-    let mut r = Response::default();
-    r.diagnostics.push(Diagnostic::of(
-        DiagnosticCode::NotImplemented,
-        Narrative::new(
+    let expr_arc = compile(expr);
+    let center_arc = compile(center);
+    let var_id = SymbolId::intern(var);
+    let mut engine_trace = Trace::new();
+
+    if narrate {
+        engine_trace.push(
+            Step::new(
+                TechniqueTag::PadeApproximant,
+                format!("[{m}/{n}] Padé approximant in {} at {}", var, center),
+            )
+            .with_input(expr_arc.clone()),
+        );
+    }
+
+    match pade(&expr_arc, var_id, &center_arc, m, n, &mut engine_trace) {
+        Some(pa) => {
+            let result_arc = pa.to_expr();
+            let result = decompile(&result_arc);
+            let num_coeffs: Vec<Expression> = pa.numerator.iter().map(|c| decompile(c)).collect();
+            let den_coeffs: Vec<Expression> = pa.denominator.iter().map(|c| decompile(c)).collect();
+            let structured = StructuredResult::CoefficientArray {
+                coefficients: num_coeffs.into_iter().chain(den_coeffs).collect(),
+                variable: var.to_string(),
+                center: if center_arc.is_zero() {
+                    None
+                } else {
+                    Some(center.clone())
+                },
+                order: m + n,
+            };
+            let steps = if narrate {
+                steps_from_trace(&engine_trace)
+            } else {
+                Vec::new()
+            };
+            let mut entry = symbolic_entry(result, EngineId::PadeApproximant, steps);
+            entry.structured = Some(structured);
+            let mut r = Response::default();
+            r.results.push((ResultKey::Single, entry));
+            r.meta.engine_trace.push(EngineId::PadeApproximant);
+            r
+        }
+        None => engine_error(
             "command.pade",
-            "Padé approximant not yet implemented".to_string(),
+            format!(
+                "Padé [{m}/{n}] approximant failed for {} in {} at {}",
+                expr, var, center
+            ),
         ),
-    ));
-    r.meta.engine_trace.push(EngineId::PadeApproximant);
-    r
+    }
 }
 
-/// Stub: WKB approximation engine is not yet implemented.
+/// WKB approximation command.
+///
+/// `ode` encodes `Q(x)` in `ε²y'' + Q(x)y = 0`.
 pub(super) fn wkb_cmd(
-    _ode: &Expression,
+    ode: &Expression,
     _fn_name: &str,
-    _var: &str,
-    _small_param: &str,
-    _order: u32,
-    _narrate: bool,
+    var: &str,
+    small_param: &str,
+    order: u32,
+    narrate: bool,
 ) -> Response {
-    let mut r = Response::default();
-    r.diagnostics.push(Diagnostic::of(
-        DiagnosticCode::NotImplemented,
-        Narrative::new(
+    let q_arc = compile(ode);
+    let var_id = SymbolId::intern(var);
+    let eps_id = SymbolId::intern(small_param);
+    let mut engine_trace = Trace::new();
+
+    if narrate {
+        engine_trace.push(
+            Step::new(
+                TechniqueTag::WkbApproximation,
+                format!(
+                    "WKB approximation for Q={}, ε={}, to order {}",
+                    ode, small_param, order
+                ),
+            )
+            .with_input(q_arc.clone()),
+        );
+    }
+
+    match wkb(&q_arc, var_id, eps_id, order, &mut engine_trace) {
+        Some(sol) => {
+            let (y_plus, y_minus) = sol.to_expr();
+            let branches = vec![
+                BranchEntry {
+                    condition: None,
+                    label: Some("y_+".to_string()),
+                    value: decompile(&y_plus),
+                },
+                BranchEntry {
+                    condition: None,
+                    label: Some("y_-".to_string()),
+                    value: decompile(&y_minus),
+                },
+            ];
+            let structured = StructuredResult::Branches {
+                branches: branches.clone(),
+            };
+            let steps = if narrate {
+                steps_from_trace(&engine_trace)
+            } else {
+                Vec::new()
+            };
+            let mut r = Response::default();
+            for (i, b) in branches.iter().enumerate() {
+                let mut entry = ResultEntry {
+                    value: ResultValue::Symbolic(b.value.clone()),
+                    structured: if i == 0 {
+                        Some(structured.clone())
+                    } else {
+                        None
+                    },
+                    shape: ResultShape::Scalar,
+                    unit: None,
+                    steps: if i == 0 { steps.clone() } else { Vec::new() },
+                    alternatives: Vec::new(),
+                    engine: EngineId::WkbExpansion,
+                };
+                r.results.push((ResultKey::Single, entry));
+            }
+            r.meta.engine_trace.push(EngineId::WkbExpansion);
+            r
+        }
+        None => engine_error(
             "command.wkb",
-            "WKB approximation not yet implemented".to_string(),
+            format!("WKB approximation failed for Q={} in {}", ode, var),
         ),
-    ));
-    r.meta.engine_trace.push(EngineId::WkbExpansion);
-    r
+    }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Extract ODE coefficients `[a(x), b(x), c(x)]` from an `Expression`.
+///
+/// Convention: the expression is either a `Function::Custom("coefficients")`
+/// or `Function::Custom("list")` with three arguments, or the expression
+/// itself is treated as `a(x)` with `b = 0`, `c = 0`.
+fn extract_ode_coefficients(ode: &Expression) -> Vec<Expression> {
+    use crate::ast::Function as AstF;
+    if let Expression::Function(AstF::Custom(name), args) = ode {
+        if (name == "list" || name == "coefficients") && args.len() == 3 {
+            return args.clone();
+        }
+    }
+    // Fallback: treat the whole expression as a(x), with b=0, c=0.
+    vec![ode.clone(), Expression::Integer(0), Expression::Integer(0)]
 }
