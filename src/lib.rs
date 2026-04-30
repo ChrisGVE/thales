@@ -399,6 +399,7 @@ pub mod equation_system;
 pub mod fourier;
 pub mod geometry;
 pub mod inequality;
+pub mod integral_transforms;
 pub mod integration;
 pub mod latex;
 pub mod limits;
