@@ -372,6 +372,24 @@ impl Expression {
                         }
                         r"\operatorname{Conj}"
                     }
+                    Function::Gamma => r"\Gamma",
+                    Function::LnGamma => r"\ln\Gamma",
+                    Function::Digamma => r"\psi",
+                    Function::BetaFn => r"\mathrm{B}",
+                    Function::Erf => r"\operatorname{erf}",
+                    Function::Erfc => r"\operatorname{erfc}",
+                    Function::BesselJ => r"J",
+                    Function::BesselY => r"Y",
+                    Function::BesselI => r"I",
+                    Function::BesselK => r"K",
+                    Function::AiryAi => r"\operatorname{Ai}",
+                    Function::AiryBi => r"\operatorname{Bi}",
+                    Function::Zeta => r"\zeta",
+                    Function::Si => r"\operatorname{Si}",
+                    Function::Ci => r"\operatorname{Ci}",
+                    Function::Ei => r"\operatorname{Ei}",
+                    Function::Heaviside => r"\theta",
+                    Function::DiracDelta => r"\delta",
                     Function::Custom(name) => {
                         // Custom functions use \text{name}
                         let args_str: Vec<String> =

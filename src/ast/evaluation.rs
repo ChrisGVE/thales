@@ -378,6 +378,25 @@ impl Expression {
                     // Re/Im/Conj: real context — Re(x)=x, Im(x)=0, Conj(x)=x
                     Function::Re | Function::Conj => arg_vals.first().copied(),
                     Function::Im => Some(0.0),
+                    // Special functions: not evaluable in this f64 path
+                    Function::Gamma
+                    | Function::LnGamma
+                    | Function::Digamma
+                    | Function::BetaFn
+                    | Function::Erf
+                    | Function::Erfc
+                    | Function::BesselJ
+                    | Function::BesselY
+                    | Function::BesselI
+                    | Function::BesselK
+                    | Function::AiryAi
+                    | Function::AiryBi
+                    | Function::Zeta
+                    | Function::Si
+                    | Function::Ci
+                    | Function::Ei
+                    | Function::Heaviside
+                    | Function::DiracDelta => None,
                     Function::Custom(_) => None,
                 }
             }

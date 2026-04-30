@@ -440,6 +440,25 @@ fn differentiate_function(func: &Function, args: &[Expression], wrt: &str) -> Ex
             let arg_deriv = args[0].differentiate(wrt);
             Expression::Function(func.clone(), vec![arg_deriv])
         }
+        // Special functions: return opaque 0 (symbolic extension point)
+        Function::Gamma
+        | Function::LnGamma
+        | Function::Digamma
+        | Function::BetaFn
+        | Function::Erf
+        | Function::Erfc
+        | Function::BesselJ
+        | Function::BesselY
+        | Function::BesselI
+        | Function::BesselK
+        | Function::AiryAi
+        | Function::AiryBi
+        | Function::Zeta
+        | Function::Si
+        | Function::Ci
+        | Function::Ei
+        | Function::Heaviside
+        | Function::DiracDelta => Expression::Integer(0),
     }
 }
 

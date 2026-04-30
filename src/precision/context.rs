@@ -525,6 +525,30 @@ impl EvalContext {
             // Re/Im/Conj: in real-valued precision context, Re(x)=x, Im(x)=0, Conj(x)=x
             Function::Re | Function::Conj => x,
             Function::Im => 0.0,
+            // Special functions: not evaluable in this f64 precision path
+            Function::Gamma
+            | Function::LnGamma
+            | Function::Digamma
+            | Function::BetaFn
+            | Function::Erf
+            | Function::Erfc
+            | Function::BesselJ
+            | Function::BesselY
+            | Function::BesselI
+            | Function::BesselK
+            | Function::AiryAi
+            | Function::AiryBi
+            | Function::Zeta
+            | Function::Si
+            | Function::Ci
+            | Function::Ei
+            | Function::Heaviside
+            | Function::DiracDelta => {
+                return Err(EvalError::CannotEvaluate(format!(
+                    "{:?} not yet implemented in precision evaluator",
+                    func
+                )));
+            }
             Function::Custom(name) => {
                 return Err(EvalError::CannotEvaluate(format!(
                     "Unknown function: {}",

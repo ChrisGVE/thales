@@ -1322,6 +1322,44 @@ pub enum Function {
     /// For real inputs, Conj(x) = x.
     Conj,
 
+    // ── Special functions ────────────────────────────────────────────────────
+    /// Gamma function Γ(x)
+    Gamma,
+    /// Log-gamma ln(Γ(x))
+    LnGamma,
+    /// Digamma ψ(x)
+    Digamma,
+    /// Beta function B(a,b) — note: 2 arguments
+    BetaFn,
+    /// Error function erf(x)
+    Erf,
+    /// Complementary error function erfc(x)
+    Erfc,
+    /// Bessel J_ν(x) — 2 arguments (order, argument)
+    BesselJ,
+    /// Bessel Y_ν(x)
+    BesselY,
+    /// Modified Bessel I_ν(x)
+    BesselI,
+    /// Modified Bessel K_ν(x)
+    BesselK,
+    /// Airy Ai(x)
+    AiryAi,
+    /// Airy Bi(x)
+    AiryBi,
+    /// Riemann zeta ζ(s)
+    Zeta,
+    /// Sine integral Si(x)
+    Si,
+    /// Cosine integral Ci(x)
+    Ci,
+    /// Exponential integral Ei(x)
+    Ei,
+    /// Heaviside step H(x)
+    Heaviside,
+    /// Dirac delta δ(x)
+    DiracDelta,
+
     /// User-defined custom function.
     ///
     /// Represents a function not built into the standard set.
@@ -1361,6 +1399,24 @@ impl fmt::Display for Function {
             Function::Re => write!(f, "Re"),
             Function::Im => write!(f, "Im"),
             Function::Conj => write!(f, "Conj"),
+            Function::Gamma => write!(f, "gamma"),
+            Function::LnGamma => write!(f, "lngamma"),
+            Function::Digamma => write!(f, "digamma"),
+            Function::BetaFn => write!(f, "beta"),
+            Function::Erf => write!(f, "erf"),
+            Function::Erfc => write!(f, "erfc"),
+            Function::BesselJ => write!(f, "besselJ"),
+            Function::BesselY => write!(f, "besselY"),
+            Function::BesselI => write!(f, "besselI"),
+            Function::BesselK => write!(f, "besselK"),
+            Function::AiryAi => write!(f, "airyAi"),
+            Function::AiryBi => write!(f, "airyBi"),
+            Function::Zeta => write!(f, "zeta"),
+            Function::Si => write!(f, "Si"),
+            Function::Ci => write!(f, "Ci"),
+            Function::Ei => write!(f, "Ei"),
+            Function::Heaviside => write!(f, "heaviside"),
+            Function::DiracDelta => write!(f, "dirac"),
             Function::Custom(name) => write!(f, "{}", name),
         }
     }

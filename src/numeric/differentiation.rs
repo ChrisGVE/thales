@@ -381,6 +381,26 @@ fn diff_builtin_single(id: FuncId, u: &Arc<Expr>) -> Arc<Expr> {
         // Re/Im/Conj intercepted by diff_func — unreachable at runtime via this path.
         FuncId::Re | FuncId::Im | FuncId::Conj => Expr::int(0),
 
+        // Special functions: derivatives not yet implemented; return opaque zero.
+        FuncId::Gamma
+        | FuncId::LnGamma
+        | FuncId::Digamma
+        | FuncId::BetaFn
+        | FuncId::Erf
+        | FuncId::Erfc
+        | FuncId::BesselJ
+        | FuncId::BesselY
+        | FuncId::BesselI
+        | FuncId::BesselK
+        | FuncId::AiryAi
+        | FuncId::AiryBi
+        | FuncId::Zeta
+        | FuncId::Si
+        | FuncId::Ci
+        | FuncId::Ei
+        | FuncId::Heaviside
+        | FuncId::DiracDelta => Expr::int(0),
+
         // Unknown/user function: produce opaque derivative marker (zero — caller
         // should not use the result as authoritative)
         FuncId::Other(_) => Expr::int(0),

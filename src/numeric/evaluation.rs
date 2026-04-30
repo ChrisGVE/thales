@@ -165,6 +165,26 @@ fn eval_func(
             evaluate(&args[0], bindings)
         }
 
+        // ── Special functions: not evaluable in this f64 path ───────────────
+        FuncId::Gamma
+        | FuncId::LnGamma
+        | FuncId::Digamma
+        | FuncId::BetaFn
+        | FuncId::Erf
+        | FuncId::Erfc
+        | FuncId::BesselJ
+        | FuncId::BesselY
+        | FuncId::BesselI
+        | FuncId::BesselK
+        | FuncId::AiryAi
+        | FuncId::AiryBi
+        | FuncId::Zeta
+        | FuncId::Si
+        | FuncId::Ci
+        | FuncId::Ei
+        | FuncId::Heaviside
+        | FuncId::DiracDelta => None,
+
         // ── Unknown / user-defined ───────────────────────────────────────────
         FuncId::Other(_) => None,
     }

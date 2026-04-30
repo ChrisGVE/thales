@@ -210,6 +210,25 @@ fn eval_f64(expr: &Arc<Expr>) -> Option<f64> {
                 // multi-arg functions not handled by the single-arg path above
                 FuncId::Atan2 | FuncId::Log | FuncId::Min | FuncId::Max => return None,
                 FuncId::Re | FuncId::Im | FuncId::Conj => return None,
+                // Special functions: not evaluable in this f64 path
+                FuncId::Gamma
+                | FuncId::LnGamma
+                | FuncId::Digamma
+                | FuncId::BetaFn
+                | FuncId::Erf
+                | FuncId::Erfc
+                | FuncId::BesselJ
+                | FuncId::BesselY
+                | FuncId::BesselI
+                | FuncId::BesselK
+                | FuncId::AiryAi
+                | FuncId::AiryBi
+                | FuncId::Zeta
+                | FuncId::Si
+                | FuncId::Ci
+                | FuncId::Ei
+                | FuncId::Heaviside
+                | FuncId::DiracDelta => return None,
                 FuncId::Other(_) => return None,
             })
         }

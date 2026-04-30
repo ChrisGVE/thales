@@ -151,6 +151,24 @@ fn try_eval_func(id: FuncId, arg: &Arc<Expr>) -> Option<Arc<Expr>> {
         FuncId::Sign => v.signum(),
         FuncId::Atan2 | FuncId::Log | FuncId::Min | FuncId::Max => return None,
         FuncId::Re | FuncId::Im | FuncId::Conj => return None,
+        FuncId::Gamma
+        | FuncId::LnGamma
+        | FuncId::Digamma
+        | FuncId::BetaFn
+        | FuncId::Erf
+        | FuncId::Erfc
+        | FuncId::BesselJ
+        | FuncId::BesselY
+        | FuncId::BesselI
+        | FuncId::BesselK
+        | FuncId::AiryAi
+        | FuncId::AiryBi
+        | FuncId::Zeta
+        | FuncId::Si
+        | FuncId::Ci
+        | FuncId::Ei
+        | FuncId::Heaviside
+        | FuncId::DiracDelta => return None,
         FuncId::Other(_) => return None,
     };
     if result == 0.0 {
