@@ -216,6 +216,46 @@ pub(in super::super) enum JsonCommand {
         var: String,
         point: String,
     },
+    LaplaceTransform {
+        expr: String,
+        time_var: String,
+        freq_var: Option<String>,
+    },
+    InverseLaplace {
+        expr: String,
+        freq_var: String,
+        time_var: Option<String>,
+    },
+    FourierTransform {
+        expr: String,
+        time_var: String,
+        freq_var: Option<String>,
+    },
+    InverseFourier {
+        expr: String,
+        freq_var: String,
+        time_var: Option<String>,
+    },
+    ZTransform {
+        expr: String,
+        var: String,
+        z_var: Option<String>,
+    },
+    InverseZTransform {
+        expr: String,
+        z_var: String,
+        var: Option<String>,
+    },
+    MellinTransform {
+        expr: String,
+        var: String,
+        s_var: Option<String>,
+    },
+    InverseMellin {
+        expr: String,
+        s_var: String,
+        var: Option<String>,
+    },
 
     // ── Special functions ──────────────────────────────────────────────
     SpecialFn {

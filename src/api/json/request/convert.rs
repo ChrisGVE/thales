@@ -435,6 +435,70 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             point: parse_expr_str(&point)?,
         }),
 
+        JsonCommand::LaplaceTransform {
+            expr,
+            time_var,
+            freq_var,
+        } => Ok(Command::LaplaceTransform {
+            expr: parse_expr_str(&expr)?,
+            time_var,
+            freq_var: freq_var.unwrap_or_else(|| "s".into()),
+        }),
+
+        JsonCommand::InverseLaplace {
+            expr,
+            freq_var,
+            time_var,
+        } => Ok(Command::InverseLaplace {
+            expr: parse_expr_str(&expr)?,
+            freq_var,
+            time_var: time_var.unwrap_or_else(|| "t".into()),
+        }),
+
+        JsonCommand::FourierTransform {
+            expr,
+            time_var,
+            freq_var,
+        } => Ok(Command::FourierTransform {
+            expr: parse_expr_str(&expr)?,
+            time_var,
+            freq_var: freq_var.unwrap_or_else(|| "omega".into()),
+        }),
+
+        JsonCommand::InverseFourier {
+            expr,
+            freq_var,
+            time_var,
+        } => Ok(Command::InverseFourier {
+            expr: parse_expr_str(&expr)?,
+            freq_var,
+            time_var: time_var.unwrap_or_else(|| "t".into()),
+        }),
+
+        JsonCommand::ZTransform { expr, var, z_var } => Ok(Command::ZTransform {
+            expr: parse_expr_str(&expr)?,
+            var,
+            z_var: z_var.unwrap_or_else(|| "z".into()),
+        }),
+
+        JsonCommand::InverseZTransform { expr, z_var, var } => Ok(Command::InverseZTransform {
+            expr: parse_expr_str(&expr)?,
+            z_var,
+            var: var.unwrap_or_else(|| "n".into()),
+        }),
+
+        JsonCommand::MellinTransform { expr, var, s_var } => Ok(Command::MellinTransform {
+            expr: parse_expr_str(&expr)?,
+            var,
+            s_var: s_var.unwrap_or_else(|| "s".into()),
+        }),
+
+        JsonCommand::InverseMellin { expr, s_var, var } => Ok(Command::InverseMellin {
+            expr: parse_expr_str(&expr)?,
+            s_var,
+            var: var.unwrap_or_else(|| "x".into()),
+        }),
+
         JsonCommand::SpecialFn { kind, args } => {
             let parsed_args = args
                 .iter()
