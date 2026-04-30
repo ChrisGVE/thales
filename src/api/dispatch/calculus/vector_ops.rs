@@ -3,8 +3,10 @@
 
 use crate::api::response::{EngineId, Response, ResultEntry, ResultKey, ResultShape, ResultValue};
 use crate::ast::{BinaryOp, Expression};
-use crate::numeric::compile::compile;
+use crate::calculus::multivar;
+use crate::numeric::compile::{compile, decompile};
 use crate::numeric::trace::{Step, TechniqueTag, Trace};
+use crate::numeric::SymbolId;
 
 use super::super::helpers::{engine_error, steps_from_trace, symbolic_entry};
 
@@ -25,18 +27,22 @@ pub(in crate::api::dispatch) fn divergence_cmd(
             ),
         );
     }
+    let arc_field: Vec<_> = field.iter().map(compile).collect();
+    let sym_ids: Vec<SymbolId> = vars.iter().map(|v| SymbolId::intern(v)).collect();
+
     let mut trace = Trace::new();
-    let mut sum = Expression::Integer(0);
-    for (fi, xi) in field.iter().zip(vars.iter()) {
-        let term = fi.differentiate(xi).simplify();
-        if narrate {
+    if narrate {
+        for (arc_fi, xi) in arc_field.iter().zip(vars.iter()) {
+            let term = multivar::divergence(std::slice::from_ref(arc_fi), &[SymbolId::intern(xi)]);
             trace.push(
                 Step::new(TechniqueTag::Divergence, format!("Component ∂/∂{}", xi))
-                    .with_output(compile(&term)),
+                    .with_output(term),
             );
         }
-        sum = Expression::Binary(BinaryOp::Add, Box::new(sum), Box::new(term)).simplify();
     }
+    let result = multivar::divergence(&arc_field, &sym_ids);
+    let sum = decompile(&result);
+
     let mut r = Response::default();
     r.results.push((
         ResultKey::Single,
@@ -66,53 +72,41 @@ pub(in crate::api::dispatch) fn curl_cmd(
             ),
         );
     }
-    let (f1, f2, f3) = (&field[0], &field[1], &field[2]);
+    let arc_field: [_; 3] = [compile(&field[0]), compile(&field[1]), compile(&field[2])];
+    let sym_ids: [SymbolId; 3] = [
+        SymbolId::intern(&vars[0]),
+        SymbolId::intern(&vars[1]),
+        SymbolId::intern(&vars[2]),
+    ];
     let (x, y, z) = (&vars[0], &vars[1], &vars[2]);
 
+    let [cx_arc, cy_arc, cz_arc] = multivar::curl(&arc_field, &sym_ids);
+    let cx = decompile(&cx_arc);
+    let cy = decompile(&cy_arc);
+    let cz = decompile(&cz_arc);
+
     let mut trace = Trace::new();
-
-    let make_diff = |expr: &Expression, v: &str| expr.differentiate(v).simplify();
-
-    let cx = Expression::Binary(
-        BinaryOp::Sub,
-        Box::new(make_diff(f3, y)),
-        Box::new(make_diff(f2, z)),
-    )
-    .simplify();
-    let cy = Expression::Binary(
-        BinaryOp::Sub,
-        Box::new(make_diff(f1, z)),
-        Box::new(make_diff(f3, x)),
-    )
-    .simplify();
-    let cz = Expression::Binary(
-        BinaryOp::Sub,
-        Box::new(make_diff(f2, x)),
-        Box::new(make_diff(f1, y)),
-    )
-    .simplify();
-
     if narrate {
         trace.push(
             Step::new(
                 TechniqueTag::Curl,
                 format!("Curl x-component ∂F₃/∂{} − ∂F₂/∂{}", y, z),
             )
-            .with_output(compile(&cx)),
+            .with_output(cx_arc),
         );
         trace.push(
             Step::new(
                 TechniqueTag::Curl,
                 format!("Curl y-component ∂F₁/∂{} − ∂F₃/∂{}", z, x),
             )
-            .with_output(compile(&cy)),
+            .with_output(cy_arc),
         );
         trace.push(
             Step::new(
                 TechniqueTag::Curl,
                 format!("Curl z-component ∂F₂/∂{} − ∂F₁/∂{}", x, y),
             )
-            .with_output(compile(&cz)),
+            .with_output(cz_arc),
         );
     }
 
@@ -143,21 +137,26 @@ pub(in crate::api::dispatch) fn laplacian_cmd(
     vars: &[String],
     narrate: bool,
 ) -> Response {
+    let arc_expr = compile(expr);
+    let sym_ids: Vec<SymbolId> = vars.iter().map(|v| SymbolId::intern(v)).collect();
+
     let mut trace = Trace::new();
-    let mut sum = Expression::Integer(0);
-    for xi in vars {
-        let d2 = expr.differentiate(xi).differentiate(xi).simplify();
-        if narrate {
+    if narrate {
+        for xi in vars {
+            let xi_id = SymbolId::intern(xi);
+            let d2 = multivar::laplacian(&arc_expr, std::slice::from_ref(&xi_id));
             trace.push(
                 Step::new(
                     TechniqueTag::Laplacian,
                     format!("Second partial ∂²/∂{}²", xi),
                 )
-                .with_output(compile(&d2)),
+                .with_output(d2),
             );
         }
-        sum = Expression::Binary(BinaryOp::Add, Box::new(sum), Box::new(d2)).simplify();
     }
+    let result = multivar::laplacian(&arc_expr, &sym_ids);
+    let sum = decompile(&result);
+
     let mut r = Response::default();
     r.results.push((
         ResultKey::Single,
