@@ -13,7 +13,7 @@
 //!   root back, assert near-zero.
 
 use thales::api::command::{
-    Command, LimitPoint, MatrixExpr as ApiMatrixExpr, MatrixOp, SimplifyRules,
+    Command, LimitPoint, MatrixExpr as ApiMatrixExpr, MatrixOp, NablaInput, NablaOp, SimplifyRules,
 };
 use thales::api::domain::Domain;
 use thales::api::execute;
@@ -604,5 +604,251 @@ fn golden_residual_factored() {
         s.contains('x') && (s.contains('4') || s.contains('2')),
         "factor→expand round-trip for x^2-4: expected polynomial, got: {}",
         s
+    );
+}
+
+// ── Category D — vector calculus golden tests ────────────────────────────────
+
+#[test]
+fn golden_divergence_position_field() {
+    // div(x, y, z) = 3
+    let resp = execute(request(Command::Divergence {
+        field: vec![var("x"), var("y"), var("z")],
+        vars: vec!["x".to_string(), "y".to_string(), "z".to_string()],
+    }))
+    .unwrap();
+    let s = symbolic_str(&resp);
+    assert_eq!(s, "3", "div(x,y,z) should equal 3, got: {}", s);
+}
+
+#[test]
+fn golden_curl_rotation_field() {
+    // curl(y, -x, 0) = (0, 0, -2)
+    let resp = execute(request(Command::Curl {
+        field: vec![
+            var("y"),
+            Expression::Unary(thales::ast::UnaryOp::Neg, Box::new(var("x"))),
+            int(0),
+        ],
+        vars: vec!["x".to_string(), "y".to_string(), "z".to_string()],
+    }))
+    .unwrap();
+    // Primary should be 0 (x-component), alternatives = [0, -2]
+    assert!(!resp.results.is_empty(), "curl result must be non-empty");
+    let (_, entry) = &resp.results[0];
+    // z-component (alternatives[1]) should be -2
+    assert_eq!(
+        entry.alternatives.len(),
+        2,
+        "curl result should have 2 alternatives (y and z components)"
+    );
+    let z_comp = format!("{}", entry.alternatives[1]);
+    assert!(
+        z_comp.contains('2') && z_comp.contains('-'),
+        "curl z-component should be -2, got: {}",
+        z_comp
+    );
+}
+
+#[test]
+fn golden_laplacian_quadratic() {
+    // laplacian(x^2 + y^2 + z^2) = 6
+    let expr = add(
+        add(pow(var("x"), int(2)), pow(var("y"), int(2))),
+        pow(var("z"), int(2)),
+    );
+    let resp = execute(request(Command::Laplacian {
+        expr,
+        vars: vec!["x".to_string(), "y".to_string(), "z".to_string()],
+    }))
+    .unwrap();
+    let s = symbolic_str(&resp);
+    assert_eq!(s, "6", "laplacian(x^2+y^2+z^2) should equal 6, got: {}", s);
+}
+
+#[test]
+fn golden_hessian_saddle() {
+    // hessian(x^2 - y^2) = [[2, 0], [0, -2]]
+    // Primary (H[0][0] = ∂²/∂x²) should be 2.
+    let expr = sub(pow(var("x"), int(2)), pow(var("y"), int(2)));
+    let resp = execute(request(Command::Hessian {
+        expr,
+        vars: vec!["x".to_string(), "y".to_string()],
+    }))
+    .unwrap();
+    let s = symbolic_str(&resp);
+    assert_eq!(s, "2", "hessian(x^2-y^2)[0][0] should be 2, got: {}", s);
+    // H[1][1] = ∂²/∂y² = -2; it appears in alternatives[2]
+    let (_, entry) = &resp.results[0];
+    assert_eq!(
+        entry.alternatives.len(),
+        3,
+        "hessian of 2-variable function should have 3 alternatives"
+    );
+    let h11 = format!("{}", entry.alternatives[2]);
+    assert!(
+        h11.contains('2') && h11.contains('-'),
+        "H[1][1] should be -2, got: {}",
+        h11
+    );
+}
+
+#[test]
+fn golden_jacobian_linear() {
+    // jacobian((x+y, x-y), (x, y)):
+    //   J = [[1, 1], [1, -1]]
+    // Primary J[0][0] = 1.
+    let resp = execute(request(Command::Jacobian {
+        fields: vec![add(var("x"), var("y")), sub(var("x"), var("y"))],
+        vars: vec!["x".to_string(), "y".to_string()],
+    }))
+    .unwrap();
+    let s = symbolic_str(&resp);
+    assert_eq!(s, "1", "jacobian((x+y,x-y))[0][0] should be 1, got: {}", s);
+}
+
+// ── Category E — Nabla identity golden tests ─────────────────────────────────
+
+fn nabla_scalar(expr: Expression, vars: Vec<String>, op: NablaOp) -> Command {
+    Command::Nabla {
+        op,
+        input: NablaInput::Scalar(expr),
+        vars,
+    }
+}
+
+fn nabla_vector(field: Vec<Expression>, vars: Vec<String>, op: NablaOp) -> Command {
+    Command::Nabla {
+        op,
+        input: NablaInput::VectorField(field),
+        vars,
+    }
+}
+
+fn xyz() -> Vec<String> {
+    vec!["x".to_string(), "y".to_string(), "z".to_string()]
+}
+
+#[test]
+fn golden_nabla_div_of_curl_zero() {
+    // div(curl(y*z, x*z, x*y)) = 0 for any smooth polynomial field
+    let yz = mul(var("y"), var("z"));
+    let xz = mul(var("x"), var("z"));
+    let xy = mul(var("x"), var("y"));
+    let resp = execute(request(nabla_vector(
+        vec![yz, xz, xy],
+        xyz(),
+        NablaOp::DivOfCurl,
+    )))
+    .unwrap();
+    let s = symbolic_str(&resp);
+    assert_eq!(s, "0", "div(curl(F)) should always be 0, got: {}", s);
+}
+
+#[test]
+fn golden_nabla_curl_of_grad_zero() {
+    // curl(grad(x^2 + y^2 + z^2)) = (0, 0, 0)
+    let f = add(
+        add(pow(var("x"), int(2)), pow(var("y"), int(2))),
+        pow(var("z"), int(2)),
+    );
+    let resp = execute(request(nabla_scalar(f, xyz(), NablaOp::CurlOfGrad))).unwrap();
+    // Primary component (x) must be 0.
+    let s = symbolic_str(&resp);
+    assert_eq!(s, "0", "curl(grad(f)) x-component should be 0, got: {}", s);
+    // All three components must be 0.
+    let (_, entry) = &resp.results[0];
+    for (i, alt) in entry.alternatives.iter().enumerate() {
+        let alt_s = format!("{}", alt);
+        assert_eq!(
+            alt_s,
+            "0",
+            "curl(grad(f)) component {} should be 0, got: {}",
+            i + 1,
+            alt_s
+        );
+    }
+}
+
+#[test]
+fn golden_nabla_div_of_grad_eq_laplacian() {
+    // div(grad(x^2 + y^2 + z^2)) = laplacian(x^2 + y^2 + z^2) = 6
+    let f = add(
+        add(pow(var("x"), int(2)), pow(var("y"), int(2))),
+        pow(var("z"), int(2)),
+    );
+    let resp = execute(request(nabla_scalar(f, xyz(), NablaOp::DivOfGrad))).unwrap();
+    let s = symbolic_str(&resp);
+    assert_eq!(
+        s, "6",
+        "div(grad(x^2+y^2+z^2)) should equal laplacian = 6, got: {}",
+        s
+    );
+}
+
+#[test]
+fn golden_nabla_grad_command() {
+    // ∇(x^2 + y^2) = (2x, 2y, 0)
+    let f = add(pow(var("x"), int(2)), pow(var("y"), int(2)));
+    let resp = execute(request(nabla_scalar(f, xyz(), NablaOp::Grad))).unwrap();
+    let (_, entry) = &resp.results[0];
+    // Primary = ∂/∂x = 2x
+    let primary = format!(
+        "{}",
+        match &entry.value {
+            ResultValue::Symbolic(e) => e,
+            other => panic!("expected Symbolic, got {:?}", other),
+        }
+    );
+    assert!(
+        primary.contains('2') && primary.contains('x'),
+        "nabla grad x-component should contain 2x, got: {}",
+        primary
+    );
+    // z-component (alternatives[1]) should be 0
+    assert_eq!(
+        entry.alternatives.len(),
+        2,
+        "grad should have 2 alternatives"
+    );
+    let z_comp = format!("{}", entry.alternatives[1]);
+    assert_eq!(z_comp, "0", "∂f/∂z should be 0, got: {}", z_comp);
+}
+
+// ── Category F — JSON Nabla transport tests ──────────────────────────────────
+
+#[test]
+fn golden_nabla_json_grad() {
+    use thales::api::json::execute_ffi;
+    let req =
+        r#"{"command":{"type":"Nabla","op":"Grad","input":"x^2 + y^2","vars":["x","y","z"]}}"#;
+    let resp_str = execute_ffi(req).expect("execute_ffi should not error");
+    let v: serde_json::Value =
+        serde_json::from_str(&resp_str).expect("response must be valid JSON");
+    let results = v["results"].as_array().expect("results must be array");
+    assert!(
+        !results.is_empty(),
+        "Nabla Grad JSON response must have results"
+    );
+}
+
+#[test]
+fn golden_nabla_json_div_of_curl() {
+    use thales::api::json::execute_ffi;
+    let req = r#"{"command":{"type":"Nabla","op":"DivOfCurl","input":["y*z","x*z","x*y"],"vars":["x","y","z"]}}"#;
+    let resp_str = execute_ffi(req).expect("execute_ffi should not error");
+    let v: serde_json::Value =
+        serde_json::from_str(&resp_str).expect("response must be valid JSON");
+    let results = v["results"].as_array().expect("results must be array");
+    assert!(
+        !results.is_empty(),
+        "Nabla DivOfCurl JSON response must have results"
+    );
+    // The value must be "0" — Symbolic result uses the "expr" key.
+    let val = v["results"][0]["value"]["expr"].as_str().unwrap_or("");
+    assert_eq!(
+        val, "0",
+        "div(curl(F)) JSON result should be 0, got: {}",
+        val
     );
 }
