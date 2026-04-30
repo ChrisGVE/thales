@@ -38,8 +38,8 @@ pub use path::{ExprPath, PathSegment};
 pub use render::render_response;
 pub use request::{Budget, Precision, Request, SolveMode, UnitSystem};
 pub use response::{
-    EngineId, ExecutionMeta, NarratedStep, NumericMethod, Response, ResultEntry, ResultKey,
-    ResultShape, ResultValue,
+    BranchEntry, DecompositionPart, EngineId, ExecutionMeta, NarratedStep, NumericMethod, Response,
+    ResultEntry, ResultKey, ResultShape, ResultValue, StructuredResult,
 };
 
 use crate::ThalesError;

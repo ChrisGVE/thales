@@ -4,13 +4,82 @@
 //! `Expression` and `Arc<Expr>` happen at this seam (architecture rule 2).
 
 use crate::api::diagnostic::{Diagnostic, DiagnosticCode};
+use crate::api::domain::Domain;
 use crate::api::narrative::Narrative;
+use crate::api::request::{Budget, Precision, Request, SolveMode};
 use crate::api::response::{
-    EngineId, NarratedStep, Response, ResultEntry, ResultKey, ResultShape, ResultValue,
+    BranchEntry, EngineId, NarratedStep, Response, ResultEntry, ResultKey, ResultShape,
+    ResultValue, StructuredResult,
 };
 use crate::ast::Expression;
 use crate::numeric::compile::decompile;
 use crate::numeric::trace::Trace;
+
+/// Emit a [`DiagnosticCode::FieldIgnored`] warning on `response` for a
+/// field that was provided in the request but had no effect on this command.
+pub(super) fn warn_ignored_field(
+    response: &mut Response,
+    field_name: &'static str,
+    template_id: &'static str,
+) {
+    response.diagnostics.push(Diagnostic::of(
+        DiagnosticCode::FieldIgnored,
+        Narrative::new(
+            template_id,
+            format!(
+                "field `{}` was provided but is not yet implemented; it had no effect",
+                field_name
+            ),
+        ),
+    ));
+}
+
+/// Execution-wide context extracted from [`Request`] fields that the
+/// current dispatcher arm may or may not honour.
+///
+/// Created once at the top of [`super::execute`] and passed down so that
+/// every arm can emit [`DiagnosticCode::FieldIgnored`] diagnostics for
+/// fields it does not consume, rather than silently dropping them.
+pub(super) struct DispatchContext {
+    pub narrate: bool,
+    pub mode: SolveMode,
+    pub precision: Option<Precision>,
+    pub budget: Option<Budget>,
+    pub ambient_domain: Option<Domain>,
+}
+
+impl DispatchContext {
+    /// Extract the context fields from a [`Request`].
+    pub fn from_request(request: &Request) -> Self {
+        Self {
+            narrate: request.narrate,
+            mode: request.mode,
+            precision: request.precision.clone(),
+            budget: request.budget,
+            ambient_domain: request.ambient_domain,
+        }
+    }
+
+    /// Emit [`DiagnosticCode::FieldIgnored`] warnings for every non-default
+    /// context field that this command does not honour.
+    ///
+    /// `honors_mode` — pass `true` only for commands that genuinely
+    /// consume [`Request::mode`] (currently only `DefIntegrate`).
+    pub fn warn_unhandled(&self, response: &mut Response, honors_mode: bool) {
+        if !honors_mode && self.mode != SolveMode::Symbolic {
+            warn_ignored_field(response, "mode", "request.field_ignored");
+        }
+        if self.precision.is_some() {
+            warn_ignored_field(response, "precision", "request.field_ignored");
+        }
+        if self.budget.is_some() {
+            warn_ignored_field(response, "budget", "request.field_ignored");
+        }
+        if self.ambient_domain.is_some() {
+            warn_ignored_field(response, "ambient_domain", "request.field_ignored");
+        }
+    }
+}
 
 pub(super) fn symbolic_entry(
     value: Expression,
@@ -19,6 +88,7 @@ pub(super) fn symbolic_entry(
 ) -> ResultEntry {
     ResultEntry {
         value: ResultValue::Symbolic(value),
+        structured: None,
         shape: ResultShape::Scalar,
         unit: None,
         steps,
@@ -30,6 +100,7 @@ pub(super) fn symbolic_entry(
 pub(super) fn unsolved_entry(narrative: Narrative, engine: EngineId) -> ResultEntry {
     ResultEntry {
         value: ResultValue::Unsolved { reason: narrative },
+        structured: None,
         shape: ResultShape::Scalar,
         unit: None,
         steps: Vec::new(),
@@ -89,11 +160,27 @@ pub(super) fn solution_to_response(
             .results
             .push((ResultKey::Single, symbolic_entry(expr, engine, steps))),
         Solution::Multiple(exprs) => {
-            for expr in exprs {
-                r.results.push((
-                    ResultKey::Single,
-                    symbolic_entry(expr, engine, steps.clone()),
-                ));
+            let branches: Vec<BranchEntry> = exprs
+                .iter()
+                .enumerate()
+                .map(|(i, e)| BranchEntry {
+                    condition: None,
+                    label: Some(format!("root_{}", i + 1)),
+                    value: e.clone(),
+                })
+                .collect();
+            let structured = StructuredResult::Branches { branches };
+            for (i, expr) in exprs.into_iter().enumerate() {
+                let mut entry = symbolic_entry(expr.clone(), engine, steps.clone());
+                // Only the first result entry carries the full Branches
+                // structured data; subsequent entries carry None to avoid
+                // redundant cloning for large solution sets.
+                entry.structured = if i == 0 {
+                    Some(structured.clone())
+                } else {
+                    None
+                };
+                r.results.push((ResultKey::Single, entry));
             }
         }
         Solution::Infinite => r.diagnostics.push(Diagnostic::of(

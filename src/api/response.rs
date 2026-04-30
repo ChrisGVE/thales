@@ -9,6 +9,112 @@ use crate::Expression;
 
 use super::{Assumption, Condition, Diagnostic, Domain, ExprPath, Narrative, Precision};
 
+/// Typed structured output supplementing [`ResultEntry::value`].
+///
+/// Each variant carries exactly the metadata its command family needs.
+/// `ResultEntry::structured` is `None` when the command produces a single
+/// scalar result and the legacy `value` field is sufficient.
+///
+/// Marked `#[non_exhaustive]` so new variants can be added in minor releases
+/// without breaking existing match arms in downstream code.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub enum StructuredResult {
+    /// Single scalar expression (pass-through for commands that have only
+    /// one output but want a typed wrapper).
+    Scalar(Expression),
+
+    /// Named binding: a label paired with its value.
+    /// Used by: `SolveSystem` (variable → value), `Optimize` (var → coordinate).
+    Labeled {
+        /// Variable or parameter name.
+        label: String,
+        /// Resolved value.
+        value: Expression,
+    },
+
+    /// Decomposition with named, typed parts.
+    /// Used by: `LU` (L, U, P), `QR` (Q, R), eigenpairs.
+    Decomposition {
+        /// Ordered list of `(name, part)` pairs. Names are stable labels
+        /// such as "L", "U", "P", "eigenvalue", "eigenvector".
+        parts: Vec<(String, DecompositionPart)>,
+    },
+
+    /// Coefficient array with series metadata.
+    /// Used by: `FourierSeries`, `Taylor`, `Laurent`, `Pade`.
+    CoefficientArray {
+        /// Coefficients in order (a₀, a₁, …).
+        coefficients: Vec<Expression>,
+        /// Name of the expansion variable (e.g. "x").
+        variable: String,
+        /// Expansion centre, or `None` for expansions around 0.
+        center: Option<Expression>,
+        /// Number of terms (order of the truncation).
+        order: u32,
+    },
+
+    /// Multi-branch result — alternatives valid under different conditions.
+    /// Used by: Frobenius (two branches), WKB (two branches), polynomial
+    /// roots, piecewise solutions.
+    Branches {
+        /// One entry per branch. The entries partition the solution space
+        /// when conditions are mutually exclusive.
+        branches: Vec<BranchEntry>,
+    },
+
+    /// Matrix or tensor result with shape metadata.
+    /// Used by: matrix operations, tensor operations.
+    Shaped {
+        /// Elements in row-major order.
+        elements: Vec<Expression>,
+        /// Shape as `[rows, cols]` for matrices, `[d1, d2, …]` for tensors.
+        shape: Vec<usize>,
+        /// Optional dimension labels (index names, covariant/contravariant).
+        labels: Option<Vec<String>>,
+    },
+
+    /// Transform result with convergence domain metadata.
+    /// Used by: Laplace, Fourier, Z, Mellin transforms.
+    TransformResult {
+        /// Transformed expression.
+        expression: Expression,
+        /// Name of the transform variable (e.g. "s", "ω", "z").
+        transform_variable: String,
+        /// Region of convergence or validity condition, if known.
+        convergence: Option<Expression>,
+    },
+}
+
+/// One branch in a [`StructuredResult::Branches`] result.
+#[derive(Debug, Clone)]
+pub struct BranchEntry {
+    /// Condition under which this branch applies, if discriminated.
+    pub condition: Option<Condition>,
+    /// Human-readable label for this branch (e.g. "y_1", "y_2", "n=0").
+    pub label: Option<String>,
+    /// The branch value.
+    pub value: Expression,
+}
+
+/// Part of a [`StructuredResult::Decomposition`] result.
+#[derive(Debug, Clone)]
+pub enum DecompositionPart {
+    /// Scalar expression.
+    Scalar(Expression),
+    /// Dense matrix in row-major order.
+    Matrix {
+        /// Elements in row-major order.
+        elements: Vec<Expression>,
+        /// Number of rows.
+        rows: usize,
+        /// Number of columns.
+        cols: usize,
+    },
+    /// Permutation vector (index `i` → row `perm[i]`).
+    Permutation(Vec<usize>),
+}
+
 use crate::numeric::trace::{TechniqueDifficulty, TechniqueTag};
 
 /// Output of [`super::execute`].
@@ -37,12 +143,23 @@ pub struct Response {
 /// the [`Condition`] under which the paired [`ResultEntry`] applies.
 /// Multiple [`ResultKey::Branch`] entries in the same response partition the
 /// solution space (e.g. one per root, one per interval, one per case).
+/// [`ResultKey::Component`] names a part in a simultaneous (non-alternative)
+/// multi-part result. [`ResultKey::ConvergenceDomain`] is a metadata entry
+/// carrying the region of convergence for transform results.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResultKey {
     /// Single unconditional result.
     Single,
     /// Result valid under the given [`Condition`].
     Branch(Condition),
+    /// Named component in a multi-part simultaneous result (not an
+    /// alternative branch). Used for ODE system components, tensor indices,
+    /// and transform metadata.
+    Component(String),
+    /// Convergence domain metadata entry for transform results (Laplace,
+    /// Fourier, Z, Mellin). The paired [`ResultEntry`] carries the region of
+    /// convergence as its value.
+    ConvergenceDomain,
 }
 
 /// One result in a [`Response`].
@@ -51,6 +168,13 @@ pub struct ResultEntry {
     /// Computed value. May be purely symbolic, purely numeric, or a
     /// symbolic-then-numeric hybrid. See [`ResultValue`].
     pub value: ResultValue,
+    /// Optional typed structured data supplementing [`Self::value`].
+    ///
+    /// When `Some`, clients should prefer this over parsing `value`.
+    /// `None` for single-scalar results where the legacy `value` field
+    /// is sufficient. New dispatch arms populate this from day one;
+    /// existing arms default to `None` for backward compatibility.
+    pub structured: Option<StructuredResult>,
     /// Structural shape of [`Self::value`] (scalar, vector, matrix, …).
     /// Allows clients to dispatch without deep introspection.
     pub shape: ResultShape,

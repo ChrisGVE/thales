@@ -102,6 +102,7 @@ pub(super) fn gradient_cmd(expr: &Expression, vars: &[String], narrate: bool) ->
         ResultKey::Single,
         ResultEntry {
             value: ResultValue::Symbolic(primary),
+            structured: None,
             shape: ResultShape::Vector,
             unit: None,
             steps: if narrate {
@@ -282,6 +283,7 @@ pub(super) fn curl_cmd(field: &[Expression], vars: &[String], narrate: bool) -> 
         ResultKey::Single,
         ResultEntry {
             value: ResultValue::Symbolic(cx),
+            structured: None,
             shape: ResultShape::Vector,
             unit: None,
             steps: if narrate {
@@ -352,6 +354,7 @@ pub(super) fn jacobian_cmd(fields: &[Expression], vars: &[String], narrate: bool
         ResultKey::Single,
         ResultEntry {
             value: ResultValue::Symbolic(primary),
+            structured: None,
             shape: ResultShape::Matrix,
             unit: None,
             steps: if narrate {
@@ -398,6 +401,7 @@ pub(super) fn hessian_cmd(expr: &Expression, vars: &[String], narrate: bool) -> 
         ResultKey::Single,
         ResultEntry {
             value: ResultValue::Symbolic(primary),
+            structured: None,
             shape: ResultShape::Matrix,
             unit: None,
             steps: if narrate {
@@ -545,6 +549,7 @@ pub(super) fn def_integrate_cmd(
                                 },
                                 method: NumericMethod::AdaptiveQuadrature,
                             },
+                            structured: None,
                             shape: ResultShape::Scalar,
                             unit: None,
                             steps: Vec::new(),

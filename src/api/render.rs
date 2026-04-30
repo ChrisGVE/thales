@@ -64,6 +64,7 @@ mod tests {
     fn entry_with_step(step: NarratedStep) -> ResultEntry {
         ResultEntry {
             value: ResultValue::Symbolic(crate::ast::Expression::Integer(0)),
+            structured: None,
             shape: ResultShape::Scalar,
             unit: None,
             steps: vec![step],
@@ -135,6 +136,7 @@ mod tests {
         let reason = Narrative::new("command.noop", "raw fallback");
         let entry = ResultEntry {
             value: ResultValue::Unsolved { reason },
+            structured: None,
             shape: ResultShape::Scalar,
             unit: None,
             steps: Vec::new(),

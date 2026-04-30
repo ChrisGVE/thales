@@ -12,6 +12,7 @@
 use crate::api::command::{Constraint, OptSense};
 use crate::api::response::{
     EngineId, NarratedStep, Response, ResultEntry, ResultKey, ResultShape, ResultValue,
+    StructuredResult,
 };
 use crate::ast::{Expression, UnaryOp, Variable};
 use crate::numeric::trace::{Step, TechniqueTag, Trace};
@@ -111,35 +112,50 @@ pub(super) fn optimize_cmd(
             if matches!(sense, OptSense::Maximize) {
                 r.objective_value = -r.objective_value;
             }
-            let coord_pairs: Vec<Expression> = r
-                .point
-                .iter()
-                .flat_map(|(name, value)| {
-                    vec![
-                        Expression::Variable(Variable::new(name)),
-                        Expression::Float(*value),
-                    ]
-                })
-                .collect();
-            // Primary value carries objective at optimum; alternatives encode
-            // the (variable, value) pairs in row-major order.
-            let primary = Expression::Float(r.objective_value);
-            let entry = ResultEntry {
-                value: ResultValue::Symbolic(primary),
-                shape: ResultShape::Set,
-                unit: None,
-                steps: build_steps_from_result(
-                    &r.point,
-                    &r.multipliers,
-                    r.objective_value,
-                    &r.classification,
-                    narrate,
-                ),
-                alternatives: coord_pairs,
-                engine: EngineId::Optimizer,
-            };
+            let steps = build_steps_from_result(
+                &r.point,
+                &r.multipliers,
+                r.objective_value,
+                &r.classification,
+                narrate,
+            );
             let mut response = Response::default();
-            response.results.push((ResultKey::Single, entry));
+            // One Labeled entry per optimum coordinate.
+            for (name, val) in &r.point {
+                let value = Expression::Float(*val);
+                response.results.push((
+                    ResultKey::Single,
+                    ResultEntry {
+                        value: ResultValue::Symbolic(value.clone()),
+                        structured: Some(StructuredResult::Labeled {
+                            label: name.clone(),
+                            value,
+                        }),
+                        shape: ResultShape::Scalar,
+                        unit: None,
+                        steps: steps.clone(),
+                        alternatives: Vec::new(),
+                        engine: EngineId::Optimizer,
+                    },
+                ));
+            }
+            // One extra entry carrying the objective value at the optimum.
+            let obj_val = Expression::Float(r.objective_value);
+            response.results.push((
+                ResultKey::Single,
+                ResultEntry {
+                    value: ResultValue::Symbolic(obj_val.clone()),
+                    structured: Some(StructuredResult::Labeled {
+                        label: "objective".to_string(),
+                        value: obj_val,
+                    }),
+                    shape: ResultShape::Scalar,
+                    unit: None,
+                    steps: steps.clone(),
+                    alternatives: Vec::new(),
+                    engine: EngineId::Optimizer,
+                },
+            ));
             response.meta.engine_trace.push(EngineId::Optimizer);
             response
         }
@@ -156,41 +172,69 @@ pub(super) fn lagrange_mult_cmd(
     let variables: Vec<Variable> = vars.iter().map(|s| Variable::new(s)).collect();
     match optimize_constrained(objective, equality_constraints, &variables) {
         Ok(r) => {
-            let coord_pairs: Vec<Expression> = r
-                .point
-                .iter()
-                .flat_map(|(name, value)| {
-                    vec![
-                        Expression::Variable(Variable::new(name)),
-                        Expression::Float(*value),
-                    ]
-                })
-                .collect();
-            let multiplier_values: Vec<Expression> = r
-                .multipliers
-                .iter()
-                .map(|m| Expression::Float(*m))
-                .collect();
-            let mut alternatives = coord_pairs;
-            alternatives.extend(multiplier_values);
-
-            let primary = Expression::Float(r.objective_value);
-            let entry = ResultEntry {
-                value: ResultValue::Symbolic(primary),
-                shape: ResultShape::Set,
-                unit: None,
-                steps: build_steps_from_result(
-                    &r.point,
-                    &r.multipliers,
-                    r.objective_value,
-                    &r.classification,
-                    narrate,
-                ),
-                alternatives,
-                engine: EngineId::Optimizer,
-            };
+            let steps = build_steps_from_result(
+                &r.point,
+                &r.multipliers,
+                r.objective_value,
+                &r.classification,
+                narrate,
+            );
             let mut response = Response::default();
-            response.results.push((ResultKey::Single, entry));
+            // One Labeled entry per optimum coordinate.
+            for (name, val) in &r.point {
+                let value = Expression::Float(*val);
+                response.results.push((
+                    ResultKey::Single,
+                    ResultEntry {
+                        value: ResultValue::Symbolic(value.clone()),
+                        structured: Some(StructuredResult::Labeled {
+                            label: name.clone(),
+                            value,
+                        }),
+                        shape: ResultShape::Scalar,
+                        unit: None,
+                        steps: steps.clone(),
+                        alternatives: Vec::new(),
+                        engine: EngineId::Optimizer,
+                    },
+                ));
+            }
+            // Lagrange multipliers as additional Labeled entries.
+            for (i, m) in r.multipliers.iter().enumerate() {
+                let value = Expression::Float(*m);
+                response.results.push((
+                    ResultKey::Single,
+                    ResultEntry {
+                        value: ResultValue::Symbolic(value.clone()),
+                        structured: Some(StructuredResult::Labeled {
+                            label: format!("lambda_{}", i + 1),
+                            value,
+                        }),
+                        shape: ResultShape::Scalar,
+                        unit: None,
+                        steps: steps.clone(),
+                        alternatives: Vec::new(),
+                        engine: EngineId::Optimizer,
+                    },
+                ));
+            }
+            // Objective value entry.
+            let obj_val = Expression::Float(r.objective_value);
+            response.results.push((
+                ResultKey::Single,
+                ResultEntry {
+                    value: ResultValue::Symbolic(obj_val.clone()),
+                    structured: Some(StructuredResult::Labeled {
+                        label: "objective".to_string(),
+                        value: obj_val,
+                    }),
+                    shape: ResultShape::Scalar,
+                    unit: None,
+                    steps: steps.clone(),
+                    alternatives: Vec::new(),
+                    engine: EngineId::Optimizer,
+                },
+            ));
             response.meta.engine_trace.push(EngineId::Optimizer);
             response
         }

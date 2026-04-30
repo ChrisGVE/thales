@@ -9,7 +9,10 @@
 use std::sync::Arc;
 
 use crate::api::command::{MatrixExpr as ApiMatrixExpr, MatrixOp};
-use crate::api::response::{EngineId, Response, ResultEntry, ResultKey, ResultShape, ResultValue};
+use crate::api::response::{
+    DecompositionPart, EngineId, Response, ResultEntry, ResultKey, ResultShape, ResultValue,
+    StructuredResult,
+};
 use crate::ast::Expression;
 use crate::matrix::MatrixExpr as CoreMatrix;
 use crate::numeric::compile::{compile, decompile};
@@ -52,6 +55,7 @@ fn matrix_to_value(m: &CoreMatrix) -> ResultEntry {
     };
     ResultEntry {
         value: ResultValue::Symbolic(primary),
+        structured: None,
         shape: ResultShape::Matrix,
         unit: None,
         steps: Vec::new(),
@@ -260,6 +264,7 @@ pub(super) fn matrix_cmd(op: MatrixOp, operands: &[ApiMatrixExpr], narrate: bool
                             };
                             ResultEntry {
                                 value: ResultValue::Symbolic(primary),
+                                structured: None,
                                 shape: ResultShape::Set,
                                 unit: None,
                                 steps: steps_from_trace(&trace),
@@ -286,8 +291,42 @@ pub(super) fn matrix_cmd(op: MatrixOp, operands: &[ApiMatrixExpr], narrate: bool
                     );
                     m.eigenpairs_numeric()
                         .map(|pairs| {
-                            // Flatten eigenvectors into a single matrix-shaped
-                            // result: each column is one eigenvector.
+                            // Build typed Decomposition: one (eigenvalue, eigenvector) pair
+                            // per column, labeled "pair_1", "pair_2", …
+                            let decomp_parts: Vec<(String, DecompositionPart)> = pairs
+                                .iter()
+                                .enumerate()
+                                .flat_map(|(i, (lambda, vec_components))| {
+                                    let label = format!("pair_{}", i + 1);
+                                    let ev_expr = if lambda.im == 0.0 {
+                                        Expression::Float(lambda.re)
+                                    } else {
+                                        Expression::Complex(*lambda)
+                                    };
+                                    let ev_part = (
+                                        format!("{}_eigenvalue", label),
+                                        DecompositionPart::Scalar(ev_expr),
+                                    );
+                                    let n = vec_components.len();
+                                    let evec_elements: Vec<Expression> = vec_components
+                                        .iter()
+                                        .map(|c| Expression::Float(*c))
+                                        .collect();
+                                    let evec_part = (
+                                        format!("{}_eigenvector", label),
+                                        DecompositionPart::Matrix {
+                                            elements: evec_elements,
+                                            rows: n,
+                                            cols: 1,
+                                        },
+                                    );
+                                    [ev_part, evec_part]
+                                })
+                                .collect();
+                            let structured = StructuredResult::Decomposition {
+                                parts: decomp_parts,
+                            };
+                            // Legacy flat cells: eigenvectors in column-major order.
                             let cells: Vec<Expression> = pairs
                                 .iter()
                                 .flat_map(|(_lambda, vec_components)| {
@@ -300,6 +339,7 @@ pub(super) fn matrix_cmd(op: MatrixOp, operands: &[ApiMatrixExpr], narrate: bool
                             };
                             ResultEntry {
                                 value: ResultValue::Symbolic(primary),
+                                structured: Some(structured),
                                 shape: ResultShape::Matrix,
                                 unit: None,
                                 steps: steps_from_trace(&trace),
@@ -322,8 +362,32 @@ pub(super) fn matrix_cmd(op: MatrixOp, operands: &[ApiMatrixExpr], narrate: bool
                         "LU decomposition",
                     );
                     m.lu_decompose()
-                        .map(|(l, u, _perm)| {
-                            // Flatten L then U into row-major cells.
+                        .map(|(l, u, perm)| {
+                            // Build typed Decomposition parts: L, U, P.
+                            let mat_to_part = |mat: &CoreMatrix| -> DecompositionPart {
+                                let rows = mat.rows();
+                                let cols = mat.cols();
+                                let elements: Vec<Expression> = (0..rows)
+                                    .flat_map(|r| {
+                                        (0..cols).map(move |c| {
+                                            decompile(mat.get(r, c).expect("in-range cell"))
+                                        })
+                                    })
+                                    .collect();
+                                DecompositionPart::Matrix {
+                                    elements,
+                                    rows,
+                                    cols,
+                                }
+                            };
+                            let structured = StructuredResult::Decomposition {
+                                parts: vec![
+                                    ("L".to_string(), mat_to_part(&l)),
+                                    ("U".to_string(), mat_to_part(&u)),
+                                    ("P".to_string(), DecompositionPart::Permutation(perm)),
+                                ],
+                            };
+                            // Flatten L then U into row-major cells for legacy fields.
                             let mut cells: Vec<Expression> = Vec::new();
                             for matrix_part in [&l, &u] {
                                 for r in 0..matrix_part.rows() {
@@ -340,6 +404,7 @@ pub(super) fn matrix_cmd(op: MatrixOp, operands: &[ApiMatrixExpr], narrate: bool
                             };
                             ResultEntry {
                                 value: ResultValue::Symbolic(primary),
+                                structured: Some(structured),
                                 shape: ResultShape::Matrix,
                                 unit: None,
                                 steps: steps_from_trace(&trace),
