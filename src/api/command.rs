@@ -315,6 +315,58 @@ pub enum Command {
         /// Order of the reverted series.
         order: u32,
     },
+    /// Puiseux series (fractional-power Laurent) of `expr` around `center`
+    /// up to `order`.
+    Puiseux {
+        /// Expression.
+        expr: Expression,
+        /// Variable.
+        var: String,
+        /// Center.
+        center: Expression,
+        /// Order of the truncated series.
+        order: u32,
+    },
+    /// Frobenius method for a linear ODE near a regular singular point.
+    Frobenius {
+        /// ODE as a relation in the unknown function and its derivatives.
+        ode: Expression,
+        /// Name of the unknown function.
+        fn_name: String,
+        /// Independent variable.
+        var: String,
+        /// Expansion point (regular singular point).
+        point: Expression,
+        /// Number of terms in each Frobenius series.
+        order: u32,
+    },
+    /// Padé approximant `[m/n]` of `expr` around `center`.
+    Pade {
+        /// Expression.
+        expr: Expression,
+        /// Variable.
+        var: String,
+        /// Expansion center.
+        center: Expression,
+        /// Numerator degree.
+        m: u32,
+        /// Denominator degree.
+        n: u32,
+    },
+    /// WKB (Wentzel-Kramers-Brillouin) asymptotic approximation for a
+    /// Schrödinger-type ODE.
+    Wkb {
+        /// ODE as a relation in the unknown function and its derivatives.
+        ode: Expression,
+        /// Name of the unknown function.
+        fn_name: String,
+        /// Independent variable.
+        var: String,
+        /// Small parameter name (ℏ or ε).
+        small_param: String,
+        /// Approximation order.
+        order: u32,
+    },
 
     // ── Transforms ──────────────────────────────────────────────────────────
     /// Fourier series on `[−period/2, period/2]` up to `terms` harmonics.
