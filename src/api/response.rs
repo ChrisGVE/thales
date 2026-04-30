@@ -319,6 +319,14 @@ pub enum EngineId {
     SeriesComposition,
     /// Lagrange reversion engine.
     SeriesReversion,
+    /// Puiseux series expansion engine.
+    PuiseuxExpansion,
+    /// Frobenius method engine.
+    FrobeniusMethod,
+    /// Padé approximant engine.
+    PadeApproximant,
+    /// WKB approximation engine.
+    WkbExpansion,
     /// Residue computation.
     Residue,
     /// Singularity classifier.

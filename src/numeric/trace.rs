@@ -228,6 +228,15 @@ pub enum TechniqueTag {
     SeriesComposition,
     /// Inversion of a series via Lagrange reversion (`f^{-1}(y)`).
     LagrangeReversion,
+    /// Puiseux series (fractional-power Laurent) around a branch point.
+    PuiseuxExpansion,
+    /// Frobenius method for series solutions of linear ODEs near a regular
+    /// singular point.
+    FrobeniusMethod,
+    /// Padé approximant construction from a Taylor series.
+    PadeApproximant,
+    /// WKB (Wentzel-Kramers-Brillouin) semiclassical approximation.
+    WkbApproximation,
 
     // ── Residues and singularities ───────────────────────────────────────
     /// Residue at a singularity via Laurent coefficient or limit formula.
@@ -358,6 +367,10 @@ impl TechniqueTag {
             TechniqueTag::AsymptoticExpansion => "Asymptotic expansion",
             TechniqueTag::SeriesComposition => "Series composition",
             TechniqueTag::LagrangeReversion => "Lagrange reversion",
+            TechniqueTag::PuiseuxExpansion => "Puiseux expansion",
+            TechniqueTag::FrobeniusMethod => "Frobenius method",
+            TechniqueTag::PadeApproximant => "Padé approximant",
+            TechniqueTag::WkbApproximation => "WKB approximation",
             TechniqueTag::ResidueTheorem => "Residue theorem",
             TechniqueTag::PoleClassification => "Pole classification",
             TechniqueTag::FourierSeries => "Fourier series",
@@ -470,6 +483,10 @@ impl TechniqueTag {
             | TechniqueTag::AsymptoticExpansion
             | TechniqueTag::SeriesComposition
             | TechniqueTag::LagrangeReversion
+            | TechniqueTag::PuiseuxExpansion
+            | TechniqueTag::FrobeniusMethod
+            | TechniqueTag::PadeApproximant
+            | TechniqueTag::WkbApproximation
             | TechniqueTag::ResidueTheorem
             | TechniqueTag::PoleClassification
             | TechniqueTag::FourierSeries
