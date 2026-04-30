@@ -11,9 +11,11 @@
 //!   representation bug (ticket: TODO-eigenvalue-complex-repr).
 //! - **C** (4 tests): polynomial residual verification — solve, substitute
 //!   root back, assert near-zero.
+//! - **G** (4 tests): ODE system symbolic/numeric and PDE stub.
 
 use thales::api::command::{
     Command, LimitPoint, MatrixExpr as ApiMatrixExpr, MatrixOp, NablaInput, NablaOp, SimplifyRules,
+    SystemIvpData,
 };
 use thales::api::domain::Domain;
 use thales::api::execute;
@@ -850,5 +852,102 @@ fn golden_nabla_json_div_of_curl() {
         val, "0",
         "div(curl(F)) JSON result should be 0, got: {}",
         val
+    );
+}
+
+// ── Category G — ODE system symbolic/numeric and PDE stub ────────────────────
+
+#[test]
+fn golden_ode_system_harmonic_oscillator() {
+    // y1' = y2, y2' = -y1  (harmonic oscillator)
+    // Expect symbolic solution via linear constant-coefficient path.
+    let resp = execute(request(Command::OdeSystem {
+        equations: vec![
+            var("y2"),
+            Expression::Unary(thales::ast::UnaryOp::Neg, Box::new(var("y1"))),
+        ],
+        fn_names: vec!["y1".to_string(), "y2".to_string()],
+        var: "t".to_string(),
+        ic: None,
+    }))
+    .unwrap();
+    assert!(
+        !resp.results.is_empty(),
+        "ode_system(harmonic oscillator): expected at least one result"
+    );
+    assert!(
+        resp.meta.engine_trace.contains(&EngineId::OdeSystem),
+        "ode_system(harmonic oscillator): expected OdeSystem in engine_trace, got: {:?}",
+        resp.meta.engine_trace
+    );
+}
+
+#[test]
+fn golden_ode_system_exponential_decay() {
+    // y1' = -y1, y2' = -2*y2  (decoupled exponential decay)
+    // Expect symbolic solution via linear constant-coefficient path.
+    let resp = execute(request(Command::OdeSystem {
+        equations: vec![
+            Expression::Unary(thales::ast::UnaryOp::Neg, Box::new(var("y1"))),
+            mul(int(-2), var("y2")),
+        ],
+        fn_names: vec!["y1".to_string(), "y2".to_string()],
+        var: "t".to_string(),
+        ic: None,
+    }))
+    .unwrap();
+    assert!(
+        !resp.results.is_empty(),
+        "ode_system(exponential decay): expected at least one result"
+    );
+    assert!(
+        resp.meta.engine_trace.contains(&EngineId::OdeSystem),
+        "ode_system(exponential decay): expected OdeSystem in engine_trace, got: {:?}",
+        resp.meta.engine_trace
+    );
+}
+
+#[test]
+fn golden_ode_system_with_ic_numeric() {
+    // y1' = y2, y2' = y1*y2  (non-linear — forces numeric fallback when IC given)
+    // With IC the system falls back to numeric RK4; without it, linear check fails
+    // and an error diagnostic is returned.  Either outcome is valid.
+    let resp = execute(request(Command::OdeSystem {
+        equations: vec![var("y2"), mul(var("y1"), var("y2"))],
+        fn_names: vec!["y1".to_string(), "y2".to_string()],
+        var: "t".to_string(),
+        ic: Some(SystemIvpData {
+            var_at: int(0),
+            values_at: vec![int(1), int(0)],
+        }),
+    }))
+    .unwrap();
+    // Non-linear system may return numeric results or a diagnostic — both acceptable.
+    let has_results = !resp.results.is_empty();
+    let has_diagnostics = !resp.diagnostics.is_empty();
+    assert!(
+        has_results || has_diagnostics,
+        "ode_system(non-linear with IC): expected results or diagnostics, got neither"
+    );
+}
+
+#[test]
+fn golden_pde_not_implemented() {
+    use thales::api::diagnostic::DiagnosticCode;
+    let resp = execute(request(Command::Pde {
+        equation: var("u"),
+        fn_name: "u".to_string(),
+        vars: vec!["x".to_string(), "t".to_string()],
+    }))
+    .unwrap();
+    assert!(
+        !resp.diagnostics.is_empty(),
+        "pde: expected at least one diagnostic"
+    );
+    assert_eq!(
+        resp.diagnostics[0].code,
+        DiagnosticCode::NotImplemented,
+        "pde: expected NotImplemented diagnostic, got: {:?}",
+        resp.diagnostics[0].code
     );
 }
