@@ -230,6 +230,17 @@ pub(in super::super) enum JsonCommand {
         var: String,
         ic: Option<JsonIvpData>,
     },
+    OdeSystem {
+        equations: Vec<String>,
+        fn_names: Vec<String>,
+        var: String,
+        ic: Option<JsonSystemIvpData>,
+    },
+    Pde {
+        equation: String,
+        fn_name: String,
+        vars: Vec<String>,
+    },
 
     // ── Matrix ─────────────────────────────────────────────────────────
     Matrix {
@@ -319,6 +330,13 @@ pub(in super::super) struct JsonIvpData {
     pub fn_at: String,
     #[serde(default)]
     pub derivatives_at: Vec<String>,
+}
+
+/// Initial-value data for `OdeSystem`.
+#[derive(Debug, Deserialize)]
+pub(in super::super) struct JsonSystemIvpData {
+    pub var_at: String,
+    pub values_at: Vec<String>,
 }
 
 /// One constraint for `Optimize`.

@@ -63,6 +63,8 @@ fn _exhaustiveness_check(cmd: Command) {
         Command::Residue { .. } => {}
         Command::SpecialFn { .. } => {}
         Command::Ode { .. } => {}
+        Command::OdeSystem { .. } => {}
+        Command::Pde { .. } => {}
         Command::Matrix { .. } => {}
         Command::Nabla { .. } => {}
         Command::Optimize { .. } => {}
@@ -124,6 +126,9 @@ fn all_existing_commands_parse() {
         r#"{"command":{"type":"Residue","expr":"1/(x^2+1)","var":"x","point":"i"}}"#,
         r#"{"command":{"type":"SpecialFn","kind":"Gamma","args":["2"]}}"#,
         r#"{"command":{"type":"Ode","equation":"y' = y","fn_name":"y","var":"x"}}"#,
+        r#"{"command":{"type":"OdeSystem","equations":["y1' = y2","y2' = -y1"],"fn_names":["y1","y2"],"var":"t"}}"#,
+        r#"{"command":{"type":"OdeSystem","equations":["y1' = y2","y2' = -y1"],"fn_names":["y1","y2"],"var":"t","ic":{"var_at":"0","values_at":["1","0"]}}}"#,
+        r#"{"command":{"type":"Pde","equation":"u_xx + u_yy = 0","fn_name":"u","vars":["x","y"]}}"#,
         r#"{"command":{"type":"Matrix","op":"Determinant","operands":[{"rows":[["1","2"],["3","4"]]}]}}"#,
         r#"{"command":{"type":"Optimize","objective":"x^2 + y^2","vars":["x","y"],"constraints":[{"kind":"Equality","expr":"x + y - 1"}],"sense":"Minimize"}}"#,
         r#"{"command":{"type":"LagrangeMult","objective":"x^2 + y^2","vars":["x","y"],"equality_constraints":["x + y - 1"]}}"#,

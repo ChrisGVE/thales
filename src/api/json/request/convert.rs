@@ -3,7 +3,7 @@
 use serde_json::Value;
 
 use super::super::super::command::{
-    Command, Constraint, IvpData, LimitPoint, NablaInput, NablaOp, SimplifyRules,
+    Command, Constraint, IvpData, LimitPoint, NablaInput, NablaOp, SimplifyRules, SystemIvpData,
 };
 use super::super::super::domain::Domain;
 use super::super::super::request::{Budget, Precision, Request};
@@ -13,6 +13,7 @@ use super::parsers::{
 };
 use super::schema::{
     JsonBudget, JsonCommand, JsonIvpData, JsonPrecision, JsonRequest, JsonSimplifyRules,
+    JsonSystemIvpData,
 };
 
 // ── Public entry point ────────────────────────────────────────────────────────
@@ -533,6 +534,37 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
                 equality_constraints: parsed_constraints,
             })
         }
+
+        JsonCommand::OdeSystem {
+            equations,
+            fn_names,
+            var,
+            ic,
+        } => {
+            let parsed_eqs: Vec<_> = equations
+                .iter()
+                .map(|s| parse_expr_str(s))
+                .collect::<Result<_, _>>()?;
+            let parsed_ic = ic
+                .map(|ic_data| json_system_ivp_to_system_ivp(ic_data))
+                .transpose()?;
+            Ok(Command::OdeSystem {
+                equations: parsed_eqs,
+                fn_names,
+                var,
+                ic: parsed_ic,
+            })
+        }
+
+        JsonCommand::Pde {
+            equation,
+            fn_name,
+            vars,
+        } => Ok(Command::Pde {
+            equation: parse_expr_str(&equation)?,
+            fn_name,
+            vars,
+        }),
     }
 }
 
@@ -549,6 +581,19 @@ fn json_ivp_to_ivp(j: JsonIvpData) -> Result<IvpData, String> {
         var_at: parse_expr_str(&j.var_at)?,
         fn_at: parse_expr_str(&j.fn_at)?,
         derivatives_at,
+    })
+}
+
+fn json_system_ivp_to_system_ivp(j: JsonSystemIvpData) -> Result<SystemIvpData, String> {
+    let values_at = j
+        .values_at
+        .iter()
+        .enumerate()
+        .map(|(i, s)| parse_expr_str(s).map_err(|e| format!("values_at[{}]: {}", i, e)))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(SystemIvpData {
+        var_at: parse_expr_str(&j.var_at)?,
+        values_at,
     })
 }
 
