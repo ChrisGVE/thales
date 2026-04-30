@@ -13,7 +13,8 @@
 use std::sync::Arc;
 
 use super::super::{
-    differentiation::diff_arc, expr::Expr, normalize, substitute::substitute, SymbolId,
+    big_rational::BigRational, differentiation::diff_arc, expr::Expr, normalize,
+    small_int::SmallInt, substitute::substitute, SymbolId,
 };
 use super::TaylorSeries;
 
@@ -54,8 +55,7 @@ pub fn taylor(expr: &Arc<Expr>, var: SymbolId, center: &Arc<Expr>, order: usize)
 
     for n in 0..=order {
         let at_center = substitute(&current, var, center);
-        let factorial_n = factorial(n);
-        let coeff = normalize::div(at_center, Expr::int(factorial_n));
+        let coeff = divide_by_factorial(at_center, n);
         coefficients.push(coeff);
 
         if n < order {
@@ -68,13 +68,24 @@ pub fn taylor(expr: &Arc<Expr>, var: SymbolId, center: &Arc<Expr>, order: usize)
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/// Compute `n!` as an `i64`. Saturates at `i64::MAX` for `n > 20`.
-fn factorial(n: usize) -> i64 {
-    let mut acc: i64 = 1;
-    for k in 2..=(n as i64) {
-        acc = acc.saturating_mul(k);
+/// Divide `expr` by `n!`, preserving exact rational arithmetic for all `n`.
+fn divide_by_factorial(expr: Arc<Expr>, n: usize) -> Arc<Expr> {
+    if n <= 1 {
+        return expr;
     }
-    acc
+    if n <= 20 {
+        let mut acc: i64 = 1;
+        for k in 2..=(n as i64) {
+            acc *= k;
+        }
+        return normalize::div(expr, Expr::int(acc));
+    }
+    let mut denom = SmallInt::from(1i64);
+    for k in 2..=(n as u64) {
+        denom = &denom * &SmallInt::from(k as i64);
+    }
+    let one_over_nfact = BigRational::new(SmallInt::from(1i64), denom);
+    normalize::mul(expr, Arc::new(Expr::Rational(one_over_nfact)))
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -88,18 +99,43 @@ mod tests {
         Expr::symbol(name)
     }
 
-    // ── factorial ────────────────────────────────────────────────────────
+    // ── divide_by_factorial ────────────────────────────────────────────
 
     #[test]
-    fn test_factorial_base_cases() {
-        assert_eq!(factorial(0), 1);
-        assert_eq!(factorial(1), 1);
+    fn test_divide_by_factorial_identity() {
+        let five = Expr::int(5);
+        let result = divide_by_factorial(five.clone(), 0);
+        assert!(Arc::ptr_eq(&result, &five));
+        let result1 = divide_by_factorial(five.clone(), 1);
+        assert!(Arc::ptr_eq(&result1, &five));
     }
 
     #[test]
-    fn test_factorial_small() {
-        assert_eq!(factorial(4), 24);
-        assert_eq!(factorial(6), 720);
+    fn test_divide_by_factorial_small() {
+        let sixty = Expr::int(120);
+        let result = divide_by_factorial(sixty, 5);
+        assert!(result.is_one(), "120/5! = 120/120 = 1");
+    }
+
+    #[test]
+    fn test_taylor_exp_order_21_not_saturated() {
+        let x_id = SymbolId::intern("tay_exp21_x");
+        let x = sym("tay_exp21_x");
+        let expr = Expr::func(FuncId::Exp, vec![x]);
+        let ts = taylor(&expr, x_id, &Expr::int(0), 21);
+        let a21 = ts.coeff(21);
+        match a21.as_ref() {
+            Expr::Rational(r) => {
+                let v = r.to_f64();
+                let expected = 1.0 / 51090942171709440000.0_f64;
+                let rel_err = ((v - expected) / expected).abs();
+                assert!(
+                    rel_err < 1e-10,
+                    "a_21 should be 1/21!, got {v:.6e}, rel_err={rel_err:.2e}"
+                );
+            }
+            other => panic!("expected rational for a_21, got {:?}", other),
+        }
     }
 
     // ── taylor ───────────────────────────────────────────────────────────
