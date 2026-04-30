@@ -33,6 +33,14 @@ pub enum ODEError {
     BoundaryValueError(String),
     /// Resonance detected in particular solution
     ResonanceDetected(String),
+    /// System equation count ≠ function count or IC dimension mismatch.
+    SystemDimensionMismatch(String),
+    /// System is not linear with constant coefficients.
+    NotLinearConstantCoefficient(String),
+    /// Eigenvalue/eigenvector computation failed.
+    EigenvalueComputationFailed(String),
+    /// PDE solving not yet supported (v0.12.0).
+    PdeNotSupported,
 }
 
 impl From<IntegrationError> for ODEError {
@@ -60,6 +68,16 @@ impl std::fmt::Display for ODEError {
             }
             ODEError::BoundaryValueError(msg) => write!(f, "Boundary value error: {}", msg),
             ODEError::ResonanceDetected(msg) => write!(f, "Resonance detected: {}", msg),
+            ODEError::SystemDimensionMismatch(msg) => {
+                write!(f, "System dimension mismatch: {}", msg)
+            }
+            ODEError::NotLinearConstantCoefficient(msg) => {
+                write!(f, "Not linear with constant coefficients: {}", msg)
+            }
+            ODEError::EigenvalueComputationFailed(msg) => {
+                write!(f, "Eigenvalue computation failed: {}", msg)
+            }
+            ODEError::PdeNotSupported => write!(f, "PDE solving is not yet supported (v0.12.0)"),
         }
     }
 }
