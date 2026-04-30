@@ -13,8 +13,8 @@ use thales::api::diagnostic::{DiagnosticCode, Severity};
 use thales::api::domain::Domain;
 use thales::api::execute;
 use thales::api::json::execute_ffi;
-use thales::api::request::{Request, SolveMode};
-use thales::api::response::{EngineId, ResultKey, ResultValue};
+use thales::api::request::{Budget, Request, SolveMode};
+use thales::api::response::{EngineId, ResultKey, ResultValue, StructuredResult};
 use thales::ast::{BinaryOp, Expression, Function, Variable};
 use thales::parser::parse_expression;
 
@@ -1313,4 +1313,391 @@ fn json_matrix_no_operands_still_works() {
     let json = r#"{"command":{"type":"Matrix","op":"Determinant"}}"#;
     let result = execute_ffi(json);
     assert!(result.is_ok());
+}
+
+// ── Phase 0B Stream 1: StructuredResult golden tests ─────────────────────────
+
+#[test]
+fn structured_solve_system_labels() {
+    // SolveSystem should produce Labeled structured entries for each variable.
+    let resp = execute(request(Command::SolveSystem {
+        equations: vec![
+            parse_expression("x+y-3").unwrap(),
+            parse_expression("x-y-1").unwrap(),
+        ],
+        vars: vec!["x".to_string(), "y".to_string()],
+        over: Domain::real(),
+    }))
+    .unwrap();
+
+    assert!(!resp.results.is_empty(), "expected at least one result");
+    let labeled_count = resp
+        .results
+        .iter()
+        .filter(|(_, e)| matches!(&e.structured, Some(StructuredResult::Labeled { .. })))
+        .count();
+    assert_eq!(labeled_count, 2, "expected two Labeled entries (x and y)");
+
+    // Each Labeled entry should have the variable name as label.
+    let labels: Vec<&str> = resp
+        .results
+        .iter()
+        .filter_map(|(_, e)| match &e.structured {
+            Some(StructuredResult::Labeled { label, .. }) => Some(label.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert!(labels.contains(&"x"), "expected label 'x'");
+    assert!(labels.contains(&"y"), "expected label 'y'");
+}
+
+#[test]
+fn structured_multiple_roots() {
+    // SolveFor x^2 + x - 6 = 0 (roots: x=2, x=-3).
+    // The symbolic isolation path cannot handle mixed degree-1/degree-2;
+    // the quadratic solver fires and returns Solution::Multiple, which the
+    // dispatcher wraps as Branches on the first result entry.
+    let relation = add(sub(pow(var("x"), int(2)), int(6)), var("x"));
+    let resp = execute(request(Command::SolveFor {
+        relation,
+        var: "x".to_string(),
+        over: Domain::real(),
+    }))
+    .unwrap();
+
+    // Expect two results (both roots).
+    assert_eq!(resp.results.len(), 2, "expected two roots for x^2+x-6=0");
+
+    // The first result entry carries the Branches structured data.
+    let first_structured = &resp.results[0].1.structured;
+    assert!(
+        matches!(first_structured, Some(StructuredResult::Branches { .. })),
+        "expected Branches on first result, got {:?}",
+        first_structured
+    );
+    if let Some(StructuredResult::Branches { branches }) = first_structured {
+        assert_eq!(branches.len(), 2, "expected two branch entries");
+        assert_eq!(
+            branches[0].label.as_deref(),
+            Some("root_1"),
+            "first branch label should be root_1"
+        );
+        assert_eq!(
+            branches[1].label.as_deref(),
+            Some("root_2"),
+            "second branch label should be root_2"
+        );
+    }
+}
+
+#[test]
+fn structured_lu_decomposition() {
+    // LU of a 2×2 matrix should produce a Decomposition with L, U, P parts.
+    let matrix = ApiMatrixExpr::Matrix(vec![vec![int(2), int(1)], vec![int(4), int(3)]]);
+    let resp = execute(request(Command::Matrix {
+        op: MatrixOp::Lu,
+        operands: vec![matrix],
+    }))
+    .unwrap();
+
+    assert_eq!(resp.results.len(), 1, "expected one result");
+    let structured = &resp.results[0].1.structured;
+    assert!(
+        matches!(structured, Some(StructuredResult::Decomposition { .. })),
+        "expected Decomposition, got {:?}",
+        structured
+    );
+    if let Some(StructuredResult::Decomposition { parts }) = structured {
+        let part_names: Vec<&str> = parts.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(part_names.contains(&"L"), "expected L part");
+        assert!(part_names.contains(&"U"), "expected U part");
+        assert!(part_names.contains(&"P"), "expected P part");
+    }
+}
+
+#[test]
+fn structured_eigenvalues_pairing() {
+    // Eigenvectors of a 2×2 diagonal matrix should produce a Decomposition
+    // with eigenvalue-eigenvector pair parts.
+    let matrix = ApiMatrixExpr::Matrix(vec![vec![int(2), int(0)], vec![int(0), int(3)]]);
+    let resp = execute(request(Command::Matrix {
+        op: MatrixOp::Eigenvectors,
+        operands: vec![matrix],
+    }))
+    .unwrap();
+
+    assert_eq!(resp.results.len(), 1, "expected one result");
+    let structured = &resp.results[0].1.structured;
+    assert!(
+        matches!(structured, Some(StructuredResult::Decomposition { .. })),
+        "expected Decomposition for eigenpairs, got {:?}",
+        structured
+    );
+    if let Some(StructuredResult::Decomposition { parts }) = structured {
+        // Expect pair_1_eigenvalue, pair_1_eigenvector, pair_2_eigenvalue, …
+        assert!(
+            parts.len() >= 4,
+            "expected at least 4 parts for 2 eigenpairs, got {}",
+            parts.len()
+        );
+    }
+}
+
+#[test]
+fn structured_optimize_labels() {
+    // Optimize a simple unconstrained quadratic: min (x-1)^2 + (y-2)^2
+    // The optimum is x=1, y=2; expect Labeled entries.
+    let objective = add(
+        pow(sub(var("x"), int(1)), int(2)),
+        pow(sub(var("y"), int(2)), int(2)),
+    );
+    let resp = execute(request(Command::Optimize {
+        objective,
+        vars: vec!["x".to_string(), "y".to_string()],
+        constraints: vec![],
+        sense: thales::api::command::OptSense::Minimize,
+    }))
+    .unwrap();
+
+    assert!(
+        !resp.results.is_empty(),
+        "expected at least one result from Optimize"
+    );
+    let labeled_count = resp
+        .results
+        .iter()
+        .filter(|(_, e)| matches!(&e.structured, Some(StructuredResult::Labeled { .. })))
+        .count();
+    assert!(
+        labeled_count >= 2,
+        "expected Labeled entries for x, y (and objective)"
+    );
+
+    let labels: Vec<&str> = resp
+        .results
+        .iter()
+        .filter_map(|(_, e)| match &e.structured {
+            Some(StructuredResult::Labeled { label, .. }) => Some(label.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert!(labels.contains(&"x"), "expected label 'x'");
+    assert!(labels.contains(&"y"), "expected label 'y'");
+    assert!(labels.contains(&"objective"), "expected label 'objective'");
+}
+
+#[test]
+fn structured_none_for_scalar() {
+    // Simplify of a single expression should have structured = None.
+    let resp = execute(request(Command::Simplify {
+        expr: add(var("x"), var("x")),
+        rules: SimplifyRules::all(),
+        over: None,
+    }))
+    .unwrap();
+
+    assert_eq!(resp.results.len(), 1, "expected single result");
+    let (_, entry) = &resp.results[0];
+    assert!(
+        entry.structured.is_none(),
+        "expected structured = None for scalar Simplify result"
+    );
+    assert!(
+        matches!(entry.value, ResultValue::Symbolic(_)),
+        "expected Symbolic value"
+    );
+}
+
+#[test]
+fn structured_json_roundtrip_labeled() {
+    // JSON SolveSystem response should contain structured.kind = "Labeled"
+    // with label and value fields.
+    let json = r#"{
+        "command": {
+            "type": "SolveSystem",
+            "equations": ["x+y-3", "x-y-1"],
+            "vars": ["x", "y"]
+        }
+    }"#;
+    let resp_str = execute_ffi(json).expect("execute_ffi should succeed");
+    let v: serde_json::Value = serde_json::from_str(&resp_str).unwrap();
+    let results = v["results"].as_array().unwrap();
+
+    let labeled: Vec<_> = results
+        .iter()
+        .filter(|r| r["structured"]["kind"] == "Labeled")
+        .collect();
+    assert_eq!(labeled.len(), 2, "expected two Labeled results in JSON");
+
+    let labels: Vec<&str> = labeled
+        .iter()
+        .filter_map(|r| r["structured"]["label"].as_str())
+        .collect();
+    assert!(labels.contains(&"x"), "JSON should contain label 'x'");
+    assert!(labels.contains(&"y"), "JSON should contain label 'y'");
+}
+
+#[test]
+fn structured_json_roundtrip_decomposition() {
+    // JSON LU response should contain structured.kind = "Decomposition"
+    // with parts array containing L, U, P.
+    let json = r#"{
+        "command": {
+            "type": "Matrix",
+            "op": "Lu",
+            "operands": [{"rows": [["2", "1"], ["4", "3"]]}]
+        }
+    }"#;
+    let resp_str = execute_ffi(json).expect("execute_ffi should succeed");
+    let v: serde_json::Value = serde_json::from_str(&resp_str).unwrap();
+    let results = v["results"].as_array().unwrap();
+    assert_eq!(results.len(), 1, "expected single LU result");
+
+    let structured = &results[0]["structured"];
+    assert_eq!(
+        structured["kind"], "Decomposition",
+        "expected Decomposition kind"
+    );
+
+    let parts = structured["parts"].as_array().unwrap();
+    let part_names: Vec<&str> = parts.iter().filter_map(|p| p["name"].as_str()).collect();
+    assert!(part_names.contains(&"L"), "JSON LU should contain L part");
+    assert!(part_names.contains(&"U"), "JSON LU should contain U part");
+    assert!(part_names.contains(&"P"), "JSON LU should contain P part");
+}
+
+// ── Field audit / DispatchContext tests ──────────────────────────────────────
+
+/// A non-Symbolic mode on a command that does not honour mode (Simplify)
+/// must produce a FieldIgnored diagnostic naming "mode".
+#[test]
+fn field_ignored_mode_numeric() {
+    let resp = execute(Request {
+        command: Command::Simplify {
+            expr: add(var("x"), var("x")),
+            rules: SimplifyRules::all(),
+            over: None,
+        },
+        mode: SolveMode::Numeric,
+        ..Default::default()
+    })
+    .unwrap();
+
+    let has_field_ignored = resp.diagnostics.iter().any(|d| {
+        d.code == DiagnosticCode::FieldIgnored && d.narrative.fallback_md.contains("mode")
+    });
+    assert!(
+        has_field_ignored,
+        "expected FieldIgnored diagnostic mentioning 'mode', got diagnostics: {:?}",
+        resp.diagnostics
+    );
+}
+
+/// A non-None budget on any command must produce a FieldIgnored diagnostic
+/// naming "budget".
+#[test]
+fn field_ignored_budget() {
+    let resp = execute(Request {
+        command: Command::Simplify {
+            expr: add(var("x"), var("x")),
+            rules: SimplifyRules::all(),
+            over: None,
+        },
+        budget: Some(Budget {
+            max_wall_ms: Some(100),
+            max_iterations: None,
+        }),
+        ..Default::default()
+    })
+    .unwrap();
+
+    let has_field_ignored = resp.diagnostics.iter().any(|d| {
+        d.code == DiagnosticCode::FieldIgnored && d.narrative.fallback_md.contains("budget")
+    });
+    assert!(
+        has_field_ignored,
+        "expected FieldIgnored diagnostic mentioning 'budget', got diagnostics: {:?}",
+        resp.diagnostics
+    );
+}
+
+/// DefIntegrate with mode: PreferSymbolic must NOT produce a FieldIgnored
+/// for "mode" — it is the one command that honours mode.
+#[test]
+fn field_not_ignored_def_integrate_mode() {
+    let resp = execute(Request {
+        command: Command::DefIntegrate {
+            expr: mul(int(2), var("x")),
+            var: "x".to_string(),
+            from: int(0),
+            to: int(1),
+        },
+        mode: SolveMode::PreferSymbolic,
+        ..Default::default()
+    })
+    .unwrap();
+
+    let mode_ignored = resp.diagnostics.iter().any(|d| {
+        d.code == DiagnosticCode::FieldIgnored && d.narrative.fallback_md.contains("mode")
+    });
+    assert!(
+        !mode_ignored,
+        "DefIntegrate should honour mode; must not emit FieldIgnored for 'mode'"
+    );
+}
+
+/// Factor with over: Domain::integer() — the domain is now passed through
+/// to factor_cmd rather than silently dropped.  The result is the same
+/// (simplification fallback) but no FieldIgnored for "Factor.over" should
+/// appear — the field was consumed, not ignored.
+#[test]
+fn factor_over_wired() {
+    let resp = execute(request(Command::Factor {
+        expr: sub(mul(var("x"), var("x")), int(9)),
+        over: Domain::integer(),
+        target: None,
+    }))
+    .unwrap();
+
+    // Result must be Symbolic (engine ran, even if partial).
+    assert_single_symbolic(&resp, EngineId::Simplify);
+
+    // Wiring means no FieldIgnored diagnostic for Factor.over.
+    let over_ignored = resp.diagnostics.iter().any(|d| {
+        d.code == DiagnosticCode::FieldIgnored && d.narrative.fallback_md.contains("Factor.over")
+    });
+    assert!(
+        !over_ignored,
+        "Factor.over must not produce FieldIgnored when the domain is passed to the engine"
+    );
+}
+
+/// SolveFor with over: Domain::natural() — domain is passed to solve_for_cmd
+/// rather than silently dropped.  No FieldIgnored for "SolveFor.over".
+#[test]
+fn solve_for_over_wired() {
+    let resp = execute(Request {
+        command: Command::SolveFor {
+            relation: sub(mul(int(2), var("x")), int(6)),
+            var: "x".to_string(),
+            over: Domain::natural(),
+        },
+        ..Default::default()
+    })
+    .unwrap();
+
+    // Solver ran successfully.
+    assert!(
+        !resp.results.is_empty() || !resp.diagnostics.is_empty(),
+        "expected a result or diagnostic from SolveFor"
+    );
+
+    // Wiring means no FieldIgnored for SolveFor.over.
+    let over_ignored = resp.diagnostics.iter().any(|d| {
+        d.code == DiagnosticCode::FieldIgnored && d.narrative.fallback_md.contains("SolveFor.over")
+    });
+    assert!(
+        !over_ignored,
+        "SolveFor.over must not produce FieldIgnored when the domain is passed to the engine"
+    );
 }
