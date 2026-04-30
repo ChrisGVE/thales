@@ -658,9 +658,8 @@ fn test_ode_ivp_dy_dx_eq_y_with_y0_eq_1() {
     let sol = solve_ivp(&ode, &x0, &y0).expect("IVP dy/dx=y, y(0)=1 must be solvable");
 
     // Decision 2b: particular solution must be y-free and satisfy IC at x₀.
-    let sol_expr = thales::numeric::compile::decompile(&sol.general_solution);
-    verify::assert_y_free(&sol_expr, "y");
-    verify::assert_ic_satisfied(&sol_expr, "x", 0.0, 1.0, 1e-9);
+    verify::assert_y_free(&sol.general_solution, "y");
+    verify::assert_ic_satisfied(&sol.general_solution, "x", 0.0, 1.0, 1e-9);
 }
 
 #[test]
@@ -680,9 +679,8 @@ fn test_ode_ivp_dy_dx_eq_neg_y() {
     // Decision 2b: when a particular solution is returned, it must be y-free
     // and satisfy the initial condition.
     if let Ok(sol) = result {
-        let sol_expr = thales::numeric::compile::decompile(&sol.general_solution);
-        verify::assert_y_free(&sol_expr, "y");
-        verify::assert_ic_satisfied(&sol_expr, "x", 0.0, 2.0, 1e-9);
+        verify::assert_y_free(&sol.general_solution, "y");
+        verify::assert_ic_satisfied(&sol.general_solution, "x", 0.0, 2.0, 1e-9);
     }
     // If Err, that's the known integrator limitation — acceptable
 }
