@@ -510,7 +510,15 @@ fn newton_raphson_system(
         }
 
         if step_norm < tol {
-            return Ok(());
+            let f_post = eval_system(equations, names, point).ok_or_else(|| {
+                SolverError::CannotSolve(
+                    "System evaluation failed during convergence recheck".to_string(),
+                )
+            })?;
+            let residual_post: f64 = f_post.iter().map(|v| v * v).sum::<f64>().sqrt();
+            if residual_post < tol {
+                return Ok(());
+            }
         }
     }
 

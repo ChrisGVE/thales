@@ -161,8 +161,11 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
         }
 
         mathlex::Expression::Matrix(rows) => {
-            // Flatten rows into a single args list with row separators
-            let mut args = Vec::new();
+            let nrows = rows.len();
+            let ncols = rows.first().map_or(0, |r| r.len());
+            let mut args = Vec::with_capacity(2 + nrows * ncols);
+            args.push(Expression::Integer(nrows as i64));
+            args.push(Expression::Integer(ncols as i64));
             for row in rows {
                 for elem in row {
                     args.push(convert_expression(elem)?);
