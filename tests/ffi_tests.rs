@@ -694,3 +694,48 @@ fn test_ode_unsolvable_returns_error() {
         "dy/dx = y^2 + x^2 should not be solvable by separable/linear methods"
     );
 }
+
+// =============================================================================
+// execute_json_ffi integration tests
+//
+// These tests exercise the canonical cross-language entry point `execute_json_ffi`
+// (defined in ffi/json_impl.rs), which delegates to `api::json::execute_ffi`.
+// We call the underlying function directly since the ffi feature flag is not
+// enabled in the default test build.
+// =============================================================================
+
+#[test]
+fn execute_json_ffi_simplify() {
+    // Valid JSON simplify request returns a JSON response with a result.
+    let req = r#"{"command":{"type":"Simplify","expr":"x + x"}}"#;
+    let resp = thales::api::json::execute_ffi(req).expect("execute_json_ffi should succeed");
+    let val: serde_json::Value = serde_json::from_str(&resp).expect("response must be valid JSON");
+    assert!(
+        val.get("results").is_some(),
+        "response must contain a 'results' field, got: {val}"
+    );
+}
+
+#[test]
+fn execute_json_ffi_unknown_command() {
+    // An unknown command type returns an error string, not a panic.
+    let req = r#"{"command":{"type":"DoesNotExist","expr":"x"}}"#;
+    let err = thales::api::json::execute_ffi(req);
+    assert!(
+        err.is_err(),
+        "unknown command must return Err, got: {err:?}"
+    );
+}
+
+#[test]
+fn execute_json_ffi_bad_json() {
+    // Malformed JSON returns an error string describing the parse failure.
+    let req = r#"{not valid json"#;
+    let err = thales::api::json::execute_ffi(req);
+    assert!(err.is_err(), "malformed JSON must return Err, got: {err:?}");
+    let msg = err.unwrap_err();
+    assert!(
+        msg.contains("invalid JSON"),
+        "error message must mention invalid JSON, got: {msg}"
+    );
+}
