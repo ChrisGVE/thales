@@ -39,10 +39,14 @@ pub mod arithmetic;
 pub mod asymptotic;
 pub mod composition;
 pub mod convergence;
+pub mod frobenius;
 pub mod known;
 pub mod laurent_expand;
+pub mod pade;
+pub mod puiseux;
 pub mod singularity;
 pub mod taylor;
+pub mod wkb;
 
 pub use arithmetic::{add, mul, truncate};
 pub use asymptotic::{
@@ -50,12 +54,16 @@ pub use asymptotic::{
 };
 pub use composition::{compose, revert};
 pub use convergence::convergence_radius;
+pub use frobenius::{frobenius, FrobeniusBranch, FrobeniusSolution};
 pub use known::{atan_series, cos_series, exp_series, ln_series, sin_series};
 pub use laurent_expand::{laurent_expand, MAX_LAURENT_SHIFT};
+pub use pade::{pade, PadeApproximant};
+pub use puiseux::{puiseux, PuiseuxSeries, PuiseuxTerm};
 pub use singularity::{
     classify_singularity, find_singularities, pole_order, residue, Singularity, SingularityType,
 };
 pub use taylor::taylor;
+pub use wkb::{wkb, WkbBranch, WkbSolution};
 
 // ── TaylorSeries ─────────────────────────────────────────────────────────────
 
