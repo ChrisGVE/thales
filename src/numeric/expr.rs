@@ -86,6 +86,43 @@ pub enum FuncId {
     Im,
     /// Complex conjugate: Conj(z).
     Conj,
+    // ── Special functions ────────────────────────────────────────────────────
+    /// Gamma function Γ(x).
+    Gamma,
+    /// Natural log of the Gamma function: ln Γ(x).
+    LnGamma,
+    /// Digamma function ψ(x) = d/dx ln Γ(x).
+    Digamma,
+    /// Beta function B(a, b).
+    BetaFn,
+    /// Error function erf(x).
+    Erf,
+    /// Complementary error function erfc(x).
+    Erfc,
+    /// Bessel function of the first kind J_ν(x).
+    BesselJ,
+    /// Bessel function of the second kind Y_ν(x).
+    BesselY,
+    /// Modified Bessel function of the first kind I_ν(x).
+    BesselI,
+    /// Modified Bessel function of the second kind K_ν(x).
+    BesselK,
+    /// Airy function Ai(x).
+    AiryAi,
+    /// Airy function Bi(x).
+    AiryBi,
+    /// Riemann zeta function ζ(s).
+    Zeta,
+    /// Sine integral Si(x) = ∫₀ˣ sin(t)/t dt.
+    Si,
+    /// Cosine integral Ci(x) = -∫ₓ^∞ cos(t)/t dt.
+    Ci,
+    /// Exponential integral Ei(x) = -P.V. ∫₋ₓ^∞ e⁻ᵗ/t dt.
+    Ei,
+    /// Heaviside step function θ(x).
+    Heaviside,
+    /// Dirac delta distribution δ(x).
+    DiracDelta,
     /// User-defined or extension function identified by a [`SymbolId`].
     Other(SymbolId),
 }
@@ -136,7 +173,25 @@ fn func_id_rank(f: &FuncId) -> u8 {
         FuncId::Re => 25,
         FuncId::Im => 26,
         FuncId::Conj => 27,
-        FuncId::Other(_) => 28,
+        FuncId::Gamma => 28,
+        FuncId::LnGamma => 29,
+        FuncId::Digamma => 30,
+        FuncId::BetaFn => 31,
+        FuncId::Erf => 32,
+        FuncId::Erfc => 33,
+        FuncId::BesselJ => 34,
+        FuncId::BesselY => 35,
+        FuncId::BesselI => 36,
+        FuncId::BesselK => 37,
+        FuncId::AiryAi => 38,
+        FuncId::AiryBi => 39,
+        FuncId::Zeta => 40,
+        FuncId::Si => 41,
+        FuncId::Ci => 42,
+        FuncId::Ei => 43,
+        FuncId::Heaviside => 44,
+        FuncId::DiracDelta => 45,
+        FuncId::Other(_) => 46,
     }
 }
 
@@ -170,6 +225,24 @@ impl fmt::Display for FuncId {
             FuncId::Re => write!(f, "Re"),
             FuncId::Im => write!(f, "Im"),
             FuncId::Conj => write!(f, "Conj"),
+            FuncId::Gamma => write!(f, "Gamma"),
+            FuncId::LnGamma => write!(f, "LnGamma"),
+            FuncId::Digamma => write!(f, "Digamma"),
+            FuncId::BetaFn => write!(f, "Beta"),
+            FuncId::Erf => write!(f, "erf"),
+            FuncId::Erfc => write!(f, "erfc"),
+            FuncId::BesselJ => write!(f, "BesselJ"),
+            FuncId::BesselY => write!(f, "BesselY"),
+            FuncId::BesselI => write!(f, "BesselI"),
+            FuncId::BesselK => write!(f, "BesselK"),
+            FuncId::AiryAi => write!(f, "AiryAi"),
+            FuncId::AiryBi => write!(f, "AiryBi"),
+            FuncId::Zeta => write!(f, "Zeta"),
+            FuncId::Si => write!(f, "Si"),
+            FuncId::Ci => write!(f, "Ci"),
+            FuncId::Ei => write!(f, "Ei"),
+            FuncId::Heaviside => write!(f, "Heaviside"),
+            FuncId::DiracDelta => write!(f, "DiracDelta"),
             FuncId::Other(s) => write!(f, "{s}"),
         }
     }

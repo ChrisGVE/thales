@@ -60,6 +60,25 @@ pub(super) fn special_fn_cmd(kind: SpecialKind, args: &[Expression], narrate: bo
             }
             special::erfc(&args[0])
         }
+        SpecialKind::LnGamma
+        | SpecialKind::Digamma
+        | SpecialKind::BesselJ
+        | SpecialKind::BesselY
+        | SpecialKind::BesselI
+        | SpecialKind::BesselK
+        | SpecialKind::AiryAi
+        | SpecialKind::AiryBi
+        | SpecialKind::Zeta
+        | SpecialKind::Si
+        | SpecialKind::Ci
+        | SpecialKind::Ei
+        | SpecialKind::Heaviside
+        | SpecialKind::DiracDelta => {
+            return engine_error(
+                "command.special_fn",
+                format!("{:?} not yet implemented", kind),
+            );
+        }
     };
 
     match result {

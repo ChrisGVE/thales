@@ -695,6 +695,34 @@ pub enum SpecialKind {
     Erf,
     /// Complementary error function `erfc(x)`.
     Erfc,
+    /// Natural log of the Gamma function `ln Γ(x)`.
+    LnGamma,
+    /// Digamma function `ψ(x)`.
+    Digamma,
+    /// Bessel function of the first kind `J_ν(x)`.
+    BesselJ,
+    /// Bessel function of the second kind `Y_ν(x)`.
+    BesselY,
+    /// Modified Bessel function of the first kind `I_ν(x)`.
+    BesselI,
+    /// Modified Bessel function of the second kind `K_ν(x)`.
+    BesselK,
+    /// Airy function `Ai(x)`.
+    AiryAi,
+    /// Airy function `Bi(x)`.
+    AiryBi,
+    /// Riemann zeta function `ζ(s)`.
+    Zeta,
+    /// Sine integral `Si(x)`.
+    Si,
+    /// Cosine integral `Ci(x)`.
+    Ci,
+    /// Exponential integral `Ei(x)`.
+    Ei,
+    /// Heaviside step function `θ(x)`.
+    Heaviside,
+    /// Dirac delta distribution `δ(x)`.
+    DiracDelta,
 }
 
 /// Initial-value data for [`Command::OdeSystem`].
