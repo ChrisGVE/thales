@@ -12,19 +12,28 @@
 //! |---|---|
 //! | [`partial`] | ∂f/∂xᵢ |
 //! | [`gradient`] | ∇f = (∂f/∂x₁, …, ∂f/∂xₙ) |
+//! | [`divergence`] | ∇·F = Σᵢ ∂Fᵢ/∂xᵢ |
+//! | [`curl`] | ∇×F = (∂F₃/∂y − ∂F₂/∂z, …) |
+//! | [`laplacian`] | ∇²f = Σᵢ ∂²f/∂xᵢ² |
 //! | [`jacobian`] | J[i][j] = ∂fᵢ/∂xⱼ |
 //! | [`hessian`] | H[i][j] = ∂²f/∂xᵢ∂xⱼ |
 //! | [`directional_derivative`] | Dᵥf = ∇f · v̂ |
 //! | [`total_derivative`] | df = Σ (∂f/∂xᵢ) dxᵢ  (chain rule with substitution) |
 
+mod curl;
 mod directional;
+mod divergence;
 mod gradient;
 mod hessian;
 mod jacobian;
+mod laplacian;
 mod total;
 
+pub use curl::curl;
 pub use directional::directional_derivative;
+pub use divergence::divergence;
 pub use gradient::{gradient, partial};
 pub use hessian::hessian;
 pub use jacobian::jacobian;
+pub use laplacian::laplacian;
 pub use total::total_derivative;
