@@ -175,6 +175,33 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
         Command::Revert { expr, var, order } => {
             series_expand::revert_cmd(&expr, &var, order, narrate)
         }
+        Command::Puiseux {
+            expr,
+            var,
+            center,
+            order,
+        } => series_expand::puiseux_cmd(&expr, &var, &center, order, narrate),
+        Command::Frobenius {
+            ode,
+            fn_name,
+            var,
+            point,
+            order,
+        } => series_expand::frobenius_cmd(&ode, &fn_name, &var, &point, order, narrate),
+        Command::Pade {
+            expr,
+            var,
+            center,
+            m,
+            n,
+        } => series_expand::pade_cmd(&expr, &var, &center, m, n, narrate),
+        Command::Wkb {
+            ode,
+            fn_name,
+            var,
+            small_param,
+            order,
+        } => series_expand::wkb_cmd(&ode, &fn_name, &var, &small_param, order, narrate),
 
         // ── Transforms ───────────────────────────────────────────────────
         Command::FourierSeries {

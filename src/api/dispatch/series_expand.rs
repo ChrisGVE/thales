@@ -1,6 +1,10 @@
 //! F1c series-expansion dispatchers (Taylor, Laurent, Asymptotic, Compose,
-//! Revert) wired to `crate::numeric::series` engines.
+//! Revert, Puiseux, Frobenius, Pade, Wkb). The first five are wired to
+//! `crate::numeric::series` engines. The last four return stub
+//! NotImplemented responses pending engine work in a subsequent subtask.
 
+use crate::api::diagnostic::{Diagnostic, DiagnosticCode};
+use crate::api::narrative::Narrative;
 use crate::api::response::{EngineId, Response, ResultKey};
 use crate::ast::Expression;
 use crate::numeric::compile::{compile, decompile};
@@ -175,4 +179,87 @@ pub(super) fn revert_cmd(expr: &Expression, var: &str, order: u32, narrate: bool
             "Lagrange reversion requires a_0=0 and a_1!=0 in the Taylor expansion".to_string(),
         ),
     }
+}
+
+/// Stub: Puiseux series engine is not yet implemented.
+pub(super) fn puiseux_cmd(
+    _expr: &Expression,
+    _var: &str,
+    _center: &Expression,
+    _order: u32,
+    _narrate: bool,
+) -> Response {
+    let mut r = Response::default();
+    r.diagnostics.push(Diagnostic::of(
+        DiagnosticCode::NotImplemented,
+        Narrative::new(
+            "command.puiseux",
+            "Puiseux series not yet implemented".to_string(),
+        ),
+    ));
+    r.meta.engine_trace.push(EngineId::PuiseuxExpansion);
+    r
+}
+
+/// Stub: Frobenius method engine is not yet implemented.
+pub(super) fn frobenius_cmd(
+    _ode: &Expression,
+    _fn_name: &str,
+    _var: &str,
+    _point: &Expression,
+    _order: u32,
+    _narrate: bool,
+) -> Response {
+    let mut r = Response::default();
+    r.diagnostics.push(Diagnostic::of(
+        DiagnosticCode::NotImplemented,
+        Narrative::new(
+            "command.frobenius",
+            "Frobenius method not yet implemented".to_string(),
+        ),
+    ));
+    r.meta.engine_trace.push(EngineId::FrobeniusMethod);
+    r
+}
+
+/// Stub: Padé approximant engine is not yet implemented.
+pub(super) fn pade_cmd(
+    _expr: &Expression,
+    _var: &str,
+    _center: &Expression,
+    _m: u32,
+    _n: u32,
+    _narrate: bool,
+) -> Response {
+    let mut r = Response::default();
+    r.diagnostics.push(Diagnostic::of(
+        DiagnosticCode::NotImplemented,
+        Narrative::new(
+            "command.pade",
+            "Padé approximant not yet implemented".to_string(),
+        ),
+    ));
+    r.meta.engine_trace.push(EngineId::PadeApproximant);
+    r
+}
+
+/// Stub: WKB approximation engine is not yet implemented.
+pub(super) fn wkb_cmd(
+    _ode: &Expression,
+    _fn_name: &str,
+    _var: &str,
+    _small_param: &str,
+    _order: u32,
+    _narrate: bool,
+) -> Response {
+    let mut r = Response::default();
+    r.diagnostics.push(Diagnostic::of(
+        DiagnosticCode::NotImplemented,
+        Narrative::new(
+            "command.wkb",
+            "WKB approximation not yet implemented".to_string(),
+        ),
+    ));
+    r.meta.engine_trace.push(EngineId::WkbExpansion);
+    r
 }
