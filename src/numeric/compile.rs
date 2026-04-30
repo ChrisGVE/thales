@@ -181,7 +181,10 @@ pub fn map_func_id(f: &Function) -> FuncId {
 pub fn decompile(expr: &Expr) -> Expression {
     match expr {
         // ── Numeric literals ─────────────────────────────────────────────────
-        Expr::Integer(n) => Expression::Integer(n.to_i64().unwrap_or(0)),
+        Expr::Integer(n) => match n.to_i64() {
+            Some(i) => Expression::Integer(i),
+            None => Expression::Float(n.to_string().parse::<f64>().unwrap_or(f64::INFINITY)),
+        },
 
         Expr::Rational(r) => big_rational_to_expr(r),
 
@@ -268,7 +271,10 @@ pub fn reverse_map_func_id(id: &FuncId) -> Function {
 /// resort for values that overflow `i64`.
 fn big_rational_to_expr(r: &BigRational) -> Expression {
     if r.is_integer() {
-        Expression::Integer(r.numer().to_i64().unwrap_or(0))
+        match r.numer().to_i64() {
+            Some(i) => Expression::Integer(i),
+            None => Expression::Float(r.to_f64()),
+        }
     } else {
         match (r.numer().to_i64(), r.denom().to_i64()) {
             (Some(n), Some(d)) => Expression::Rational(Rational64::new(n, d)),

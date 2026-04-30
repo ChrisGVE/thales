@@ -123,12 +123,21 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
             ))
         }
 
-        // Cross product / dot product — in scalar contexts, treat as multiplication
-        mathlex::Expression::CrossProduct { left, right }
-        | mathlex::Expression::DotProduct { left, right } => {
+        mathlex::Expression::CrossProduct { left, right } => {
             let l = convert_expression(left)?;
             let r = convert_expression(right)?;
-            Ok(Expression::Binary(BinaryOp::Mul, Box::new(l), Box::new(r)))
+            Ok(Expression::Function(
+                Function::Custom("cross_product".to_string()),
+                vec![l, r],
+            ))
+        }
+        mathlex::Expression::DotProduct { left, right } => {
+            let l = convert_expression(left)?;
+            let r = convert_expression(right)?;
+            Ok(Expression::Function(
+                Function::Custom("dot_product".to_string()),
+                vec![l, r],
+            ))
         }
 
         // Outer product

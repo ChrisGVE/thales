@@ -490,12 +490,16 @@ mod tests {
 
     #[test]
     fn test_parse_times() {
+        // \times is a cross product operator in mathlex; the bridge preserves
+        // it as Function::Custom("cross_product") rather than flattening to Mul.
         let expr = parse_latex(r"2 \times 3").unwrap();
-        if let Expression::Binary(BinaryOp::Mul, left, right) = expr {
-            assert!(matches!(*left, Expression::Integer(2)));
-            assert!(matches!(*right, Expression::Integer(3)));
+        if let Expression::Function(Function::Custom(name), args) = &expr {
+            assert_eq!(name, "cross_product");
+            assert_eq!(args.len(), 2);
+            assert!(matches!(args[0], Expression::Integer(2)));
+            assert!(matches!(args[1], Expression::Integer(3)));
         } else {
-            panic!("Expected multiplication");
+            panic!("Expected cross_product function, got {:?}", expr);
         }
     }
 

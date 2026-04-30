@@ -1,5 +1,6 @@
 //! Solver command dispatchers (SolveFor, SolveSystem).
 
+use crate::api::condition::Condition;
 use crate::api::response::{EngineId, Response, ResultEntry, ResultKey, ResultShape, ResultValue};
 use crate::ast::{Expression, Variable};
 
@@ -23,7 +24,7 @@ pub(super) fn solve_system_cmd(
             let mut r = Response::default();
             for (name, value) in pairs {
                 r.results.push((
-                    ResultKey::Single,
+                    ResultKey::Branch(Condition::Eq(name, value.clone())),
                     ResultEntry {
                         value: ResultValue::Symbolic(value),
                         shape: ResultShape::Scalar,
@@ -37,7 +38,6 @@ pub(super) fn solve_system_cmd(
                         engine: EngineId::SystemSolver,
                     },
                 ));
-                let _ = name;
             }
             r.meta.engine_trace.push(EngineId::SystemSolver);
             r
