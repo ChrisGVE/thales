@@ -6,6 +6,7 @@
 //! Jacobian matrix and volume-element construction.
 
 mod cartesian;
+mod change_coords;
 mod complex;
 pub mod curvilinear;
 pub mod jacobian;

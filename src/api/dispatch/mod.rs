@@ -143,7 +143,9 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
             honors_mode = true;
             calculus::def_integrate_cmd(&expr, &var, &from, &to, narrate, ctx.mode)
         }
-        Command::MultiIntegrate { .. } => not_implemented_stub("command.multi_integrate"),
+        Command::MultiIntegrate { expr, integrations } => {
+            calculus::multi_integrate_cmd(&expr, &integrations, narrate)
+        }
         Command::ChangeCoords { .. } => not_implemented_stub("command.change_coords"),
         Command::PathIntegral { .. } => not_implemented_stub("command.path_integral"),
         Command::SurfaceIntegral { .. } => not_implemented_stub("command.surface_integral"),

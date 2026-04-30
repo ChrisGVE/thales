@@ -1,5 +1,6 @@
-//! Integration command dispatchers: integrate and def_integrate.
+//! Integration command dispatchers: integrate, def_integrate, multi_integrate.
 
+use crate::api::command::IntegrationStep;
 use crate::api::request::{Precision, SolveMode};
 use crate::api::response::{
     EngineId, NumericMethod, Response, ResultEntry, ResultKey, ResultShape, ResultValue,
@@ -113,4 +114,37 @@ pub(in crate::api::dispatch) fn def_integrate_cmd(
         "command.def_integrate",
         "definite integral failed symbolically and no numeric fallback available".to_string(),
     )
+}
+
+pub(in crate::api::dispatch) fn multi_integrate_cmd(
+    expr: &Expression,
+    integrations: &[IntegrationStep],
+    narrate: bool,
+) -> Response {
+    match crate::integration::multi_integrate(expr, integrations) {
+        Ok(result) => {
+            let mut trace = Trace::new();
+            if narrate {
+                trace.push(
+                    Step::new(
+                        TechniqueTag::PatternIntegration,
+                        format!("Iterated integral over {} variable(s)", integrations.len()),
+                    )
+                    .with_output(compile(&result)),
+                );
+            }
+            let mut r = Response::default();
+            r.results.push((
+                ResultKey::Single,
+                symbolic_entry(
+                    result,
+                    EngineId::PatternIntegration,
+                    steps_from_trace(&trace),
+                ),
+            ));
+            r.meta.engine_trace.push(EngineId::PatternIntegration);
+            r
+        }
+        Err(e) => engine_error("command.multi_integrate", format!("{}", e)),
+    }
 }

@@ -27,6 +27,7 @@
 
 mod by_parts;
 mod definite;
+mod multi;
 mod partial_fractions;
 mod substitution;
 
@@ -43,6 +44,7 @@ pub use definite::{
     definite_integral, definite_integral_with_fallback, definite_integral_with_steps,
     improper_integral_to_infinity, numerical_integrate,
 };
+pub use multi::multi_integrate;
 pub use substitution::{integrate_by_substitution, integrate_with_substitution};
 
 /// Error types that can occur during integration.
