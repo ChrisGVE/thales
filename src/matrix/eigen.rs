@@ -324,7 +324,8 @@ fn solve_cubic(p: f64, q: f64, r: f64) -> MatrixResult<Vec<f64>> {
 
     if discriminant > 0.0 {
         // Three distinct real roots
-        let theta = (-b / 2.0 / ((-a / 3.0).powi(3).sqrt())).acos();
+        let acos_arg = (-b / 2.0 / ((-a / 3.0).powi(3).sqrt())).clamp(-1.0, 1.0);
+        let theta = acos_arg.acos();
         let r_cubed = (-a / 3.0).sqrt();
 
         let t1 = 2.0 * r_cubed * (theta / 3.0).cos();
