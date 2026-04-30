@@ -122,6 +122,32 @@ fn table_lookup_power(expr: &Arc<Expr>, var: SymbolId, x: &Arc<Expr>) -> Option<
         return Some(normalize::mul(expr.clone(), x.clone()));
     }
 
+    // c * x^n  (Mul node where one factor contains var, the rest are constant)
+    //
+    // When the expression is a product and we can peel off a constant coefficient
+    // (w.r.t. `var`) from a single var-dependent factor, integrate that factor and
+    // multiply by the constant.  This covers the common multivariate case e.g.
+    // ∫ y·x dx = y · x²/2  where `y` is free w.r.t. `x`.
+    if let Some((coeff, factors)) = extract_mul_factors(expr) {
+        let var_factors: Vec<&Arc<Expr>> =
+            factors.iter().filter(|f| contains_var(f, var)).collect();
+        let const_factors: Vec<&Arc<Expr>> =
+            factors.iter().filter(|f| !contains_var(f, var)).collect();
+
+        // Only handle the case of exactly one var-containing factor; anything
+        // more complex (e.g. x·sin(x)) is handled by tabular/by-parts.
+        if var_factors.len() == 1 {
+            let var_part = var_factors[0];
+            if let Some(anti_var) = table_lookup_power(var_part, var, x) {
+                // constant part = coeff * product of const_factors
+                let const_part = const_factors
+                    .iter()
+                    .fold(coeff, |acc, f| normalize::mul(acc, (*f).clone()));
+                return Some(normalize::mul(const_part, anti_var));
+            }
+        }
+    }
+
     None
 }
 
