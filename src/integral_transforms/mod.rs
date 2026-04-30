@@ -83,9 +83,13 @@ pub fn split_linear_terms(expr: &Arc<Expr>, _var: SymbolId) -> Vec<(f64, Arc<Exp
                 ));
             }
 
-            // Symbolic terms: each entry is (term, coeff)
+            // Symbolic terms: each entry is (term, coeff).
+            // Also extract any embedded numeric coefficient from the term key
+            // itself (e.g. a Mul{Float(2.0)^1, Func(Exp,[...])^1} key that was
+            // not simplified into the AddNode rational coefficient).
             for (term, coeff) in &node.terms {
-                terms.push((coeff.to_f64(), Arc::clone(term)));
+                let (inner_coeff, inner_term) = extract_coefficient(term);
+                terms.push((coeff.to_f64() * inner_coeff, inner_term));
             }
 
             if terms.is_empty() {
@@ -116,7 +120,7 @@ pub fn split_linear_terms(expr: &Arc<Expr>, _var: SymbolId) -> Vec<(f64, Arc<Exp
 fn extract_coefficient(expr: &Arc<Expr>) -> (f64, Arc<Expr>) {
     match expr.as_ref() {
         Expr::Mul(node) => {
-            let coeff = node.coeff.to_f64();
+            let mut coeff = node.coeff.to_f64();
             if node.factors.is_empty() {
                 // Pure numeric Mul — treat as constant
                 return (
@@ -124,14 +128,48 @@ fn extract_coefficient(expr: &Arc<Expr>) -> (f64, Arc<Expr>) {
                     Arc::new(Expr::Integer(crate::numeric::SmallInt::from(1i64))),
                 );
             }
-            // Return the coefficient and the expression itself as the term,
-            // but with a coefficient of 1.0 to avoid double-counting.
-            // Callers use the (coeff, term) pair where term is the non-numeric part.
-            // We reconstruct a unit-coefficient version by cloning the node.
+            // Collect symbolic (non-numeric) factors, absorbing float/int/rational
+            // factors (with exponent 1) into the coefficient.
             use crate::numeric::MulNode;
-            let mut unit_node = MulNode::one();
-            unit_node.factors = node.factors.clone();
-            (coeff, Arc::new(Expr::Mul(unit_node)))
+            let mut symbolic = MulNode::one();
+            for (base, exp) in &node.factors {
+                let is_exp1 = matches!(exp.as_ref(), Expr::Integer(n) if n.to_i64() == Some(1));
+                if is_exp1 {
+                    match base.as_ref() {
+                        Expr::Float(f) => {
+                            coeff *= f;
+                            continue;
+                        }
+                        Expr::Integer(n) => {
+                            if let Some(v) = n.to_i64() {
+                                coeff *= v as f64;
+                                continue;
+                            }
+                        }
+                        Expr::Rational(r) => {
+                            coeff *= r.to_f64();
+                            continue;
+                        }
+                        _ => {}
+                    }
+                }
+                symbolic.add_factor(Arc::clone(base), Arc::clone(exp));
+            }
+            // Build the symbolic term.
+            let term = if symbolic.factors.is_empty() {
+                Arc::new(Expr::Integer(crate::numeric::SmallInt::from(1i64)))
+            } else if symbolic.factors.len() == 1 {
+                let (base, exp) = symbolic.factors.iter().next().unwrap();
+                let is_exp1 = matches!(exp.as_ref(), Expr::Integer(n) if n.to_i64() == Some(1));
+                if is_exp1 {
+                    Arc::clone(base)
+                } else {
+                    Arc::new(Expr::Mul(symbolic))
+                }
+            } else {
+                Arc::new(Expr::Mul(symbolic))
+            };
+            (coeff, term)
         }
         Expr::Integer(n) => {
             let c = n.to_i64().map(|v| v as f64).unwrap_or(f64::INFINITY);

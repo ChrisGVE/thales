@@ -307,6 +307,30 @@ pub fn pow(base: Arc<Expr>, exp: Arc<Expr>) -> Arc<Expr> {
         }
     }
 
+    // Rule 4b: float^integer or float^float → evaluate numerically
+    let base_f = match base.as_ref() {
+        Expr::Float(f) => Some(*f),
+        Expr::Integer(n) => n.to_i64().map(|v| v as f64),
+        Expr::Rational(r) => Some(r.to_f64()),
+        _ => None,
+    };
+    let exp_f = match exp.as_ref() {
+        Expr::Float(f) => Some(*f),
+        Expr::Integer(n) => n.to_i64().map(|v| v as f64),
+        Expr::Rational(r) => Some(r.to_f64()),
+        _ => None,
+    };
+    if let (Some(b), Some(e)) = (base_f, exp_f) {
+        // Only fold when at least one operand is Float (avoid shadowing exact
+        // integer^integer cases handled above, and avoid promoting exact
+        // integer results to lossy Float).
+        let base_is_float = matches!(base.as_ref(), Expr::Float(_));
+        let exp_is_float = matches!(exp.as_ref(), Expr::Float(_));
+        if base_is_float || exp_is_float {
+            return Arc::new(Expr::Float(b.powf(e)));
+        }
+    }
+
     // Rule: (a^b)^c → a^(b*c) when b is integer
     if let Expr::Pow(inner_base, inner_exp) = base.as_ref() {
         if is_integer_expr(inner_exp) {
