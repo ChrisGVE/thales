@@ -20,7 +20,10 @@ use super::command::{
 };
 use super::domain::Domain;
 use super::request::{Request, SolveMode};
-use super::response::{NarratedStep, Response, ResultEntry, ResultKey, ResultValue};
+use super::response::{
+    DecompositionPart, NarratedStep, Response, ResultEntry, ResultKey, ResultValue,
+    StructuredResult,
+};
 
 /// FFI-shaped entry point: JSON request → JSON response, with errors
 /// stringified for cross-language transport.
@@ -272,10 +275,13 @@ fn result_entry_to_json(key: &ResultKey, entry: &ResultEntry) -> Value {
     let key_label = match key {
         ResultKey::Single => "Single".to_string(),
         ResultKey::Branch(_) => "Branch".to_string(),
+        ResultKey::Component(name) => format!("Component({})", name),
+        ResultKey::ConvergenceDomain => "ConvergenceDomain".to_string(),
     };
     json!({
         "key": key_label,
         "value": result_value_to_json(&entry.value),
+        "structured": entry.structured.as_ref().map(structured_result_to_json),
         "shape": format!("{:?}", entry.shape),
         "engine": format!("{:?}", entry.engine),
         "steps": entry
@@ -289,6 +295,105 @@ fn result_entry_to_json(key: &ResultKey, entry: &ResultEntry) -> Value {
             .map(|e| format!("{}", e))
             .collect::<Vec<_>>(),
     })
+}
+
+fn structured_result_to_json(s: &StructuredResult) -> Value {
+    match s {
+        StructuredResult::Scalar(e) => json!({
+            "kind": "Scalar",
+            "expr": format!("{}", e),
+        }),
+        StructuredResult::Labeled { label, value } => json!({
+            "kind": "Labeled",
+            "label": label,
+            "value": format!("{}", value),
+        }),
+        StructuredResult::Decomposition { parts } => json!({
+            "kind": "Decomposition",
+            "parts": parts
+                .iter()
+                .map(|(name, part)| json!({
+                    "name": name,
+                    "part": decomposition_part_to_json(part),
+                }))
+                .collect::<Vec<_>>(),
+        }),
+        StructuredResult::CoefficientArray {
+            coefficients,
+            variable,
+            center,
+            order,
+        } => json!({
+            "kind": "CoefficientArray",
+            "coefficients": coefficients
+                .iter()
+                .map(|e| format!("{}", e))
+                .collect::<Vec<_>>(),
+            "variable": variable,
+            "center": center.as_ref().map(|e| format!("{}", e)),
+            "order": order,
+        }),
+        StructuredResult::Branches { branches } => json!({
+            "kind": "Branches",
+            "branches": branches
+                .iter()
+                .map(|b| json!({
+                    "label": b.label,
+                    "value": format!("{}", b.value),
+                }))
+                .collect::<Vec<_>>(),
+        }),
+        StructuredResult::Shaped {
+            elements,
+            shape,
+            labels,
+        } => json!({
+            "kind": "Shaped",
+            "elements": elements
+                .iter()
+                .map(|e| format!("{}", e))
+                .collect::<Vec<_>>(),
+            "shape": shape,
+            "labels": labels,
+        }),
+        StructuredResult::TransformResult {
+            expression,
+            transform_variable,
+            convergence,
+        } => json!({
+            "kind": "TransformResult",
+            "expression": format!("{}", expression),
+            "transform_variable": transform_variable,
+            "convergence": convergence.as_ref().map(|e| format!("{}", e)),
+        }),
+        _ => json!({ "kind": "Unknown" }),
+    }
+}
+
+fn decomposition_part_to_json(part: &DecompositionPart) -> Value {
+    match part {
+        DecompositionPart::Scalar(e) => json!({
+            "kind": "Scalar",
+            "expr": format!("{}", e),
+        }),
+        DecompositionPart::Matrix {
+            elements,
+            rows,
+            cols,
+        } => json!({
+            "kind": "Matrix",
+            "elements": elements
+                .iter()
+                .map(|e| format!("{}", e))
+                .collect::<Vec<_>>(),
+            "rows": rows,
+            "cols": cols,
+        }),
+        DecompositionPart::Permutation(p) => json!({
+            "kind": "Permutation",
+            "indices": p,
+        }),
+    }
 }
 
 fn result_value_to_json(value: &ResultValue) -> Value {
