@@ -24,8 +24,10 @@ use crate::api::command::{Command, SimplifyRules};
 use crate::api::diagnostic::{Diagnostic, DiagnosticCode};
 use crate::api::narrative::Narrative;
 use crate::api::request::Request;
-use crate::api::response::{EngineId, Response, ResultKey};
+use crate::api::response::Response;
 use crate::ThalesError;
+
+use helpers::DispatchContext;
 
 mod algebra;
 mod calculus;
@@ -42,15 +44,39 @@ mod special;
 /// Execute a [`Request`]. Single entry point for thales.
 pub fn execute(request: Request) -> Result<Response, ThalesError> {
     let start = Instant::now();
-    let narrate = request.narrate;
+    let ctx = DispatchContext::from_request(&request);
+    let narrate = ctx.narrate;
+
+    // `honors_mode` is set to true only for commands that genuinely consume
+    // request.mode (currently only DefIntegrate). All other arms will emit a
+    // FieldIgnored diagnostic if mode is non-Symbolic.
+    let mut honors_mode = false;
 
     let mut response = match request.command {
         Command::Noop => noop_response(),
 
         // ── Algebra ──────────────────────────────────────────────────────
-        Command::Simplify { expr, rules, .. } => algebra::simplify_cmd(&expr, rules, narrate),
-        Command::Expand { expr, .. } => algebra::expand_cmd(&expr, narrate),
-        Command::Factor { expr, .. } => algebra::factor_cmd(&expr, narrate),
+        Command::Simplify { expr, rules, over } => {
+            let mut r = algebra::simplify_cmd(&expr, rules, narrate);
+            if over.is_some() {
+                helpers::warn_ignored_field(&mut r, "Simplify.over", "request.field_ignored");
+            }
+            r
+        }
+        Command::Expand { expr, target } => {
+            let mut r = algebra::expand_cmd(&expr, narrate);
+            if target.is_some() {
+                helpers::warn_ignored_field(&mut r, "Expand.target", "request.field_ignored");
+            }
+            r
+        }
+        Command::Factor { expr, over, target } => {
+            let mut r = algebra::factor_cmd(&expr, over, narrate);
+            if target.is_some() {
+                helpers::warn_ignored_field(&mut r, "Factor.target", "request.field_ignored");
+            }
+            r
+        }
         Command::Substitute { expr, bindings, .. } => {
             algebra::substitute_cmd(&expr, &bindings, narrate)
         }
@@ -77,7 +103,11 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
         }
 
         // ── Solve ────────────────────────────────────────────────────────
-        Command::SolveFor { relation, var, .. } => solver::solve_for_cmd(&relation, &var, narrate),
+        Command::SolveFor {
+            relation,
+            var,
+            over,
+        } => solver::solve_for_cmd(&relation, &var, over, narrate),
         Command::SolveSystem {
             equations, vars, ..
         } => solver::solve_system_cmd(&equations, &vars, narrate),
@@ -107,7 +137,10 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
             var,
             from,
             to,
-        } => calculus::def_integrate_cmd(&expr, &var, &from, &to, narrate, request.mode),
+        } => {
+            honors_mode = true;
+            calculus::def_integrate_cmd(&expr, &var, &from, &to, narrate, ctx.mode)
+        }
 
         // ── Limits ───────────────────────────────────────────────────────
         Command::Limit {
@@ -179,6 +212,10 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
             equality_constraints,
         } => optimize::lagrange_mult_cmd(&objective, &vars, &equality_constraints, narrate),
     };
+
+    // Emit FieldIgnored warnings for request-level context fields that the
+    // dispatched command does not honour.
+    ctx.warn_unhandled(&mut response, honors_mode);
 
     response.meta.elapsed_ms = start.elapsed().as_millis() as u64;
     Ok(crate::api::render::render_response(response))

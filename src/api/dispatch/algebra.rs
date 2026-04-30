@@ -56,8 +56,14 @@ pub(super) fn expand_cmd(expr: &Expression, narrate: bool) -> Response {
     r
 }
 
-pub(super) fn factor_cmd(expr: &Expression, narrate: bool) -> Response {
+pub(super) fn factor_cmd(
+    expr: &Expression,
+    _over: crate::api::domain::Domain,
+    narrate: bool,
+) -> Response {
     // No standalone factor engine at the Expression layer yet.
+    // `_over` is accepted so the domain is not silently dropped; a
+    // full domain-aware factoring engine is wired in a later release.
     let factored = expr.simplify();
     let mut trace = Trace::new();
     if narrate {

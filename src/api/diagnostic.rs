@@ -88,6 +88,9 @@ pub enum DiagnosticCode {
     UndefinedSymbol,
     /// A malformed input was repaired heuristically; see narrative.
     InputRepaired,
+    /// A request or command field was accepted but not honored; it had no
+    /// effect on this result. The accompanying narrative names the field.
+    FieldIgnored,
     /// Engine-specific code not yet promoted to the enum. Carries a stable
     /// string label.
     Other(&'static str),
@@ -112,7 +115,8 @@ impl DiagnosticCode {
             | DiagnosticCode::ConvergenceFailure
             | DiagnosticCode::BranchCutCrossed
             | DiagnosticCode::DivergentSeriesTruncated
-            | DiagnosticCode::NoSolutionInDomain => Severity::Warning,
+            | DiagnosticCode::NoSolutionInDomain
+            | DiagnosticCode::FieldIgnored => Severity::Warning,
 
             // Errors — result is invalid or absent.
             DiagnosticCode::NotImplemented
