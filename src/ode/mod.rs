@@ -26,6 +26,7 @@ pub mod builder;
 mod first_order;
 pub mod non_homogeneous;
 mod second_order;
+pub mod system;
 mod types;
 pub mod verify;
 
@@ -38,6 +39,7 @@ pub use second_order::{
     solve_characteristic_equation, solve_second_order_homogeneous, solve_second_order_ivp,
     CharacteristicRoots, RootType, SecondOrderODE, SecondOrderSolution,
 };
+pub use system::{OdeSystem, OdeSystemSolution};
 pub use types::{FirstOrderODE, ODEError, ODESolution};
 
 #[cfg(test)]
