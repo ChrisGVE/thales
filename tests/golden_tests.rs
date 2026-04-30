@@ -951,3 +951,131 @@ fn golden_pde_not_implemented() {
         resp.diagnostics[0].code
     );
 }
+
+// ── Category H — Integral transform golden tests ──────────────────────────────
+
+#[test]
+fn golden_laplace_transform_t_squared() {
+    // L{t²} = 2/s³
+    let resp = execute(request(Command::LaplaceTransform {
+        expr: pow(var("t"), int(2)),
+        time_var: "t".to_string(),
+        freq_var: "s".to_string(),
+    }))
+    .unwrap();
+    assert_eq!(
+        resp.results[0].1.engine,
+        EngineId::LaplaceTransform,
+        "L{{t²}}: expected LaplaceTransform engine"
+    );
+    let s = symbolic_str(&resp);
+    // 2/s³ must contain 2 and s.
+    assert!(
+        s.contains('2') && s.contains('s'),
+        "L{{t²}}: expected 2/s³ form, got: {}",
+        s
+    );
+    assert!(
+        resp.meta.engine_trace.contains(&EngineId::LaplaceTransform),
+        "L{{t²}}: expected LaplaceTransform in engine_trace"
+    );
+}
+
+#[test]
+fn golden_laplace_transform_exp() {
+    // L{e^(2t)} = 1/(s-2)
+    let resp = execute(request(Command::LaplaceTransform {
+        expr: exp(mul(int(2), var("t"))),
+        time_var: "t".to_string(),
+        freq_var: "s".to_string(),
+    }))
+    .unwrap();
+    assert_eq!(
+        resp.results[0].1.engine,
+        EngineId::LaplaceTransform,
+        "L{{e^(2t)}}: expected LaplaceTransform engine"
+    );
+    let s = symbolic_str(&resp);
+    // 1/(s-2) must contain s and 2.
+    assert!(
+        s.contains('s') && s.contains('2'),
+        "L{{e^(2t)}}: expected 1/(s-2) form, got: {}",
+        s
+    );
+}
+
+#[test]
+fn golden_inverse_laplace_one_over_s() {
+    // L^{-1}{1/s} = 1
+    let resp = execute(request(Command::InverseLaplace {
+        expr: div(int(1), var("s")),
+        freq_var: "s".to_string(),
+        time_var: "t".to_string(),
+    }))
+    .unwrap();
+    assert_eq!(
+        resp.results[0].1.engine,
+        EngineId::InverseLaplace,
+        "L^{{-1}}{{1/s}}: expected InverseLaplace engine"
+    );
+    let s = symbolic_str(&resp);
+    assert_eq!(s, "1", "L^{{-1}}{{1/s}}: expected 1, got: {}", s);
+    assert!(
+        resp.meta.engine_trace.contains(&EngineId::InverseLaplace),
+        "L^{{-1}}{{1/s}}: expected InverseLaplace in engine_trace"
+    );
+}
+
+#[test]
+fn golden_fourier_gaussian() {
+    // F{e^(-t²)} — the command is dispatched to the Fourier engine.
+    // The engine either returns a symbolic result (table hit) or an
+    // engine-error diagnostic (no table entry yet). Either outcome is
+    // acceptable; what matters is that the dispatch reached the engine
+    // rather than returning a plain NotImplemented stub.
+    let resp = execute(request(Command::FourierTransform {
+        expr: exp(Expression::Unary(
+            thales::ast::UnaryOp::Neg,
+            Box::new(pow(var("t"), int(2))),
+        )),
+        time_var: "t".to_string(),
+        freq_var: "omega".to_string(),
+    }))
+    .unwrap();
+    // The dispatch must produce at least a result entry or a diagnostic.
+    let has_result = !resp.results.is_empty();
+    let has_diagnostic = !resp.diagnostics.is_empty();
+    assert!(
+        has_result || has_diagnostic,
+        "F{{e^(-t²)}}: expected result or diagnostic, got neither"
+    );
+    // On success the engine_trace must record the engine; on error the result
+    // carries EngineId::Other so the trace is empty — both are valid.
+    if has_result && matches!(resp.results[0].1.engine, EngineId::FourierTransform) {
+        assert!(
+            resp.meta.engine_trace.contains(&EngineId::FourierTransform),
+            "F{{e^(-t²)}} success path: expected FourierTransform in engine_trace"
+        );
+    }
+}
+
+#[test]
+fn golden_z_transform_not_implemented() {
+    use thales::api::diagnostic::DiagnosticCode;
+    let resp = execute(request(Command::ZTransform {
+        expr: var("n"),
+        var: "n".to_string(),
+        z_var: "z".to_string(),
+    }))
+    .unwrap();
+    assert!(
+        !resp.diagnostics.is_empty(),
+        "ZTransform stub: expected at least one diagnostic"
+    );
+    assert_eq!(
+        resp.diagnostics[0].code,
+        DiagnosticCode::NotImplemented,
+        "ZTransform stub: expected NotImplemented, got: {:?}",
+        resp.diagnostics[0].code
+    );
+}
