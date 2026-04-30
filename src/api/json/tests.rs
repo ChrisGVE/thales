@@ -49,6 +49,10 @@ fn _exhaustiveness_check(cmd: Command) {
         Command::DirectionalDiff { .. } => {}
         Command::Integrate { .. } => {}
         Command::DefIntegrate { .. } => {}
+        Command::MultiIntegrate { .. } => {}
+        Command::ChangeCoords { .. } => {}
+        Command::PathIntegral { .. } => {}
+        Command::SurfaceIntegral { .. } => {}
         Command::Limit { .. } => {}
         Command::Taylor { .. } => {}
         Command::Laurent { .. } => {}

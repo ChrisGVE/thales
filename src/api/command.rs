@@ -14,6 +14,7 @@
 //! integration, integral transforms beyond Fourier series, systems of ODEs,
 //! tensor algebra, and special-function expansions live in v0.9.0.
 
+use crate::transforms::CoordSystem;
 use crate::Expression;
 
 use super::{Condition, Domain, ExprPath};
@@ -248,6 +249,39 @@ pub enum Command {
         from: Expression,
         /// Upper bound.
         to: Expression,
+    },
+    /// Iterated multiple integral (double, triple, …) over rectangular
+    /// bounds. Steps are evaluated inner-to-outer.
+    MultiIntegrate {
+        /// Integrand.
+        expr: Expression,
+        /// Integration steps, inner to outer.
+        integrations: Vec<IntegrationStep>,
+    },
+    /// Change coordinates with automatic Jacobian insertion.
+    ChangeCoords {
+        /// Expression to transform.
+        expr: Expression,
+        /// Original variable names.
+        from_vars: Vec<String>,
+        /// New coordinate variable names.
+        to_vars: Vec<String>,
+        /// Target coordinate system.
+        system: CoordSystem,
+    },
+    /// Path integral along a parametric curve (stub for v0.10.0).
+    PathIntegral {
+        /// Integrand.
+        expr: Expression,
+        /// Parametric curve.
+        curve: ParamCurve,
+    },
+    /// Surface integral (stub for v0.10.0).
+    SurfaceIntegral {
+        /// Integrand.
+        expr: Expression,
+        /// Integration variables.
+        vars: Vec<String>,
     },
 
     // ── Limits ──────────────────────────────────────────────────────────────
@@ -824,4 +858,32 @@ pub enum OptSense {
     Minimize,
     /// Maximise objective.
     Maximize,
+}
+
+/// One step in an iterated multiple integral.
+///
+/// Steps are listed inner-to-outer in [`Command::MultiIntegrate`].
+#[derive(Debug, Clone)]
+pub struct IntegrationStep {
+    /// Variable of integration for this step.
+    pub var: String,
+    /// Lower bound.
+    pub from: Expression,
+    /// Upper bound.
+    pub to: Expression,
+}
+
+/// Parametric curve for path integrals.
+///
+/// Used by [`Command::PathIntegral`] (stub for v0.10.0).
+#[derive(Debug, Clone)]
+pub struct ParamCurve {
+    /// Curve components as expressions of the parameter.
+    pub components: Vec<Expression>,
+    /// Parameter variable name.
+    pub param: String,
+    /// Parameter range start.
+    pub from: Expression,
+    /// Parameter range end.
+    pub to: Expression,
 }

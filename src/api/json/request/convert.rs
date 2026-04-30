@@ -2,8 +2,11 @@
 
 use serde_json::Value;
 
+use crate::transforms::CoordSystem;
+
 use super::super::super::command::{
-    Command, Constraint, IvpData, LimitPoint, NablaInput, NablaOp, SimplifyRules, SystemIvpData,
+    Command, Constraint, IntegrationStep, IvpData, LimitPoint, NablaInput, NablaOp, ParamCurve,
+    SimplifyRules, SystemIvpData,
 };
 use super::super::super::domain::Domain;
 use super::super::super::request::{Budget, Precision, Request};
@@ -12,8 +15,8 @@ use super::parsers::{
     parse_opt_sense, parse_side, parse_solve_mode, parse_special_kind,
 };
 use super::schema::{
-    JsonBudget, JsonCommand, JsonIvpData, JsonPrecision, JsonRequest, JsonSimplifyRules,
-    JsonSystemIvpData,
+    JsonBudget, JsonCommand, JsonIntegrationStep, JsonIvpData, JsonParamCurve, JsonPrecision,
+    JsonRequest, JsonSimplifyRules, JsonSystemIvpData,
 };
 
 // ── Public entry point ────────────────────────────────────────────────────────
@@ -281,6 +284,39 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             var,
             from: parse_expr_str(&from)?,
             to: parse_expr_str(&to)?,
+        }),
+
+        JsonCommand::MultiIntegrate { expr, integrations } => {
+            let parsed_integrations = integrations
+                .into_iter()
+                .map(|s| json_integration_step_to_step(s))
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(Command::MultiIntegrate {
+                expr: parse_expr_str(&expr)?,
+                integrations: parsed_integrations,
+            })
+        }
+
+        JsonCommand::ChangeCoords {
+            expr,
+            from_vars,
+            to_vars,
+            system,
+        } => Ok(Command::ChangeCoords {
+            expr: parse_expr_str(&expr)?,
+            from_vars,
+            to_vars,
+            system: parse_coord_system(&system)?,
+        }),
+
+        JsonCommand::PathIntegral { expr, curve } => Ok(Command::PathIntegral {
+            expr: parse_expr_str(&expr)?,
+            curve: json_param_curve_to_param_curve(curve)?,
+        }),
+
+        JsonCommand::SurfaceIntegral { expr, vars } => Ok(Command::SurfaceIntegral {
+            expr: parse_expr_str(&expr)?,
+            vars,
         }),
 
         JsonCommand::Limit {
@@ -687,6 +723,43 @@ fn json_rules_to_rules(j: JsonSimplifyRules) -> SimplifyRules {
         exponential: j.exponential,
         hyperbolic: j.hyperbolic,
         rational: j.rational,
+    }
+}
+
+fn json_integration_step_to_step(j: JsonIntegrationStep) -> Result<IntegrationStep, String> {
+    Ok(IntegrationStep {
+        var: j.var,
+        from: parse_expr_str(&j.from)?,
+        to: parse_expr_str(&j.to)?,
+    })
+}
+
+fn json_param_curve_to_param_curve(j: JsonParamCurve) -> Result<ParamCurve, String> {
+    let components = j
+        .components
+        .iter()
+        .enumerate()
+        .map(|(i, s)| parse_expr_str(s).map_err(|e| format!("curve.components[{}]: {}", i, e)))
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(ParamCurve {
+        components,
+        param: j.param,
+        from: parse_expr_str(&j.from)?,
+        to: parse_expr_str(&j.to)?,
+    })
+}
+
+fn parse_coord_system(s: &str) -> Result<CoordSystem, String> {
+    match s {
+        "Cartesian2D" => Ok(CoordSystem::Cartesian2D),
+        "Polar2D" => Ok(CoordSystem::Polar2D),
+        "Cartesian3D" => Ok(CoordSystem::Cartesian3D),
+        "Cylindrical" => Ok(CoordSystem::Cylindrical),
+        "Spherical" => Ok(CoordSystem::Spherical),
+        "Parabolic2D" => Ok(CoordSystem::Parabolic2D),
+        "Elliptic2D" => Ok(CoordSystem::Elliptic2D),
+        "Custom" => Ok(CoordSystem::Custom),
+        other => Err(format!("unknown CoordSystem `{}`", other)),
     }
 }
 

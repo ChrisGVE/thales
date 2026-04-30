@@ -138,6 +138,24 @@ pub(in super::super) enum JsonCommand {
         from: String,
         to: String,
     },
+    MultiIntegrate {
+        expr: String,
+        integrations: Vec<JsonIntegrationStep>,
+    },
+    ChangeCoords {
+        expr: String,
+        from_vars: Vec<String>,
+        to_vars: Vec<String>,
+        system: String,
+    },
+    PathIntegral {
+        expr: String,
+        curve: JsonParamCurve,
+    },
+    SurfaceIntegral {
+        expr: String,
+        vars: Vec<String>,
+    },
 
     // ── Limits ─────────────────────────────────────────────────────────
     Limit {
@@ -317,6 +335,23 @@ pub(in super::super) enum JsonCommand {
 }
 
 // ── Supporting serde types ────────────────────────────────────────────────────
+
+/// One step in a `MultiIntegrate` command.
+#[derive(Debug, Deserialize)]
+pub(in super::super) struct JsonIntegrationStep {
+    pub var: String,
+    pub from: String,
+    pub to: String,
+}
+
+/// Parametric curve for a `PathIntegral` command.
+#[derive(Debug, Deserialize)]
+pub(in super::super) struct JsonParamCurve {
+    pub components: Vec<String>,
+    pub param: String,
+    pub from: String,
+    pub to: String,
+}
 
 /// Subset of simplification rule flags exposed through JSON.
 #[derive(Debug, Deserialize)]

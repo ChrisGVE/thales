@@ -143,6 +143,10 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
             honors_mode = true;
             calculus::def_integrate_cmd(&expr, &var, &from, &to, narrate, ctx.mode)
         }
+        Command::MultiIntegrate { .. } => not_implemented_stub("command.multi_integrate"),
+        Command::ChangeCoords { .. } => not_implemented_stub("command.change_coords"),
+        Command::PathIntegral { .. } => not_implemented_stub("command.path_integral"),
+        Command::SurfaceIntegral { .. } => not_implemented_stub("command.surface_integral"),
 
         // ── Limits ───────────────────────────────────────────────────────
         Command::Limit {
@@ -297,6 +301,15 @@ fn noop_response() -> Response {
     r.diagnostics.push(Diagnostic::of(
         DiagnosticCode::NotImplemented,
         Narrative::new("command.noop", "Noop command produces no result."),
+    ));
+    r
+}
+
+fn not_implemented_stub(template_id: &'static str) -> Response {
+    let mut r = Response::default();
+    r.diagnostics.push(Diagnostic::of(
+        DiagnosticCode::NotImplemented,
+        Narrative::new(template_id, "Not yet implemented."),
     ));
     r
 }
