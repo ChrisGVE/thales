@@ -343,6 +343,8 @@ pub enum EngineId {
     OdeSecondOrder,
     /// ODE solver (higher order).
     OdeHigherOrder,
+    /// ODE system solver (eigenvalue or numeric).
+    OdeSystem,
     /// Matrix operations.
     Matrix,
     /// Fourier series engine.
