@@ -136,7 +136,7 @@ fn command_from_json(val: &Value) -> Result<Command, String> {
         "Diff" => Ok(Command::Diff {
             expr: get_expr(val, "expr")?,
             var: get_string(val, "var")?,
-            order: val.get("order").and_then(|v| v.as_u64()).unwrap_or(1) as u32,
+            order: json_u64_to_u32(val.get("order"), "order", 1)?,
         }),
         "PartialDiff" => Ok(Command::PartialDiff {
             expr: get_expr(val, "expr")?,
@@ -180,11 +180,11 @@ fn command_from_json(val: &Value) -> Result<Command, String> {
             expr: get_expr(val, "expr")?,
             var: get_string(val, "var")?,
             period: get_expr(val, "period")?,
-            terms: val.get("terms").and_then(|v| v.as_u64()).unwrap_or(3) as u32,
+            terms: json_u64_to_u32(val.get("terms"), "terms", 3)?,
         }),
 
         "Ode" => {
-            let ic = val.get("ic").and_then(|v| ivp_from_json(v).ok());
+            let ic = val.get("ic").map(ivp_from_json).transpose()?;
             Ok(Command::Ode {
                 equation: get_expr(val, "equation")?,
                 fn_name: get_string(val, "fn_name")?,
@@ -389,6 +389,15 @@ fn get_string_list(val: &Value, key: &str) -> Result<Vec<String>, String> {
         .collect()
 }
 
+fn json_u64_to_u32(val: Option<&Value>, field: &str, default: u32) -> Result<u32, String> {
+    match val.and_then(|v| v.as_u64()) {
+        Some(n) => {
+            u32::try_from(n).map_err(|_| format!("`{}` value {} exceeds u32 maximum", field, n))
+        }
+        None => Ok(default),
+    }
+}
+
 fn get_bindings(val: &Value) -> Result<Vec<(Expression, Expression)>, String> {
     let arr = val
         .get("bindings")
@@ -427,7 +436,7 @@ fn get_partial_diff_vars(val: &Value) -> Result<Vec<(String, u32)>, String> {
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| "PartialDiff entry: missing `var`".to_string())?
                 .to_string();
-            let order = obj.get("order").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
+            let order = json_u64_to_u32(obj.get("order"), "order", 1)?;
             Ok((var, order))
         })
         .collect()
@@ -449,10 +458,17 @@ fn ivp_from_json(val: &Value) -> Result<IvpData, String> {
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
-                .filter_map(|v| v.as_str())
-                .filter_map(|s| parse_expr_str(s).ok())
-                .collect()
+                .enumerate()
+                .map(|(i, v)| {
+                    let s = v
+                        .as_str()
+                        .ok_or_else(|| format!("derivatives_at[{}]: expected string", i))?;
+                    parse_expr_str(s)
+                        .map_err(|e| format!("derivatives_at[{}]: parse error: {}", i, e))
+                })
+                .collect::<Result<Vec<_>, _>>()
         })
+        .transpose()?
         .unwrap_or_default();
     let _ = Variable::new("placeholder_for_compiler_hint");
     Ok(IvpData {

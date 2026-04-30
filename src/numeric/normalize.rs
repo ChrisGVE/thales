@@ -347,7 +347,11 @@ pub fn div(lhs: Arc<Expr>, rhs: Arc<Expr>) -> Arc<Expr> {
         return lhs;
     }
 
-    // 0 / x → 0 (x ≠ 0, but we don't check domain here)
+    if rhs.is_zero() {
+        return Arc::new(Expr::Float(f64::NAN));
+    }
+
+    // 0 / x → 0 (x ≠ 0, confirmed above)
     if lhs.is_zero() {
         return Expr::int(0);
     }
@@ -931,5 +935,34 @@ mod tests {
             Expr::Add(node) => assert_eq!(node.term_count(), 3),
             _ => panic!("expected AddNode"),
         }
+    }
+
+    #[test]
+    fn div_zero_by_zero_is_nan() {
+        let zero = Expr::int(0);
+        let result = div(zero.clone(), zero);
+        match result.as_ref() {
+            Expr::Float(f) => assert!(f.is_nan(), "0/0 should be NaN, got {}", f),
+            other => panic!("0/0 should be Float(NaN), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn div_nonzero_by_zero_is_nan() {
+        let five = Expr::int(5);
+        let zero = Expr::int(0);
+        let result = div(five, zero);
+        match result.as_ref() {
+            Expr::Float(f) => assert!(f.is_nan(), "5/0 should be NaN, got {}", f),
+            other => panic!("5/0 should be Float(NaN), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn div_zero_by_nonzero_is_zero() {
+        let zero = Expr::int(0);
+        let five = Expr::int(5);
+        let result = div(zero, five);
+        assert!(result.is_zero(), "0/5 should be 0");
     }
 }

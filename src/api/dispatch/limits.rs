@@ -16,10 +16,15 @@ pub(super) fn limit_cmd(
     narrate: bool,
 ) -> Response {
     let api_point = match point {
-        ApiLimitPoint::Finite(e) => {
-            let v = expression_to_f64(&e).unwrap_or(0.0);
-            crate::limits::LimitPoint::Value(v)
-        }
+        ApiLimitPoint::Finite(e) => match expression_to_f64(&e) {
+            Some(v) => crate::limits::LimitPoint::Value(v),
+            None => {
+                return engine_error(
+                    "command.limit",
+                    format!("cannot evaluate limit point to a number: {:?}", e),
+                );
+            }
+        },
         ApiLimitPoint::PosInf => crate::limits::LimitPoint::PositiveInfinity,
         ApiLimitPoint::NegInf => crate::limits::LimitPoint::NegativeInfinity,
     };
