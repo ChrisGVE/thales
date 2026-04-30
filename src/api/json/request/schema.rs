@@ -176,6 +176,33 @@ pub(in super::super) enum JsonCommand {
         var: String,
         order: Option<u32>,
     },
+    Puiseux {
+        expr: String,
+        var: String,
+        center: Option<String>,
+        order: Option<u32>,
+    },
+    Frobenius {
+        ode: String,
+        fn_name: String,
+        var: String,
+        point: Option<String>,
+        order: Option<u32>,
+    },
+    Pade {
+        expr: String,
+        var: String,
+        center: Option<String>,
+        m: u32,
+        n: u32,
+    },
+    Wkb {
+        ode: String,
+        fn_name: String,
+        var: String,
+        small_param: String,
+        order: Option<u32>,
+    },
 
     // ── Transforms ─────────────────────────────────────────────────────
     FourierSeries {

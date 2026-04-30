@@ -348,6 +348,72 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             order: order.unwrap_or(3),
         }),
 
+        JsonCommand::Puiseux {
+            expr,
+            var,
+            center,
+            order,
+        } => Ok(Command::Puiseux {
+            expr: parse_expr_str(&expr)?,
+            var,
+            center: center
+                .as_deref()
+                .map(parse_expr_str)
+                .transpose()?
+                .unwrap_or(crate::ast::Expression::Integer(0)),
+            order: order.unwrap_or(3),
+        }),
+
+        JsonCommand::Frobenius {
+            ode,
+            fn_name,
+            var,
+            point,
+            order,
+        } => Ok(Command::Frobenius {
+            ode: parse_expr_str(&ode)?,
+            fn_name,
+            var,
+            point: point
+                .as_deref()
+                .map(parse_expr_str)
+                .transpose()?
+                .unwrap_or(crate::ast::Expression::Integer(0)),
+            order: order.unwrap_or(3),
+        }),
+
+        JsonCommand::Pade {
+            expr,
+            var,
+            center,
+            m,
+            n,
+        } => Ok(Command::Pade {
+            expr: parse_expr_str(&expr)?,
+            var,
+            center: center
+                .as_deref()
+                .map(parse_expr_str)
+                .transpose()?
+                .unwrap_or(crate::ast::Expression::Integer(0)),
+            m,
+            n,
+        }),
+
+        JsonCommand::Wkb {
+            ode,
+            fn_name,
+            var,
+            small_param,
+            order,
+        } => Ok(Command::Wkb {
+            ode: parse_expr_str(&ode)?,
+            fn_name,
+            var,
+            small_param,
+            order: order.unwrap_or(2),
+        }),
+
         JsonCommand::FourierSeries {
             expr,
             var,

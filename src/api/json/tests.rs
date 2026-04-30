@@ -55,6 +55,10 @@ fn _exhaustiveness_check(cmd: Command) {
         Command::Asymptotic { .. } => {}
         Command::Compose { .. } => {}
         Command::Revert { .. } => {}
+        Command::Puiseux { .. } => {}
+        Command::Frobenius { .. } => {}
+        Command::Pade { .. } => {}
+        Command::Wkb { .. } => {}
         Command::FourierSeries { .. } => {}
         Command::Residue { .. } => {}
         Command::SpecialFn { .. } => {}
