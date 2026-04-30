@@ -24,6 +24,7 @@
 
 pub mod builder;
 mod first_order;
+pub(crate) mod linear_system;
 pub mod non_homogeneous;
 mod second_order;
 pub mod system;
