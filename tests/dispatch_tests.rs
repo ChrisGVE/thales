@@ -1277,12 +1277,15 @@ fn limit_at_symbolic_point_returns_error() {
 
 #[test]
 fn json_rejects_oversized_diff_order() {
+    // 4294967297 = 2^32 + 1 exceeds u32::MAX; must be rejected.
+    // The serde-based parser emits "invalid value: integer `N`, expected u32".
     let json = r#"{"command":{"type":"Diff","expr":"x^2","var":"x","order":4294967297}}"#;
     let result = execute_ffi(json);
-    match result {
-        Ok(s) => assert!(s.contains("exceeds"), "should mention exceeds: {}", s),
-        Err(e) => assert!(e.contains("exceeds"), "error should mention exceeds: {}", e),
-    }
+    assert!(
+        result.is_err(),
+        "oversized order must be rejected; got Ok: {}",
+        result.unwrap()
+    );
 }
 
 #[test]
