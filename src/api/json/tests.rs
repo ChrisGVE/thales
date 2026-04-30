@@ -61,6 +61,14 @@ fn _exhaustiveness_check(cmd: Command) {
         Command::Wkb { .. } => {}
         Command::FourierSeries { .. } => {}
         Command::Residue { .. } => {}
+        Command::LaplaceTransform { .. } => {}
+        Command::InverseLaplace { .. } => {}
+        Command::FourierTransform { .. } => {}
+        Command::InverseFourier { .. } => {}
+        Command::ZTransform { .. } => {}
+        Command::InverseZTransform { .. } => {}
+        Command::MellinTransform { .. } => {}
+        Command::InverseMellin { .. } => {}
         Command::SpecialFn { .. } => {}
         Command::Ode { .. } => {}
         Command::OdeSystem { .. } => {}

@@ -365,11 +365,10 @@ mod tests {
         );
 
         // With r=2, exponent 1 = 2/2, so exponent_num=2, exponent_den=2.
-        let coeff_1 = series
-            .terms
-            .iter()
-            .find(|t| t.exponent_num as f64 / t.exponent_den as f64 - 1.0 < 1e-9
-                   && (t.exponent_num as f64 / t.exponent_den as f64 - 1.0).abs() < 1e-9);
+        let coeff_1 = series.terms.iter().find(|t| {
+            t.exponent_num as f64 / t.exponent_den as f64 - 1.0 < 1e-9
+                && (t.exponent_num as f64 / t.exponent_den as f64 - 1.0).abs() < 1e-9
+        });
         assert!(coeff_1.is_some(), "should have x^1 term (as exponent 1.0)");
         let c1 = &coeff_1.unwrap().coefficient;
         match c1.as_ref() {

@@ -23,12 +23,10 @@ use crate::ThalesError;
 /// stringified for cross-language transport.
 pub fn execute_ffi(request_json: &str) -> Result<String, String> {
     let request_val: serde_json::Value =
-        serde_json::from_str(request_json)
-            .map_err(|e| format!("invalid JSON request: {}", e))?;
+        serde_json::from_str(request_json).map_err(|e| format!("invalid JSON request: {}", e))?;
     let request = request::request_from_json(&request_val)?;
     let response = super::dispatch::execute(request)
         .map_err(|e: ThalesError| format!("dispatch error: {}", e))?;
     let response_val = response::response_to_json(&response);
-    serde_json::to_string(&response_val)
-        .map_err(|e| format!("failed to serialise response: {}", e))
+    serde_json::to_string(&response_val).map_err(|e| format!("failed to serialise response: {}", e))
 }

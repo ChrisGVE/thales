@@ -213,6 +213,23 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
         } => series::fourier_series_cmd(&expr, &var, &period, terms, narrate),
         Command::Residue { expr, var, point } => special::residue_cmd(&expr, &var, &point, narrate),
 
+        // ── Integral transforms (stubs — dispatch/transforms.rs coming next) ──
+        Command::LaplaceTransform { .. }
+        | Command::InverseLaplace { .. }
+        | Command::FourierTransform { .. }
+        | Command::InverseFourier { .. }
+        | Command::ZTransform { .. }
+        | Command::InverseZTransform { .. }
+        | Command::MellinTransform { .. }
+        | Command::InverseMellin { .. } => {
+            let mut r = Response::default();
+            r.diagnostics.push(Diagnostic::of(
+                DiagnosticCode::NotImplemented,
+                Narrative::new("command.transform", "Integral transform dispatch pending."),
+            ));
+            r
+        }
+
         // ── Special functions ────────────────────────────────────────────
         Command::SpecialFn { kind, args } => special::special_fn_cmd(kind, &args, narrate),
 

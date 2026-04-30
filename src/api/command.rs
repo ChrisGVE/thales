@@ -390,6 +390,80 @@ pub enum Command {
         point: Expression,
     },
 
+    // ── Integral transforms ────────────────────────────────────────────────
+    /// Laplace transform L{f(t)} = F(s).
+    LaplaceTransform {
+        /// Integrand expression `f(t)`.
+        expr: Expression,
+        /// Time-domain variable (e.g. `"t"`).
+        time_var: String,
+        /// Frequency-domain variable (e.g. `"s"`).
+        freq_var: String,
+    },
+    /// Inverse Laplace transform L^{-1}{F(s)} = f(t).
+    InverseLaplace {
+        /// Frequency-domain expression `F(s)`.
+        expr: Expression,
+        /// Frequency-domain variable (e.g. `"s"`).
+        freq_var: String,
+        /// Time-domain variable (e.g. `"t"`).
+        time_var: String,
+    },
+    /// Continuous Fourier transform F{f(t)} = F(ω).
+    FourierTransform {
+        /// Time-domain expression `f(t)`.
+        expr: Expression,
+        /// Time-domain variable (e.g. `"t"`).
+        time_var: String,
+        /// Frequency-domain variable (e.g. `"ω"`).
+        freq_var: String,
+    },
+    /// Inverse Fourier transform F^{-1}{F(ω)} = f(t).
+    InverseFourier {
+        /// Frequency-domain expression `F(ω)`.
+        expr: Expression,
+        /// Frequency-domain variable (e.g. `"ω"`).
+        freq_var: String,
+        /// Time-domain variable (e.g. `"t"`).
+        time_var: String,
+    },
+    /// Z-transform (stub for v0.10.0).
+    ZTransform {
+        /// Discrete-time expression.
+        expr: Expression,
+        /// Discrete-time variable (e.g. `"n"`).
+        var: String,
+        /// Complex frequency variable (e.g. `"z"`).
+        z_var: String,
+    },
+    /// Inverse Z-transform (stub for v0.10.0).
+    InverseZTransform {
+        /// Z-domain expression.
+        expr: Expression,
+        /// Complex frequency variable (e.g. `"z"`).
+        z_var: String,
+        /// Discrete-time variable (e.g. `"n"`).
+        var: String,
+    },
+    /// Mellin transform (stub for v0.10.0).
+    MellinTransform {
+        /// Expression to transform.
+        expr: Expression,
+        /// Integration variable (e.g. `"x"`).
+        var: String,
+        /// Complex frequency variable (e.g. `"s"`).
+        s_var: String,
+    },
+    /// Inverse Mellin transform (stub for v0.10.0).
+    InverseMellin {
+        /// Frequency-domain expression.
+        expr: Expression,
+        /// Complex frequency variable (e.g. `"s"`).
+        s_var: String,
+        /// Output variable (e.g. `"x"`).
+        var: String,
+    },
+
     // ── Special functions ───────────────────────────────────────────────────
     /// Evaluate or simplify a special function.
     SpecialFn {

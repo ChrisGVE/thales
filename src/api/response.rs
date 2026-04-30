@@ -349,6 +349,22 @@ pub enum EngineId {
     Matrix,
     /// Fourier series engine.
     FourierSeries,
+    /// Laplace transform engine.
+    LaplaceTransform,
+    /// Inverse Laplace transform engine.
+    InverseLaplace,
+    /// Continuous Fourier transform engine.
+    FourierTransform,
+    /// Inverse Fourier transform engine.
+    InverseFourier,
+    /// Z-transform engine (stub).
+    ZTransform,
+    /// Inverse Z-transform engine (stub).
+    InverseZTransform,
+    /// Mellin transform engine (stub).
+    MellinTransform,
+    /// Inverse Mellin transform engine (stub).
+    InverseMellin,
     /// Special functions.
     SpecialFunctions,
     /// Partial fractions decomposition.
