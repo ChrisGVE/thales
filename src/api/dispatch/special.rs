@@ -60,24 +60,131 @@ pub(super) fn special_fn_cmd(kind: SpecialKind, args: &[Expression], narrate: bo
             }
             special::erfc(&args[0])
         }
-        SpecialKind::LnGamma
-        | SpecialKind::Digamma
-        | SpecialKind::BesselJ
-        | SpecialKind::BesselY
-        | SpecialKind::BesselI
-        | SpecialKind::BesselK
-        | SpecialKind::AiryAi
-        | SpecialKind::AiryBi
-        | SpecialKind::Zeta
-        | SpecialKind::Si
-        | SpecialKind::Ci
-        | SpecialKind::Ei
-        | SpecialKind::Heaviside
-        | SpecialKind::DiracDelta => {
-            return engine_error(
-                "command.special_fn",
-                format!("{:?} not yet implemented", kind),
-            );
+        SpecialKind::LnGamma => {
+            if args.len() != 1 {
+                return engine_error(
+                    "command.special_fn",
+                    format!("LnGamma takes 1 argument, got {}", args.len()),
+                );
+            }
+            special::lngamma(&args[0])
+        }
+        SpecialKind::Digamma => {
+            if args.len() != 1 {
+                return engine_error(
+                    "command.special_fn",
+                    format!("Digamma takes 1 argument, got {}", args.len()),
+                );
+            }
+            special::digamma(&args[0])
+        }
+        SpecialKind::BesselJ => {
+            if args.len() != 2 {
+                return engine_error(
+                    "command.special_fn",
+                    format!("BesselJ takes 2 arguments, got {}", args.len()),
+                );
+            }
+            special::bessel_j(&args[0], &args[1])
+        }
+        SpecialKind::BesselY => {
+            if args.len() != 2 {
+                return engine_error(
+                    "command.special_fn",
+                    format!("BesselY takes 2 arguments, got {}", args.len()),
+                );
+            }
+            special::bessel_y(&args[0], &args[1])
+        }
+        SpecialKind::BesselI => {
+            if args.len() != 2 {
+                return engine_error(
+                    "command.special_fn",
+                    format!("BesselI takes 2 arguments, got {}", args.len()),
+                );
+            }
+            special::bessel_i(&args[0], &args[1])
+        }
+        SpecialKind::BesselK => {
+            if args.len() != 2 {
+                return engine_error(
+                    "command.special_fn",
+                    format!("BesselK takes 2 arguments, got {}", args.len()),
+                );
+            }
+            special::bessel_k(&args[0], &args[1])
+        }
+        SpecialKind::AiryAi => {
+            if args.len() != 1 {
+                return engine_error(
+                    "command.special_fn",
+                    format!("AiryAi takes 1 argument, got {}", args.len()),
+                );
+            }
+            special::airy_ai(&args[0])
+        }
+        SpecialKind::AiryBi => {
+            if args.len() != 1 {
+                return engine_error(
+                    "command.special_fn",
+                    format!("AiryBi takes 1 argument, got {}", args.len()),
+                );
+            }
+            special::airy_bi(&args[0])
+        }
+        SpecialKind::Zeta => {
+            if args.len() != 1 {
+                return engine_error(
+                    "command.special_fn",
+                    format!("Zeta takes 1 argument, got {}", args.len()),
+                );
+            }
+            special::zeta(&args[0])
+        }
+        SpecialKind::Si => {
+            if args.len() != 1 {
+                return engine_error(
+                    "command.special_fn",
+                    format!("Si takes 1 argument, got {}", args.len()),
+                );
+            }
+            special::si(&args[0])
+        }
+        SpecialKind::Ci => {
+            if args.len() != 1 {
+                return engine_error(
+                    "command.special_fn",
+                    format!("Ci takes 1 argument, got {}", args.len()),
+                );
+            }
+            special::ci(&args[0])
+        }
+        SpecialKind::Ei => {
+            if args.len() != 1 {
+                return engine_error(
+                    "command.special_fn",
+                    format!("Ei takes 1 argument, got {}", args.len()),
+                );
+            }
+            special::ei(&args[0])
+        }
+        SpecialKind::Heaviside => {
+            if args.len() != 1 {
+                return engine_error(
+                    "command.special_fn",
+                    format!("Heaviside takes 1 argument, got {}", args.len()),
+                );
+            }
+            special::heaviside(&args[0])
+        }
+        SpecialKind::DiracDelta => {
+            if args.len() != 1 {
+                return engine_error(
+                    "command.special_fn",
+                    format!("DiracDelta takes 1 argument, got {}", args.len()),
+                );
+            }
+            special::dirac_delta(&args[0])
         }
     };
 
