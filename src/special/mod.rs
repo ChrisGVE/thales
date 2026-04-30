@@ -29,10 +29,14 @@
 
 pub mod airy;
 pub mod bessel;
+pub mod distributions;
+pub mod integrals;
 pub mod lngamma_digamma;
 
 pub use airy::{airy_ai, airy_bi};
 pub use bessel::{bessel_i, bessel_j, bessel_k, bessel_y};
+pub use distributions::{dirac_delta, heaviside};
+pub use integrals::{ci, ei, si, zeta};
 pub use lngamma_digamma::{digamma, lngamma};
 
 use crate::ast::{BinaryOp, Expression, Function, SymbolicConstant};
