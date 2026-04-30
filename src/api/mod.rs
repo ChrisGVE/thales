@@ -13,16 +13,8 @@
 //!   alternative equivalent forms, and engine provenance. The response also
 //!   carries diagnostics, assumptions, and execution metadata.
 //!
-//! # Scaffolding status (v0.8.1, T1)
-//!
-//! This is the API **skeleton**. Types are defined but the [`execute`]
-//! function is stubbed — it accepts any [`Request`] and returns
-//! `Err(ThalesError::ApiNotImplemented)`. Per-command dispatch arrives in T5.
-//!
-//! FFI JSON transport lives at T6 and will be built via custom serde impls
-//! (or string-based serialization) once the API shape settles. v0.8.1 types
-//! deliberately omit serde derives because `ast::Expression` does not derive
-//! `Serialize` / `Deserialize` today.
+//! FFI JSON transport lives in [`json`] and calls the same dispatcher as this
+//! public Rust entry point.
 
 pub mod command;
 pub mod condition;
@@ -59,11 +51,6 @@ use crate::ThalesError;
 /// command variant, and assembles the [`Response`] by decompiling results back
 /// to `Expression` at this exit point.
 ///
-/// # Scaffolding note (T1)
-///
-/// Dispatch is not yet wired. This function returns
-/// `Err(ThalesError::ApiNotImplemented)` for every call. T5 delivers the
-/// full dispatch table.
-pub fn execute(_request: Request) -> Result<Response, ThalesError> {
-    Err(ThalesError::ApiNotImplemented)
+pub fn execute(request: Request) -> Result<Response, ThalesError> {
+    dispatch::execute(request)
 }

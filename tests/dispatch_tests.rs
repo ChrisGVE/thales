@@ -10,7 +10,7 @@ use thales::api::command::{
     Command, IvpData, LimitPoint, MatrixExpr as ApiMatrixExpr, MatrixOp, SimplifyRules, SpecialKind,
 };
 use thales::api::diagnostic::{DiagnosticCode, Severity};
-use thales::api::dispatch::execute;
+use thales::api::execute;
 use thales::api::domain::Domain;
 use thales::api::json::execute_ffi;
 use thales::api::request::{Request, SolveMode};
@@ -1201,7 +1201,7 @@ fn dispatch_resolves_noop_diagnostic_narrative() {
 
 #[test]
 fn ffi_round_trip_carries_resolved_narrative() {
-    // The FFI surface goes through dispatch::execute and therefore inherits
+    // The FFI surface goes through the same dispatcher as api::execute and inherits
     // render_response. The resolved Markdown must reach the JSON.
     // Matrix (Determinant) is not yet wired; use it to test the narrative path.
     let req = r#"{"command":{"type":"Matrix","op":"Determinant"}}"#;
