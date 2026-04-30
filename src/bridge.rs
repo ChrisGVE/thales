@@ -467,4 +467,23 @@ mod ffi {
     extern "Rust" {
         fn parse_latex_calculus_ffi(input: &str) -> Result<String, String>;
     }
+
+    // =========================================================================
+    // Unified JSON entry point
+    // =========================================================================
+    //
+    // # Legacy FFI Freeze (v0.9.0)
+    //
+    // All per-operation FFI functions above are FROZEN as of v0.9.0:
+    // - No new per-operation FFI functions will be added.
+    // - Existing per-operation functions remain for backward compatibility.
+    // - All new operations are accessible only through `execute_json_ffi`.
+    // - Deprecation warnings will be added in v0.10.0.
+    // - Removal planned for v1.0.0.
+    //
+    // The canonical cross-language entry point is `execute_json_ffi`.
+
+    extern "Rust" {
+        fn execute_json_ffi(request_json: &str) -> Result<String, String>;
+    }
 }

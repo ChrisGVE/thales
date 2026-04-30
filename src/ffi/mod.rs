@@ -31,6 +31,7 @@
 
 // Implementation submodules
 mod calculus_impl;
+mod json_impl;
 mod precision_impl;
 mod series_impl;
 mod solver_impl;
@@ -39,6 +40,7 @@ mod transforms_impl;
 // Re-export all implementation functions into this module's namespace
 // so the swift-bridge `extern "Rust"` declarations can find them.
 use calculus_impl::*;
+use json_impl::*;
 use precision_impl::*;
 use series_impl::*;
 use solver_impl::*;
@@ -428,6 +430,14 @@ mod ffi {
 
     extern "Rust" {
         fn parse_latex_calculus_ffi(input: &str) -> Result<String, String>;
+    }
+
+    // =========================================================================
+    // Unified JSON entry point
+    // =========================================================================
+
+    extern "Rust" {
+        fn execute_json_ffi(request_json: &str) -> Result<String, String>;
     }
 }
 
