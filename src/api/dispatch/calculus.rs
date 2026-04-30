@@ -15,7 +15,7 @@ use super::helpers::{engine_error, expression_to_f64, steps_from_trace, symbolic
 pub(super) fn diff_cmd(expr: &Expression, var: &str, order: u32, narrate: bool) -> Response {
     let mut current = expr.clone();
     let mut trace = Trace::new();
-    for _ in 0..order.max(1) {
+    for _ in 0..order {
         let next = current.differentiate(var);
         if narrate {
             trace.push(
@@ -50,7 +50,7 @@ pub(super) fn partial_diff_cmd(
     let mut current = expr.clone();
     let mut trace = Trace::new();
     for (var, order) in vars {
-        for _ in 0..(*order).max(1) {
+        for _ in 0..*order {
             current = current.differentiate(var);
             if narrate {
                 trace.push(

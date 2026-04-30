@@ -371,12 +371,15 @@ fn expr_to_rat(expr: &Arc<Expr>) -> Option<BigRational> {
 /// Convert a `BigRational` to the canonical `Arc<Expr>`.
 fn rat_to_expr(r: BigRational) -> Arc<Expr> {
     if r.is_integer() {
-        let n = r.numer().to_i64().unwrap_or(0);
-        Expr::int(n)
+        match r.numer().to_i64() {
+            Some(n) => Expr::int(n),
+            None => Arc::new(Expr::Rational(r)),
+        }
     } else {
-        let n = r.numer().to_i64().unwrap_or(0);
-        let d = r.denom().to_i64().unwrap_or(1);
-        Expr::rational(n, d)
+        match (r.numer().to_i64(), r.denom().to_i64()) {
+            (Some(n), Some(d)) => Expr::rational(n, d),
+            _ => Arc::new(Expr::Rational(r)),
+        }
     }
 }
 

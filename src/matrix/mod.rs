@@ -815,17 +815,17 @@ mod tests {
         let eigenvalues = m.eigenvalues_numeric().unwrap();
         assert_eq!(eigenvalues.len(), 2);
 
-        // Sort eigenvalues for consistent comparison
+        // Sort eigenvalues for consistent comparison (by real part)
         let mut sorted = eigenvalues.clone();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        sorted.sort_by(|a, b| a.re.partial_cmp(&b.re).unwrap());
 
         assert!(
-            (sorted[0] - 1.0).abs() < 1e-10,
+            (sorted[0].re - 1.0).abs() < 1e-10,
             "Expected 1, got {}",
             sorted[0]
         );
         assert!(
-            (sorted[1] - 3.0).abs() < 1e-10,
+            (sorted[1].re - 3.0).abs() < 1e-10,
             "Expected 3, got {}",
             sorted[1]
         );
@@ -839,10 +839,10 @@ mod tests {
 
         let eigenvalues = m.eigenvalues_numeric().unwrap();
         let mut sorted = eigenvalues.clone();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        sorted.sort_by(|a, b| a.re.partial_cmp(&b.re).unwrap());
 
-        assert!((sorted[0] - 3.0).abs() < 1e-10);
-        assert!((sorted[1] - 5.0).abs() < 1e-10);
+        assert!((sorted[0].re - 3.0).abs() < 1e-10);
+        assert!((sorted[1].re - 5.0).abs() < 1e-10);
     }
 
     #[test]
@@ -854,7 +854,7 @@ mod tests {
         assert_eq!(eigenvalues.len(), 3);
 
         for ev in eigenvalues {
-            assert!((ev - 1.0).abs() < 1e-10);
+            assert!((ev.re - 1.0).abs() < 1e-10);
         }
     }
 
@@ -900,8 +900,8 @@ mod tests {
                 })
                 .collect();
 
-            // Compute λv
-            let lambda_v: Vec<f64> = eigenvector.iter().map(|v| eigenvalue * v).collect();
+            // Compute λv (use real part of eigenvalue — these are real-eigenvalue test cases)
+            let lambda_v: Vec<f64> = eigenvector.iter().map(|v| eigenvalue.re * v).collect();
 
             // Check Av ≈ λv
             for i in 0..2 {
@@ -931,11 +931,11 @@ mod tests {
 
         let eigenvalues = m.eigenvalues_numeric().unwrap();
         let mut sorted = eigenvalues.clone();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        sorted.sort_by(|a, b| a.re.partial_cmp(&b.re).unwrap());
 
-        assert!((sorted[0] - 1.0).abs() < 1e-10);
-        assert!((sorted[1] - 2.0).abs() < 1e-10);
-        assert!((sorted[2] - 3.0).abs() < 1e-10);
+        assert!((sorted[0].re - 1.0).abs() < 1e-10);
+        assert!((sorted[1].re - 2.0).abs() < 1e-10);
+        assert!((sorted[2].re - 3.0).abs() < 1e-10);
     }
 
     #[test]

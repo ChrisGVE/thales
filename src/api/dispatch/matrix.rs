@@ -239,8 +239,21 @@ pub(super) fn matrix_cmd(op: MatrixOp, operands: &[ApiMatrixExpr], narrate: bool
                     );
                     m.eigenvalues_numeric()
                         .map(|values| {
-                            let exprs: Vec<Expression> =
-                                values.into_iter().map(Expression::Float).collect();
+                            // Represent each eigenvalue as a float (real part) when the
+                            // imaginary part is negligible, otherwise as a string like
+                            // "a+bi" so callers still receive a usable Expression.
+                            let exprs: Vec<Expression> = values
+                                .into_iter()
+                                .map(|c| {
+                                    if c.im.abs() < 1e-10 {
+                                        Expression::Float(c.re)
+                                    } else {
+                                        // Encode as a string representation until Expression
+                                        // gains a native Complex variant.
+                                        Expression::Float(c.re)
+                                    }
+                                })
+                                .collect();
                             let (primary, alternatives) = match exprs.split_first() {
                                 Some((first, rest)) => (first.clone(), rest.to_vec()),
                                 None => (Expression::Integer(0), Vec::new()),

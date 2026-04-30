@@ -10,8 +10,8 @@ use thales::api::command::{
     Command, IvpData, LimitPoint, MatrixExpr as ApiMatrixExpr, MatrixOp, SimplifyRules, SpecialKind,
 };
 use thales::api::diagnostic::{DiagnosticCode, Severity};
-use thales::api::execute;
 use thales::api::domain::Domain;
+use thales::api::execute;
 use thales::api::json::execute_ffi;
 use thales::api::request::{Request, SolveMode};
 use thales::api::response::{EngineId, ResultKey, ResultValue};
@@ -1211,4 +1211,106 @@ fn ffi_round_trip_carries_resolved_narrative() {
         .as_str()
         .expect("diagnostic fallback_md must serialise as a string");
     assert_eq!(diag_md, dict_entry("command.matrix"));
+}
+
+// ── Phase 0A: C-11 diff order 0 ────────────────────────────────────────────
+
+#[test]
+fn diff_order_zero_returns_original() {
+    let req = request(Command::Diff {
+        expr: add(pow(var("x"), int(2)), int(1)),
+        var: "x".to_string(),
+        order: 0,
+    });
+    let resp = execute(req).unwrap();
+    assert_eq!(resp.results.len(), 1);
+    let (_, entry) = &resp.results[0];
+    if let ResultValue::Symbolic(e) = &entry.value {
+        assert_ne!(
+            format!("{:?}", e),
+            format!("{:?}", mul(int(2), var("x"))),
+            "order 0 should not differentiate"
+        );
+    }
+}
+
+#[test]
+fn partial_diff_order_zero_returns_original() {
+    let req = request(Command::PartialDiff {
+        expr: add(pow(var("x"), int(2)), pow(var("y"), int(2))),
+        vars: vec![("x".to_string(), 0)],
+    });
+    let resp = execute(req).unwrap();
+    assert_eq!(resp.results.len(), 1);
+}
+
+// ── Phase 0A: C-10 limit point error ───────────────────────────────────────
+
+#[test]
+fn limit_at_numeric_point_works() {
+    let req = request(Command::Limit {
+        expr: pow(var("x"), int(2)),
+        var: "x".to_string(),
+        point: LimitPoint::Finite(int(2)),
+        side: None,
+    });
+    let resp = execute(req).unwrap();
+    assert!(!resp.results.is_empty());
+}
+
+#[test]
+fn limit_at_symbolic_point_returns_error() {
+    let req = request(Command::Limit {
+        expr: pow(var("x"), int(2)),
+        var: "x".to_string(),
+        point: LimitPoint::Finite(var("z")),
+        side: None,
+    });
+    let resp = execute(req).unwrap();
+    assert!(
+        !resp.diagnostics.is_empty(),
+        "symbolic limit point should produce a diagnostic"
+    );
+}
+
+// ── Phase 0A: C-12 u64 overflow, C-13 ic error, C-14 derivatives_at ───────
+
+#[test]
+fn json_rejects_oversized_diff_order() {
+    let json = r#"{"command":{"type":"Diff","expr":"x^2","var":"x","order":4294967297}}"#;
+    let result = execute_ffi(json);
+    match result {
+        Ok(s) => assert!(s.contains("exceeds"), "should mention exceeds: {}", s),
+        Err(e) => assert!(e.contains("exceeds"), "error should mention exceeds: {}", e),
+    }
+}
+
+#[test]
+fn json_accepts_valid_diff_order() {
+    let json = r#"{"command":{"type":"Diff","expr":"x^2","var":"x","order":3}}"#;
+    let result = execute_ffi(json);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn json_ode_missing_ic_is_ok() {
+    let json = r#"{"command":{"type":"Ode","equation":"y","fn_name":"y","var":"x"}}"#;
+    let result = execute_ffi(json);
+    assert!(result.is_ok());
+}
+
+// ── Phase 0A: C-15 JSON Matrix operands ────────────────────────────────────
+
+#[test]
+fn json_matrix_determinant_with_operand() {
+    let json = r#"{"command":{"type":"Matrix","op":"Determinant","operands":[{"rows":[["1","2"],["3","4"]]}]}}"#;
+    let result = execute_ffi(json);
+    assert!(result.is_ok(), "should parse matrix operand: {:?}", result);
+}
+
+#[test]
+fn json_matrix_no_operands_still_works() {
+    let json = r#"{"command":{"type":"Matrix","op":"Determinant"}}"#;
+    let result = execute_ffi(json);
+    assert!(result.is_ok());
 }

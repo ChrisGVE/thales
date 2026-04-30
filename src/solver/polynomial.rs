@@ -114,7 +114,8 @@ fn solve_cubic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<So
         // Three distinct real roots (casus irreducibilis)
         // Use trigonometric method
         let m = 2.0 * (-dep_p / 3.0).sqrt();
-        let theta = (3.0 * dep_q / (dep_p * m)).acos() / 3.0;
+        let acos_arg = (3.0 * dep_q / (dep_p * m)).clamp(-1.0, 1.0);
+        let theta = acos_arg.acos() / 3.0;
 
         let t1 = m * theta.cos();
         let t2 = m * (theta - 2.0 * std::f64::consts::PI / 3.0).cos();
@@ -279,7 +280,8 @@ fn solve_quartic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<
     if disc_cubic > 1e-10 {
         // Use trigonometric method for real root
         let sqrt_term = 2.0 * (-dep_p / 3.0).sqrt();
-        let theta = (3.0 * dep_q / (dep_p * sqrt_term)).acos() / 3.0;
+        let acos_arg = (3.0 * dep_q / (dep_p * sqrt_term)).clamp(-1.0, 1.0);
+        let theta = acos_arg.acos() / 3.0;
         m = sqrt_term * theta.cos() - resolvent_coeffs[2] / 3.0;
     } else {
         // Use Cardano's formula
@@ -304,7 +306,11 @@ fn solve_quartic(coeffs: &[f64], _var: &str, trace: &mut Trace) -> SolverResult<
 
     // Factor quartic: (y² + m)² = (α + 2m)y² - βy + (m² + αm + γ - γ)
     // Using Ferrari's factorization into two quadratics
-    let sqrt_2m_alpha = (2.0 * m + alpha).max(0.0).sqrt();
+    let val_2m_alpha = 2.0 * m + alpha;
+    if val_2m_alpha < -1e-12 {
+        return solve_polynomial_numerically(coeffs, _var, trace);
+    }
+    let sqrt_2m_alpha = val_2m_alpha.max(0.0).sqrt();
 
     // y² + sqrt(2m+α)y + (m + β/(2*sqrt(2m+α))) = 0
     // y² - sqrt(2m+α)y + (m - β/(2*sqrt(2m+α))) = 0
@@ -411,11 +417,11 @@ fn solve_polynomial_numerically(
     let max_iter = 100;
     let tolerance = 1e-12;
 
+    let mut converged = false;
     for _ in 0..max_iter {
         let mut max_change: f64 = 0.0;
 
         for i in 0..degree {
-            // Evaluate polynomial at roots[i]
             let mut p_val = num_complex::Complex64::new(0.0, 0.0);
             let mut power = num_complex::Complex64::new(1.0, 0.0);
             for &coeff in coeffs.iter() {
@@ -423,7 +429,6 @@ fn solve_polynomial_numerically(
                 power *= roots[i];
             }
 
-            // Compute denominator product
             let mut denom = num_complex::Complex64::new(1.0, 0.0);
             for j in 0..degree {
                 if i != j {
@@ -439,8 +444,19 @@ fn solve_polynomial_numerically(
         }
 
         if max_change < tolerance {
+            converged = true;
             break;
         }
+    }
+
+    if !converged {
+        trace.push(Step::new(
+            TechniqueTag::NumericalApproximation,
+            format!(
+                "Warning: Durand-Kerner did not converge after {} iterations (tolerance {})",
+                max_iter, tolerance
+            ),
+        ));
     }
 
     // Convert to Arc<Expr>

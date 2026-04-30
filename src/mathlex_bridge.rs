@@ -123,12 +123,21 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
             ))
         }
 
-        // Cross product / dot product — in scalar contexts, treat as multiplication
-        mathlex::Expression::CrossProduct { left, right }
-        | mathlex::Expression::DotProduct { left, right } => {
+        mathlex::Expression::CrossProduct { left, right } => {
             let l = convert_expression(left)?;
             let r = convert_expression(right)?;
-            Ok(Expression::Binary(BinaryOp::Mul, Box::new(l), Box::new(r)))
+            Ok(Expression::Function(
+                Function::Custom("cross_product".to_string()),
+                vec![l, r],
+            ))
+        }
+        mathlex::Expression::DotProduct { left, right } => {
+            let l = convert_expression(left)?;
+            let r = convert_expression(right)?;
+            Ok(Expression::Function(
+                Function::Custom("dot_product".to_string()),
+                vec![l, r],
+            ))
         }
 
         // Outer product
@@ -152,8 +161,11 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
         }
 
         mathlex::Expression::Matrix(rows) => {
-            // Flatten rows into a single args list with row separators
-            let mut args = Vec::new();
+            let nrows = rows.len();
+            let ncols = rows.first().map_or(0, |r| r.len());
+            let mut args = Vec::with_capacity(2 + nrows * ncols);
+            args.push(Expression::Integer(nrows as i64));
+            args.push(Expression::Integer(ncols as i64));
             for row in rows {
                 for elem in row {
                     args.push(convert_expression(elem)?);

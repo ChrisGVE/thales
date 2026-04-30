@@ -15,7 +15,9 @@ use crate::ast::{Expression, Variable};
 use crate::parser::parse_equation;
 use crate::ThalesError;
 
-use super::command::{Command, IvpData, LimitPoint, MatrixOp, SimplifyRules, SpecialKind};
+use super::command::{
+    Command, IvpData, LimitPoint, MatrixExpr, MatrixOp, SimplifyRules, SpecialKind,
+};
 use super::domain::Domain;
 use super::request::{Request, SolveMode};
 use super::response::{NarratedStep, Response, ResultEntry, ResultKey, ResultValue};
@@ -136,7 +138,7 @@ fn command_from_json(val: &Value) -> Result<Command, String> {
         "Diff" => Ok(Command::Diff {
             expr: get_expr(val, "expr")?,
             var: get_string(val, "var")?,
-            order: val.get("order").and_then(|v| v.as_u64()).unwrap_or(1) as u32,
+            order: json_u64_to_u32(val.get("order"), "order", 1)?,
         }),
         "PartialDiff" => Ok(Command::PartialDiff {
             expr: get_expr(val, "expr")?,
@@ -180,11 +182,11 @@ fn command_from_json(val: &Value) -> Result<Command, String> {
             expr: get_expr(val, "expr")?,
             var: get_string(val, "var")?,
             period: get_expr(val, "period")?,
-            terms: val.get("terms").and_then(|v| v.as_u64()).unwrap_or(3) as u32,
+            terms: json_u64_to_u32(val.get("terms"), "terms", 3)?,
         }),
 
         "Ode" => {
-            let ic = val.get("ic").and_then(|v| ivp_from_json(v).ok());
+            let ic = val.get("ic").map(ivp_from_json).transpose()?;
             Ok(Command::Ode {
                 equation: get_expr(val, "equation")?,
                 fn_name: get_string(val, "fn_name")?,
@@ -202,14 +204,22 @@ fn command_from_json(val: &Value) -> Result<Command, String> {
             args: get_expr_list(val, "args")?,
         }),
 
-        "Matrix" => Ok(Command::Matrix {
-            op: parse_matrix_op(
+        "Matrix" => {
+            let op = parse_matrix_op(
                 val.get("op")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| "Matrix: missing `op`".to_string())?,
-            )?,
-            operands: Vec::new(),
-        }),
+            )?;
+            let operands = match val.get("operands").and_then(|v| v.as_array()) {
+                Some(arr) => arr
+                    .iter()
+                    .enumerate()
+                    .map(|(i, v)| parse_matrix_expr(v, i))
+                    .collect::<Result<Vec<_>, _>>()?,
+                None => Vec::new(),
+            };
+            Ok(Command::Matrix { op, operands })
+        }
 
         other => Err(format!(
             "unsupported command type `{}` in v0.8.1 JSON transport",
@@ -389,6 +399,61 @@ fn get_string_list(val: &Value, key: &str) -> Result<Vec<String>, String> {
         .collect()
 }
 
+fn parse_matrix_expr(val: &Value, index: usize) -> Result<MatrixExpr, String> {
+    if let Some(s) = val.as_str() {
+        return Ok(MatrixExpr::Scalar(parse_expr_str(s)?));
+    }
+    if let Some(obj) = val.as_object() {
+        if let Some(rows) = obj.get("rows").and_then(|v| v.as_array()) {
+            let parsed_rows: Result<Vec<Vec<Expression>>, String> = rows
+                .iter()
+                .enumerate()
+                .map(|(r, row)| {
+                    let cols = row.as_array().ok_or_else(|| {
+                        format!("operands[{}].rows[{}]: expected array", index, r)
+                    })?;
+                    cols.iter()
+                        .enumerate()
+                        .map(|(c, cell)| {
+                            let s = cell.as_str().ok_or_else(|| {
+                                format!("operands[{}].rows[{}][{}]: expected string", index, r, c)
+                            })?;
+                            parse_expr_str(s)
+                        })
+                        .collect()
+                })
+                .collect();
+            return Ok(MatrixExpr::Matrix(parsed_rows?));
+        }
+        if let Some(elems) = obj.get("elements").and_then(|v| v.as_array()) {
+            let parsed: Result<Vec<Expression>, String> = elems
+                .iter()
+                .enumerate()
+                .map(|(i, e)| {
+                    let s = e.as_str().ok_or_else(|| {
+                        format!("operands[{}].elements[{}]: expected string", index, i)
+                    })?;
+                    parse_expr_str(s)
+                })
+                .collect();
+            return Ok(MatrixExpr::Vector(parsed?));
+        }
+    }
+    Err(format!(
+        "operands[{}]: expected string (scalar), or object with 'rows' or 'elements'",
+        index
+    ))
+}
+
+fn json_u64_to_u32(val: Option<&Value>, field: &str, default: u32) -> Result<u32, String> {
+    match val.and_then(|v| v.as_u64()) {
+        Some(n) => {
+            u32::try_from(n).map_err(|_| format!("`{}` value {} exceeds u32 maximum", field, n))
+        }
+        None => Ok(default),
+    }
+}
+
 fn get_bindings(val: &Value) -> Result<Vec<(Expression, Expression)>, String> {
     let arr = val
         .get("bindings")
@@ -427,7 +492,7 @@ fn get_partial_diff_vars(val: &Value) -> Result<Vec<(String, u32)>, String> {
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| "PartialDiff entry: missing `var`".to_string())?
                 .to_string();
-            let order = obj.get("order").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
+            let order = json_u64_to_u32(obj.get("order"), "order", 1)?;
             Ok((var, order))
         })
         .collect()
@@ -449,10 +514,17 @@ fn ivp_from_json(val: &Value) -> Result<IvpData, String> {
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
-                .filter_map(|v| v.as_str())
-                .filter_map(|s| parse_expr_str(s).ok())
-                .collect()
+                .enumerate()
+                .map(|(i, v)| {
+                    let s = v
+                        .as_str()
+                        .ok_or_else(|| format!("derivatives_at[{}]: expected string", i))?;
+                    parse_expr_str(s)
+                        .map_err(|e| format!("derivatives_at[{}]: parse error: {}", i, e))
+                })
+                .collect::<Result<Vec<_>, _>>()
         })
+        .transpose()?
         .unwrap_or_default();
     let _ = Variable::new("placeholder_for_compiler_hint");
     Ok(IvpData {
