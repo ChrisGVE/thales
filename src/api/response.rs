@@ -353,6 +353,8 @@ pub enum EngineId {
     PartialFractions,
     /// Constrained optimiser.
     Optimizer,
+    /// Nabla (del) operator — gradient, divergence, curl, Laplacian, identities.
+    Nabla,
     /// Other engine identified by a stable label.
     Other(&'static str),
 }

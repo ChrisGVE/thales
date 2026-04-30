@@ -64,6 +64,7 @@ fn _exhaustiveness_check(cmd: Command) {
         Command::SpecialFn { .. } => {}
         Command::Ode { .. } => {}
         Command::Matrix { .. } => {}
+        Command::Nabla { .. } => {}
         Command::Optimize { .. } => {}
         Command::LagrangeMult { .. } => {}
         // If Command gains a new variant, this match becomes non-exhaustive

@@ -2,7 +2,9 @@
 
 use serde_json::Value;
 
-use super::super::super::command::{Command, Constraint, IvpData, LimitPoint, SimplifyRules};
+use super::super::super::command::{
+    Command, Constraint, IvpData, LimitPoint, NablaInput, NablaOp, SimplifyRules,
+};
 use super::super::super::domain::Domain;
 use super::super::super::request::{Budget, Precision, Request};
 use super::parsers::{
@@ -472,6 +474,16 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             })
         }
 
+        JsonCommand::Nabla { op, input, vars } => {
+            let nabla_op = parse_nabla_op(&op)?;
+            let nabla_input = parse_nabla_input(&input, &nabla_op)?;
+            Ok(Command::Nabla {
+                op: nabla_op,
+                input: nabla_input,
+                vars,
+            })
+        }
+
         JsonCommand::Optimize {
             objective,
             vars,
@@ -566,5 +578,52 @@ fn json_rules_to_rules(j: JsonSimplifyRules) -> SimplifyRules {
         exponential: j.exponential,
         hyperbolic: j.hyperbolic,
         rational: j.rational,
+    }
+}
+
+fn parse_nabla_op(s: &str) -> Result<NablaOp, String> {
+    match s {
+        "Grad" => Ok(NablaOp::Grad),
+        "Div" => Ok(NablaOp::Div),
+        "Curl" => Ok(NablaOp::Curl),
+        "Laplacian" => Ok(NablaOp::Laplacian),
+        "DivOfCurl" => Ok(NablaOp::DivOfCurl),
+        "CurlOfGrad" => Ok(NablaOp::CurlOfGrad),
+        "DivOfGrad" => Ok(NablaOp::DivOfGrad),
+        other => Err(format!("unknown NablaOp `{}`", other)),
+    }
+}
+
+/// Parse the `input` JSON value for a Nabla command.
+///
+/// Scalar ops (Grad, Laplacian, CurlOfGrad, DivOfGrad) expect a string.
+/// Vector ops (Div, Curl, DivOfCurl) expect an array of strings.
+fn parse_nabla_input(value: &serde_json::Value, op: &NablaOp) -> Result<NablaInput, String> {
+    match op {
+        NablaOp::Grad | NablaOp::Laplacian | NablaOp::CurlOfGrad | NablaOp::DivOfGrad => {
+            let s = value
+                .as_str()
+                .ok_or_else(|| format!("Nabla {:?}: input must be a string expression", op))?;
+            Ok(NablaInput::Scalar(parse_expr_str(s)?))
+        }
+        NablaOp::Div | NablaOp::Curl | NablaOp::DivOfCurl => {
+            let arr = value.as_array().ok_or_else(|| {
+                format!(
+                    "Nabla {:?}: input must be an array of expression strings",
+                    op
+                )
+            })?;
+            let components = arr
+                .iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    let s = v
+                        .as_str()
+                        .ok_or_else(|| format!("Nabla {:?}: input[{}] must be a string", op, i))?;
+                    parse_expr_str(s)
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(NablaInput::VectorField(components))
+        }
     }
 }

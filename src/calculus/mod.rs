@@ -13,3 +13,4 @@
 //!   vector-valued functions.
 
 pub mod multivar;
+pub mod nabla;

@@ -34,6 +34,7 @@ mod calculus;
 mod helpers;
 mod limits;
 mod matrix;
+mod nabla;
 mod ode;
 mod optimize;
 mod series;
@@ -225,6 +226,9 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
 
         // ── Matrix ───────────────────────────────────────────────────────
         Command::Matrix { op, operands } => matrix::matrix_cmd(op, &operands, narrate),
+
+        // ── Nabla ────────────────────────────────────────────────────────
+        Command::Nabla { op, input, vars } => nabla::nabla_cmd(op, input, &vars, narrate),
 
         // ── Optimization ─────────────────────────────────────────────────
         Command::Optimize {

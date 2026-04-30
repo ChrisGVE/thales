@@ -237,6 +237,20 @@ pub(in super::super) enum JsonCommand {
         operands: Option<Vec<Value>>,
     },
 
+    // ── Nabla ──────────────────────────────────────────────────────────
+    /// JSON mirror of [`super::super::super::command::Command::Nabla`].
+    ///
+    /// `op` is one of: `"Grad"`, `"Div"`, `"Curl"`, `"Laplacian"`,
+    /// `"DivOfCurl"`, `"CurlOfGrad"`, `"DivOfGrad"`.
+    ///
+    /// `input` is either a plain expression string (scalar ops) or an
+    /// array of expression strings (vector-field ops).
+    Nabla {
+        op: String,
+        input: Value,
+        vars: Vec<String>,
+    },
+
     // ── Optimization ───────────────────────────────────────────────────
     Optimize {
         objective: String,

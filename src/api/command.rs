@@ -422,6 +422,21 @@ pub enum Command {
         operands: Vec<MatrixExpr>,
     },
 
+    // ── Nabla (del operator) ─────────────────────────────────────────────────
+    /// Del operator `∇` applied to a scalar or vector field.
+    ///
+    /// `op` selects which vector-calculus operation to perform; `input`
+    /// carries either a scalar expression or the components of a vector
+    /// field; `vars` names the coordinate variables in order.
+    Nabla {
+        /// Operation to perform.
+        op: NablaOp,
+        /// Scalar or vector-field input.
+        input: NablaInput,
+        /// Coordinate variable names, in order.
+        vars: Vec<String>,
+    },
+
     // ── Optimization ────────────────────────────────────────────────────────
     /// Constrained optimisation.
     Optimize {
@@ -449,6 +464,34 @@ impl Default for Command {
     fn default() -> Self {
         Command::Noop
     }
+}
+
+/// Operation selector for [`Command::Nabla`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NablaOp {
+    /// Gradient `∇f`.
+    Grad,
+    /// Divergence `∇·F`.
+    Div,
+    /// Curl `∇×F` (3-D only).
+    Curl,
+    /// Laplacian `∇²f`.
+    Laplacian,
+    /// Divergence of curl `∇·(∇×F)` — identity that equals 0.
+    DivOfCurl,
+    /// Curl of gradient `∇×(∇f)` — identity that equals (0,0,0).
+    CurlOfGrad,
+    /// Divergence of gradient `∇·(∇f) = ∇²f`.
+    DivOfGrad,
+}
+
+/// Input payload for [`Command::Nabla`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum NablaInput {
+    /// A scalar field expression.
+    Scalar(Expression),
+    /// Components of a vector field, one per coordinate variable.
+    VectorField(Vec<Expression>),
 }
 
 /// Bundle of simplification rules to apply.
