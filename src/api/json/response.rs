@@ -7,6 +7,24 @@ use super::super::response::{
     StructuredResult,
 };
 
+// ── Helper ────────────────────────────────────────────────────────────────────
+
+/// Serialise a thales `Expression` to its mathlex JSON representation.
+///
+/// Renders the expression to its canonical display string, then parses it
+/// back through mathlex to obtain a serde-serialisable `mathlex::Expression`.
+/// Falls back to a string sentinel on the rare path where re-parse fails
+/// (e.g., an intermediate expression that uses non-standard notation).
+fn expr_to_json(e: &super::super::super::ast::Expression) -> Value {
+    let display = format!("{}", e);
+    match mathlex::parse(&display) {
+        Ok(ml_expr) => serde_json::to_value(&ml_expr).unwrap_or_else(|_| json!(display)),
+        Err(_) => json!(display),
+    }
+}
+
+// ── Public entry point ────────────────────────────────────────────────────────
+
 pub(super) fn response_to_json(response: &Response) -> Value {
     json!({
         "results": response
@@ -61,7 +79,7 @@ pub(super) fn result_entry_to_json(key: &ResultKey, entry: &ResultEntry) -> Valu
         "alternatives": entry
             .alternatives
             .iter()
-            .map(|e| format!("{}", e))
+            .map(|e| expr_to_json(e))
             .collect::<Vec<_>>(),
     })
 }
@@ -85,12 +103,12 @@ pub(super) fn structured_result_to_json(s: &StructuredResult) -> Value {
     match s {
         StructuredResult::Scalar(e) => json!({
             "kind": "Scalar",
-            "expr": format!("{}", e),
+            "expr": expr_to_json(e),
         }),
         StructuredResult::Labeled { label, value } => json!({
             "kind": "Labeled",
             "label": label,
-            "value": format!("{}", value),
+            "value": expr_to_json(value),
         }),
         StructuredResult::Decomposition { parts } => json!({
             "kind": "Decomposition",
@@ -111,10 +129,10 @@ pub(super) fn structured_result_to_json(s: &StructuredResult) -> Value {
             "kind": "CoefficientArray",
             "coefficients": coefficients
                 .iter()
-                .map(|e| format!("{}", e))
+                .map(|e| expr_to_json(e))
                 .collect::<Vec<_>>(),
             "variable": variable,
-            "center": center.as_ref().map(|e| format!("{}", e)),
+            "center": center.as_ref().map(|e| expr_to_json(e)),
             "order": order,
         }),
         StructuredResult::Branches { branches } => json!({
@@ -124,7 +142,7 @@ pub(super) fn structured_result_to_json(s: &StructuredResult) -> Value {
                 .map(|b| json!({
                     "label": b.label,
                     "condition": b.condition.as_ref().map(|c| format!("{:?}", c)),
-                    "value": format!("{}", b.value),
+                    "value": expr_to_json(&b.value),
                 }))
                 .collect::<Vec<_>>(),
         }),
@@ -136,7 +154,7 @@ pub(super) fn structured_result_to_json(s: &StructuredResult) -> Value {
             "kind": "Shaped",
             "elements": elements
                 .iter()
-                .map(|e| format!("{}", e))
+                .map(|e| expr_to_json(e))
                 .collect::<Vec<_>>(),
             "shape": shape,
             "labels": labels,
@@ -147,9 +165,9 @@ pub(super) fn structured_result_to_json(s: &StructuredResult) -> Value {
             convergence,
         } => json!({
             "kind": "TransformResult",
-            "expression": format!("{}", expression),
+            "expression": expr_to_json(expression),
             "transform_variable": transform_variable,
-            "convergence": convergence.as_ref().map(|e| format!("{}", e)),
+            "convergence": convergence.as_ref().map(|e| expr_to_json(e)),
         }),
         _ => json!({ "kind": "Unknown" }),
     }
@@ -159,7 +177,7 @@ fn decomposition_part_to_json(part: &DecompositionPart) -> Value {
     match part {
         DecompositionPart::Scalar(e) => json!({
             "kind": "Scalar",
-            "expr": format!("{}", e),
+            "expr": expr_to_json(e),
         }),
         DecompositionPart::Matrix {
             elements,
@@ -169,7 +187,7 @@ fn decomposition_part_to_json(part: &DecompositionPart) -> Value {
             "kind": "Matrix",
             "elements": elements
                 .iter()
-                .map(|e| format!("{}", e))
+                .map(|e| expr_to_json(e))
                 .collect::<Vec<_>>(),
             "rows": rows,
             "cols": cols,
@@ -185,7 +203,7 @@ fn result_value_to_json(value: &ResultValue) -> Value {
     match value {
         ResultValue::Symbolic(e) => json!({
             "kind": "Symbolic",
-            "expr": format!("{}", e),
+            "expr": expr_to_json(e),
         }),
         ResultValue::Numeric {
             value,
@@ -193,7 +211,7 @@ fn result_value_to_json(value: &ResultValue) -> Value {
             method,
         } => json!({
             "kind": "Numeric",
-            "expr": format!("{}", value),
+            "expr": expr_to_json(value),
             "decimal_digits": precision.decimal_digits,
             "method": format!("{:?}", method),
         }),
@@ -204,8 +222,8 @@ fn result_value_to_json(value: &ResultValue) -> Value {
             method,
         } => json!({
             "kind": "Hybrid",
-            "last_symbolic": format!("{}", last_symbolic),
-            "numeric": format!("{}", numeric),
+            "last_symbolic": expr_to_json(last_symbolic),
+            "numeric": expr_to_json(numeric),
             "decimal_digits": precision.decimal_digits,
             "method": format!("{:?}", method),
         }),
@@ -229,7 +247,7 @@ fn step_to_json(step: &NarratedStep) -> Value {
         "difficulty": format!("{:?}", step.difficulty),
         "detail_md": step.narrative.fallback_md,
         "template_id": step.narrative.template_id,
-        "input": step.input.as_ref().map(|e| format!("{}", e)),
-        "output": step.output.as_ref().map(|e| format!("{}", e)),
+        "input": step.input.as_ref().map(|e| expr_to_json(e)),
+        "output": step.output.as_ref().map(|e| expr_to_json(e)),
     })
 }

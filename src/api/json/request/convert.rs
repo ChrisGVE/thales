@@ -1,27 +1,34 @@
 //! Conversion from JSON mirror types to internal [`Command`] / [`Request`].
 
-use serde_json::Value;
-
+use crate::ast::Expression;
+use crate::mathlex_bridge::convert_expression;
 use crate::transforms::CoordSystem;
 
 use super::super::super::command::{
-    Command, Constraint, IntegrationStep, IvpData, LimitPoint, NablaInput, NablaOp, ParamCurve,
-    SimplifyRules, SystemIvpData,
+    Command, Constraint, IntegrationStep, IvpData, LimitPoint, MatrixExpr, NablaInput, NablaOp,
+    ParamCurve, SimplifyRules, SystemIvpData,
 };
 use super::super::super::domain::Domain;
 use super::super::super::request::{Budget, Precision, Request};
 use super::parsers::{
-    parse_domain_str, parse_expr_str, parse_identity_id, parse_matrix_expr, parse_matrix_op,
-    parse_opt_sense, parse_side, parse_solve_mode, parse_special_kind,
+    parse_domain_str, parse_identity_id, parse_matrix_op, parse_opt_sense, parse_side,
+    parse_solve_mode, parse_special_kind,
 };
 use super::schema::{
-    JsonBudget, JsonCommand, JsonIntegrationStep, JsonIvpData, JsonParamCurve, JsonPrecision,
-    JsonRequest, JsonSimplifyRules, JsonSystemIvpData,
+    JsonBudget, JsonCommand, JsonIntegrationStep, JsonIvpData, JsonMatrixOperand, JsonNablaInput,
+    JsonParamCurve, JsonPrecision, JsonRequest, JsonSimplifyRules, JsonSystemIvpData,
 };
+
+// ── Helper ────────────────────────────────────────────────────────────────────
+
+/// Convert a mathlex `Expression` into a thales internal `Expression`.
+fn cvt(e: mathlex::Expression) -> Result<Expression, String> {
+    convert_expression(&e)
+}
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
-pub(in super::super) fn request_from_json(val: &Value) -> Result<Request, String> {
+pub(in super::super) fn request_from_json(val: &serde_json::Value) -> Result<Request, String> {
     let json_req: JsonRequest =
         serde_json::from_value(val.clone()).map_err(|e| format!("invalid request: {}", e))?;
 
@@ -64,7 +71,7 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
         JsonCommand::Noop => Ok(Command::Noop),
 
         JsonCommand::Simplify { expr, rules, over } => Ok(Command::Simplify {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             rules: rules
                 .map(json_rules_to_rules)
                 .unwrap_or_else(SimplifyRules::all),
@@ -72,12 +79,12 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
         }),
 
         JsonCommand::Expand { expr, .. } => Ok(Command::Expand {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             target: None,
         }),
 
         JsonCommand::Factor { expr, over, .. } => Ok(Command::Factor {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             over: over
                 .as_deref()
                 .map(parse_domain_str)
@@ -89,42 +96,42 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
         JsonCommand::Substitute { expr, bindings } => {
             let parsed_bindings = bindings
                 .into_iter()
-                .map(|b| Ok((parse_expr_str(&b.old)?, parse_expr_str(&b.new)?)))
+                .map(|b| Ok((cvt(b.old)?, cvt(b.new)?)))
                 .collect::<Result<Vec<_>, String>>()?;
             Ok(Command::Substitute {
-                expr: parse_expr_str(&expr)?,
+                expr: cvt(expr)?,
                 bindings: parsed_bindings,
                 target: None,
             })
         }
 
         JsonCommand::CombineLikeTerms { expr, .. } => Ok(Command::CombineLikeTerms {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             target: None,
         }),
 
         JsonCommand::CommonDenominator { expr, .. } => Ok(Command::CommonDenominator {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             target: None,
         }),
 
         JsonCommand::PartialFractions { expr, var } => Ok(Command::PartialFractions {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             var,
         }),
 
         JsonCommand::Rationalize { expr, .. } => Ok(Command::Rationalize {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             target: None,
         }),
 
         JsonCommand::Conjugate { expr, .. } => Ok(Command::Conjugate {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             target: None,
         }),
 
         JsonCommand::InverseFn { expr, var } => Ok(Command::InverseFn {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             var,
         }),
 
@@ -132,12 +139,12 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             equation,
             solve_for,
         } => Ok(Command::Rearrange {
-            equation: parse_expr_str(&equation)?,
+            equation: cvt(equation)?,
             solve_for,
         }),
 
         JsonCommand::ApplyIdentity { expr, identity, .. } => Ok(Command::ApplyIdentity {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             identity: parse_identity_id(&identity)?,
             target: None,
         }),
@@ -147,7 +154,7 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             var,
             over,
         } => Ok(Command::SolveFor {
-            relation: parse_expr_str(&relation)?,
+            relation: cvt(relation)?,
             var,
             over: over
                 .as_deref()
@@ -162,8 +169,8 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             over,
         } => {
             let parsed = equations
-                .iter()
-                .map(|s| parse_expr_str(s))
+                .into_iter()
+                .map(cvt)
                 .collect::<Result<Vec<_>, _>>()?;
             Ok(Command::SolveSystem {
                 equations: parsed,
@@ -177,7 +184,7 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
         }
 
         JsonCommand::Diff { expr, var, order } => Ok(Command::Diff {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             var,
             order: order.unwrap_or(1),
         }),
@@ -188,7 +195,7 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
                 .map(|v| Ok((v.var, v.order)))
                 .collect::<Result<Vec<_>, String>>()?;
             Ok(Command::PartialDiff {
-                expr: parse_expr_str(&expr)?,
+                expr: cvt(expr)?,
                 vars: parsed_vars,
             })
         }
@@ -196,25 +203,22 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
         JsonCommand::TotalDiff { expr, var, deps } => {
             let parsed_deps = deps
                 .into_iter()
-                .map(|d| Ok((d.name, parse_expr_str(&d.expr)?)))
+                .map(|d| Ok((d.name, cvt(d.expr)?)))
                 .collect::<Result<Vec<_>, String>>()?;
             Ok(Command::TotalDiff {
-                expr: parse_expr_str(&expr)?,
+                expr: cvt(expr)?,
                 var,
                 deps: parsed_deps,
             })
         }
 
         JsonCommand::Gradient { expr, vars } => Ok(Command::Gradient {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             vars,
         }),
 
         JsonCommand::Divergence { field, vars } => {
-            let parsed = field
-                .iter()
-                .map(|s| parse_expr_str(s))
-                .collect::<Result<Vec<_>, _>>()?;
+            let parsed = field.into_iter().map(cvt).collect::<Result<Vec<_>, _>>()?;
             Ok(Command::Divergence {
                 field: parsed,
                 vars,
@@ -222,10 +226,7 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
         }
 
         JsonCommand::Curl { field, vars } => {
-            let parsed = field
-                .iter()
-                .map(|s| parse_expr_str(s))
-                .collect::<Result<Vec<_>, _>>()?;
+            let parsed = field.into_iter().map(cvt).collect::<Result<Vec<_>, _>>()?;
             Ok(Command::Curl {
                 field: parsed,
                 vars,
@@ -233,15 +234,12 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
         }
 
         JsonCommand::Laplacian { expr, vars } => Ok(Command::Laplacian {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             vars,
         }),
 
         JsonCommand::Jacobian { fields, vars } => {
-            let parsed = fields
-                .iter()
-                .map(|s| parse_expr_str(s))
-                .collect::<Result<Vec<_>, _>>()?;
+            let parsed = fields.into_iter().map(cvt).collect::<Result<Vec<_>, _>>()?;
             Ok(Command::Jacobian {
                 fields: parsed,
                 vars,
@@ -249,7 +247,7 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
         }
 
         JsonCommand::Hessian { expr, vars } => Ok(Command::Hessian {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             vars,
         }),
 
@@ -259,18 +257,18 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             direction,
         } => {
             let parsed_dir = direction
-                .iter()
-                .map(|s| parse_expr_str(s))
+                .into_iter()
+                .map(cvt)
                 .collect::<Result<Vec<_>, _>>()?;
             Ok(Command::DirectionalDiff {
-                expr: parse_expr_str(&expr)?,
+                expr: cvt(expr)?,
                 vars,
                 direction: parsed_dir,
             })
         }
 
         JsonCommand::Integrate { expr, var } => Ok(Command::Integrate {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             var,
         }),
 
@@ -280,19 +278,19 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             from,
             to,
         } => Ok(Command::DefIntegrate {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             var,
-            from: parse_expr_str(&from)?,
-            to: parse_expr_str(&to)?,
+            from: cvt(from)?,
+            to: cvt(to)?,
         }),
 
         JsonCommand::MultiIntegrate { expr, integrations } => {
             let parsed_integrations = integrations
                 .into_iter()
-                .map(|s| json_integration_step_to_step(s))
+                .map(json_integration_step_to_step)
                 .collect::<Result<Vec<_>, String>>()?;
             Ok(Command::MultiIntegrate {
-                expr: parse_expr_str(&expr)?,
+                expr: cvt(expr)?,
                 integrations: parsed_integrations,
             })
         }
@@ -303,19 +301,19 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             to_vars,
             system,
         } => Ok(Command::ChangeCoords {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             from_vars,
             to_vars,
             system: parse_coord_system(&system)?,
         }),
 
         JsonCommand::PathIntegral { expr, curve } => Ok(Command::PathIntegral {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             curve: json_param_curve_to_param_curve(curve)?,
         }),
 
         JsonCommand::SurfaceIntegral { expr, vars } => Ok(Command::SurfaceIntegral {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             vars,
         }),
 
@@ -325,14 +323,16 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             point,
             side,
         } => {
-            let point = match point.as_str() {
-                "+inf" => LimitPoint::PosInf,
-                "-inf" => LimitPoint::NegInf,
-                s => LimitPoint::Finite(parse_expr_str(s)?),
+            let point = match &point.kind {
+                mathlex::ExprKind::Constant(mathlex::MathConstant::Infinity) => LimitPoint::PosInf,
+                mathlex::ExprKind::Constant(mathlex::MathConstant::NegInfinity) => {
+                    LimitPoint::NegInf
+                }
+                _ => LimitPoint::Finite(cvt(point)?),
             };
             let side = side.as_deref().map(parse_side).transpose()?;
             Ok(Command::Limit {
-                expr: parse_expr_str(&expr)?,
+                expr: cvt(expr)?,
                 var,
                 point,
                 side,
@@ -345,9 +345,9 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             center,
             order,
         } => Ok(Command::Taylor {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             var,
-            center: parse_expr_str(&center)?,
+            center: cvt(center)?,
             order: order.unwrap_or(3),
         }),
 
@@ -357,14 +357,14 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             center,
             order,
         } => Ok(Command::Laurent {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             var,
-            center: parse_expr_str(&center)?,
+            center: cvt(center)?,
             order: order.unwrap_or(3),
         }),
 
         JsonCommand::Asymptotic { expr, var, order } => Ok(Command::Asymptotic {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             var,
             order: order.unwrap_or(3),
         }),
@@ -375,14 +375,14 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             var,
             order,
         } => Ok(Command::Compose {
-            outer: parse_expr_str(&outer)?,
-            inner: parse_expr_str(&inner)?,
+            outer: cvt(outer)?,
+            inner: cvt(inner)?,
             var,
             order: order.unwrap_or(3),
         }),
 
         JsonCommand::Revert { expr, var, order } => Ok(Command::Revert {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             var,
             order: order.unwrap_or(3),
         }),
@@ -393,13 +393,12 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             center,
             order,
         } => Ok(Command::Puiseux {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             var,
             center: center
-                .as_deref()
-                .map(parse_expr_str)
+                .map(cvt)
                 .transpose()?
-                .unwrap_or(crate::ast::Expression::Integer(0)),
+                .unwrap_or(Expression::Integer(0)),
             order: order.unwrap_or(3),
         }),
 
@@ -410,14 +409,13 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             point,
             order,
         } => Ok(Command::Frobenius {
-            ode: parse_expr_str(&ode)?,
+            ode: cvt(ode)?,
             fn_name,
             var,
             point: point
-                .as_deref()
-                .map(parse_expr_str)
+                .map(cvt)
                 .transpose()?
-                .unwrap_or(crate::ast::Expression::Integer(0)),
+                .unwrap_or(Expression::Integer(0)),
             order: order.unwrap_or(3),
         }),
 
@@ -428,13 +426,12 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             m,
             n,
         } => Ok(Command::Pade {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             var,
             center: center
-                .as_deref()
-                .map(parse_expr_str)
+                .map(cvt)
                 .transpose()?
-                .unwrap_or(crate::ast::Expression::Integer(0)),
+                .unwrap_or(Expression::Integer(0)),
             m,
             n,
         }),
@@ -446,7 +443,7 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             small_param,
             order,
         } => Ok(Command::Wkb {
-            ode: parse_expr_str(&ode)?,
+            ode: cvt(ode)?,
             fn_name,
             var,
             small_param,
@@ -459,16 +456,16 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             period,
             terms,
         } => Ok(Command::FourierSeries {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             var,
-            period: parse_expr_str(&period)?,
+            period: cvt(period)?,
             terms: terms.unwrap_or(3),
         }),
 
         JsonCommand::Residue { expr, var, point } => Ok(Command::Residue {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             var,
-            point: parse_expr_str(&point)?,
+            point: cvt(point)?,
         }),
 
         JsonCommand::LaplaceTransform {
@@ -476,7 +473,7 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             time_var,
             freq_var,
         } => Ok(Command::LaplaceTransform {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             time_var,
             freq_var: freq_var.unwrap_or_else(|| "s".into()),
         }),
@@ -486,7 +483,7 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             freq_var,
             time_var,
         } => Ok(Command::InverseLaplace {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             freq_var,
             time_var: time_var.unwrap_or_else(|| "t".into()),
         }),
@@ -496,7 +493,7 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             time_var,
             freq_var,
         } => Ok(Command::FourierTransform {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             time_var,
             freq_var: freq_var.unwrap_or_else(|| "omega".into()),
         }),
@@ -506,40 +503,37 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             freq_var,
             time_var,
         } => Ok(Command::InverseFourier {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             freq_var,
             time_var: time_var.unwrap_or_else(|| "t".into()),
         }),
 
         JsonCommand::ZTransform { expr, var, z_var } => Ok(Command::ZTransform {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             var,
             z_var: z_var.unwrap_or_else(|| "z".into()),
         }),
 
         JsonCommand::InverseZTransform { expr, z_var, var } => Ok(Command::InverseZTransform {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             z_var,
             var: var.unwrap_or_else(|| "n".into()),
         }),
 
         JsonCommand::MellinTransform { expr, var, s_var } => Ok(Command::MellinTransform {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             var,
             s_var: s_var.unwrap_or_else(|| "s".into()),
         }),
 
         JsonCommand::InverseMellin { expr, s_var, var } => Ok(Command::InverseMellin {
-            expr: parse_expr_str(&expr)?,
+            expr: cvt(expr)?,
             s_var,
             var: var.unwrap_or_else(|| "x".into()),
         }),
 
         JsonCommand::SpecialFn { kind, args } => {
-            let parsed_args = args
-                .iter()
-                .map(|s| parse_expr_str(s))
-                .collect::<Result<Vec<_>, _>>()?;
+            let parsed_args = args.into_iter().map(cvt).collect::<Result<Vec<_>, _>>()?;
             Ok(Command::SpecialFn {
                 kind: parse_special_kind(&kind)?,
                 args: parsed_args,
@@ -554,7 +548,7 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
         } => {
             let ic = ic.map(json_ivp_to_ivp).transpose()?;
             Ok(Command::Ode {
-                equation: parse_expr_str(&equation)?,
+                equation: cvt(equation)?,
                 fn_name,
                 var,
                 ic,
@@ -565,9 +559,8 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             let matrix_op = parse_matrix_op(&op)?;
             let parsed_operands = operands
                 .unwrap_or_default()
-                .iter()
-                .enumerate()
-                .map(|(i, v)| parse_matrix_expr(v, i))
+                .into_iter()
+                .map(json_matrix_operand_to_matrix_expr)
                 .collect::<Result<Vec<_>, _>>()?;
             Ok(Command::Matrix {
                 op: matrix_op,
@@ -577,7 +570,7 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
 
         JsonCommand::Nabla { op, input, vars } => {
             let nabla_op = parse_nabla_op(&op)?;
-            let nabla_input = parse_nabla_input(&input, &nabla_op)?;
+            let nabla_input = json_nabla_input_to_nabla_input(input, &nabla_op)?;
             Ok(Command::Nabla {
                 op: nabla_op,
                 input: nabla_input,
@@ -595,7 +588,7 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
                 .unwrap_or_default()
                 .into_iter()
                 .map(|c| {
-                    let expr = parse_expr_str(&c.expr)?;
+                    let expr = cvt(c.expr)?;
                     match c.kind.as_str() {
                         "Equality" => Ok(Constraint::Equality(expr)),
                         "LessEq" => Ok(Constraint::LessEq(expr)),
@@ -612,7 +605,7 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
                 .transpose()?
                 .unwrap_or_default();
             Ok(Command::Optimize {
-                objective: parse_expr_str(&objective)?,
+                objective: cvt(objective)?,
                 vars,
                 constraints: parsed_constraints,
                 sense: parsed_sense,
@@ -625,11 +618,11 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             equality_constraints,
         } => {
             let parsed_constraints = equality_constraints
-                .iter()
-                .map(|s| parse_expr_str(s))
+                .into_iter()
+                .map(cvt)
                 .collect::<Result<Vec<_>, _>>()?;
             Ok(Command::LagrangeMult {
-                objective: parse_expr_str(&objective)?,
+                objective: cvt(objective)?,
                 vars,
                 equality_constraints: parsed_constraints,
             })
@@ -641,13 +634,8 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             var,
             ic,
         } => {
-            let parsed_eqs: Vec<_> = equations
-                .iter()
-                .map(|s| parse_expr_str(s))
-                .collect::<Result<_, _>>()?;
-            let parsed_ic = ic
-                .map(|ic_data| json_system_ivp_to_system_ivp(ic_data))
-                .transpose()?;
+            let parsed_eqs: Vec<_> = equations.into_iter().map(cvt).collect::<Result<_, _>>()?;
+            let parsed_ic = ic.map(json_system_ivp_to_system_ivp).transpose()?;
             Ok(Command::OdeSystem {
                 equations: parsed_eqs,
                 fn_names,
@@ -661,7 +649,7 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
             fn_name,
             vars,
         } => Ok(Command::Pde {
-            equation: parse_expr_str(&equation)?,
+            equation: cvt(equation)?,
             fn_name,
             vars,
         }),
@@ -673,13 +661,13 @@ fn json_command_to_command(cmd: JsonCommand) -> Result<Command, String> {
 fn json_ivp_to_ivp(j: JsonIvpData) -> Result<IvpData, String> {
     let derivatives_at = j
         .derivatives_at
-        .iter()
+        .into_iter()
         .enumerate()
-        .map(|(i, s)| parse_expr_str(s).map_err(|e| format!("derivatives_at[{}]: {}", i, e)))
+        .map(|(i, e)| cvt(e).map_err(|err| format!("derivatives_at[{}]: {}", i, err)))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(IvpData {
-        var_at: parse_expr_str(&j.var_at)?,
-        fn_at: parse_expr_str(&j.fn_at)?,
+        var_at: cvt(j.var_at)?,
+        fn_at: cvt(j.fn_at)?,
         derivatives_at,
     })
 }
@@ -687,19 +675,19 @@ fn json_ivp_to_ivp(j: JsonIvpData) -> Result<IvpData, String> {
 fn json_system_ivp_to_system_ivp(j: JsonSystemIvpData) -> Result<SystemIvpData, String> {
     let values_at = j
         .values_at
-        .iter()
+        .into_iter()
         .enumerate()
-        .map(|(i, s)| parse_expr_str(s).map_err(|e| format!("values_at[{}]: {}", i, e)))
+        .map(|(i, e)| cvt(e).map_err(|err| format!("values_at[{}]: {}", i, err)))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(SystemIvpData {
-        var_at: parse_expr_str(&j.var_at)?,
+        var_at: cvt(j.var_at)?,
         values_at,
     })
 }
 
 fn json_precision_to_precision(j: JsonPrecision) -> Result<Precision, String> {
-    let abs_tol = j.abs_tol.as_deref().map(parse_expr_str).transpose()?;
-    let rel_tol = j.rel_tol.as_deref().map(parse_expr_str).transpose()?;
+    let abs_tol = j.abs_tol.map(cvt).transpose()?;
+    let rel_tol = j.rel_tol.map(cvt).transpose()?;
     Ok(Precision {
         decimal_digits: j.decimal_digits,
         abs_tol,
@@ -729,24 +717,53 @@ fn json_rules_to_rules(j: JsonSimplifyRules) -> SimplifyRules {
 fn json_integration_step_to_step(j: JsonIntegrationStep) -> Result<IntegrationStep, String> {
     Ok(IntegrationStep {
         var: j.var,
-        from: parse_expr_str(&j.from)?,
-        to: parse_expr_str(&j.to)?,
+        from: cvt(j.from)?,
+        to: cvt(j.to)?,
     })
 }
 
 fn json_param_curve_to_param_curve(j: JsonParamCurve) -> Result<ParamCurve, String> {
     let components = j
         .components
-        .iter()
+        .into_iter()
         .enumerate()
-        .map(|(i, s)| parse_expr_str(s).map_err(|e| format!("curve.components[{}]: {}", i, e)))
+        .map(|(i, e)| cvt(e).map_err(|err| format!("curve.components[{}]: {}", i, err)))
         .collect::<Result<Vec<_>, String>>()?;
     Ok(ParamCurve {
         components,
         param: j.param,
-        from: parse_expr_str(&j.from)?,
-        to: parse_expr_str(&j.to)?,
+        from: cvt(j.from)?,
+        to: cvt(j.to)?,
     })
+}
+
+fn json_matrix_operand_to_matrix_expr(op: JsonMatrixOperand) -> Result<MatrixExpr, String> {
+    match op {
+        JsonMatrixOperand::Scalar(e) => Ok(MatrixExpr::Scalar(cvt(e)?)),
+        JsonMatrixOperand::Matrix { rows } => {
+            let parsed_rows = rows
+                .into_iter()
+                .enumerate()
+                .map(|(r, row)| {
+                    row.into_iter()
+                        .enumerate()
+                        .map(|(c, cell)| {
+                            cvt(cell).map_err(|err| format!("matrix.rows[{}][{}]: {}", r, c, err))
+                        })
+                        .collect::<Result<Vec<_>, String>>()
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(MatrixExpr::Matrix(parsed_rows))
+        }
+        JsonMatrixOperand::Vector { elements } => {
+            let parsed = elements
+                .into_iter()
+                .enumerate()
+                .map(|(i, e)| cvt(e).map_err(|err| format!("vector.elements[{}]: {}", i, err)))
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(MatrixExpr::Vector(parsed))
+        }
+    }
 }
 
 fn parse_coord_system(s: &str) -> Result<CoordSystem, String> {
@@ -763,7 +780,7 @@ fn parse_coord_system(s: &str) -> Result<CoordSystem, String> {
     }
 }
 
-fn parse_nabla_op(s: &str) -> Result<NablaOp, String> {
+pub(super) fn parse_nabla_op(s: &str) -> Result<NablaOp, String> {
     match s {
         "Grad" => Ok(NablaOp::Grad),
         "Div" => Ok(NablaOp::Div),
@@ -776,36 +793,39 @@ fn parse_nabla_op(s: &str) -> Result<NablaOp, String> {
     }
 }
 
-/// Parse the `input` JSON value for a Nabla command.
+/// Convert [`JsonNablaInput`] to [`NablaInput`], validating op compatibility.
 ///
-/// Scalar ops (Grad, Laplacian, CurlOfGrad, DivOfGrad) expect a string.
-/// Vector ops (Div, Curl, DivOfCurl) expect an array of strings.
-fn parse_nabla_input(value: &serde_json::Value, op: &NablaOp) -> Result<NablaInput, String> {
+/// Scalar ops (Grad, Laplacian, CurlOfGrad, DivOfGrad) expect a scalar
+/// Expression; vector ops (Div, Curl, DivOfCurl) expect a vector field.
+fn json_nabla_input_to_nabla_input(
+    input: JsonNablaInput,
+    op: &NablaOp,
+) -> Result<NablaInput, String> {
     match op {
         NablaOp::Grad | NablaOp::Laplacian | NablaOp::CurlOfGrad | NablaOp::DivOfGrad => {
-            let s = value
-                .as_str()
-                .ok_or_else(|| format!("Nabla {:?}: input must be a string expression", op))?;
-            Ok(NablaInput::Scalar(parse_expr_str(s)?))
-        }
-        NablaOp::Div | NablaOp::Curl | NablaOp::DivOfCurl => {
-            let arr = value.as_array().ok_or_else(|| {
-                format!(
-                    "Nabla {:?}: input must be an array of expression strings",
+            match input {
+                JsonNablaInput::Scalar(e) => Ok(NablaInput::Scalar(cvt(e)?)),
+                JsonNablaInput::VectorField(_) => Err(format!(
+                    "Nabla {:?}: expected a scalar expression, got a vector field",
                     op
-                )
-            })?;
-            let components = arr
-                .iter()
-                .enumerate()
-                .map(|(i, v)| {
-                    let s = v
-                        .as_str()
-                        .ok_or_else(|| format!("Nabla {:?}: input[{}] must be a string", op, i))?;
-                    parse_expr_str(s)
-                })
-                .collect::<Result<Vec<_>, String>>()?;
-            Ok(NablaInput::VectorField(components))
+                )),
+            }
         }
+        NablaOp::Div | NablaOp::Curl | NablaOp::DivOfCurl => match input {
+            JsonNablaInput::VectorField(components) => {
+                let parsed = components
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, e)| {
+                        cvt(e).map_err(|err| format!("Nabla {:?}: input[{}]: {}", op, i, err))
+                    })
+                    .collect::<Result<Vec<_>, String>>()?;
+                Ok(NablaInput::VectorField(parsed))
+            }
+            JsonNablaInput::Scalar(_) => Err(format!(
+                "Nabla {:?}: expected a vector field (array), got a scalar",
+                op
+            )),
+        },
     }
 }

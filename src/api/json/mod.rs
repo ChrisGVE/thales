@@ -1,14 +1,15 @@
 //! JSON wire protocol for [`super::execute`].
 //!
-//! v0.9.0 ships a derive-based serde mirror schema: each JSON request carries
-//! a `command.type` tag plus string-encoded `Expression` fields. The
-//! dispatcher parses strings via [`crate::parser::parse_expression`]
-//! before handing to the symbolic engines. Responses serialise
-//! `Expression` values back to canonical display strings.
+//! v0.9.0 ships a derive-based serde schema: each JSON request carries a
+//! `command.type` tag plus native [`mathlex::Expression`] JSON objects for all
+//! expression fields. The dispatcher converts mathlex expressions to the
+//! internal thales representation via [`crate::mathlex_bridge`].
+//! Responses serialise `Expression` values back to structured mathlex JSON
+//! using the canonical display string as an intermediate parse step.
 //!
 //! Module layout:
 //! - [`request`]: `JsonCommand`, `JsonRequest`, `JsonPrecision`, `JsonBudget`,
-//!   and `command_from_json` / `request_from_json` parsing.
+//!   and `request_from_json` parsing.
 //! - [`response`]: `response_to_json` and supporting serialisers.
 //! - [`tests`]: `#[cfg(test)]` integration tests.
 

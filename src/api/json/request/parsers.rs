@@ -1,32 +1,8 @@
 //! String-to-type parsers used during JSON → Command conversion.
 
-use serde_json::Value;
-
-use crate::ast::Expression;
-use crate::parser::parse_equation;
-
-use super::super::super::command::{IdentityId, MatrixExpr, MatrixOp, OptSense, Side, SpecialKind};
+use super::super::super::command::{IdentityId, MatrixOp, OptSense, Side, SpecialKind};
 use super::super::super::domain::Domain;
 use super::super::super::request::SolveMode;
-
-// ── Expression parsing ────────────────────────────────────────────────────────
-
-/// Parse an expression string. When the input contains `=`, parse as an
-/// equation and return `lhs - rhs` so callers that expect a bare expression
-/// handle it uniformly. Falls back to [`crate::parser::parse_expression`] for
-/// plain expressions.
-pub(in super::super) fn parse_expr_str(s: &str) -> Result<Expression, String> {
-    if s.contains('=') {
-        let eq = parse_equation(s).map_err(|e| format!("failed to parse `{}`: {:?}", s, e))?;
-        Ok(Expression::Binary(
-            crate::ast::BinaryOp::Sub,
-            Box::new(eq.left),
-            Box::new(eq.right),
-        ))
-    } else {
-        crate::parser::parse_expression(s).map_err(|e| format!("failed to parse `{}`: {:?}", s, e))
-    }
-}
 
 // ── Enum parsers ──────────────────────────────────────────────────────────────
 
@@ -130,52 +106,4 @@ pub(super) fn parse_opt_sense(s: &str) -> Result<OptSense, String> {
         "Maximize" => Ok(OptSense::Maximize),
         other => Err(format!("unknown OptSense `{}`", other)),
     }
-}
-
-// ── Composite parsers ─────────────────────────────────────────────────────────
-
-pub(super) fn parse_matrix_expr(val: &Value, index: usize) -> Result<MatrixExpr, String> {
-    if let Some(s) = val.as_str() {
-        return Ok(MatrixExpr::Scalar(parse_expr_str(s)?));
-    }
-    if let Some(obj) = val.as_object() {
-        if let Some(rows) = obj.get("rows").and_then(|v| v.as_array()) {
-            let parsed_rows: Result<Vec<Vec<Expression>>, String> = rows
-                .iter()
-                .enumerate()
-                .map(|(r, row)| {
-                    let cols = row.as_array().ok_or_else(|| {
-                        format!("operands[{}].rows[{}]: expected array", index, r)
-                    })?;
-                    cols.iter()
-                        .enumerate()
-                        .map(|(c, cell)| {
-                            let s = cell.as_str().ok_or_else(|| {
-                                format!("operands[{}].rows[{}][{}]: expected string", index, r, c)
-                            })?;
-                            parse_expr_str(s)
-                        })
-                        .collect()
-                })
-                .collect();
-            return Ok(MatrixExpr::Matrix(parsed_rows?));
-        }
-        if let Some(elems) = obj.get("elements").and_then(|v| v.as_array()) {
-            let parsed: Result<Vec<Expression>, String> = elems
-                .iter()
-                .enumerate()
-                .map(|(i, e)| {
-                    let s = e.as_str().ok_or_else(|| {
-                        format!("operands[{}].elements[{}]: expected string", index, i)
-                    })?;
-                    parse_expr_str(s)
-                })
-                .collect();
-            return Ok(MatrixExpr::Vector(parsed?));
-        }
-    }
-    Err(format!(
-        "operands[{}]: expected string (scalar), or object with 'rows' or 'elements'",
-        index
-    ))
 }

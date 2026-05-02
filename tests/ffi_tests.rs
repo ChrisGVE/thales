@@ -707,8 +707,11 @@ fn test_ode_unsolvable_returns_error() {
 #[test]
 fn execute_json_ffi_simplify() {
     // Valid JSON simplify request returns a JSON response with a result.
-    let req = r#"{"command":{"type":"Simplify","expr":"x + x"}}"#;
-    let resp = thales::api::json::execute_ffi(req).expect("execute_json_ffi should succeed");
+    let ml = mathlex::parse("x + x").expect("parse x + x");
+    let expr_val = serde_json::to_value(&ml).expect("serialise expr");
+    let payload = serde_json::json!({ "command": {"type": "Simplify", "expr": expr_val} });
+    let req = serde_json::to_string(&payload).unwrap();
+    let resp = thales::api::json::execute_ffi(&req).expect("execute_json_ffi should succeed");
     let val: serde_json::Value = serde_json::from_str(&resp).expect("response must be valid JSON");
     assert!(
         val.get("results").is_some(),
@@ -719,8 +722,12 @@ fn execute_json_ffi_simplify() {
 #[test]
 fn execute_json_ffi_unknown_command() {
     // An unknown command type returns an error string, not a panic.
-    let req = r#"{"command":{"type":"DoesNotExist","expr":"x"}}"#;
-    let err = thales::api::json::execute_ffi(req);
+    // Use a well-formed expr object so the failure is due to the unknown type.
+    let ml = mathlex::parse("x").expect("parse x");
+    let expr_val = serde_json::to_value(&ml).expect("serialise expr");
+    let payload = serde_json::json!({ "command": {"type": "DoesNotExist", "expr": expr_val} });
+    let req = serde_json::to_string(&payload).unwrap();
+    let err = thales::api::json::execute_ffi(&req);
     assert!(
         err.is_err(),
         "unknown command must return Err, got: {err:?}"

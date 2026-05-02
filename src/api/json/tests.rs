@@ -1,17 +1,31 @@
 //! JSON transport architecture tests.
 
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use super::super::command::{Command, LimitPoint, Side};
 use super::super::response::ResultKey;
 use super::execute_ffi;
-use super::request::{parse_expr_str, request_from_json};
+use super::request::request_from_json;
 
-// ── Helper ────────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-fn execute_ok(req: &str) -> Value {
-    let resp = execute_ffi(req).unwrap_or_else(|e| panic!("execute_ffi failed: {}", e));
+fn execute_ok(req: Value) -> Value {
+    let s = serde_json::to_string(&req).unwrap();
+    let resp = execute_ffi(&s).unwrap_or_else(|e| panic!("execute_ffi failed: {}", e));
     serde_json::from_str(&resp).unwrap()
+}
+
+/// Parse a plain-text math expression and return its mathlex serde JSON form.
+fn expr_json(input: &str) -> Value {
+    let ml = mathlex::parse(input)
+        .unwrap_or_else(|e| panic!("expr_json: failed to parse `{}`: {:?}", input, e));
+    serde_json::to_value(&ml)
+        .unwrap_or_else(|e| panic!("expr_json: failed to serialise `{}`: {}", input, e))
+}
+
+/// Build a minimal JSON request value for a given command object.
+fn req(command: Value) -> Value {
+    json!({ "command": command })
 }
 
 // ── Test 1: exhaustiveness compile check ─────────────────────────────────────
@@ -100,75 +114,145 @@ fn exhaustiveness_compile_check() {
 
 #[test]
 fn all_existing_commands_parse() {
-    let payloads: &[&str] = &[
-        r#"{"command":{"type":"Noop"}}"#,
-        r#"{"command":{"type":"Simplify","expr":"x + x"}}"#,
-        r#"{"command":{"type":"Expand","expr":"(x+1)^2"}}"#,
-        r#"{"command":{"type":"Factor","expr":"x^2 - 1"}}"#,
-        r#"{"command":{"type":"Substitute","expr":"x + y","bindings":[{"old":"x","new":"2"}]}}"#,
-        r#"{"command":{"type":"CombineLikeTerms","expr":"2*x + 3*x"}}"#,
-        r#"{"command":{"type":"CommonDenominator","expr":"1/2 + 1/3"}}"#,
-        r#"{"command":{"type":"PartialFractions","expr":"1/(x^2-1)","var":"x"}}"#,
-        r#"{"command":{"type":"Rationalize","expr":"1/(1+sqrt(2))"}}"#,
-        r#"{"command":{"type":"Conjugate","expr":"1 + 2*i"}}"#,
-        r#"{"command":{"type":"InverseFn","expr":"2*x + 1","var":"x"}}"#,
-        r#"{"command":{"type":"Rearrange","equation":"y = 2*x + 1","solve_for":"x"}}"#,
-        r#"{"command":{"type":"ApplyIdentity","expr":"sin(x)^2 + cos(x)^2","identity":"PythagoreanTrig"}}"#,
-        r#"{"command":{"type":"SolveFor","relation":"2*x + 6 = 0","var":"x"}}"#,
-        r#"{"command":{"type":"SolveSystem","equations":["x + y = 3","x - y = 1"],"vars":["x","y"]}}"#,
-        r#"{"command":{"type":"Diff","expr":"x^3","var":"x","order":1}}"#,
-        r#"{"command":{"type":"PartialDiff","expr":"x^2*y","vars":[{"var":"x","order":1},{"var":"y","order":1}]}}"#,
-        r#"{"command":{"type":"TotalDiff","expr":"x^2 + y^2","var":"t","deps":[{"name":"x","expr":"t"},{"name":"y","expr":"t^2"}]}}"#,
-        r#"{"command":{"type":"Gradient","expr":"x^2 + y^2","vars":["x","y"]}}"#,
-        r#"{"command":{"type":"Divergence","field":["x","y","z"],"vars":["x","y","z"]}}"#,
-        r#"{"command":{"type":"Curl","field":["y","-x","0"],"vars":["x","y","z"]}}"#,
-        r#"{"command":{"type":"Laplacian","expr":"x^2 + y^2","vars":["x","y"]}}"#,
-        r#"{"command":{"type":"Jacobian","fields":["x*y","x+y"],"vars":["x","y"]}}"#,
-        r#"{"command":{"type":"Hessian","expr":"x^2 + y^2","vars":["x","y"]}}"#,
-        r#"{"command":{"type":"DirectionalDiff","expr":"x^2 + y^2","vars":["x","y"],"direction":["1","0"]}}"#,
-        r#"{"command":{"type":"Integrate","expr":"2*x","var":"x"}}"#,
-        r#"{"command":{"type":"DefIntegrate","expr":"x^2","var":"x","from":"0","to":"1"}}"#,
-        r#"{"command":{"type":"Limit","expr":"sin(x)/x","var":"x","point":"0"}}"#,
-        r#"{"command":{"type":"Taylor","expr":"exp(x)","var":"x","center":"0","order":3}}"#,
-        r#"{"command":{"type":"Laurent","expr":"1/x","var":"x","center":"0","order":2}}"#,
-        r#"{"command":{"type":"Asymptotic","expr":"1/x","var":"x","order":3}}"#,
-        r#"{"command":{"type":"Compose","outer":"sin(x)","inner":"x^2","var":"x","order":3}}"#,
-        r#"{"command":{"type":"Revert","expr":"x + x^2","var":"x","order":3}}"#,
-        r#"{"command":{"type":"FourierSeries","expr":"x","var":"x","period":"2"}}"#,
-        r#"{"command":{"type":"Residue","expr":"1/(x^2+1)","var":"x","point":"i"}}"#,
-        r#"{"command":{"type":"LaplaceTransform","expr":"t^2","time_var":"t"}}"#,
-        r#"{"command":{"type":"LaplaceTransform","expr":"exp(-t)","time_var":"t","freq_var":"s"}}"#,
-        r#"{"command":{"type":"InverseLaplace","expr":"1/(s+1)","freq_var":"s"}}"#,
-        r#"{"command":{"type":"InverseLaplace","expr":"1/s^2","freq_var":"s","time_var":"t"}}"#,
-        r#"{"command":{"type":"FourierTransform","expr":"exp(-t^2)","time_var":"t"}}"#,
-        r#"{"command":{"type":"FourierTransform","expr":"sin(t)","time_var":"t","freq_var":"omega"}}"#,
-        r#"{"command":{"type":"InverseFourier","expr":"1/(1+omega^2)","freq_var":"omega"}}"#,
-        r#"{"command":{"type":"InverseFourier","expr":"exp(-omega^2)","freq_var":"omega","time_var":"t"}}"#,
-        r#"{"command":{"type":"ZTransform","expr":"2^n","var":"n"}}"#,
-        r#"{"command":{"type":"ZTransform","expr":"n","var":"n","z_var":"z"}}"#,
-        r#"{"command":{"type":"InverseZTransform","expr":"z/(z-1)","z_var":"z"}}"#,
-        r#"{"command":{"type":"InverseZTransform","expr":"1/(z-2)","z_var":"z","var":"n"}}"#,
-        r#"{"command":{"type":"MellinTransform","expr":"x^2","var":"x"}}"#,
-        r#"{"command":{"type":"MellinTransform","expr":"1/(1+x)","var":"x","s_var":"s"}}"#,
-        r#"{"command":{"type":"InverseMellin","expr":"1/(s*(s+1))","s_var":"s"}}"#,
-        r#"{"command":{"type":"InverseMellin","expr":"1/s^2","s_var":"s","var":"x"}}"#,
-        r#"{"command":{"type":"SpecialFn","kind":"Gamma","args":["2"]}}"#,
-        r#"{"command":{"type":"Ode","equation":"y' = y","fn_name":"y","var":"x"}}"#,
-        r#"{"command":{"type":"OdeSystem","equations":["y1' = y2","y2' = -y1"],"fn_names":["y1","y2"],"var":"t"}}"#,
-        r#"{"command":{"type":"OdeSystem","equations":["y1' = y2","y2' = -y1"],"fn_names":["y1","y2"],"var":"t","ic":{"var_at":"0","values_at":["1","0"]}}}"#,
-        r#"{"command":{"type":"Pde","equation":"u_xx + u_yy = 0","fn_name":"u","vars":["x","y"]}}"#,
-        r#"{"command":{"type":"Matrix","op":"Determinant","operands":[{"rows":[["1","2"],["3","4"]]}]}}"#,
-        r#"{"command":{"type":"Optimize","objective":"x^2 + y^2","vars":["x","y"],"constraints":[{"kind":"Equality","expr":"x + y - 1"}],"sense":"Minimize"}}"#,
-        r#"{"command":{"type":"LagrangeMult","objective":"x^2 + y^2","vars":["x","y"],"equality_constraints":["x + y - 1"]}}"#,
+    let payloads: Vec<Value> = vec![
+        req(json!({"type": "Noop"})),
+        req(json!({"type": "Simplify", "expr": expr_json("x + x")})),
+        req(json!({"type": "Expand", "expr": expr_json("(x+1)^2")})),
+        req(json!({"type": "Factor", "expr": expr_json("x^2 - 1")})),
+        req(json!({"type": "Substitute", "expr": expr_json("x + y"),
+            "bindings": [{"old": expr_json("x"), "new": expr_json("2")}]})),
+        req(json!({"type": "CombineLikeTerms", "expr": expr_json("2*x + 3*x")})),
+        req(json!({"type": "CommonDenominator", "expr": expr_json("1/2 + 1/3")})),
+        req(json!({"type": "PartialFractions", "expr": expr_json("1/(x^2-1)"), "var": "x"})),
+        req(json!({"type": "Rationalize", "expr": expr_json("1/(1+sqrt(2))")})),
+        req(json!({"type": "Conjugate", "expr": expr_json("1 + 2*i")})),
+        req(json!({"type": "InverseFn", "expr": expr_json("2*x + 1"), "var": "x"})),
+        req(json!({"type": "Rearrange",
+            "equation": expr_json("y = 2*x + 1"), "solve_for": "x"})),
+        req(json!({"type": "ApplyIdentity",
+            "expr": expr_json("sin(x)^2 + cos(x)^2"), "identity": "PythagoreanTrig"})),
+        req(json!({"type": "SolveFor",
+            "relation": expr_json("2*x + 6 = 0"), "var": "x"})),
+        req(json!({"type": "SolveSystem",
+            "equations": [expr_json("x + y = 3"), expr_json("x - y = 1")],
+            "vars": ["x", "y"]})),
+        req(json!({"type": "Diff",
+            "expr": expr_json("x^3"), "var": "x", "order": 1})),
+        req(json!({"type": "PartialDiff",
+            "expr": expr_json("x^2*y"),
+            "vars": [{"var": "x", "order": 1}, {"var": "y", "order": 1}]})),
+        req(json!({"type": "TotalDiff",
+            "expr": expr_json("x^2 + y^2"), "var": "t",
+            "deps": [{"name": "x", "expr": expr_json("t")},
+                     {"name": "y", "expr": expr_json("t^2")}]})),
+        req(json!({"type": "Gradient",
+            "expr": expr_json("x^2 + y^2"), "vars": ["x", "y"]})),
+        req(json!({"type": "Divergence",
+            "field": [expr_json("x"), expr_json("y"), expr_json("z")],
+            "vars": ["x", "y", "z"]})),
+        req(json!({"type": "Curl",
+            "field": [expr_json("y"), expr_json("-x"), expr_json("0")],
+            "vars": ["x", "y", "z"]})),
+        req(json!({"type": "Laplacian",
+            "expr": expr_json("x^2 + y^2"), "vars": ["x", "y"]})),
+        req(json!({"type": "Jacobian",
+            "fields": [expr_json("x*y"), expr_json("x+y")], "vars": ["x", "y"]})),
+        req(json!({"type": "Hessian",
+            "expr": expr_json("x^2 + y^2"), "vars": ["x", "y"]})),
+        req(json!({"type": "DirectionalDiff",
+            "expr": expr_json("x^2 + y^2"), "vars": ["x", "y"],
+            "direction": [expr_json("1"), expr_json("0")]})),
+        req(json!({"type": "Integrate", "expr": expr_json("2*x"), "var": "x"})),
+        req(json!({"type": "DefIntegrate",
+            "expr": expr_json("x^2"), "var": "x",
+            "from": expr_json("0"), "to": expr_json("1")})),
+        req(json!({"type": "Limit",
+            "expr": expr_json("sin(x)/x"), "var": "x", "point": expr_json("0")})),
+        req(json!({"type": "Taylor",
+            "expr": expr_json("exp(x)"), "var": "x",
+            "center": expr_json("0"), "order": 3})),
+        req(json!({"type": "Laurent",
+            "expr": expr_json("1/x"), "var": "x",
+            "center": expr_json("0"), "order": 2})),
+        req(json!({"type": "Asymptotic",
+            "expr": expr_json("1/x"), "var": "x", "order": 3})),
+        req(json!({"type": "Compose",
+            "outer": expr_json("sin(x)"), "inner": expr_json("x^2"),
+            "var": "x", "order": 3})),
+        req(json!({"type": "Revert",
+            "expr": expr_json("x + x^2"), "var": "x", "order": 3})),
+        req(json!({"type": "FourierSeries",
+            "expr": expr_json("x"), "var": "x", "period": expr_json("2")})),
+        req(json!({"type": "Residue",
+            "expr": expr_json("1/(x^2+1)"), "var": "x", "point": expr_json("i")})),
+        req(json!({"type": "LaplaceTransform",
+            "expr": expr_json("t^2"), "time_var": "t"})),
+        req(json!({"type": "LaplaceTransform",
+            "expr": expr_json("exp(-t)"), "time_var": "t", "freq_var": "s"})),
+        req(json!({"type": "InverseLaplace",
+            "expr": expr_json("1/(s+1)"), "freq_var": "s"})),
+        req(json!({"type": "InverseLaplace",
+            "expr": expr_json("1/s^2"), "freq_var": "s", "time_var": "t"})),
+        req(json!({"type": "FourierTransform",
+            "expr": expr_json("exp(-t^2)"), "time_var": "t"})),
+        req(json!({"type": "FourierTransform",
+            "expr": expr_json("sin(t)"), "time_var": "t", "freq_var": "omega"})),
+        req(json!({"type": "InverseFourier",
+            "expr": expr_json("1/(1+omega^2)"), "freq_var": "omega"})),
+        req(json!({"type": "InverseFourier",
+            "expr": expr_json("exp(-omega^2)"), "freq_var": "omega", "time_var": "t"})),
+        req(json!({"type": "ZTransform",
+            "expr": expr_json("2^n"), "var": "n"})),
+        req(json!({"type": "ZTransform",
+            "expr": expr_json("n"), "var": "n", "z_var": "z"})),
+        req(json!({"type": "InverseZTransform",
+            "expr": expr_json("z/(z-1)"), "z_var": "z"})),
+        req(json!({"type": "InverseZTransform",
+            "expr": expr_json("1/(z-2)"), "z_var": "z", "var": "n"})),
+        req(json!({"type": "MellinTransform",
+            "expr": expr_json("x^2"), "var": "x"})),
+        req(json!({"type": "MellinTransform",
+            "expr": expr_json("1/(1+x)"), "var": "x", "s_var": "s"})),
+        req(json!({"type": "InverseMellin",
+            "expr": expr_json("1/(s*(s+1))"), "s_var": "s"})),
+        req(json!({"type": "InverseMellin",
+            "expr": expr_json("1/s^2"), "s_var": "s", "var": "x"})),
+        req(json!({"type": "SpecialFn",
+            "kind": "Gamma", "args": [expr_json("2")]})),
+        req(json!({"type": "Ode",
+            "equation": expr_json("y' = y"), "fn_name": "y", "var": "x"})),
+        req(json!({"type": "OdeSystem",
+            "equations": [expr_json("y1' = y2"), expr_json("y2' = -y1")],
+            "fn_names": ["y1", "y2"], "var": "t"})),
+        req(json!({"type": "OdeSystem",
+            "equations": [expr_json("y1' = y2"), expr_json("y2' = -y1")],
+            "fn_names": ["y1", "y2"], "var": "t",
+            "ic": {"var_at": expr_json("0"),
+                   "values_at": [expr_json("1"), expr_json("0")]}})),
+        req(json!({"type": "Pde",
+            "equation": expr_json("u_xx + u_yy = 0"),
+            "fn_name": "u", "vars": ["x", "y"]})),
+        req(json!({"type": "Matrix", "op": "Determinant",
+        "operands": [{"rows": [
+            [expr_json("1"), expr_json("2")],
+            [expr_json("3"), expr_json("4")]
+        ]}]})),
+        req(json!({"type": "Optimize",
+            "objective": expr_json("x^2 + y^2"), "vars": ["x", "y"],
+            "constraints": [{"kind": "Equality", "expr": expr_json("x + y - 1")}],
+            "sense": "Minimize"})),
+        req(json!({"type": "LagrangeMult",
+            "objective": expr_json("x^2 + y^2"), "vars": ["x", "y"],
+            "equality_constraints": [expr_json("x + y - 1")]})),
     ];
 
-    for payload in payloads {
-        let val: Value = serde_json::from_str(payload).unwrap();
+    for payload in &payloads {
+        let val = payload.clone();
         let result = request_from_json(&val);
         assert!(
             result.is_ok(),
             "payload failed to parse: {}\nerror: {}",
-            payload,
+            serde_json::to_string_pretty(payload).unwrap_or_default(),
             result.unwrap_err()
         );
     }
@@ -178,50 +262,51 @@ fn all_existing_commands_parse() {
 
 #[test]
 fn request_controls_passthrough() {
-    let payload = r#"{
-        "command": {"type": "Simplify", "expr": "x"},
+    let payload = json!({
+        "command": {"type": "Simplify", "expr": expr_json("x")},
         "narrate": false,
         "mode": "Numeric",
         "precision": {"decimal_digits": 10},
         "budget": {"max_wall_ms": 5000, "max_iterations": 1000},
         "ambient_domain": "Real",
         "seed": 42
-    }"#;
-    let val: Value = serde_json::from_str(payload).unwrap();
-    let req = request_from_json(&val).expect("should parse");
+    });
+    let req_parsed = request_from_json(&payload).expect("should parse");
 
-    assert!(!req.narrate, "narrate should be false");
+    assert!(!req_parsed.narrate, "narrate should be false");
     assert_eq!(
-        req.mode,
+        req_parsed.mode,
         super::super::request::SolveMode::Numeric,
         "mode should be Numeric"
     );
-    let prec = req.precision.expect("precision should be Some");
+    let prec = req_parsed.precision.expect("precision should be Some");
     assert_eq!(prec.decimal_digits, 10);
-    let budget = req.budget.expect("budget should be Some");
+    let budget = req_parsed.budget.expect("budget should be Some");
     assert_eq!(budget.max_wall_ms, Some(5000));
     assert_eq!(budget.max_iterations, Some(1000));
     assert!(
-        req.ambient_domain.is_some(),
+        req_parsed.ambient_domain.is_some(),
         "ambient_domain should be Some"
     );
-    assert_eq!(req.seed, Some(42));
+    assert_eq!(req_parsed.seed, Some(42));
 }
 
 // ── Test 4: matrix operands parsed ───────────────────────────────────────────
 
 #[test]
 fn matrix_operands_parsed() {
-    let payload = r#"{
+    let payload = json!({
         "command": {
             "type": "Matrix",
             "op": "Determinant",
-            "operands": [{"rows": [["1","2"],["3","4"]]}]
+            "operands": [{"rows": [
+                [expr_json("1"), expr_json("2")],
+                [expr_json("3"), expr_json("4")]
+            ]}]
         }
-    }"#;
-    let val: Value = serde_json::from_str(payload).unwrap();
-    let req = request_from_json(&val).expect("should parse");
-    match req.command {
+    });
+    let req_parsed = request_from_json(&payload).expect("should parse");
+    match req_parsed.command {
         Command::Matrix { op: _, operands } => {
             assert!(
                 !operands.is_empty(),
@@ -236,11 +321,17 @@ fn matrix_operands_parsed() {
 
 #[test]
 fn limit_side_parsed() {
-    let payload =
-        r#"{"command":{"type":"Limit","expr":"1/x","var":"x","point":"0","side":"Left"}}"#;
-    let val: Value = serde_json::from_str(payload).unwrap();
-    let req = request_from_json(&val).expect("should parse");
-    match req.command {
+    let payload = json!({
+        "command": {
+            "type": "Limit",
+            "expr": expr_json("1/x"),
+            "var": "x",
+            "point": expr_json("0"),
+            "side": "Left"
+        }
+    });
+    let req_parsed = request_from_json(&payload).expect("should parse");
+    match req_parsed.command {
         Command::Limit { side, point, .. } => {
             assert_eq!(side, Some(Side::Left), "side should be Left");
             assert!(
@@ -256,9 +347,15 @@ fn limit_side_parsed() {
 
 #[test]
 fn branch_condition_serialized() {
-    // x^2 = 1 has two roots; each result should have a key in the response
-    let req = r#"{"command":{"type":"SolveFor","relation":"x^2 - 1 = 0","var":"x"}}"#;
-    let v = execute_ok(req);
+    // x^2 - 1 = 0 has two roots; each result should have a key in the response
+    let payload = json!({
+        "command": {
+            "type": "SolveFor",
+            "relation": expr_json("x^2 - 1 = 0"),
+            "var": "x"
+        }
+    });
+    let v = execute_ok(payload);
     let results = v["results"].as_array().expect("results should be array");
     // With multiple roots we expect at least one result
     assert!(!results.is_empty(), "should have at least one result");
@@ -272,16 +369,16 @@ fn branch_condition_serialized() {
 
 #[test]
 fn numeric_precision_serialized() {
-    // The Numeric result value should now include decimal_digits in the output
-    // We build a response containing a Numeric entry via the helpers directly
-    // rather than driving through a full command (which requires numeric mode).
-    // Instead we test the serialiser unit directly.
+    // The Numeric result value should now include decimal_digits in the output.
+    // Test the serialiser unit directly without a full command round-trip.
     use super::super::request::Precision;
     use super::super::response::{
         EngineId, ExecutionMeta, NumericMethod, Response, ResultEntry, ResultShape, ResultValue,
     };
     use super::response::response_to_json;
 
+    // Build a thales Expression for 3.14159
+    let expr = crate::parser::parse_expression("3.14159").unwrap();
     let prec = Precision {
         decimal_digits: 15,
         abs_tol: None,
@@ -289,7 +386,7 @@ fn numeric_precision_serialized() {
     };
     let entry = ResultEntry {
         value: ResultValue::Numeric {
-            value: parse_expr_str("3.14159").unwrap(),
+            value: expr,
             precision: prec,
             method: NumericMethod::NewtonRaphson,
         },
@@ -360,8 +457,8 @@ fn nosolution_domain_serialized() {
 
 #[test]
 fn unknown_command_error_message() {
-    let req = r#"{"command":{"type":"DefinitelyNotARealCommand","expr":"x"}}"#;
-    let err = execute_ffi(req).unwrap_err();
+    let req_str = r#"{"command":{"type":"DefinitelyNotARealCommand","expr":{"kind":"Variable","value":"x"}}}"#;
+    let err = execute_ffi(req_str).unwrap_err();
     // The error should indicate the parsing failure. With serde tag dispatch,
     // unknown variants produce a descriptive error mentioning the unknown type.
     assert!(

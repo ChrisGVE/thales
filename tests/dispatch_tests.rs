@@ -51,6 +51,14 @@ fn request(cmd: Command) -> Request {
     }
 }
 
+/// Parse a plain-text math expression and return its mathlex serde JSON form.
+fn expr_json(input: &str) -> serde_json::Value {
+    let ml = mathlex::parse(input)
+        .unwrap_or_else(|e| panic!("expr_json: failed to parse `{}`: {:?}", input, e));
+    serde_json::to_value(&ml)
+        .unwrap_or_else(|e| panic!("expr_json: failed to serialise `{}`: {}", input, e))
+}
+
 fn assert_single_symbolic(resp: &thales::api::response::Response, engine: EngineId) {
     assert_eq!(resp.results.len(), 1, "expected single result entry");
     let (key, entry) = &resp.results[0];
@@ -1036,8 +1044,10 @@ fn noop_is_error_severity() {
 
 #[test]
 fn ffi_round_trip_simplify() {
-    let req = r#"{"command":{"type":"Simplify","expr":"x + x"}}"#;
-    let resp = execute_ffi(req).unwrap();
+    let payload = serde_json::json!({
+        "command": {"type": "Simplify", "expr": expr_json("x + x")}
+    });
+    let resp = execute_ffi(&serde_json::to_string(&payload).unwrap()).unwrap();
     let v: serde_json::Value = serde_json::from_str(&resp).unwrap();
     assert_eq!(v["results"][0]["value"]["kind"], "Symbolic");
 }
@@ -1045,35 +1055,47 @@ fn ffi_round_trip_simplify() {
 #[test]
 fn ffi_round_trip_diff_integrate_inverses() {
     // d/dx(x^2) then ∫ that dx should round-trip to a polynomial.
-    let diff_req = r#"{"command":{"type":"Diff","expr":"x^2","var":"x","order":1}}"#;
-    let resp = execute_ffi(diff_req).unwrap();
+    let diff_payload = serde_json::json!({
+        "command": {"type": "Diff", "expr": expr_json("x^2"), "var": "x", "order": 1}
+    });
+    let resp = execute_ffi(&serde_json::to_string(&diff_payload).unwrap()).unwrap();
     let v: serde_json::Value = serde_json::from_str(&resp).unwrap();
-    let derivative = v["results"][0]["value"]["expr"]
-        .as_str()
-        .unwrap()
-        .to_string();
-
-    let integrate_req = format!(
-        r#"{{"command":{{"type":"Integrate","expr":"{}","var":"x"}}}}"#,
-        derivative
+    // Response now emits structured mathlex Expression JSON; extract it for use
+    // as input to a second request.
+    let derivative_expr = v["results"][0]["value"]["expr"].clone();
+    assert!(
+        !derivative_expr.is_null(),
+        "derivative expr must not be null"
     );
-    let resp2 = execute_ffi(&integrate_req).unwrap();
+
+    let integrate_payload = serde_json::json!({
+        "command": {"type": "Integrate", "expr": derivative_expr, "var": "x"}
+    });
+    let resp2 = execute_ffi(&serde_json::to_string(&integrate_payload).unwrap()).unwrap();
     let v2: serde_json::Value = serde_json::from_str(&resp2).unwrap();
     assert_eq!(v2["results"][0]["engine"], "PatternIntegration");
 }
 
 #[test]
 fn ffi_round_trip_solve_for() {
-    let req = r#"{"command":{"type":"SolveFor","relation":"2*x + 3 = 7","var":"x"}}"#;
-    let resp = execute_ffi(req).unwrap();
+    let payload = serde_json::json!({
+        "command": {"type": "SolveFor", "relation": expr_json("2*x + 3 = 7"), "var": "x"}
+    });
+    let resp = execute_ffi(&serde_json::to_string(&payload).unwrap()).unwrap();
     let v: serde_json::Value = serde_json::from_str(&resp).unwrap();
     assert_eq!(v["results"][0]["engine"], "EquationSolver");
 }
 
 #[test]
 fn ffi_round_trip_solve_system() {
-    let req = r#"{"command":{"type":"SolveSystem","equations":["x + y = 5","x - y = 1"],"vars":["x","y"]}}"#;
-    let resp = execute_ffi(req).unwrap();
+    let payload = serde_json::json!({
+        "command": {
+            "type": "SolveSystem",
+            "equations": [expr_json("x + y = 5"), expr_json("x - y = 1")],
+            "vars": ["x", "y"]
+        }
+    });
+    let resp = execute_ffi(&serde_json::to_string(&payload).unwrap()).unwrap();
     let v: serde_json::Value = serde_json::from_str(&resp).unwrap();
     let results = v["results"].as_array().unwrap();
     assert_eq!(results.len(), 2);
@@ -1081,8 +1103,10 @@ fn ffi_round_trip_solve_system() {
 
 #[test]
 fn ffi_round_trip_ode() {
-    let req = r#"{"command":{"type":"Ode","equation":"y","fn_name":"y","var":"x"}}"#;
-    let resp = execute_ffi(req).unwrap();
+    let payload = serde_json::json!({
+        "command": {"type": "Ode", "equation": expr_json("y"), "fn_name": "y", "var": "x"}
+    });
+    let resp = execute_ffi(&serde_json::to_string(&payload).unwrap()).unwrap();
     let v: serde_json::Value = serde_json::from_str(&resp).unwrap();
     assert_eq!(v["results"][0]["engine"], "OdeFirstOrder");
 }
@@ -1090,8 +1114,10 @@ fn ffi_round_trip_ode() {
 #[test]
 fn ffi_round_trip_parse_uses_parser() {
     // Confirm that the JSON transport round-trips through parse_expression.
-    let req = r#"{"command":{"type":"Simplify","expr":"sin(x)^2 + cos(x)^2"}}"#;
-    let resp = execute_ffi(req).unwrap();
+    let payload = serde_json::json!({
+        "command": {"type": "Simplify", "expr": expr_json("sin(x)^2 + cos(x)^2")}
+    });
+    let resp = execute_ffi(&serde_json::to_string(&payload).unwrap()).unwrap();
     let v: serde_json::Value = serde_json::from_str(&resp).unwrap();
     assert_eq!(v["results"][0]["value"]["kind"], "Symbolic");
 
@@ -1279,8 +1305,10 @@ fn limit_at_symbolic_point_returns_error() {
 fn json_rejects_oversized_diff_order() {
     // 4294967297 = 2^32 + 1 exceeds u32::MAX; must be rejected.
     // The serde-based parser emits "invalid value: integer `N`, expected u32".
-    let json = r#"{"command":{"type":"Diff","expr":"x^2","var":"x","order":4294967297}}"#;
-    let result = execute_ffi(json);
+    let payload = serde_json::json!({
+        "command": {"type": "Diff", "expr": expr_json("x^2"), "var": "x", "order": 4294967297u64}
+    });
+    let result = execute_ffi(&serde_json::to_string(&payload).unwrap());
     assert!(
         result.is_err(),
         "oversized order must be rejected; got Ok: {}",
@@ -1290,15 +1318,19 @@ fn json_rejects_oversized_diff_order() {
 
 #[test]
 fn json_accepts_valid_diff_order() {
-    let json = r#"{"command":{"type":"Diff","expr":"x^2","var":"x","order":3}}"#;
-    let result = execute_ffi(json);
+    let payload = serde_json::json!({
+        "command": {"type": "Diff", "expr": expr_json("x^2"), "var": "x", "order": 3}
+    });
+    let result = execute_ffi(&serde_json::to_string(&payload).unwrap());
     assert!(result.is_ok());
 }
 
 #[test]
 fn json_ode_missing_ic_is_ok() {
-    let json = r#"{"command":{"type":"Ode","equation":"y","fn_name":"y","var":"x"}}"#;
-    let result = execute_ffi(json);
+    let payload = serde_json::json!({
+        "command": {"type": "Ode", "equation": expr_json("y"), "fn_name": "y", "var": "x"}
+    });
+    let result = execute_ffi(&serde_json::to_string(&payload).unwrap());
     assert!(result.is_ok());
 }
 
@@ -1306,8 +1338,17 @@ fn json_ode_missing_ic_is_ok() {
 
 #[test]
 fn json_matrix_determinant_with_operand() {
-    let json = r#"{"command":{"type":"Matrix","op":"Determinant","operands":[{"rows":[["1","2"],["3","4"]]}]}}"#;
-    let result = execute_ffi(json);
+    let payload = serde_json::json!({
+        "command": {
+            "type": "Matrix",
+            "op": "Determinant",
+            "operands": [{"rows": [
+                [expr_json("1"), expr_json("2")],
+                [expr_json("3"), expr_json("4")]
+            ]}]
+        }
+    });
+    let result = execute_ffi(&serde_json::to_string(&payload).unwrap());
     assert!(result.is_ok(), "should parse matrix operand: {:?}", result);
 }
 
@@ -1515,14 +1556,15 @@ fn structured_none_for_scalar() {
 fn structured_json_roundtrip_labeled() {
     // JSON SolveSystem response should contain structured.kind = "Labeled"
     // with label and value fields.
-    let json = r#"{
+    let payload = serde_json::json!({
         "command": {
             "type": "SolveSystem",
-            "equations": ["x+y-3", "x-y-1"],
+            "equations": [expr_json("x+y-3"), expr_json("x-y-1")],
             "vars": ["x", "y"]
         }
-    }"#;
-    let resp_str = execute_ffi(json).expect("execute_ffi should succeed");
+    });
+    let resp_str =
+        execute_ffi(&serde_json::to_string(&payload).unwrap()).expect("execute_ffi should succeed");
     let v: serde_json::Value = serde_json::from_str(&resp_str).unwrap();
     let results = v["results"].as_array().unwrap();
 
@@ -1544,14 +1586,18 @@ fn structured_json_roundtrip_labeled() {
 fn structured_json_roundtrip_decomposition() {
     // JSON LU response should contain structured.kind = "Decomposition"
     // with parts array containing L, U, P.
-    let json = r#"{
+    let payload = serde_json::json!({
         "command": {
             "type": "Matrix",
             "op": "Lu",
-            "operands": [{"rows": [["2", "1"], ["4", "3"]]}]
+            "operands": [{"rows": [
+                [expr_json("2"), expr_json("1")],
+                [expr_json("4"), expr_json("3")]
+            ]}]
         }
-    }"#;
-    let resp_str = execute_ffi(json).expect("execute_ffi should succeed");
+    });
+    let resp_str =
+        execute_ffi(&serde_json::to_string(&payload).unwrap()).expect("execute_ffi should succeed");
     let v: serde_json::Value = serde_json::from_str(&resp_str).unwrap();
     let results = v["results"].as_array().unwrap();
     assert_eq!(results.len(), 1, "expected single LU result");

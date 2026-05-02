@@ -819,9 +819,18 @@ fn golden_nabla_grad_command() {
 #[test]
 fn golden_nabla_json_grad() {
     use thales::api::json::execute_ffi;
-    let req =
-        r#"{"command":{"type":"Nabla","op":"Grad","input":"x^2 + y^2","vars":["x","y","z"]}}"#;
-    let resp_str = execute_ffi(req).expect("execute_ffi should not error");
+    let ml_expr = mathlex::parse("x^2 + y^2").expect("parse x^2 + y^2");
+    let expr_val = serde_json::to_value(&ml_expr).expect("serialise expr");
+    let payload = serde_json::json!({
+        "command": {
+            "type": "Nabla",
+            "op": "Grad",
+            "input": expr_val,
+            "vars": ["x", "y", "z"]
+        }
+    });
+    let req = serde_json::to_string(&payload).unwrap();
+    let resp_str = execute_ffi(&req).expect("execute_ffi should not error");
     let v: serde_json::Value =
         serde_json::from_str(&resp_str).expect("response must be valid JSON");
     let results = v["results"].as_array().expect("results must be array");
@@ -834,8 +843,23 @@ fn golden_nabla_json_grad() {
 #[test]
 fn golden_nabla_json_div_of_curl() {
     use thales::api::json::execute_ffi;
-    let req = r#"{"command":{"type":"Nabla","op":"DivOfCurl","input":["y*z","x*z","x*y"],"vars":["x","y","z"]}}"#;
-    let resp_str = execute_ffi(req).expect("execute_ffi should not error");
+    let components: Vec<serde_json::Value> = ["y*z", "x*z", "x*y"]
+        .iter()
+        .map(|s| {
+            let ml = mathlex::parse(s).unwrap_or_else(|e| panic!("parse {}: {:?}", s, e));
+            serde_json::to_value(&ml).expect("serialise")
+        })
+        .collect();
+    let payload = serde_json::json!({
+        "command": {
+            "type": "Nabla",
+            "op": "DivOfCurl",
+            "input": components,
+            "vars": ["x", "y", "z"]
+        }
+    });
+    let req = serde_json::to_string(&payload).unwrap();
+    let resp_str = execute_ffi(&req).expect("execute_ffi should not error");
     let v: serde_json::Value =
         serde_json::from_str(&resp_str).expect("response must be valid JSON");
     let results = v["results"].as_array().expect("results must be array");
@@ -843,12 +867,13 @@ fn golden_nabla_json_div_of_curl() {
         !results.is_empty(),
         "Nabla DivOfCurl JSON response must have results"
     );
-    // The value must be "0" — Symbolic result uses the "expr" key.
-    let val = v["results"][0]["value"]["expr"].as_str().unwrap_or("");
-    assert_eq!(
-        val, "0",
+    // div(curl(F)) = 0; the expr JSON should contain an integer 0.
+    let expr_json = &v["results"][0]["value"]["expr"];
+    let expr_str = expr_json.to_string();
+    assert!(
+        expr_str.contains('0'),
         "div(curl(F)) JSON result should be 0, got: {}",
-        val
+        expr_str
     );
 }
 

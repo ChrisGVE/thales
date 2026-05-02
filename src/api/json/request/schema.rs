@@ -1,7 +1,7 @@
 //! Serde-derived JSON mirror types for request parsing.
 
+use mathlex::Expression;
 use serde::Deserialize;
-use serde_json::Value;
 
 // ── Mirror enum ───────────────────────────────────────────────────────────────
 
@@ -9,8 +9,8 @@ use serde_json::Value;
 ///
 /// Every [`Command`] variant has exactly one corresponding `JsonCommand`
 /// variant. The `_exhaustiveness_check` in `tests.rs` fails compilation if
-/// they diverge. Expression inputs are `String`; they are parsed during
-/// conversion in [`super::convert`].
+/// they diverge. Expression inputs are native mathlex [`Expression`] JSON
+/// objects; serde deserialises them directly with no string-parsing step.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub(in super::super) enum JsonCommand {
@@ -19,203 +19,203 @@ pub(in super::super) enum JsonCommand {
 
     // ── Algebra ────────────────────────────────────────────────────────
     Simplify {
-        expr: String,
+        expr: Expression,
         rules: Option<JsonSimplifyRules>,
         over: Option<String>,
     },
     Expand {
-        expr: String,
+        expr: Expression,
         target: Option<String>,
     },
     Factor {
-        expr: String,
+        expr: Expression,
         over: Option<String>,
         target: Option<String>,
     },
     Substitute {
-        expr: String,
+        expr: Expression,
         bindings: Vec<JsonBinding>,
     },
     CombineLikeTerms {
-        expr: String,
+        expr: Expression,
         target: Option<String>,
     },
     CommonDenominator {
-        expr: String,
+        expr: Expression,
         target: Option<String>,
     },
     PartialFractions {
-        expr: String,
+        expr: Expression,
         var: String,
     },
     Rationalize {
-        expr: String,
+        expr: Expression,
         target: Option<String>,
     },
     Conjugate {
-        expr: String,
+        expr: Expression,
         target: Option<String>,
     },
     InverseFn {
-        expr: String,
+        expr: Expression,
         var: String,
     },
     Rearrange {
-        equation: String,
+        equation: Expression,
         solve_for: String,
     },
     ApplyIdentity {
-        expr: String,
+        expr: Expression,
         identity: String,
         target: Option<String>,
     },
 
     // ── Solve ──────────────────────────────────────────────────────────
     SolveFor {
-        relation: String,
+        relation: Expression,
         var: String,
         over: Option<String>,
     },
     SolveSystem {
-        equations: Vec<String>,
+        equations: Vec<Expression>,
         vars: Vec<String>,
         over: Option<String>,
     },
 
     // ── Differentiation ────────────────────────────────────────────────
     Diff {
-        expr: String,
+        expr: Expression,
         var: String,
         order: Option<u32>,
     },
     PartialDiff {
-        expr: String,
+        expr: Expression,
         vars: Vec<JsonPartialDiffVar>,
     },
     TotalDiff {
-        expr: String,
+        expr: Expression,
         var: String,
         deps: Vec<JsonDep>,
     },
     Gradient {
-        expr: String,
+        expr: Expression,
         vars: Vec<String>,
     },
     Divergence {
-        field: Vec<String>,
+        field: Vec<Expression>,
         vars: Vec<String>,
     },
     Curl {
-        field: Vec<String>,
+        field: Vec<Expression>,
         vars: Vec<String>,
     },
     Laplacian {
-        expr: String,
+        expr: Expression,
         vars: Vec<String>,
     },
     Jacobian {
-        fields: Vec<String>,
+        fields: Vec<Expression>,
         vars: Vec<String>,
     },
     Hessian {
-        expr: String,
+        expr: Expression,
         vars: Vec<String>,
     },
     DirectionalDiff {
-        expr: String,
+        expr: Expression,
         vars: Vec<String>,
-        direction: Vec<String>,
+        direction: Vec<Expression>,
     },
 
     // ── Integration ────────────────────────────────────────────────────
     Integrate {
-        expr: String,
+        expr: Expression,
         var: String,
     },
     DefIntegrate {
-        expr: String,
+        expr: Expression,
         var: String,
-        from: String,
-        to: String,
+        from: Expression,
+        to: Expression,
     },
     MultiIntegrate {
-        expr: String,
+        expr: Expression,
         integrations: Vec<JsonIntegrationStep>,
     },
     ChangeCoords {
-        expr: String,
+        expr: Expression,
         from_vars: Vec<String>,
         to_vars: Vec<String>,
         system: String,
     },
     PathIntegral {
-        expr: String,
+        expr: Expression,
         curve: JsonParamCurve,
     },
     SurfaceIntegral {
-        expr: String,
+        expr: Expression,
         vars: Vec<String>,
     },
 
     // ── Limits ─────────────────────────────────────────────────────────
     Limit {
-        expr: String,
+        expr: Expression,
         var: String,
-        point: String,
+        point: Expression,
         side: Option<String>,
     },
 
     // ── Expansions ─────────────────────────────────────────────────────
     Taylor {
-        expr: String,
+        expr: Expression,
         var: String,
-        center: String,
+        center: Expression,
         order: Option<u32>,
     },
     Laurent {
-        expr: String,
+        expr: Expression,
         var: String,
-        center: String,
+        center: Expression,
         order: Option<u32>,
     },
     Asymptotic {
-        expr: String,
+        expr: Expression,
         var: String,
         order: Option<u32>,
     },
     Compose {
-        outer: String,
-        inner: String,
+        outer: Expression,
+        inner: Expression,
         var: String,
         order: Option<u32>,
     },
     Revert {
-        expr: String,
+        expr: Expression,
         var: String,
         order: Option<u32>,
     },
     Puiseux {
-        expr: String,
+        expr: Expression,
         var: String,
-        center: Option<String>,
+        center: Option<Expression>,
         order: Option<u32>,
     },
     Frobenius {
-        ode: String,
+        ode: Expression,
         fn_name: String,
         var: String,
-        point: Option<String>,
+        point: Option<Expression>,
         order: Option<u32>,
     },
     Pade {
-        expr: String,
+        expr: Expression,
         var: String,
-        center: Option<String>,
+        center: Option<Expression>,
         m: u32,
         n: u32,
     },
     Wkb {
-        ode: String,
+        ode: Expression,
         fn_name: String,
         var: String,
         small_param: String,
@@ -224,53 +224,53 @@ pub(in super::super) enum JsonCommand {
 
     // ── Transforms ─────────────────────────────────────────────────────
     FourierSeries {
-        expr: String,
+        expr: Expression,
         var: String,
-        period: String,
+        period: Expression,
         terms: Option<u32>,
     },
     Residue {
-        expr: String,
+        expr: Expression,
         var: String,
-        point: String,
+        point: Expression,
     },
     LaplaceTransform {
-        expr: String,
+        expr: Expression,
         time_var: String,
         freq_var: Option<String>,
     },
     InverseLaplace {
-        expr: String,
+        expr: Expression,
         freq_var: String,
         time_var: Option<String>,
     },
     FourierTransform {
-        expr: String,
+        expr: Expression,
         time_var: String,
         freq_var: Option<String>,
     },
     InverseFourier {
-        expr: String,
+        expr: Expression,
         freq_var: String,
         time_var: Option<String>,
     },
     ZTransform {
-        expr: String,
+        expr: Expression,
         var: String,
         z_var: Option<String>,
     },
     InverseZTransform {
-        expr: String,
+        expr: Expression,
         z_var: String,
         var: Option<String>,
     },
     MellinTransform {
-        expr: String,
+        expr: Expression,
         var: String,
         s_var: Option<String>,
     },
     InverseMellin {
-        expr: String,
+        expr: Expression,
         s_var: String,
         var: Option<String>,
     },
@@ -278,24 +278,24 @@ pub(in super::super) enum JsonCommand {
     // ── Special functions ──────────────────────────────────────────────
     SpecialFn {
         kind: String,
-        args: Vec<String>,
+        args: Vec<Expression>,
     },
 
     // ── ODE ────────────────────────────────────────────────────────────
     Ode {
-        equation: String,
+        equation: Expression,
         fn_name: String,
         var: String,
         ic: Option<JsonIvpData>,
     },
     OdeSystem {
-        equations: Vec<String>,
+        equations: Vec<Expression>,
         fn_names: Vec<String>,
         var: String,
         ic: Option<JsonSystemIvpData>,
     },
     Pde {
-        equation: String,
+        equation: Expression,
         fn_name: String,
         vars: Vec<String>,
     },
@@ -303,7 +303,7 @@ pub(in super::super) enum JsonCommand {
     // ── Matrix ─────────────────────────────────────────────────────────
     Matrix {
         op: String,
-        operands: Option<Vec<Value>>,
+        operands: Option<Vec<JsonMatrixOperand>>,
     },
 
     // ── Nabla ──────────────────────────────────────────────────────────
@@ -312,25 +312,26 @@ pub(in super::super) enum JsonCommand {
     /// `op` is one of: `"Grad"`, `"Div"`, `"Curl"`, `"Laplacian"`,
     /// `"DivOfCurl"`, `"CurlOfGrad"`, `"DivOfGrad"`.
     ///
-    /// `input` is either a plain expression string (scalar ops) or an
-    /// array of expression strings (vector-field ops).
+    /// `input` is either a plain Expression object (scalar ops) or an
+    /// array of Expression objects (vector-field ops), encoded as
+    /// [`JsonNablaInput`].
     Nabla {
         op: String,
-        input: Value,
+        input: JsonNablaInput,
         vars: Vec<String>,
     },
 
     // ── Optimization ───────────────────────────────────────────────────
     Optimize {
-        objective: String,
+        objective: Expression,
         vars: Vec<String>,
         constraints: Option<Vec<JsonConstraint>>,
         sense: Option<String>,
     },
     LagrangeMult {
-        objective: String,
+        objective: Expression,
         vars: Vec<String>,
-        equality_constraints: Vec<String>,
+        equality_constraints: Vec<Expression>,
     },
 }
 
@@ -340,17 +341,17 @@ pub(in super::super) enum JsonCommand {
 #[derive(Debug, Deserialize)]
 pub(in super::super) struct JsonIntegrationStep {
     pub var: String,
-    pub from: String,
-    pub to: String,
+    pub from: Expression,
+    pub to: Expression,
 }
 
 /// Parametric curve for a `PathIntegral` command.
 #[derive(Debug, Deserialize)]
 pub(in super::super) struct JsonParamCurve {
-    pub components: Vec<String>,
+    pub components: Vec<Expression>,
     pub param: String,
-    pub from: String,
-    pub to: String,
+    pub from: Expression,
+    pub to: Expression,
 }
 
 /// Subset of simplification rule flags exposed through JSON.
@@ -375,8 +376,8 @@ pub(in super::super) struct JsonSimplifyRules {
 /// A `(old, new)` substitution pair.
 #[derive(Debug, Deserialize)]
 pub(in super::super) struct JsonBinding {
-    pub old: String,
-    pub new: String,
+    pub old: Expression,
+    pub new: Expression,
 }
 
 /// One `(var, order)` entry for `PartialDiff`.
@@ -395,30 +396,53 @@ fn default_order() -> u32 {
 #[derive(Debug, Deserialize)]
 pub(in super::super) struct JsonDep {
     pub name: String,
-    pub expr: String,
+    pub expr: Expression,
 }
 
 /// Initial-value data for `Ode`.
 #[derive(Debug, Deserialize)]
 pub(in super::super) struct JsonIvpData {
-    pub var_at: String,
-    pub fn_at: String,
+    pub var_at: Expression,
+    pub fn_at: Expression,
     #[serde(default)]
-    pub derivatives_at: Vec<String>,
+    pub derivatives_at: Vec<Expression>,
 }
 
 /// Initial-value data for `OdeSystem`.
 #[derive(Debug, Deserialize)]
 pub(in super::super) struct JsonSystemIvpData {
-    pub var_at: String,
-    pub values_at: Vec<String>,
+    pub var_at: Expression,
+    pub values_at: Vec<Expression>,
 }
 
 /// One constraint for `Optimize`.
 #[derive(Debug, Deserialize)]
 pub(in super::super) struct JsonConstraint {
     pub kind: String,
-    pub expr: String,
+    pub expr: Expression,
+}
+
+/// A single operand for a `Matrix` command.
+///
+/// `Scalar` wraps a plain Expression; `Matrix` wraps a row-major grid;
+/// `Vector` wraps a flat element list.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub(in super::super) enum JsonMatrixOperand {
+    Matrix { rows: Vec<Vec<Expression>> },
+    Vector { elements: Vec<Expression> },
+    Scalar(Expression),
+}
+
+/// Input payload for a `Nabla` command.
+///
+/// Scalar ops (Grad, Laplacian, CurlOfGrad, DivOfGrad) send a single
+/// Expression; vector ops (Div, Curl, DivOfCurl) send an array.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub(in super::super) enum JsonNablaInput {
+    VectorField(Vec<Expression>),
+    Scalar(Expression),
 }
 
 // ── Request wrapper ───────────────────────────────────────────────────────────
@@ -445,8 +469,8 @@ pub(in super::super) struct JsonRequest {
 #[derive(Debug, Deserialize)]
 pub(in super::super) struct JsonPrecision {
     pub decimal_digits: u32,
-    pub abs_tol: Option<String>,
-    pub rel_tol: Option<String>,
+    pub abs_tol: Option<Expression>,
+    pub rel_tol: Option<Expression>,
 }
 
 /// JSON representation of [`super::super::super::request::Budget`].
