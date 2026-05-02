@@ -23,23 +23,21 @@ fn is_zero_expr(expr: &Expression) -> bool {
 /// functions, variables, constants). Unsupported mathlex variants are mapped
 /// to a `Function(Custom("..."), args)` or returned as an error.
 pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, String> {
-    match expr {
-        mathlex::Expression::Integer(n) => Ok(Expression::Integer(*n)),
+    match &expr.kind {
+        mathlex::ExprKind::Integer(n) => Ok(Expression::Integer(*n)),
 
-        mathlex::Expression::Float(f) => Ok(Expression::Float(f.value())),
+        mathlex::ExprKind::Float(f) => Ok(Expression::Float(f.value())),
 
-        mathlex::Expression::Variable(name) => {
-            Ok(Expression::Variable(Variable::new(name.as_str())))
-        }
+        mathlex::ExprKind::Variable(name) => Ok(Expression::Variable(Variable::new(name.as_str()))),
 
-        mathlex::Expression::Constant(c) => match c {
+        mathlex::ExprKind::Constant(c) => match c {
             mathlex::MathConstant::Pi => Ok(Expression::Constant(SymbolicConstant::Pi)),
             mathlex::MathConstant::E => Ok(Expression::Constant(SymbolicConstant::E)),
             mathlex::MathConstant::I => Ok(Expression::Constant(SymbolicConstant::I)),
             other => Err(format!("unsupported constant: {:?}", other)),
         },
 
-        mathlex::Expression::Unary { op, operand } => {
+        mathlex::ExprKind::Unary { op, operand } => {
             let inner = convert_expression(operand)?;
             match op {
                 mathlex::UnaryOp::Neg => Ok(Expression::Unary(UnaryOp::Neg, Box::new(inner))),
@@ -55,7 +53,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
             }
         }
 
-        mathlex::Expression::Binary { op, left, right } => {
+        mathlex::ExprKind::Binary { op, left, right } => {
             let l = convert_expression(left)?;
             let r = convert_expression(right)?;
             match op {
@@ -81,7 +79,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
             }
         }
 
-        mathlex::Expression::Function { name, args } => {
+        mathlex::ExprKind::Function { name, args } => {
             let converted_args: Result<Vec<Expression>, String> =
                 args.iter().map(convert_expression).collect();
             let converted_args = converted_args?;
@@ -89,7 +87,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
             Ok(Expression::Function(func, converted_args))
         }
 
-        mathlex::Expression::Equation { left, right } => {
+        mathlex::ExprKind::Equation { left, right } => {
             // Equations are not expressions in thales; this path is used
             // when an equation appears inside a larger expression context.
             // We represent it as left - right (implicit "= 0" form).
@@ -98,7 +96,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
             Ok(Expression::Binary(BinaryOp::Sub, Box::new(l), Box::new(r)))
         }
 
-        mathlex::Expression::Rational {
+        mathlex::ExprKind::Rational {
             numerator,
             denominator,
         } => {
@@ -107,7 +105,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
             Ok(Expression::Binary(BinaryOp::Div, Box::new(n), Box::new(d)))
         }
 
-        mathlex::Expression::Complex { real, imaginary } => {
+        mathlex::ExprKind::Complex { real, imaginary } => {
             let r = convert_expression(real)?;
             let im = convert_expression(imaginary)?;
             // Represent as real + imaginary * i
@@ -123,7 +121,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
             ))
         }
 
-        mathlex::Expression::CrossProduct { left, right } => {
+        mathlex::ExprKind::CrossProduct { left, right } => {
             let l = convert_expression(left)?;
             let r = convert_expression(right)?;
             Ok(Expression::Function(
@@ -131,7 +129,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
                 vec![l, r],
             ))
         }
-        mathlex::Expression::DotProduct { left, right } => {
+        mathlex::ExprKind::DotProduct { left, right } => {
             let l = convert_expression(left)?;
             let r = convert_expression(right)?;
             Ok(Expression::Function(
@@ -141,7 +139,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
         }
 
         // Outer product
-        mathlex::Expression::OuterProduct { left, right } => {
+        mathlex::ExprKind::OuterProduct { left, right } => {
             let l = convert_expression(left)?;
             let r = convert_expression(right)?;
             Ok(Expression::Function(
@@ -151,7 +149,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
         }
 
         // Vector and Matrix — map to Custom functions for now
-        mathlex::Expression::Vector(elems) => {
+        mathlex::ExprKind::Vector(elems) => {
             let converted: Result<Vec<Expression>, String> =
                 elems.iter().map(convert_expression).collect();
             Ok(Expression::Function(
@@ -160,7 +158,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
             ))
         }
 
-        mathlex::Expression::Matrix(rows) => {
+        mathlex::ExprKind::Matrix(rows) => {
             let nrows = rows.len();
             let ncols = rows.first().map_or(0, |r| r.len());
             let mut args = Vec::with_capacity(2 + nrows * ncols);
@@ -178,7 +176,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
         }
 
         // Calculus notation — thales handles these internally, not via parsing
-        mathlex::Expression::Derivative { expr, var, order } => {
+        mathlex::ExprKind::Derivative { expr, var, order } => {
             let inner = convert_expression(expr)?;
             // Try symbolic differentiation first
             let mut result = inner.clone();
@@ -206,7 +204,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
             }
         }
 
-        mathlex::Expression::PartialDerivative { expr, var, order } => {
+        mathlex::ExprKind::PartialDerivative { expr, var, order } => {
             let inner = convert_expression(expr)?;
             // Try symbolic differentiation first
             let mut result = inner.clone();
@@ -230,7 +228,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
             }
         }
 
-        mathlex::Expression::Gradient { expr } => {
+        mathlex::ExprKind::Gradient { expr } => {
             // Gradient is a vector calculus operation — not directly representable
             // as a scalar expression. Map to a custom function placeholder.
             let inner = convert_expression(expr)?;
@@ -240,7 +238,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
             ))
         }
 
-        mathlex::Expression::Integral { integrand, var, .. } => {
+        mathlex::ExprKind::Integral { integrand, var, .. } => {
             let inner = convert_expression(integrand)?;
             Ok(Expression::Function(
                 Function::Custom("integral".to_string()),
@@ -248,7 +246,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
             ))
         }
 
-        mathlex::Expression::Sum {
+        mathlex::ExprKind::Sum {
             body,
             index,
             lower,
@@ -268,7 +266,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
             ))
         }
 
-        mathlex::Expression::Product {
+        mathlex::ExprKind::Product {
             body,
             index,
             lower,
@@ -288,7 +286,7 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
             ))
         }
 
-        mathlex::Expression::Limit { expr, var, to, .. } => {
+        mathlex::ExprKind::Limit { expr, var, to, .. } => {
             let inner = convert_expression(expr)?;
             let to_expr = convert_expression(to)?;
             Ok(Expression::Function(
@@ -304,15 +302,15 @@ pub fn convert_expression(expr: &mathlex::Expression) -> Result<Expression, Stri
         // Catch-all for unsupported mathlex variants
         other => Err(format!(
             "unsupported mathlex expression type: {}",
-            variant_name(other)
+            variant_name_from_kind(other)
         )),
     }
 }
 
 /// Extract an equation (left, right) from a mathlex Expression::Equation.
 pub fn convert_equation(expr: &mathlex::Expression) -> Result<Equation, String> {
-    match expr {
-        mathlex::Expression::Equation { left, right } => {
+    match &expr.kind {
+        mathlex::ExprKind::Equation { left, right } => {
             let l = convert_expression(left)?;
             let r = convert_expression(right)?;
             Ok(Equation::new("", l, r))
@@ -352,13 +350,13 @@ pub enum ExtractedODE {
 /// assert!(matches!(ode, thales::mathlex_bridge::ExtractedODE::First(_)));
 /// ```
 pub fn try_extract_ode(expr: &mathlex::Expression) -> Option<ExtractedODE> {
-    let (left, right) = match expr {
-        mathlex::Expression::Equation { left, right } => (left.as_ref(), right.as_ref()),
+    let (left, right) = match &expr.kind {
+        mathlex::ExprKind::Equation { left, right } => (left.as_ref(), right.as_ref()),
         _ => return None,
     };
 
     // Case 1: LHS is a single derivative — first-order ODE
-    if let mathlex::Expression::Derivative { expr, var, order } = left {
+    if let mathlex::ExprKind::Derivative { expr, var, order } = &left.kind {
         if *order == 1 {
             let dep_var = extract_variable_name(expr)?;
             let rhs = convert_expression(right).ok()?;
@@ -372,8 +370,8 @@ pub fn try_extract_ode(expr: &mathlex::Expression) -> Option<ExtractedODE> {
 
 /// Extract the variable name from a simple mathlex variable expression.
 fn extract_variable_name(expr: &mathlex::Expression) -> Option<String> {
-    match expr {
-        mathlex::Expression::Variable(name) => Some(name.clone()),
+    match &expr.kind {
+        mathlex::ExprKind::Variable(name) => Some(name.clone()),
         _ => None,
     }
 }
@@ -545,8 +543,8 @@ fn try_extract_second_order(
 /// - `Unary(Neg, inner)` → recurse with flipped sign
 /// - Anything else → forcing term (converted to thales expression)
 fn collect_ode_terms(expr: &mathlex::Expression, sign: f64, terms: &mut ODETerms) -> Option<()> {
-    match expr {
-        mathlex::Expression::Binary {
+    match &expr.kind {
+        mathlex::ExprKind::Binary {
             op: mathlex::BinaryOp::Add,
             left,
             right,
@@ -555,7 +553,7 @@ fn collect_ode_terms(expr: &mathlex::Expression, sign: f64, terms: &mut ODETerms
             collect_ode_terms(right, sign, terms)?;
         }
 
-        mathlex::Expression::Binary {
+        mathlex::ExprKind::Binary {
             op: mathlex::BinaryOp::Sub,
             left,
             right,
@@ -564,26 +562,26 @@ fn collect_ode_terms(expr: &mathlex::Expression, sign: f64, terms: &mut ODETerms
             collect_ode_terms(right, -sign, terms)?;
         }
 
-        mathlex::Expression::Unary {
+        mathlex::ExprKind::Unary {
             op: mathlex::UnaryOp::Neg,
             operand,
         } => {
             collect_ode_terms(operand, -sign, terms)?;
         }
 
-        mathlex::Expression::Derivative { expr, var, order } => {
+        mathlex::ExprKind::Derivative { expr, var, order } => {
             let dep = extract_variable_name(expr)?;
             terms.add_derivative_term(sign, &dep, var, *order)?;
         }
 
-        mathlex::Expression::Binary {
+        mathlex::ExprKind::Binary {
             op: mathlex::BinaryOp::Mul,
             left,
             right,
         } => {
             // Try coeff * derivative or derivative * coeff
             if let Some(c) = mathlex_to_f64(left) {
-                if let mathlex::Expression::Derivative { expr, var, order } = right.as_ref() {
+                if let mathlex::ExprKind::Derivative { expr, var, order } = &right.kind {
                     let dep = extract_variable_name(expr)?;
                     terms.add_derivative_term(sign * c, &dep, var, *order)?;
                     return Some(());
@@ -597,7 +595,7 @@ fn collect_ode_terms(expr: &mathlex::Expression, sign: f64, terms: &mut ODETerms
                 }
             }
             if let Some(c) = mathlex_to_f64(right) {
-                if let mathlex::Expression::Derivative { expr, var, order } = left.as_ref() {
+                if let mathlex::ExprKind::Derivative { expr, var, order } = &left.kind {
                     let dep = extract_variable_name(expr)?;
                     terms.add_derivative_term(sign * c, &dep, var, *order)?;
                     return Some(());
@@ -620,7 +618,7 @@ fn collect_ode_terms(expr: &mathlex::Expression, sign: f64, terms: &mut ODETerms
             terms.forcing_terms.push(signed);
         }
 
-        mathlex::Expression::Variable(name) => {
+        mathlex::ExprKind::Variable(name) => {
             // Could be the dependent variable (y term with coeff 1)
             if terms.dependent.as_deref() == Some(name.as_str()) || terms.dependent.is_none() {
                 // Only treat as y-term if we've already seen derivatives of this variable,
@@ -650,7 +648,7 @@ fn collect_ode_terms(expr: &mathlex::Expression, sign: f64, terms: &mut ODETerms
             }
         }
 
-        mathlex::Expression::Integer(0) => {
+        mathlex::ExprKind::Integer(0) => {
             // Zero contributes nothing
         }
 
@@ -671,10 +669,10 @@ fn collect_ode_terms(expr: &mathlex::Expression, sign: f64, terms: &mut ODETerms
 
 /// Try to extract a constant f64 value from a mathlex expression.
 fn mathlex_to_f64(expr: &mathlex::Expression) -> Option<f64> {
-    match expr {
-        mathlex::Expression::Integer(n) => Some(*n as f64),
-        mathlex::Expression::Float(f) => Some(f.value()),
-        mathlex::Expression::Unary {
+    match &expr.kind {
+        mathlex::ExprKind::Integer(n) => Some(*n as f64),
+        mathlex::ExprKind::Float(f) => Some(f.value()),
+        mathlex::ExprKind::Unary {
             op: mathlex::UnaryOp::Neg,
             operand,
         } => mathlex_to_f64(operand).map(|v| -v),
@@ -734,26 +732,31 @@ fn match_function_name(name: &str) -> Function {
 
 /// Get a human-readable name for a mathlex expression variant (for error messages).
 fn variant_name(expr: &mathlex::Expression) -> &'static str {
-    match expr {
-        mathlex::Expression::Integer(_) => "Integer",
-        mathlex::Expression::Float(_) => "Float",
-        mathlex::Expression::Variable(_) => "Variable",
-        mathlex::Expression::Constant(_) => "Constant",
-        mathlex::Expression::Unary { .. } => "Unary",
-        mathlex::Expression::Binary { .. } => "Binary",
-        mathlex::Expression::Function { .. } => "Function",
-        mathlex::Expression::Equation { .. } => "Equation",
-        mathlex::Expression::Rational { .. } => "Rational",
-        mathlex::Expression::Complex { .. } => "Complex",
-        mathlex::Expression::Vector(_) => "Vector",
-        mathlex::Expression::Matrix(_) => "Matrix",
-        mathlex::Expression::Derivative { .. } => "Derivative",
-        mathlex::Expression::PartialDerivative { .. } => "PartialDerivative",
-        mathlex::Expression::Gradient { .. } => "Gradient",
-        mathlex::Expression::Integral { .. } => "Integral",
-        mathlex::Expression::Sum { .. } => "Sum",
-        mathlex::Expression::Product { .. } => "Product",
-        mathlex::Expression::Limit { .. } => "Limit",
+    variant_name_from_kind(&expr.kind)
+}
+
+/// Get a human-readable name for a mathlex ExprKind variant (for error messages).
+fn variant_name_from_kind(kind: &mathlex::ExprKind) -> &'static str {
+    match kind {
+        mathlex::ExprKind::Integer(_) => "Integer",
+        mathlex::ExprKind::Float(_) => "Float",
+        mathlex::ExprKind::Variable(_) => "Variable",
+        mathlex::ExprKind::Constant(_) => "Constant",
+        mathlex::ExprKind::Unary { .. } => "Unary",
+        mathlex::ExprKind::Binary { .. } => "Binary",
+        mathlex::ExprKind::Function { .. } => "Function",
+        mathlex::ExprKind::Equation { .. } => "Equation",
+        mathlex::ExprKind::Rational { .. } => "Rational",
+        mathlex::ExprKind::Complex { .. } => "Complex",
+        mathlex::ExprKind::Vector(_) => "Vector",
+        mathlex::ExprKind::Matrix(_) => "Matrix",
+        mathlex::ExprKind::Derivative { .. } => "Derivative",
+        mathlex::ExprKind::PartialDerivative { .. } => "PartialDerivative",
+        mathlex::ExprKind::Gradient { .. } => "Gradient",
+        mathlex::ExprKind::Integral { .. } => "Integral",
+        mathlex::ExprKind::Sum { .. } => "Sum",
+        mathlex::ExprKind::Product { .. } => "Product",
+        mathlex::ExprKind::Limit { .. } => "Limit",
         _ => "Unknown",
     }
 }
@@ -764,32 +767,33 @@ mod tests {
 
     #[test]
     fn test_convert_integer() {
-        let ml = mathlex::Expression::Integer(42);
+        let ml = mathlex::Expression::integer(42);
         let result = convert_expression(&ml).unwrap();
         assert_eq!(result, Expression::Integer(42));
     }
 
     #[test]
     fn test_convert_variable() {
-        let ml = mathlex::Expression::Variable("x".to_string());
+        let ml = mathlex::Expression::variable("x");
         let result = convert_expression(&ml).unwrap();
         assert_eq!(result, Expression::Variable(Variable::new("x")));
     }
 
     #[test]
     fn test_convert_pi() {
-        let ml = mathlex::Expression::Constant(mathlex::MathConstant::Pi);
+        let ml = mathlex::Expression::constant(mathlex::MathConstant::Pi);
         let result = convert_expression(&ml).unwrap();
         assert_eq!(result, Expression::Constant(SymbolicConstant::Pi));
     }
 
     #[test]
     fn test_convert_addition() {
-        let ml = mathlex::Expression::Binary {
+        let ml = mathlex::ExprKind::Binary {
             op: mathlex::BinaryOp::Add,
-            left: Box::new(mathlex::Expression::Integer(1)),
-            right: Box::new(mathlex::Expression::Integer(2)),
-        };
+            left: Box::new(mathlex::Expression::integer(1)),
+            right: Box::new(mathlex::Expression::integer(2)),
+        }
+        .into();
         let result = convert_expression(&ml).unwrap();
         assert_eq!(
             result,
@@ -803,11 +807,12 @@ mod tests {
 
     #[test]
     fn test_convert_power() {
-        let ml = mathlex::Expression::Binary {
+        let ml = mathlex::ExprKind::Binary {
             op: mathlex::BinaryOp::Pow,
-            left: Box::new(mathlex::Expression::Variable("x".to_string())),
-            right: Box::new(mathlex::Expression::Integer(2)),
-        };
+            left: Box::new(mathlex::Expression::variable("x")),
+            right: Box::new(mathlex::Expression::integer(2)),
+        }
+        .into();
         let result = convert_expression(&ml).unwrap();
         assert_eq!(
             result,
@@ -820,10 +825,11 @@ mod tests {
 
     #[test]
     fn test_convert_sin() {
-        let ml = mathlex::Expression::Function {
+        let ml = mathlex::ExprKind::Function {
             name: "sin".to_string(),
-            args: vec![mathlex::Expression::Variable("x".to_string())],
-        };
+            args: vec![mathlex::Expression::variable("x")],
+        }
+        .into();
         let result = convert_expression(&ml).unwrap();
         assert_eq!(
             result,
@@ -836,10 +842,11 @@ mod tests {
 
     #[test]
     fn test_convert_negation() {
-        let ml = mathlex::Expression::Unary {
+        let ml = mathlex::ExprKind::Unary {
             op: mathlex::UnaryOp::Neg,
-            operand: Box::new(mathlex::Expression::Integer(5)),
-        };
+            operand: Box::new(mathlex::Expression::integer(5)),
+        }
+        .into();
         let result = convert_expression(&ml).unwrap();
         assert_eq!(
             result,
@@ -860,10 +867,11 @@ mod tests {
 
     #[test]
     fn test_convert_equation() {
-        let ml = mathlex::Expression::Equation {
-            left: Box::new(mathlex::Expression::Variable("x".to_string())),
-            right: Box::new(mathlex::Expression::Integer(5)),
-        };
+        let ml = mathlex::ExprKind::Equation {
+            left: Box::new(mathlex::Expression::variable("x")),
+            right: Box::new(mathlex::Expression::integer(5)),
+        }
+        .into();
         let eq = convert_equation(&ml).unwrap();
         assert_eq!(eq.left, Expression::Variable(Variable::new("x")));
         assert_eq!(eq.right, Expression::Integer(5));
@@ -876,15 +884,19 @@ mod tests {
     #[test]
     fn test_convert_derivative_first_order() {
         // d/dx(x^2) should evaluate to 2x
-        let ml = mathlex::Expression::Derivative {
-            expr: Box::new(mathlex::Expression::Binary {
-                op: mathlex::BinaryOp::Pow,
-                left: Box::new(mathlex::Expression::Variable("x".to_string())),
-                right: Box::new(mathlex::Expression::Integer(2)),
-            }),
+        let ml = mathlex::ExprKind::Derivative {
+            expr: Box::new(
+                mathlex::ExprKind::Binary {
+                    op: mathlex::BinaryOp::Pow,
+                    left: Box::new(mathlex::Expression::variable("x")),
+                    right: Box::new(mathlex::Expression::integer(2)),
+                }
+                .into(),
+            ),
             var: "x".to_string(),
             order: 1,
-        };
+        }
+        .into();
         let result = convert_expression(&ml).unwrap();
         // d/dx(x^2) = 2x — check it evaluates to 2 at x=1
         let mut env = std::collections::HashMap::new();
@@ -895,15 +907,19 @@ mod tests {
     #[test]
     fn test_convert_derivative_second_order() {
         // d²/dx²(x³) should evaluate to 6x
-        let ml = mathlex::Expression::Derivative {
-            expr: Box::new(mathlex::Expression::Binary {
-                op: mathlex::BinaryOp::Pow,
-                left: Box::new(mathlex::Expression::Variable("x".to_string())),
-                right: Box::new(mathlex::Expression::Integer(3)),
-            }),
+        let ml = mathlex::ExprKind::Derivative {
+            expr: Box::new(
+                mathlex::ExprKind::Binary {
+                    op: mathlex::BinaryOp::Pow,
+                    left: Box::new(mathlex::Expression::variable("x")),
+                    right: Box::new(mathlex::Expression::integer(3)),
+                }
+                .into(),
+            ),
             var: "x".to_string(),
             order: 2,
-        };
+        }
+        .into();
         let result = convert_expression(&ml).unwrap();
         let mut env = std::collections::HashMap::new();
         env.insert("x".to_string(), 2.0);
@@ -914,19 +930,26 @@ mod tests {
     #[test]
     fn test_convert_partial_derivative() {
         // ∂/∂x(x²·y) should evaluate to 2xy
-        let ml = mathlex::Expression::PartialDerivative {
-            expr: Box::new(mathlex::Expression::Binary {
-                op: mathlex::BinaryOp::Mul,
-                left: Box::new(mathlex::Expression::Binary {
-                    op: mathlex::BinaryOp::Pow,
-                    left: Box::new(mathlex::Expression::Variable("x".to_string())),
-                    right: Box::new(mathlex::Expression::Integer(2)),
-                }),
-                right: Box::new(mathlex::Expression::Variable("y".to_string())),
-            }),
+        let ml = mathlex::ExprKind::PartialDerivative {
+            expr: Box::new(
+                mathlex::ExprKind::Binary {
+                    op: mathlex::BinaryOp::Mul,
+                    left: Box::new(
+                        mathlex::ExprKind::Binary {
+                            op: mathlex::BinaryOp::Pow,
+                            left: Box::new(mathlex::Expression::variable("x")),
+                            right: Box::new(mathlex::Expression::integer(2)),
+                        }
+                        .into(),
+                    ),
+                    right: Box::new(mathlex::Expression::variable("y")),
+                }
+                .into(),
+            ),
             var: "x".to_string(),
             order: 1,
-        };
+        }
+        .into();
         let result = convert_expression(&ml).unwrap();
         let mut env = std::collections::HashMap::new();
         env.insert("x".to_string(), 3.0);
@@ -937,9 +960,10 @@ mod tests {
 
     #[test]
     fn test_convert_gradient() {
-        let ml = mathlex::Expression::Gradient {
-            expr: Box::new(mathlex::Expression::Variable("f".to_string())),
-        };
+        let ml = mathlex::ExprKind::Gradient {
+            expr: Box::new(mathlex::Expression::variable("f")),
+        }
+        .into();
         let result = convert_expression(&ml).unwrap();
         assert!(matches!(
             result,
@@ -970,7 +994,7 @@ mod tests {
     fn test_parse_and_convert_prime_derivative() {
         // y' has var="" (implicit independent variable)
         let ml = mathlex::parse("y'").unwrap();
-        assert!(matches!(ml, mathlex::Expression::Derivative { .. }));
+        assert!(matches!(&ml.kind, mathlex::ExprKind::Derivative { .. }));
     }
 
     // ------------------------------------------------------------------

@@ -16,7 +16,7 @@ readme = "README.md"
 crate-type = ["staticlib", "cdylib", "lib"]
 
 [dependencies]
-mathlex = { version = "0.3.4", features = ["serde"] }
+mathlex = { version = "0.4", features = ["serde"] }
 num = "0.4"
 num-bigint = "0.4"
 num-complex = "0.4"

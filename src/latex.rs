@@ -283,8 +283,8 @@ pub fn parse_latex_equation(input: &str) -> Result<(Expression, Expression), Vec
     // Use mathlex to parse as a LaTeX equation system (single equation)
     let ml_expr = mathlex::parse_latex(input).map_err(|e| vec![convert_mathlex_error(&e)])?;
 
-    match &ml_expr {
-        mathlex::Expression::Equation { left, right } => {
+    match &ml_expr.kind {
+        mathlex::ExprKind::Equation { left, right } => {
             let l = mathlex_bridge::convert_expression(left).map_err(|msg| {
                 vec![LaTeXParseError::InvalidExpression {
                     pos: 0,
