@@ -18,23 +18,16 @@ use super::quadratic::QuadraticSolver;
 use super::types::{Solution, SolverError, SolverResult};
 use super::Solver;
 
-/// Build a symbolic complex number `re ± im*i` as an `Arc<Expr>`.
+/// Build a complex number `re + im*i` as an `Arc<Expr>`.
 ///
 /// For `im == 0` returns `Expr::float(re)`.
-/// For `im > 0` returns `re + im*i`.
-/// For `im < 0` returns `re - |im|*i`.
+/// Otherwise returns `Expr::complex(re, im)` which decompiles to
+/// `Expression::Complex(Complex64{re, im})`.
 fn symbolic_complex(re: f64, im: f64) -> Arc<Expr> {
     if im == 0.0 {
         return Expr::float(re);
     }
-    let shift = Expr::float(re);
-    let im_abs = Expr::float(im.abs());
-    let i_times_im = normalize::mul(Expr::i_unit(), im_abs);
-    if im > 0.0 {
-        normalize::add(shift, i_times_im)
-    } else {
-        normalize::sub(shift, i_times_im)
-    }
+    Expr::complex(re, im)
 }
 
 /// Solve cubic equation ax³ + bx² + cx + d = 0 using Cardano's formula.

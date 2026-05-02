@@ -119,12 +119,10 @@ impl Solver for QuadraticSolver {
         } else {
             let real_part = -b / (2.0 * a);
             let imag_part = (-discriminant).sqrt() / (2.0 * a);
-            // Build symbolic roots: real_part ± imag_part * i
-            let shift = Expr::float(real_part);
-            let im_expr = Expr::float(imag_part);
-            let i_times_im = normalize::mul(Expr::i_unit(), im_expr);
-            let root1_arc = normalize::add(shift.clone(), i_times_im.clone());
-            let root2_arc = normalize::sub(shift, i_times_im);
+            // Build complex roots using Expr::complex which decompiles to
+            // Expression::Complex(Complex64{re, im}).
+            let root1_arc = Expr::complex(real_part, imag_part);
+            let root2_arc = Expr::complex(real_part, -imag_part);
             trace.push(
                 Step::new(
                     TechniqueTag::QuadraticFormula,
@@ -141,7 +139,10 @@ impl Solver for QuadraticSolver {
             trace.push(
                 Step::new(
                     TechniqueTag::Custom("ComplexDecomposition"),
-                    format!("Complex roots: Re = {}, Im = ±{}", real_part, imag_part),
+                    format!(
+                        "Complex roots: Re = {}, Im = ±{}, original_var={}",
+                        real_part, imag_part, var_name
+                    ),
                 )
                 .with_output(re_root1),
             );
