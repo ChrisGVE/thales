@@ -178,7 +178,6 @@ fn test_force_equation_solve_for_f() {
     let (solution, _path) = result.unwrap();
     match solution {
         thales::solver::Solution::Unique(expr) => {
-            // Should be m * a
             assert_eq!(expr, mul(var("m"), var("a")));
         }
         _ => panic!("Expected unique solution"),
@@ -337,8 +336,8 @@ fn test_linear_equation_solve_for_y() {
     let (solution, _path) = result.unwrap();
     match solution {
         thales::solver::Solution::Unique(expr) => {
-            // Should be m * x + b
-            assert_eq!(expr, add(mul(var("m"), var("x")), var("b")));
+            // Should be m * x + b (normalizer sorts: b before x*m)
+            assert_eq!(expr, add(var("b"), mul(var("x"), var("m"))));
         }
         _ => panic!("Expected unique solution"),
     }
@@ -409,7 +408,6 @@ fn test_solve_for_no_values() {
     assert!(result.is_ok());
 
     let (result_expr, _trace) = result.unwrap();
-    // Result should be m * a
     assert_eq!(result_expr, mul(var("m"), var("a")));
 }
 

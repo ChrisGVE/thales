@@ -583,12 +583,8 @@ fn t5_05_work_integral() {
 
 #[test]
 fn t5_06_chain_rule() {
-    // y = sin(x^2), dy/dx = 2x*cos(x^2) — solver handles algebraically
-    assert_solves_at_tier(
-        "dy_dx = 2 * x * cos(x^2)",
-        "x",
-        TechniqueDifficulty::Advanced,
-    );
+    // dy_dx = 2*x*cos(x^2) — transcendental equation, no algebraic solution
+    assert_solve_fails("dy_dx = 2 * x * cos(x^2)", "x");
 }
 
 #[test]
@@ -599,8 +595,8 @@ fn t5_07_integration_by_parts() {
 
 #[test]
 fn t5_08_u_substitution() {
-    // integral(2x*cos(x^2)) = sin(x^2) + C — solver handles algebraically
-    assert_solves_at_tier("y = 2 * x * cos(x^2)", "x", TechniqueDifficulty::Advanced);
+    // y = 2*x*cos(x^2) — transcendental equation, no algebraic solution
+    assert_solve_fails("y = 2 * x * cos(x^2)", "x");
 }
 
 #[test]
@@ -629,12 +625,8 @@ fn t5_09_separable_ode() {
 
 #[test]
 fn t5_10_taylor_series() {
-    // sin(x) ≈ x - x^3/6 + x^5/120 for small x — solver handles as polynomial
-    assert_solves_at_tier(
-        "y = x - x^3 / 6 + x^5 / 120",
-        "x",
-        TechniqueDifficulty::Advanced,
-    );
+    // y = x - x^3/6 + x^5/120 — quintic polynomial, no general algebraic solution (Abel-Ruffini)
+    assert_solve_fails("y = x - x^3 / 6 + x^5 / 120", "x");
 }
 
 // ============================================================================

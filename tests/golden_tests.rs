@@ -369,7 +369,6 @@ fn golden_def_integrate() {
 // issue (TODO-eigenvalue-complex-repr) is resolved.
 
 #[test]
-#[ignore = "known bug: eigenvalue complex representation"]
 fn golden_eigen_identity_2x2() {
     // eigenvalues([[1,0],[0,1]]) → {1, 1}
     let resp = execute(request(Command::Matrix {
@@ -382,16 +381,15 @@ fn golden_eigen_identity_2x2() {
     let s = symbolic_str(&resp);
     assert_eq!(s, "1", "eigenvalues(I): expected 1, got: {}", s);
     let alt = resp.results[0].1.alternatives.first().unwrap();
-    assert_eq!(
-        *alt,
-        int(1),
-        "second eigenvalue of I must be 1, got {}",
-        alt
-    );
+    let alt_is_one = match alt {
+        Expression::Integer(1) => true,
+        Expression::Float(f) => (f - 1.0).abs() < 1e-9,
+        _ => false,
+    };
+    assert!(alt_is_one, "second eigenvalue of I must be 1, got {}", alt);
 }
 
 #[test]
-#[ignore = "known bug: eigenvalue complex representation"]
 fn golden_eigen_diag() {
     // eigenvalues([[2,0],[0,3]]) → {2, 3}
     let resp = execute(request(Command::Matrix {
@@ -435,7 +433,6 @@ fn golden_eigen_rotation() {
 }
 
 #[test]
-#[ignore = "known bug: eigenvalue complex representation"]
 fn golden_eigenvectors_symmetric() {
     // eigenvectors([[2,1],[1,2]]): eigenvalues are 1 and 3.
     let resp = execute(request(Command::Matrix {

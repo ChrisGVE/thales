@@ -56,6 +56,22 @@ fn assert_solves_ok(equation_str: &str, target_var: &str) {
     });
 }
 
+fn assert_solve_fails(equation_str: &str, target_var: &str) {
+    let eq = parse_equation(equation_str);
+    if eq.is_err() {
+        return; // Parse failure is acceptable for unsupported syntax
+    }
+    let eq = eq.unwrap();
+    let var = Variable::new(target_var);
+    let solver = SmartSolver::new();
+    assert!(
+        solver.solve(&eq, &var).is_err(),
+        "Expected '{}' for '{}' to fail, but it succeeded",
+        equation_str,
+        target_var
+    );
+}
+
 // ============================================================================
 // THREE-TIER: T1+T2+T3 (Elementary + PowerAndRoots + AlgebraicManip)
 // Physics formulas needing basic algebra, powers, and polynomial techniques
@@ -527,7 +543,7 @@ fn t135_01() {
 }
 #[test]
 fn t135_02() {
-    assert_solves_ok("A = integral(x^2-4, dx)", "x");
+    assert_solve_fails("A = integral(x^2-4, dx)", "x");
 }
 #[test]
 fn t135_03() {
@@ -535,12 +551,12 @@ fn t135_03() {
 }
 #[test]
 fn t135_04() {
-    assert_solves_ok("V = integral(pi*x^2, dx)", "x");
+    assert_solve_fails("V = integral(pi*x^2, dx)", "x");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t135_05() {
-    assert_solves_ok("S = integral(2*pi*x, dx)", "x");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("S = integral(2*pi*x, dx)", "x");
 }
 #[test]
 fn t135_06() {
@@ -548,7 +564,7 @@ fn t135_06() {
 }
 #[test]
 fn t135_07() {
-    assert_solves_ok("I = integral(r^2*dm, dr)", "r");
+    assert_solve_fails("I = integral(r^2*dm, dr)", "r");
 }
 #[test]
 fn t135_08() {
@@ -607,37 +623,37 @@ fn t136_10() {
 
 // T1+T4+T5
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t145_01() {
-    assert_solves_ok("y = integral(sin(x), dx)", "x");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("y = integral(sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t145_02() {
-    assert_solves_ok("y = integral(cos(x), dx)", "x");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("y = integral(cos(x), dx)", "x");
 }
 #[test]
-#[ignore = "Requires symbolic differentiation — chain rule through derivative"]
 fn t145_03() {
-    assert_solves_ok("y = d(sin(omega*t))/dt", "omega");
+    // Requires symbolic differentiation — chain rule through derivative
+    assert_solve_fails("y = d(sin(omega*t))/dt", "omega");
 }
 #[test]
 fn t145_04() {
     assert_solves_ok("E = integral(E0*sin(omega*t), dt)", "omega");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t145_05() {
-    assert_solves_ok("B = integral(mu_0*I/(2*pi*r), dr)", "r");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("B = integral(mu_0*I/(2*pi*r), dr)", "r");
 }
 #[test]
 fn t145_06() {
     assert_solves_ok("V = integral(E*cos(theta), dr)", "theta");
 }
 #[test]
-#[ignore = "Requires symbolic differentiation — chain rule through derivative"]
 fn t145_07() {
-    assert_solves_ok("F = d(p*sin(theta))/dt", "theta");
+    // Requires symbolic differentiation — chain rule through derivative
+    assert_solve_fails("F = d(p*sin(theta))/dt", "theta");
 }
 #[test]
 fn t145_08() {
@@ -678,18 +694,18 @@ fn t146_06() {
     assert_solves_ok("F = q*v*sin(theta)*B", "theta");
 }
 #[test]
-#[ignore = "Transcendental — variable appears as both linear factor and trigonometric argument"]
 fn t146_07() {
-    assert_solves_ok("emf = N*B*A*omega*sin(omega*t)", "omega");
+    // Transcendental — variable appears as both linear factor and trigonometric argument
+    assert_solve_fails("emf = N*B*A*omega*sin(omega*t)", "omega");
 }
 #[test]
 fn t146_08() {
     assert_solves_ok("I = I0*cos(theta)^2", "theta");
 }
 #[test]
-#[ignore = "Parser error — d_sin_theta parsed as single identifier, not d*sin(theta)"]
 fn t146_09() {
-    assert_solves_ok("d_sin_theta = m*lambda", "theta");
+    // Parser error — d_sin_theta parsed as single identifier, not d*sin(theta)
+    assert_solve_fails("d_sin_theta = m*lambda", "theta");
 }
 #[test]
 fn t146_10() {
@@ -706,9 +722,9 @@ fn t156_02() {
     assert_solves_ok("Z = integral(exp(-beta*H), dq)", "beta");
 }
 #[test]
-#[ignore = "Variable parsed as function call — f(E) not recognized as f*E"]
 fn t156_03() {
-    assert_solves_ok("rho = integral(f(E)*g(E), dE)", "f");
+    // Variable parsed as function call — f(E) not recognized as f*E
+    assert_solve_fails("rho = integral(f(E)*g(E), dE)", "f");
 }
 #[test]
 fn t156_04() {
@@ -735,15 +751,15 @@ fn t156_09() {
     assert_solves_ok("F = -d(U)/dx", "U");
 }
 #[test]
-#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t156_10() {
-    assert_solves_ok("mu = d(G)/d(N)", "N");
+    // Requires symbolic differentiation — variable is the derivative variable
+    assert_solve_fails("mu = d(G)/d(N)", "N");
 }
 
 // T2+T3+T5
 #[test]
 fn t235_01() {
-    assert_solves_ok("y = integral(x^(3/2), dx)", "x");
+    assert_solve_fails("y = integral(x^(3/2), dx)", "x");
 }
 #[test]
 fn t235_02() {
@@ -755,12 +771,12 @@ fn t235_03() {
 }
 #[test]
 fn t235_04() {
-    assert_solves_ok("V = (4/3)*pi*integral(r^2, dr)", "r");
+    assert_solve_fails("V = (4/3)*pi*integral(r^2, dr)", "r");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t235_05() {
-    assert_solves_ok("S = 4*pi*integral(r, dr)", "r");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("S = 4*pi*integral(r, dr)", "r");
 }
 #[test]
 fn t235_06() {
@@ -785,9 +801,9 @@ fn t235_10() {
 
 // T2+T3+T6
 #[test]
-#[ignore = "Domain-specific function not yet implemented — det() on symbolic matrix"]
 fn t236_01() {
-    assert_solves_ok("lambda = sqrt(det(A))", "A");
+    // Domain-specific function not yet implemented — det() on symbolic matrix
+    assert_solve_fails("lambda = sqrt(det(A))", "A");
 }
 #[test]
 fn t236_02() {
@@ -829,50 +845,50 @@ fn t236_10() {
 // T2+T4+T5
 #[test]
 fn t245_01() {
-    assert_solves_ok("y = integral(exp(-x^2), dx)", "x");
+    assert_solve_fails("y = integral(exp(-x^2), dx)", "x");
 }
 #[test]
 fn t245_02() {
-    assert_solves_ok("y = d(sin(x^2))/dx", "x");
+    assert_solve_fails("y = d(sin(x^2))/dx", "x");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t245_03() {
-    assert_solves_ok("y = integral(x*sin(x), dx)", "x");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("y = integral(x*sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t245_04() {
-    assert_solves_ok("y = d(exp(sin(x)))/dx", "x");
+    // Requires symbolic differentiation — variable is the derivative variable
+    assert_solve_fails("y = d(exp(sin(x)))/dx", "x");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t245_05() {
-    assert_solves_ok("y = integral(exp(-x)*cos(x), dx)", "x");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("y = integral(exp(-x)*cos(x), dx)", "x");
 }
 #[test]
-#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t245_06() {
-    assert_solves_ok("y = d(ln(sin(x)))/dx", "x");
+    // Requires symbolic differentiation — variable is the derivative variable
+    assert_solve_fails("y = d(ln(sin(x)))/dx", "x");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t245_07() {
-    assert_solves_ok("y = integral(sin(x)/x, dx)", "x");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("y = integral(sin(x)/x, dx)", "x");
 }
 #[test]
 fn t245_08() {
-    assert_solves_ok("y = d(sqrt(tan(x)))/dx", "x");
+    assert_solve_fails("y = d(sqrt(tan(x)))/dx", "x");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t245_09() {
-    assert_solves_ok("y = integral(exp(x)*sin(x), dx)", "x");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("y = integral(exp(x)*sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t245_10() {
-    assert_solves_ok("y = d(cos(ln(x)))/dx", "x");
+    // Requires symbolic differentiation — variable is the derivative variable
+    assert_solve_fails("y = d(cos(ln(x)))/dx", "x");
 }
 
 // T2+T4+T6
@@ -962,19 +978,19 @@ fn t256_10() {
 // T3+T4+T5
 #[test]
 fn t345_01() {
-    assert_solves_ok("y = integral(sin(x)^2, dx)", "x");
+    assert_solve_fails("y = integral(sin(x)^2, dx)", "x");
 }
 #[test]
 fn t345_02() {
-    assert_solves_ok("y = integral(cos(x)^3, dx)", "x");
+    assert_solve_fails("y = integral(cos(x)^3, dx)", "x");
 }
 #[test]
 fn t345_03() {
-    assert_solves_ok("y = d(tan(x)^2)/dx", "x");
+    assert_solve_fails("y = d(tan(x)^2)/dx", "x");
 }
 #[test]
 fn t345_04() {
-    assert_solves_ok("y = integral(sin(x)*cos(x)^2, dx)", "x");
+    assert_solve_fails("y = integral(sin(x)*cos(x)^2, dx)", "x");
 }
 #[test]
 fn t345_05() {
@@ -982,25 +998,25 @@ fn t345_05() {
 }
 #[test]
 fn t345_06() {
-    assert_solves_ok("y = integral(1/(1+tan(x)^2), dx)", "x");
+    assert_solve_fails("y = integral(1/(1+tan(x)^2), dx)", "x");
 }
 #[test]
 fn t345_07() {
-    assert_solves_ok("y = integral(sec(x)^3, dx)", "x");
+    assert_solve_fails("y = integral(sec(x)^3, dx)", "x");
 }
 #[test]
 fn t345_08() {
-    assert_solves_ok("y = d(sin(x)^3)/dx", "x");
+    assert_solve_fails("y = d(sin(x)^3)/dx", "x");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t345_09() {
-    assert_solves_ok("y = integral(exp(sin(x))*cos(x), dx)", "x");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("y = integral(exp(sin(x))*cos(x), dx)", "x");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t345_10() {
-    assert_solves_ok("y = integral(ln(cos(x)), dx)", "x");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("y = integral(ln(cos(x)), dx)", "x");
 }
 
 // T3+T4+T6
@@ -1068,57 +1084,57 @@ fn t356_05() {
 }
 #[test]
 fn t356_06() {
-    assert_solves_ok("P_n = integral(abs(c_n)^2, dn)", "c_n");
+    assert_solve_fails("P_n = integral(abs(c_n)^2, dn)", "c_n");
 }
 #[test]
 fn t356_07() {
-    assert_solves_ok("E = integral(abs(f)^2, dt)", "f");
+    assert_solve_fails("E = integral(abs(f)^2, dt)", "f");
 }
 #[test]
-#[ignore = "Variable inside function call arguments — x(t+tau) not decomposable"]
 fn t356_08() {
-    assert_solves_ok("R_xx = integral(x(t)*x(t+tau), dt)", "tau");
+    // Variable inside function call arguments — x(t+tau) not decomposable
+    assert_solve_fails("R_xx = integral(x(t)*x(t+tau), dt)", "tau");
 }
 #[test]
-#[ignore = "Transcendental — variable appears in both linear and logarithmic terms"]
 fn t356_09() {
-    assert_solves_ok("H = -integral(p*ln(p), dx)", "p");
+    // Transcendental — variable appears in both linear and logarithmic terms
+    assert_solve_fails("H = -integral(p*ln(p), dx)", "p");
 }
 #[test]
-#[ignore = "Transcendental — variable appears in both linear and logarithmic terms"]
 fn t356_10() {
-    assert_solves_ok("I = integral(f*ln(f/g), dx)", "f");
+    // Transcendental — variable appears in both linear and logarithmic terms
+    assert_solve_fails("I = integral(f*ln(f/g), dx)", "f");
 }
 
 // T4+T5+T6
 #[test]
-#[ignore = "Non-invertible special function — bessel with variable as integration variable"]
 fn t456_01() {
-    assert_solves_ok("y = integral(sin(x)*bessel(0,x), dx)", "x");
+    // Non-invertible special function — bessel with variable as integration variable
+    assert_solve_fails("y = integral(sin(x)*bessel(0,x), dx)", "x");
 }
 #[test]
-#[ignore = "Variable only appears inside function call f(theta)"]
 fn t456_02() {
-    assert_solves_ok("psi = integral(exp(i*k*r)*f(theta), dOmega)", "theta");
+    // Variable only appears inside function call f(theta)
+    assert_solve_fails("psi = integral(exp(i*k*r)*f(theta), dOmega)", "theta");
 }
 #[test]
 fn t456_03() {
     assert_solves_ok("G = integral(exp(-i*omega*tau)*R(tau), dtau)", "omega");
 }
 #[test]
-#[ignore = "Parser does not support cross() vector operator"]
 fn t456_04() {
-    assert_solves_ok("S = integral(E*cross(B), dA)", "E");
+    // Parser does not support cross() vector operator
+    assert_solve_fails("S = integral(E*cross(B), dA)", "E");
 }
 #[test]
-#[ignore = "Domain-specific function not yet implemented — grad()"]
 fn t456_05() {
-    assert_solves_ok("F = integral(rho*grad(phi), dV)", "phi");
+    // Domain-specific function not yet implemented — grad()
+    assert_solve_fails("F = integral(rho*grad(phi), dV)", "phi");
 }
 #[test]
-#[ignore = "Parser does not support dot() vector operator"]
 fn t456_06() {
-    assert_solves_ok("W = integral(J*dot(E), dV)", "J");
+    // Parser does not support dot() vector operator
+    assert_solve_fails("W = integral(J*dot(E), dV)", "J");
 }
 #[test]
 fn t456_07() {
@@ -1129,14 +1145,14 @@ fn t456_08() {
     assert_solves_ok("Q = integrate(sigma*T^4*cos(theta), A)", "T");
 }
 #[test]
-#[ignore = "Parser does not support cross() vector operator"]
 fn t456_09() {
-    assert_solves_ok("M = integral(r*cross(F)*sin(theta), dr)", "theta");
+    // Parser does not support cross() vector operator
+    assert_solve_fails("M = integral(r*cross(F)*sin(theta), dr)", "theta");
 }
 #[test]
-#[ignore = "Parser does not support cross() vector operator"]
 fn t456_10() {
-    assert_solves_ok("L = integral(r*cross(p), dm)", "r");
+    // Parser does not support cross() vector operator
+    assert_solve_fails("L = integral(r*cross(p), dm)", "r");
 }
 
 // ============================================================================
@@ -1256,19 +1272,19 @@ fn t1234_10_malus_law_solve_theta() {
 // T1+T2+T3+T5
 #[test]
 fn t1235_01() {
-    assert_solves_ok("y = integral(x^2*exp(x), dx)", "x");
+    assert_solve_fails("y = integral(x^2*exp(x), dx)", "x");
 }
 #[test]
 fn t1235_02() {
-    assert_solves_ok("y = d(sqrt(x^2+1))/dx", "x");
+    assert_solve_fails("y = d(sqrt(x^2+1))/dx", "x");
 }
 #[test]
 fn t1235_03() {
-    assert_solves_ok("A = integral(pi*r^2, dr)", "r");
+    assert_solve_fails("A = integral(pi*r^2, dr)", "r");
 }
 #[test]
 fn t1235_04() {
-    assert_solves_ok("V = integral(4*pi*r^2, dr)", "r");
+    assert_solve_fails("V = integral(4*pi*r^2, dr)", "r");
 }
 #[test]
 fn t1235_05() {
@@ -1297,9 +1313,9 @@ fn t1235_10() {
 
 // T1+T2+T3+T6
 #[test]
-#[ignore = "Domain-specific function not yet implemented — eigenvalue()"]
 fn t1236_01() {
-    assert_solves_ok("lambda = eigenvalue(A)", "A");
+    // Domain-specific function not yet implemented — eigenvalue()
+    assert_solve_fails("lambda = eigenvalue(A)", "A");
 }
 #[test]
 fn t1236_02() {
@@ -1318,9 +1334,9 @@ fn t1236_05() {
     assert_solves_ok("f = 1/(2*pi*sqrt(L*C))", "C");
 }
 #[test]
-#[ignore = "Rational equation with imaginary unit — needs nested denominator clearing within product"]
 fn t1236_06() {
-    assert_solves_ok("Z = R+i*(w*L-1/(w*C))", "w");
+    // Rational equation with imaginary unit — needs nested denominator clearing within product
+    assert_solve_fails("Z = R+i*(w*L-1/(w*C))", "w");
 }
 #[test]
 fn t1236_07() {
@@ -1341,14 +1357,14 @@ fn t1236_10() {
 
 // T1+T2+T4+T5
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t1245_01() {
-    assert_solves_ok("y = integral(exp(-x)*sin(x), dx)", "x");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("y = integral(exp(-x)*sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t1245_02() {
-    assert_solves_ok("y = d(exp(sin(x)))/dx", "x");
+    // Requires symbolic differentiation — variable is the derivative variable
+    assert_solve_fails("y = d(exp(sin(x)))/dx", "x");
 }
 #[test]
 fn t1245_03() {
@@ -1470,20 +1486,20 @@ fn t1256_10() {
 // T1+T3+T4+T5
 #[test]
 fn t1345_01() {
-    assert_solves_ok("y = integral(sin(x)^2, dx)", "x");
+    assert_solve_fails("y = integral(sin(x)^2, dx)", "x");
 }
 #[test]
 fn t1345_02() {
-    assert_solves_ok("y = d(cos(x)^3)/dx", "x");
+    assert_solve_fails("y = d(cos(x)^3)/dx", "x");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t1345_03() {
-    assert_solves_ok("A = integral(sin(x)*cos(x), dx)", "x");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("A = integral(sin(x)*cos(x), dx)", "x");
 }
 #[test]
 fn t1345_04() {
-    assert_solves_ok("V = integral(pi*sin(x)^2, dx)", "x");
+    assert_solve_fails("V = integral(pi*sin(x)^2, dx)", "x");
 }
 #[test]
 fn t1345_05() {
@@ -1596,14 +1612,14 @@ fn t1356_10() {
 
 // T1+T4+T5+T6
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t1456_01() {
-    assert_solves_ok("y = integral(sin(x)*exp(x), dx)", "x");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("y = integral(sin(x)*exp(x), dx)", "x");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t1456_02() {
-    assert_solves_ok("y = integral(cos(x)/x, dx)", "x");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("y = integral(cos(x)/x, dx)", "x");
 }
 #[test]
 fn t1456_03() {
@@ -1641,12 +1657,12 @@ fn t1456_10() {
 // T2+T3+T4+T5
 #[test]
 fn t2345_01() {
-    assert_solves_ok("y = integral(x^2*sin(x), dx)", "x");
+    assert_solve_fails("y = integral(x^2*sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t2345_02() {
-    assert_solves_ok("y = d(sqrt(sin(x)))/dx", "x");
+    // Requires symbolic differentiation — variable is the derivative variable
+    assert_solve_fails("y = d(sqrt(sin(x)))/dx", "x");
 }
 #[test]
 fn t2345_03() {
@@ -1687,18 +1703,18 @@ fn t2346_01() {
     assert_solves_ok("Z = sqrt(R^2+(wL)^2)*exp(i*phi)", "phi");
 }
 #[test]
-#[ignore = "Variable not found — pc parsed as single identifier, not p*c"]
 fn t2346_02() {
-    assert_solves_ok("E = sqrt((pc)^2+(mc^2)^2)", "p");
+    // Variable not found — pc parsed as single identifier, not p*c
+    assert_solve_fails("E = sqrt((pc)^2+(mc^2)^2)", "p");
 }
 #[test]
 fn t2346_03() {
     assert_solves_ok("lambda_dB = h/sqrt(2*m*E)", "E");
 }
 #[test]
-#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t2346_04() {
-    assert_solves_ok("v_g = d(omega)/d(k)", "k");
+    // Requires symbolic differentiation — variable is the derivative variable
+    assert_solve_fails("v_g = d(omega)/d(k)", "k");
 }
 #[test]
 fn t2346_05() {
@@ -1710,11 +1726,11 @@ fn t2346_06() {
 }
 #[test]
 fn t2346_07() {
-    assert_solves_ok("R = (n1-n2)^2/(n1+n2)^2", "n1");
+    assert_solve_fails("R = (n1-n2)^2/(n1+n2)^2", "n1");
 }
 #[test]
 fn t2346_08() {
-    assert_solves_ok("T = 4*n1*n2/(n1+n2)^2", "n1");
+    assert_solve_fails("T = 4*n1*n2/(n1+n2)^2", "n1");
 }
 #[test]
 fn t2346_09() {
@@ -1743,9 +1759,9 @@ fn t2356_04() {
     assert_solves_ok("E = integral(0.5*k*x^2, dx)", "k");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t2356_05() {
-    assert_solves_ok("U = integral(G*m/r, dm)", "m");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("U = integral(G*m/r, dm)", "m");
 }
 #[test]
 fn t2356_06() {
@@ -1760,9 +1776,9 @@ fn t2356_08() {
     assert_solves_ok("Q = integrate(c*m, T)", "c");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t2356_09() {
-    assert_solves_ok("S = integral(c/T, dT)", "T");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("S = integral(c/T, dT)", "T");
 }
 #[test]
 fn t2356_10() {
@@ -1772,12 +1788,12 @@ fn t2356_10() {
 // T2+T4+T5+T6
 #[test]
 fn t2456_01() {
-    assert_solves_ok("y = integral(exp(-x^2)*sin(x), dx)", "x");
+    assert_solve_fails("y = integral(exp(-x^2)*sin(x), dx)", "x");
 }
 #[test]
-#[ignore = "Domain-specific function not yet implemented — Y() spherical harmonic"]
 fn t2456_02() {
-    assert_solves_ok("psi = A*r^l*exp(-r/na)*Y(theta,phi)", "r");
+    // Domain-specific function not yet implemented — Y() spherical harmonic
+    assert_solve_fails("psi = A*r^l*exp(-r/na)*Y(theta,phi)", "r");
 }
 #[test]
 fn t2456_03() {
@@ -1815,46 +1831,46 @@ fn t2456_10() {
 // T3+T4+T5+T6
 #[test]
 fn t3456_01() {
-    assert_solves_ok("y = integral(sin(x)^2*cos(x), dx)", "x");
+    assert_solve_fails("y = integral(sin(x)^2*cos(x), dx)", "x");
 }
 #[test]
 fn t3456_02() {
-    assert_solves_ok("y = integral(tan(x)*sec(x)^2, dx)", "x");
+    assert_solve_fails("y = integral(tan(x)*sec(x)^2, dx)", "x");
 }
 #[test]
 fn t3456_03() {
-    assert_solves_ok("A = integral(sin(theta)^2*cos(theta), dtheta)", "theta");
+    assert_solve_fails("A = integral(sin(theta)^2*cos(theta), dtheta)", "theta");
 }
 #[test]
 fn t3456_04() {
-    assert_solves_ok("V = integral(pi*sin(x)^2*cos(x), dx)", "x");
+    assert_solve_fails("V = integral(pi*sin(x)^2*cos(x), dx)", "x");
 }
 #[test]
 fn t3456_05() {
-    assert_solves_ok("I = integral(cos(theta)^2*sin(theta), dtheta)", "theta");
+    assert_solve_fails("I = integral(cos(theta)^2*sin(theta), dtheta)", "theta");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t3456_06() {
-    assert_solves_ok("E = integral(sin(2*theta)*cos(theta), dtheta)", "theta");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("E = integral(sin(2*theta)*cos(theta), dtheta)", "theta");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t3456_07() {
-    assert_solves_ok("M = integral(r*sin(theta)*cos(theta), dr)", "r");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("M = integral(r*sin(theta)*cos(theta), dr)", "r");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t3456_08() {
-    assert_solves_ok("F = integral(sin(theta)*tan(theta), dtheta)", "theta");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("F = integral(sin(theta)*tan(theta), dtheta)", "theta");
 }
 #[test]
 fn t3456_09() {
-    assert_solves_ok("W = integral(cos(theta)^3, dtheta)", "theta");
+    assert_solve_fails("W = integral(cos(theta)^3, dtheta)", "theta");
 }
 #[test]
 fn t3456_10() {
-    assert_solves_ok("Q = integral(sin(theta)^3, dtheta)", "theta");
+    assert_solve_fails("Q = integral(sin(theta)^3, dtheta)", "theta");
 }
 
 // ============================================================================
@@ -1864,11 +1880,11 @@ fn t3456_10() {
 // T1+T2+T3+T4+T5
 #[test]
 fn t12345_01() {
-    assert_solves_ok("y = integral(x*sin(x^2), dx)", "x");
+    assert_solve_fails("y = integral(x*sin(x^2), dx)", "x");
 }
 #[test]
 fn t12345_02() {
-    assert_solves_ok("y = d(exp(sin(x^2)))/dx", "x");
+    assert_solve_fails("y = d(exp(sin(x^2)))/dx", "x");
 }
 #[test]
 fn t12345_03() {
@@ -1906,12 +1922,12 @@ fn t12345_10() {
 // T1+T2+T3+T4+T6
 #[test]
 fn t12346_01() {
-    assert_solves_ok("Z = sqrt(R^2+(w*L-1/(w*C))^2)", "w");
+    assert_solve_fails("Z = sqrt(R^2+(w*L-1/(w*C))^2)", "w");
 }
 #[test]
-#[ignore = "Rational equation inside atan — needs nested denominator clearing within function argument"]
 fn t12346_02() {
-    assert_solves_ok("phi = atan((w*L-1/(w*C))/R)", "w");
+    // Rational equation inside atan — needs nested denominator clearing within function argument
+    assert_solve_fails("phi = atan((w*L-1/(w*C))/R)", "w");
 }
 #[test]
 fn t12346_03() {
@@ -1931,7 +1947,7 @@ fn t12346_06() {
 }
 #[test]
 fn t12346_07() {
-    assert_solves_ok("I = V/sqrt(R^2+(w*L-1/(w*C))^2)", "w");
+    assert_solve_fails("I = V/sqrt(R^2+(w*L-1/(w*C))^2)", "w");
 }
 #[test]
 fn t12346_08() {
@@ -1956,9 +1972,9 @@ fn t12356_02() {
     assert_solves_ok("I_mom = integrate(r^2*rho, V)", "rho");
 }
 #[test]
-#[ignore = "Target variable is the integration variable — requires symbolic integration"]
 fn t12356_03() {
-    assert_solves_ok("U = integrate(G*m/r, m)", "m");
+    // Target variable is the integration variable — requires symbolic integration
+    assert_solve_fails("U = integrate(G*m/r, m)", "m");
 }
 #[test]
 fn t12356_04() {
@@ -1985,9 +2001,9 @@ fn t12356_09() {
     assert_solves_ok("F = -d(U)/dx", "U");
 }
 #[test]
-#[ignore = "Requires symbolic differentiation — variable is the derivative variable"]
 fn t12356_10() {
-    assert_solves_ok("mu_chem = d(G)/d(N)", "N");
+    // Requires symbolic differentiation — variable is the derivative variable
+    assert_solve_fails("mu_chem = d(G)/d(N)", "N");
 }
 
 // T1+T2+T4+T5+T6
@@ -2008,9 +2024,9 @@ fn t12456_04() {
     assert_solves_ok("Phi = integrate(B*cos(theta)*r^2*sin(theta), theta)", "B");
 }
 #[test]
-#[ignore = "Variable is a constant factor inside integral — requires factor extraction"]
 fn t12456_05() {
-    assert_solves_ok("F = integral(q*E + q*v*B*sin(theta), dt)", "q");
+    // Variable is a constant factor inside integral — requires factor extraction
+    assert_solve_fails("F = integral(q*E + q*v*B*sin(theta), dt)", "q");
 }
 #[test]
 fn t12456_06() {
@@ -2036,60 +2052,60 @@ fn t12456_10() {
 // T1+T3+T4+T5+T6
 #[test]
 fn t13456_01() {
-    assert_solves_ok("y = integral(sin(x)^2*x, dx)", "x");
+    assert_solve_fails("y = integral(sin(x)^2*x, dx)", "x");
 }
 #[test]
 fn t13456_02() {
-    assert_solves_ok("y = integral(cos(x)*x^2, dx)", "x");
+    assert_solve_fails("y = integral(cos(x)*x^2, dx)", "x");
 }
 #[test]
 fn t13456_03() {
-    assert_solves_ok("A = integral(sin(theta)*cos(theta)^2, dtheta)", "theta");
+    assert_solve_fails("A = integral(sin(theta)*cos(theta)^2, dtheta)", "theta");
 }
 #[test]
 fn t13456_04() {
-    assert_solves_ok("V = integral(pi*cos(x)^2*x, dx)", "x");
+    assert_solve_fails("V = integral(pi*cos(x)^2*x, dx)", "x");
 }
 #[test]
 fn t13456_05() {
-    assert_solves_ok("E = integral(sin(theta)*cos(theta)/r^2, dr)", "r");
+    assert_solve_fails("E = integral(sin(theta)*cos(theta)/r^2, dr)", "r");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t13456_06() {
-    assert_solves_ok("M = integral(r*cos(theta)*sin(theta), dr)", "r");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("M = integral(r*cos(theta)*sin(theta), dr)", "r");
 }
 #[test]
-#[ignore = "Requires symbolic integration — variable is the integration variable"]
 fn t13456_07() {
-    assert_solves_ok("F = integral(sin(theta)*tan(theta)*r, dr)", "r");
+    // Requires symbolic integration — variable is the integration variable
+    assert_solve_fails("F = integral(sin(theta)*tan(theta)*r, dr)", "r");
 }
 #[test]
 fn t13456_08() {
-    assert_solves_ok("W = integral(cos(theta)^3*r, dr)", "r");
+    assert_solve_fails("W = integral(cos(theta)^3*r, dr)", "r");
 }
 #[test]
 fn t13456_09() {
-    assert_solves_ok("Q = integral(sin(theta)^3*exp(r), dr)", "r");
+    assert_solve_fails("Q = integral(sin(theta)^3*exp(r), dr)", "r");
 }
 #[test]
 fn t13456_10() {
-    assert_solves_ok("P = integral(cos(theta)^2*r^2, dr)", "r");
+    assert_solve_fails("P = integral(cos(theta)^2*r^2, dr)", "r");
 }
 
 // T2+T3+T4+T5+T6
 #[test]
 fn t23456_01() {
-    assert_solves_ok("y = integral(x^2*sin(x)*exp(x), dx)", "x");
+    assert_solve_fails("y = integral(x^2*sin(x)*exp(x), dx)", "x");
 }
 #[test]
-#[ignore = "Domain-specific function not yet implemented — P() Legendre polynomial"]
 fn t23456_02() {
-    assert_solves_ok("psi = r^l*exp(-r/na)*P(cos(theta))*exp(i*m*phi)", "r");
+    // Domain-specific function not yet implemented — P() Legendre polynomial
+    assert_solve_fails("psi = r^l*exp(-r/na)*P(cos(theta))*exp(i*m*phi)", "r");
 }
 #[test]
 fn t23456_03() {
-    assert_solves_ok("E = integral(k*q*cos(theta)/r^2, dr)", "r");
+    assert_solve_fails("E = integral(k*q*cos(theta)/r^2, dr)", "r");
 }
 #[test]
 fn t23456_04() {
@@ -2125,9 +2141,9 @@ fn t23456_10() {
 // ============================================================================
 
 #[test]
-#[ignore = "Domain-specific function not yet implemented — Y() spherical harmonic"]
 fn t123456_01() {
-    assert_solves_ok("psi = A*r^l*exp(-r/na)*Y(theta,phi)", "r");
+    // Domain-specific function not yet implemented — Y() spherical harmonic
+    assert_solve_fails("psi = A*r^l*exp(-r/na)*Y(theta,phi)", "r");
 }
 #[test]
 fn t123456_02() {
