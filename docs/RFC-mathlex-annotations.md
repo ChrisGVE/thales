@@ -1,10 +1,15 @@
 # RFC — mathlex annotations substrate (M-R1 … M-R6)
 
-Status: **draft**
+Status: **deferred to v0.10.0**
 Authors: Chris, Claude (drafted autonomously per session 8 decisions)
-Target mathlex version: **v0.4.0** (annotations-enabled)
+Target mathlex version: **v0.10.0** (annotation consumption)
 Tracked under task-master tag: `mathlex-upstream`
 Cross-reference: `mathcore-units-crate` tag (shared utility crate)
+
+> **Note (v0.9.0):** The annotation substrate shipped in mathlex v0.4.0
+> (empty `AnnotationSet` on every node). Unit propagation and annotation
+> consumption by thales deferred from v0.9.0 to v0.10.0 to maintain
+> release scope.
 
 ---
 
