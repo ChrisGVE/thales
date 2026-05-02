@@ -197,267 +197,280 @@ impl Expression {
     /// - [`differentiate`](Expression::differentiate) - Symbolic differentiation (results benefit from simplification)
     /// - [`solver`](crate::solver) - Equation solving using simplification
     pub fn simplify(&self) -> Expression {
-        // First, recursively simplify sub-expressions
         let simplified = match self {
-            Expression::Unary(op, expr) => {
-                let simplified_expr = expr.simplify();
-                match op {
-                    UnaryOp::Neg => {
-                        // -(-x) → x
-                        if let Expression::Unary(UnaryOp::Neg, inner) = &simplified_expr {
-                            inner.as_ref().clone()
-                        } else {
-                            Expression::Unary(*op, Box::new(simplified_expr))
-                        }
-                    }
-                    _ => Expression::Unary(*op, Box::new(simplified_expr)),
-                }
-            }
-            Expression::Binary(op, left, right) => {
-                let left_simplified = left.simplify();
-                let right_simplified = right.simplify();
-
-                // First apply identity simplifications
-                let after_identity = match op {
-                    BinaryOp::Add => {
-                        // 0 + x → x
-                        if Self::is_zero(&left_simplified) {
-                            return right_simplified;
-                        }
-                        // x + 0 → x
-                        if Self::is_zero(&right_simplified) {
-                            return left_simplified;
-                        }
-                        // Like terms: 2x + 3x → 5x
-                        let (coef1, base1) = Self::extract_coefficient_and_base(&left_simplified);
-                        let (coef2, base2) = Self::extract_coefficient_and_base(&right_simplified);
-                        if Self::bases_equal(&base1, &base2) && !Self::is_one(&base1) {
-                            let new_coef = coef1 + coef2;
-                            if new_coef.abs() < 1e-10 {
-                                return Expression::Integer(0);
-                            }
-                            let coef_expr = Self::from_numeric_value(new_coef);
-                            if Self::is_one(&coef_expr) {
-                                return base1;
-                            }
-                            return Expression::Binary(
-                                BinaryOp::Mul,
-                                Box::new(coef_expr),
-                                Box::new(base1),
-                            );
-                        }
-                        None
-                    }
-                    BinaryOp::Sub => {
-                        // x - 0 → x
-                        if Self::is_zero(&right_simplified) {
-                            return left_simplified;
-                        }
-                        // x - x → 0
-                        if left_simplified == right_simplified {
-                            return Expression::Integer(0);
-                        }
-                        // Like terms: 5x - 3x → 2x
-                        let (coef1, base1) = Self::extract_coefficient_and_base(&left_simplified);
-                        let (coef2, base2) = Self::extract_coefficient_and_base(&right_simplified);
-                        if Self::bases_equal(&base1, &base2) && !Self::is_one(&base1) {
-                            let new_coef = coef1 - coef2;
-                            if new_coef.abs() < 1e-10 {
-                                return Expression::Integer(0);
-                            }
-                            let coef_expr = Self::from_numeric_value(new_coef);
-                            if Self::is_one(&coef_expr) {
-                                return base1;
-                            }
-                            if new_coef < 0.0 {
-                                // Negative coefficient: return as -|coef| * base
-                                return Expression::Unary(
-                                    UnaryOp::Neg,
-                                    Box::new(Expression::Binary(
-                                        BinaryOp::Mul,
-                                        Box::new(Self::from_numeric_value(-new_coef)),
-                                        Box::new(base1),
-                                    )),
-                                );
-                            }
-                            return Expression::Binary(
-                                BinaryOp::Mul,
-                                Box::new(coef_expr),
-                                Box::new(base1),
-                            );
-                        }
-                        None
-                    }
-                    BinaryOp::Mul => {
-                        // 0 * x → 0
-                        if Self::is_zero(&left_simplified) {
-                            return Expression::Integer(0);
-                        }
-                        // x * 0 → 0
-                        if Self::is_zero(&right_simplified) {
-                            return Expression::Integer(0);
-                        }
-                        // 1 * x → x
-                        if Self::is_one(&left_simplified) {
-                            return right_simplified;
-                        }
-                        // x * 1 → x
-                        if Self::is_one(&right_simplified) {
-                            return left_simplified;
-                        }
-                        // x^a * x^b → x^(a+b) - power law for same base
-                        if let (Expression::Power(base1, exp1), Expression::Power(base2, exp2)) =
-                            (&left_simplified, &right_simplified)
-                        {
-                            if base1 == base2 {
-                                let new_exp =
-                                    Expression::Binary(BinaryOp::Add, exp1.clone(), exp2.clone())
-                                        .simplify();
-                                return Expression::Power(base1.clone(), Box::new(new_exp));
-                            }
-                        }
-                        // x * x → x^2
-                        if left_simplified == right_simplified {
-                            return Expression::Power(
-                                Box::new(left_simplified),
-                                Box::new(Expression::Integer(2)),
-                            );
-                        }
-                        // x * x^n → x^(n+1)
-                        if let Expression::Power(base, exp) = &right_simplified {
-                            if **base == left_simplified {
-                                let new_exp = Expression::Binary(
-                                    BinaryOp::Add,
-                                    exp.clone(),
-                                    Box::new(Expression::Integer(1)),
-                                )
-                                .simplify();
-                                return Expression::Power(base.clone(), Box::new(new_exp));
-                            }
-                        }
-                        // x^n * x → x^(n+1)
-                        if let Expression::Power(base, exp) = &left_simplified {
-                            if **base == right_simplified {
-                                let new_exp = Expression::Binary(
-                                    BinaryOp::Add,
-                                    exp.clone(),
-                                    Box::new(Expression::Integer(1)),
-                                )
-                                .simplify();
-                                return Expression::Power(base.clone(), Box::new(new_exp));
-                            }
-                        }
-                        None
-                    }
-                    BinaryOp::Div => {
-                        // x / 1 → x
-                        if Self::is_one(&right_simplified) {
-                            return left_simplified;
-                        }
-                        None
-                    }
-                    _ => None,
-                };
-
-                if after_identity.is_some() {
-                    return after_identity.unwrap();
-                }
-
-                // Constant folding: if both operands are numeric constants, evaluate
-                if Self::is_numeric_constant(&left_simplified)
-                    && Self::is_numeric_constant(&right_simplified)
-                {
-                    if let (Some(left_val), Some(right_val)) = (
-                        Self::extract_numeric_value(&left_simplified),
-                        Self::extract_numeric_value(&right_simplified),
-                    ) {
-                        let result = match op {
-                            BinaryOp::Add => Some(left_val + right_val),
-                            BinaryOp::Sub => Some(left_val - right_val),
-                            BinaryOp::Mul => Some(left_val * right_val),
-                            BinaryOp::Div => {
-                                if right_val.abs() > 1e-10 {
-                                    Some(left_val / right_val)
-                                } else {
-                                    None // Avoid division by zero
-                                }
-                            }
-                            BinaryOp::Mod => Some(left_val % right_val),
-                        };
-
-                        if let Some(value) = result {
-                            return Self::from_numeric_value(value);
-                        }
-                    }
-                }
-
-                Expression::Binary(*op, Box::new(left_simplified), Box::new(right_simplified))
-            }
-            Expression::Function(func, args) => {
-                let simplified_args: Vec<Expression> =
-                    args.iter().map(|arg| arg.simplify()).collect();
-
-                // Constant folding: if all arguments are numeric constants, evaluate the function
-                if simplified_args.iter().all(Self::is_numeric_constant) {
-                    // Try to evaluate the function with constant arguments
-                    let temp_expr = Expression::Function(func.clone(), simplified_args.clone());
-                    if let Some(value) = temp_expr.evaluate(&HashMap::new()) {
-                        return Self::from_numeric_value(value);
-                    }
-                }
-
-                Expression::Function(func.clone(), simplified_args)
-            }
-            Expression::Power(base, exp) => {
-                let base_simplified = base.simplify();
-                let exp_simplified = exp.simplify();
-
-                // x^0 → 1 (where x != 0)
-                if Self::is_zero(&exp_simplified) && !Self::is_zero(&base_simplified) {
-                    return Expression::Integer(1);
-                }
-                // x^1 → x
-                if Self::is_one(&exp_simplified) {
-                    return base_simplified;
-                }
-                // (x^a)^b → x^(a*b) - power of power law
-                // Only safe when inner exponent `a` is an integer; for non-integer `a`,
-                // the identity can produce incorrect results (e.g., ((-1)^2)^(1/2) ≠ -1).
-                if let Expression::Power(inner_base, inner_exp) = &base_simplified {
-                    if Self::is_integer_expr(inner_exp) {
-                        let new_exp = Expression::Binary(
-                            BinaryOp::Mul,
-                            inner_exp.clone(),
-                            Box::new(exp_simplified.clone()),
-                        )
-                        .simplify();
-                        return Expression::Power(inner_base.clone(), Box::new(new_exp));
-                    }
-                }
-
-                // Constant folding: if both base and exponent are numeric constants, evaluate
-                if Self::is_numeric_constant(&base_simplified)
-                    && Self::is_numeric_constant(&exp_simplified)
-                {
-                    if let (Some(base_val), Some(exp_val)) = (
-                        Self::extract_numeric_value(&base_simplified),
-                        Self::extract_numeric_value(&exp_simplified),
-                    ) {
-                        let result = base_val.powf(exp_val);
-                        if result.is_finite() {
-                            return Self::from_numeric_value(result);
-                        }
-                    }
-                }
-
-                Expression::Power(Box::new(base_simplified), Box::new(exp_simplified))
-            }
+            Expression::Unary(op, expr) => Self::simplify_unary(*op, expr),
+            Expression::Binary(op, left, right) => Self::simplify_binary(*op, left, right),
+            Expression::Function(func, args) => Self::simplify_function(func, args),
+            Expression::Power(base, exp) => Self::simplify_power(base, exp),
             _ => self.clone(),
         };
 
         // Apply pattern-matching simplification rules as a final pass
         let rules = all_simplification_rules();
         apply_rules_to_fixpoint(&simplified, &rules, 20)
+    }
+
+    /// Simplify a unary expression (double-negation elimination, recursive descent).
+    fn simplify_unary(op: UnaryOp, expr: &Expression) -> Expression {
+        let simplified_expr = expr.simplify();
+        match op {
+            UnaryOp::Neg => {
+                // -(-x) → x
+                if let Expression::Unary(UnaryOp::Neg, inner) = &simplified_expr {
+                    inner.as_ref().clone()
+                } else {
+                    Expression::Unary(op, Box::new(simplified_expr))
+                }
+            }
+            _ => Expression::Unary(op, Box::new(simplified_expr)),
+        }
+    }
+
+    /// Simplify a binary expression: identity rules then constant folding.
+    fn simplify_binary(op: BinaryOp, left: &Expression, right: &Expression) -> Expression {
+        let left_s = left.simplify();
+        let right_s = right.simplify();
+
+        // Identity rules per operator
+        match op {
+            BinaryOp::Add => {
+                if let Some(r) = Self::simplify_add(&left_s, &right_s) {
+                    return r;
+                }
+            }
+            BinaryOp::Sub => {
+                if let Some(r) = Self::simplify_sub(&left_s, &right_s) {
+                    return r;
+                }
+            }
+            BinaryOp::Mul => {
+                if let Some(r) = Self::simplify_mul(&left_s, &right_s) {
+                    return r;
+                }
+            }
+            BinaryOp::Div => {
+                // x / 1 → x
+                if Self::is_one(&right_s) {
+                    return left_s;
+                }
+            }
+            _ => {}
+        }
+
+        // Constant folding
+        if Self::is_numeric_constant(&left_s) && Self::is_numeric_constant(&right_s) {
+            if let (Some(lv), Some(rv)) = (
+                Self::extract_numeric_value(&left_s),
+                Self::extract_numeric_value(&right_s),
+            ) {
+                let result = match op {
+                    BinaryOp::Add => Some(lv + rv),
+                    BinaryOp::Sub => Some(lv - rv),
+                    BinaryOp::Mul => Some(lv * rv),
+                    BinaryOp::Div => {
+                        if rv.abs() > 1e-10 {
+                            Some(lv / rv)
+                        } else {
+                            None
+                        }
+                    }
+                    BinaryOp::Mod => Some(lv % rv),
+                };
+                if let Some(value) = result {
+                    return Self::from_numeric_value(value);
+                }
+            }
+        }
+
+        Expression::Binary(op, Box::new(left_s), Box::new(right_s))
+    }
+
+    /// Addition identity rules and like-terms collection.
+    fn simplify_add(left_s: &Expression, right_s: &Expression) -> Option<Expression> {
+        // 0 + x → x
+        if Self::is_zero(left_s) {
+            return Some(right_s.clone());
+        }
+        // x + 0 → x
+        if Self::is_zero(right_s) {
+            return Some(left_s.clone());
+        }
+        // Like terms: 2x + 3x → 5x
+        let (coef1, base1) = Self::extract_coefficient_and_base(left_s);
+        let (coef2, base2) = Self::extract_coefficient_and_base(right_s);
+        if Self::bases_equal(&base1, &base2) && !Self::is_one(&base1) {
+            let new_coef = coef1 + coef2;
+            if new_coef.abs() < 1e-10 {
+                return Some(Expression::Integer(0));
+            }
+            let coef_expr = Self::from_numeric_value(new_coef);
+            if Self::is_one(&coef_expr) {
+                return Some(base1);
+            }
+            return Some(Expression::Binary(
+                BinaryOp::Mul,
+                Box::new(coef_expr),
+                Box::new(base1),
+            ));
+        }
+        None
+    }
+
+    /// Subtraction identity rules and like-terms collection.
+    fn simplify_sub(left_s: &Expression, right_s: &Expression) -> Option<Expression> {
+        // x - 0 → x
+        if Self::is_zero(right_s) {
+            return Some(left_s.clone());
+        }
+        // x - x → 0
+        if left_s == right_s {
+            return Some(Expression::Integer(0));
+        }
+        // Like terms: 5x - 3x → 2x
+        let (coef1, base1) = Self::extract_coefficient_and_base(left_s);
+        let (coef2, base2) = Self::extract_coefficient_and_base(right_s);
+        if Self::bases_equal(&base1, &base2) && !Self::is_one(&base1) {
+            let new_coef = coef1 - coef2;
+            if new_coef.abs() < 1e-10 {
+                return Some(Expression::Integer(0));
+            }
+            let coef_expr = Self::from_numeric_value(new_coef);
+            if Self::is_one(&coef_expr) {
+                return Some(base1);
+            }
+            if new_coef < 0.0 {
+                // Negative coefficient: return as -|coef| * base
+                return Some(Expression::Unary(
+                    UnaryOp::Neg,
+                    Box::new(Expression::Binary(
+                        BinaryOp::Mul,
+                        Box::new(Self::from_numeric_value(-new_coef)),
+                        Box::new(base1),
+                    )),
+                ));
+            }
+            return Some(Expression::Binary(
+                BinaryOp::Mul,
+                Box::new(coef_expr),
+                Box::new(base1),
+            ));
+        }
+        None
+    }
+
+    /// Multiplication identity rules and power-law combinations.
+    fn simplify_mul(left_s: &Expression, right_s: &Expression) -> Option<Expression> {
+        // 0 * x → 0
+        if Self::is_zero(left_s) {
+            return Some(Expression::Integer(0));
+        }
+        // x * 0 → 0
+        if Self::is_zero(right_s) {
+            return Some(Expression::Integer(0));
+        }
+        // 1 * x → x
+        if Self::is_one(left_s) {
+            return Some(right_s.clone());
+        }
+        // x * 1 → x
+        if Self::is_one(right_s) {
+            return Some(left_s.clone());
+        }
+        // x^a * x^b → x^(a+b)
+        if let (Expression::Power(base1, exp1), Expression::Power(base2, exp2)) = (left_s, right_s)
+        {
+            if base1 == base2 {
+                let new_exp =
+                    Expression::Binary(BinaryOp::Add, exp1.clone(), exp2.clone()).simplify();
+                return Some(Expression::Power(base1.clone(), Box::new(new_exp)));
+            }
+        }
+        // x * x → x^2
+        if left_s == right_s {
+            return Some(Expression::Power(
+                Box::new(left_s.clone()),
+                Box::new(Expression::Integer(2)),
+            ));
+        }
+        // x * x^n → x^(n+1)
+        if let Expression::Power(base, exp) = right_s {
+            if **base == *left_s {
+                let new_exp = Expression::Binary(
+                    BinaryOp::Add,
+                    exp.clone(),
+                    Box::new(Expression::Integer(1)),
+                )
+                .simplify();
+                return Some(Expression::Power(base.clone(), Box::new(new_exp)));
+            }
+        }
+        // x^n * x → x^(n+1)
+        if let Expression::Power(base, exp) = left_s {
+            if **base == *right_s {
+                let new_exp = Expression::Binary(
+                    BinaryOp::Add,
+                    exp.clone(),
+                    Box::new(Expression::Integer(1)),
+                )
+                .simplify();
+                return Some(Expression::Power(base.clone(), Box::new(new_exp)));
+            }
+        }
+        None
+    }
+
+    /// Simplify a function application: constant folding when all args are numeric.
+    fn simplify_function(func: &super::Function, args: &[Expression]) -> Expression {
+        let simplified_args: Vec<Expression> = args.iter().map(|a| a.simplify()).collect();
+
+        if simplified_args.iter().all(Self::is_numeric_constant) {
+            let temp_expr = Expression::Function(func.clone(), simplified_args.clone());
+            if let Some(value) = temp_expr.evaluate(&HashMap::new()) {
+                return Self::from_numeric_value(value);
+            }
+        }
+
+        Expression::Function(func.clone(), simplified_args)
+    }
+
+    /// Simplify a power expression: identity rules, power-of-power, constant folding.
+    fn simplify_power(base: &Expression, exp: &Expression) -> Expression {
+        let base_s = base.simplify();
+        let exp_s = exp.simplify();
+
+        // x^0 → 1 (where x != 0)
+        if Self::is_zero(&exp_s) && !Self::is_zero(&base_s) {
+            return Expression::Integer(1);
+        }
+        // x^1 → x
+        if Self::is_one(&exp_s) {
+            return base_s;
+        }
+        // (x^a)^b → x^(a*b) — only safe when inner exponent is an integer;
+        // for non-integer `a` the identity can give wrong results.
+        if let Expression::Power(inner_base, inner_exp) = &base_s {
+            if Self::is_integer_expr(inner_exp) {
+                let new_exp =
+                    Expression::Binary(BinaryOp::Mul, inner_exp.clone(), Box::new(exp_s.clone()))
+                        .simplify();
+                return Expression::Power(inner_base.clone(), Box::new(new_exp));
+            }
+        }
+
+        // Constant folding
+        if Self::is_numeric_constant(&base_s) && Self::is_numeric_constant(&exp_s) {
+            if let (Some(bv), Some(ev)) = (
+                Self::extract_numeric_value(&base_s),
+                Self::extract_numeric_value(&exp_s),
+            ) {
+                let result = bv.powf(ev);
+                if result.is_finite() {
+                    return Self::from_numeric_value(result);
+                }
+            }
+        }
+
+        Expression::Power(Box::new(base_s), Box::new(exp_s))
     }
 
     /// Check if expression is zero.
