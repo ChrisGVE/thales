@@ -13,6 +13,7 @@ use serde::Deserialize;
 /// objects; serde deserialises them directly with no string-parsing step.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
+#[allow(dead_code)]
 pub(in super::super) enum JsonCommand {
     // ── Placeholder ────────────────────────────────────────────────────
     Noop,

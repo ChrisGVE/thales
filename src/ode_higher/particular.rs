@@ -1,8 +1,7 @@
 //! Particular solution methods (undetermined coefficients).
 
 use super::helpers::*;
-use super::types::{CharRoot, HigherOrderODE, HigherOrderSolution};
-use crate::ast::{BinaryOp, Expression, Function, Variable};
+use crate::ast::{BinaryOp, Expression};
 use crate::numeric::compile::{compile, decompile};
 use crate::ode::{solve_second_order_homogeneous, ODEError, SecondOrderODE, SecondOrderSolution};
 

@@ -1,9 +1,7 @@
 //! Higher-order ODE solving algorithms.
 
-use crate::ast::{BinaryOp, Expression, Function, Variable};
 use crate::numeric::compile::compile;
-use crate::ode::{solve_second_order_homogeneous, ODEError, SecondOrderODE, SecondOrderSolution};
-use std::fmt;
+use crate::ode::{solve_second_order_homogeneous, ODEError, SecondOrderODE};
 
 use super::helpers::*;
 use super::types::{CharRoot, HigherOrderODE, HigherOrderSolution};

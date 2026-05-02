@@ -220,7 +220,7 @@ impl fmt::Display for MulNode {
         let coeff_is_one = self.coeff.is_one();
         let coeff_is_neg_one = self.coeff == neg_one;
         let has_numer = !numer_parts.is_empty();
-        let has_any_factors = has_numer || !denom_parts.is_empty();
+        let _has_any_factors = has_numer || !denom_parts.is_empty();
 
         // `printed_coeff` is true when a numeric coefficient token was emitted
         // and the *next* numerator factor needs no `*` separator (e.g. `2x`).

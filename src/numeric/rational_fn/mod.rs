@@ -7,7 +7,7 @@
 pub(super) mod advanced;
 pub(super) mod core;
 
-pub use core::{PartialFractionTerm, RationalFunction};
+pub use core::RationalFunction;
 
 #[cfg(test)]
 mod tests_advanced;

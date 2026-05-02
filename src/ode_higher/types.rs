@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use crate::ast::Expression;
 use crate::numeric::Expr;
 
 /// A single root of the characteristic polynomial, with its multiplicity.

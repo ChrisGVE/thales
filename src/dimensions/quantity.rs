@@ -1,6 +1,5 @@
 //! Physical quantities with units.
 
-use super::types::Dimension;
 use super::unit::Unit;
 use std::fmt;
 

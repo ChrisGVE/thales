@@ -4,8 +4,8 @@ use crate::ast::{BinaryOp, Expression, UnaryOp, Variable};
 use std::collections::HashMap;
 
 use super::polynomial::{
-    evaluate_constant, evaluate_polynomial, extract_coefficients, find_polynomial_roots,
-    get_polynomial_degree, is_irreducible_quadratic, is_polynomial,
+    evaluate_polynomial, extract_coefficients, find_polynomial_roots, get_polynomial_degree,
+    is_irreducible_quadratic, is_polynomial,
 };
 use super::types::{DecomposeError, PartialFractionResult, PartialFractionTerm};
 

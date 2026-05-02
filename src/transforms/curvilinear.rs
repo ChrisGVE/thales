@@ -239,7 +239,7 @@ pub fn curvilinear_curl(field: &[Arc<Expr>; 3], sys: &CurvilinearSystem) -> [Arc
     let hs = sys.scale_factors();
     let cs = &sys.coords;
 
-    let curl_component = |i: usize, j: usize, k: usize| -> Arc<Expr> {
+    let curl_component = |_i: usize, j: usize, k: usize| -> Arc<Expr> {
         // (∇×F)_i = (1/(hⱼ·hₖ)) · [∂(hₖ·Fₖ)/∂uⱼ − ∂(hⱼ·Fⱼ)/∂uₖ]
         let hj_fj = normalize::mul(hs[j].clone(), field[j].clone());
         let hk_fk = normalize::mul(hs[k].clone(), field[k].clone());

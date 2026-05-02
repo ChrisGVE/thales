@@ -4,7 +4,7 @@ use crate::ast::Expression;
 use std::collections::HashMap;
 
 use super::solver::solve_inequality;
-use super::types::{Bound, Inequality, InequalityError, InequalityResult, IntervalSolution};
+use super::types::{Bound, Inequality, InequalityResult, IntervalSolution};
 
 pub fn solve_system(inequalities: &[Inequality], var: &str) -> InequalityResult {
     if inequalities.is_empty() {

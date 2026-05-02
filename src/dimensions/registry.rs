@@ -1,6 +1,5 @@
 //! Unit registry with predefined units.
 
-use super::types::Dimension;
 use super::unit::Unit;
 use std::collections::HashMap;
 

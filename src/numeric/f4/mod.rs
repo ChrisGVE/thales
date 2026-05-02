@@ -356,7 +356,7 @@ pub fn f4<O: MonomialOrder>(
         let reduced = row_reduce(rows);
 
         // Extract new basis elements: rows whose pivot is a *new* leading monomial
-        let mut new_elements = extract_new_elements(reduced, &cols, &existing_lms, order);
+        let new_elements = extract_new_elements(reduced, &cols, &existing_lms, order);
 
         if new_elements.is_empty() {
             break;

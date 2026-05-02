@@ -3,7 +3,7 @@
 use crate::ast::{BinaryOp, Expression, UnaryOp, Variable};
 use std::collections::HashMap;
 
-use super::types::{Bound, Inequality, InequalityError, InequalityResult, IntervalSolution};
+use super::types::{Inequality, InequalityError, InequalityResult, IntervalSolution};
 
 pub fn solve_inequality(inequality: &Inequality, var: &str) -> InequalityResult {
     // Move everything to one side: f(x) <op> 0

@@ -41,7 +41,7 @@
 //! | [`tangent_to_parametric_curve`] | Tangent at parameter value `t₀` |
 //! | [`normal_to_parametric_curve`] | Normal at parameter value `t₀` |
 
-use crate::numeric::{expr::FuncId, normalize, substitute::substitute, Expr, SymbolId};
+use crate::numeric::{expr::FuncId, normalize, substitute::substitute, Expr};
 use std::sync::Arc;
 
 use super::parametric::ParametricCurve;

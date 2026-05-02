@@ -137,7 +137,7 @@ pub fn wkb(
     // Leading order: S₀' = ±√Q.
     // We represent this symbolically as ±Integral(sqrt(Q), x).
     // The integral is stored as a placeholder `Pow(Q, 1/2)` integrated symbolically.
-    let sqrt_q = build_sqrt(potential);
+    let _sqrt_q = build_sqrt(potential);
 
     // Try to simplify sqrt_q by integrating if Q is a simple power of var.
     let phase_plus = build_phase(potential, var, true);

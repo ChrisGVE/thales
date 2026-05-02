@@ -201,6 +201,7 @@ pub(crate) fn is_known_real(expr: &Arc<Expr>) -> bool {
 ///
 /// Call this from the `simplify_pow` path when the base is `Abs(x)` and the
 /// exponent is the integer 2.
+#[allow(dead_code)]
 pub(crate) fn simplify_abs_squared(inner: &Arc<Expr>) -> Arc<Expr> {
     let re = Expr::func(FuncId::Re, vec![inner.clone()]);
     let im = Expr::func(FuncId::Im, vec![inner.clone()]);
@@ -213,6 +214,7 @@ pub(crate) fn simplify_abs_squared(inner: &Arc<Expr>) -> Arc<Expr> {
 ///
 /// Checks whether an `AddNode` has the form `Re(x) + i*Im(x)` (with coeff 1
 /// for both terms) and returns `Some(x)` when matched; otherwise `None`.
+#[allow(dead_code)]
 pub(crate) fn try_reconstruct_from_re_im(node: &super::AddNode) -> Option<Arc<Expr>> {
     if !node.constant.is_zero() || node.terms.len() != 2 {
         return None;

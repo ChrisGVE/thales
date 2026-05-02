@@ -23,8 +23,6 @@ mod helpers;
 mod lhopital;
 mod series;
 
-pub(crate) use helpers::{LHOPITAL_MAX_ITER, SERIES_ORDER};
-
 // ── Public types ──────────────────────────────────────────────────────────────
 
 /// The point at which a limit is evaluated.

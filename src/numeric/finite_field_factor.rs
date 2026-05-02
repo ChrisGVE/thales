@@ -15,6 +15,7 @@ type PolyMod = Vec<i64>;
 
 /// Result of factoring a polynomial over GF(p).
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
 pub struct FiniteFieldFactors {
     /// The prime field characteristic.
     pub prime: i64,

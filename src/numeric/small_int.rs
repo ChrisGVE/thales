@@ -2,7 +2,7 @@
 //! promotes to heap-allocated `BigInt` on overflow.
 
 use num::bigint::BigInt;
-use num::traits::{Num, One, Signed, Zero};
+use num::traits::{One, Signed, Zero};
 use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};

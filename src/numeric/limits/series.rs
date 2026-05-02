@@ -2,8 +2,6 @@
 
 use std::sync::Arc;
 
-use num::traits::Zero;
-
 use super::super::expr::Expr;
 use super::super::SymbolId;
 use super::helpers::SERIES_ORDER;

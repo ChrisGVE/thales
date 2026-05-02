@@ -169,7 +169,6 @@ pub(super) fn structured_result_to_json(s: &StructuredResult) -> Value {
             "transform_variable": transform_variable,
             "convergence": convergence.as_ref().map(|e| expr_to_json(e)),
         }),
-        _ => json!({ "kind": "Unknown" }),
     }
 }
 

@@ -1,8 +1,8 @@
 //! Display and LaTeX rendering for partial fraction types.
 
-use crate::ast::{BinaryOp, Expression, Function, UnaryOp, Variable};
+use crate::ast::{BinaryOp, Expression, Function, Variable};
 
-use super::decompose::{coefficients_to_expression, float_to_expression};
+use super::decompose::float_to_expression;
 use super::types::{PartialFractionResult, PartialFractionTerm};
 
 impl PartialFractionTerm {

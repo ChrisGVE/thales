@@ -1,6 +1,5 @@
 //! Types for precision-aware evaluation.
 
-use crate::ast::Expression;
 use num_rational::Rational64;
 use std::fmt;
 

@@ -74,7 +74,6 @@ pub fn rule_cos_zero() -> Strategy {
 /// and a `cos(x)^2` term with coefficient 1 for the same argument `x`. Any
 /// remaining terms are preserved.
 pub fn rule_sin_sq_plus_cos_sq() -> Strategy {
-    use crate::numeric::BigRational;
     use num::traits::One as _;
     try_rule(|e| {
         let node = match e.as_ref() {

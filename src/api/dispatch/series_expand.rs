@@ -458,7 +458,7 @@ pub(super) fn wkb_cmd(
             };
             let mut r = Response::default();
             for (i, b) in branches.iter().enumerate() {
-                let mut entry = ResultEntry {
+                let entry = ResultEntry {
                     value: ResultValue::Symbolic(b.value.clone()),
                     structured: if i == 0 {
                         Some(structured.clone())

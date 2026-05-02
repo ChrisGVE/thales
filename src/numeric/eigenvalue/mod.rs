@@ -40,18 +40,17 @@
 //! }
 //! ```
 
-use super::big_rational::BigRational;
-use super::dense_poly::DensePolynomial;
 use super::expr::Expr;
 use super::normalize;
 use super::poly_equation_solver::roots_with_multiplicity;
 use super::symbol::SymbolId;
 use std::sync::Arc;
 
+#[cfg(test)]
+pub(crate) use super::big_rational::BigRational;
+
 mod expand;
 mod extract;
-
-pub(crate) use extract::collect_poly_coeffs;
 
 #[cfg(test)]
 mod tests;

@@ -1,6 +1,6 @@
 //! Polynomial analysis and root-finding utilities.
 
-use crate::ast::{BinaryOp, Expression, SymbolicConstant, UnaryOp, Variable};
+use crate::ast::{BinaryOp, Expression, SymbolicConstant, UnaryOp};
 use std::collections::HashMap;
 
 pub fn is_rational_function(expr: &Expression, var: &str) -> bool {

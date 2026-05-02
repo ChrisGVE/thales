@@ -22,7 +22,6 @@
 //! - [`exp_contract`]    — contract products of `exp` into a single `exp`
 
 use crate::numeric::expr::{Expr, FuncId};
-use crate::numeric::normalize;
 use crate::numeric::rewrite::{choice, innermost, Strategy};
 use std::sync::Arc;
 

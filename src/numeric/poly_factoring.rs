@@ -147,9 +147,9 @@ impl<R: Field> DensePolynomial<R> {
             }];
         }
 
-        let mut a = f.gcd(&fp);
+        let a = f.gcd(&fp);
         let mut b = f.div_rem(&a).0;
-        let mut c = fp.div_rem(&a).0;
+        let c = fp.div_rem(&a).0;
         let mut c = &c - &b.derivative();
 
         let mut factors = Vec::new();

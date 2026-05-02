@@ -1,6 +1,6 @@
 //! Evaluation context with precision tracking.
 
-use crate::ast::{BinaryOp, Expression, Function, SymbolicConstant, UnaryOp, Variable};
+use crate::ast::{BinaryOp, Expression, Function, SymbolicConstant, UnaryOp};
 use num::CheckedAdd;
 use num::CheckedDiv;
 use num::CheckedMul;

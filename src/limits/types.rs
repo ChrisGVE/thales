@@ -17,9 +17,6 @@ pub(super) fn try_expr_to_f64(expr: &Expression) -> Option<f64> {
     }
 }
 
-/// Maximum number of L'Hôpital's rule applications.
-pub(super) const MAX_LHOPITAL_ITERATIONS: u32 = 10;
-
 /// Error type for limit evaluation failures.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]

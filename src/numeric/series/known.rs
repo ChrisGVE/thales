@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use super::super::{expr::Expr, BigRational, SmallInt};
+use super::super::{expr::Expr, BigRational};
 use super::TaylorSeries;
 use crate::numeric::ring::Ring;
 use crate::numeric::SymbolId;

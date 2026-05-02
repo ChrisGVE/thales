@@ -21,6 +21,8 @@
 //! | Cartesian3D | identity                                          | 1                  |
 //! | Custom      | identity (caller supplies own Jacobian)           | 1                  |
 
+#![allow(dead_code)]
+
 use std::sync::Arc;
 
 use crate::ast::Expression;

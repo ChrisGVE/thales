@@ -47,7 +47,6 @@ pub mod exponential;
 pub mod logarithmic;
 pub mod tower;
 
-use crate::numeric::differentiation::diff_arc;
 use crate::numeric::expr::{Expr, FuncId};
 use crate::numeric::normalize;
 use crate::numeric::{
