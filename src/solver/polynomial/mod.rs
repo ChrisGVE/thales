@@ -213,50 +213,56 @@ fn add_into_coeffs(
             }
             Some(())
         }
-        Expr::Mul(node) => {
-            let mut combined = scale * node.coeff.to_f64();
-            let mut degree: usize = 0;
-            let mut saw_var = false;
-            for (base, exp) in &node.factors {
-                if contains_symbol(base, var) || contains_symbol(exp, var) {
-                    if saw_var {
-                        return None;
-                    }
-                    match (base.as_ref(), exp.as_ref()) {
-                        (Expr::Symbol(s), Expr::Integer(n)) if *s == var => {
-                            let d = n.to_i64()?;
-                            if d < 0 {
-                                return None;
-                            }
-                            degree = d as usize;
-                            saw_var = true;
-                        }
-                        _ => return None,
-                    }
-                } else {
-                    match (base.as_ref(), exp.as_ref()) {
-                        (Expr::Integer(n), Expr::Integer(e)) => {
-                            let b = n.to_i64()? as f64;
-                            let ev = e.to_i64()?;
-                            combined *= b.powi(ev as i32);
-                        }
-                        (Expr::Rational(r), Expr::Integer(e)) => {
-                            let ev = e.to_i64()?;
-                            combined *= r.to_f64().powi(ev as i32);
-                        }
-                        (Expr::Float(f), Expr::Integer(e)) => {
-                            let ev = e.to_i64()?;
-                            combined *= f.powi(ev as i32);
-                        }
-                        _ => return None,
-                    }
-                }
-            }
-            bump(coeffs, degree, combined);
-            Some(())
-        }
+        Expr::Mul(node) => add_mul_into_coeffs(node, var, scale, coeffs),
         _ => None,
     }
+}
+
+/// Handle the `Expr::Mul` arm of [`add_into_coeffs`]: walk the factors to
+/// extract one variable factor (with integer exponent) and accumulate the
+/// numeric coefficient into `coeffs`.
+fn add_mul_into_coeffs(
+    node: &crate::numeric::MulNode,
+    var: SymbolId,
+    scale: f64,
+    coeffs: &mut Vec<f64>,
+) -> Option<()> {
+    let mut combined = scale * node.coeff.to_f64();
+    let mut degree: usize = 0;
+    let mut saw_var = false;
+    for (base, exp) in &node.factors {
+        if contains_symbol(base, var) || contains_symbol(exp, var) {
+            if saw_var {
+                return None;
+            }
+            match (base.as_ref(), exp.as_ref()) {
+                (Expr::Symbol(s), Expr::Integer(n)) if *s == var => {
+                    let d = n.to_i64()?;
+                    if d < 0 {
+                        return None;
+                    }
+                    degree = d as usize;
+                    saw_var = true;
+                }
+                _ => return None,
+            }
+        } else {
+            match (base.as_ref(), exp.as_ref()) {
+                (Expr::Integer(n), Expr::Integer(e)) => {
+                    combined *= (n.to_i64()? as f64).powi(e.to_i64()? as i32);
+                }
+                (Expr::Rational(r), Expr::Integer(e)) => {
+                    combined *= r.to_f64().powi(e.to_i64()? as i32);
+                }
+                (Expr::Float(f), Expr::Integer(e)) => {
+                    combined *= f.powi(e.to_i64()? as i32);
+                }
+                _ => return None,
+            }
+        }
+    }
+    bump(coeffs, degree, combined);
+    Some(())
 }
 
 fn bump(coeffs: &mut Vec<f64>, degree: usize, value: f64) {
