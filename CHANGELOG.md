@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-05-02
+
+### Breaking Changes
+
+- **JSON wire format**: Expression fields serialize as structured JSON objects
+  (`{"kind": "Binary", "value": {...}}`) instead of display strings (`"x + 1"`).
+  Callers must update request payloads and response parsers.
+- **FFI surface collapsed**: All ~57 per-operation FFI functions removed.
+  `execute_json_ffi(json)` is the sole cross-language entry point.
+  Swift package requires rebuild against new bindings.
+
+### Added
+
+- **Series expansions**: Puiseux, Frobenius, Padé approximant, WKB approximation
+- **Vector calculus**: Nabla operator (`Grad`, `Div`, `Curl`, `Laplacian`,
+  `DivOfCurl`, `CurlOfGrad`, `DivOfGrad`) with golden identity tests
+- **ODE systems**: `OdeSystem` command with matrix extraction, eigenvalue solver,
+  and RK4 system integration; `Pde` command stub
+- **Integral transforms**: Laplace, inverse Laplace, Fourier, inverse Fourier,
+  Z-transform, inverse Z-transform, Mellin, inverse Mellin
+- **Special functions**: 18 new variants — Gamma, Beta, Erf, Erfc, LnGamma,
+  Digamma, BesselJ/Y/I/K, AiryAi/Bi, Zeta, Si, Ci, Ei, Heaviside, DiracDelta
+- **Multi-variable integration**: `MultiIntegrate`, `ChangeCoords`,
+  `PathIntegral`, `SurfaceIntegral` commands with coordinate system support
+- **Algebra promotions**: `Conjugate`, `InverseFn`, `ApplyIdentity` commands
+- **Higher-dim calculus**: `TotalDiff`, `Divergence`, `Curl`, `Laplacian`,
+  `Jacobian`, `Hessian`, `DirectionalDiff` commands
+- **Optimization**: `Optimize` and `LagrangeMult` commands with constraint support
+- **Structured response model**: `StructuredResult` envelope with typed result
+  shapes (Scalar, Labeled, Decomposition, CoefficientArray, Branches, Shaped,
+  TransformResult)
+- **Narrative resolution**: dispatch exit renders narratives into localized text
+
+### Fixed
+
+- Complex roots in quadratic/cubic/quartic solvers use `Expr::complex()` natively
+  instead of building symbolic `re + im*i` tree — fixes decompile producing
+  `2*i` instead of `Complex{re:0, im:2}`
+- Eigenvalue dispatch returns `Expression::Complex` for complex eigenvalues
+  instead of silently dropping imaginary parts
+- Stress tests: ~30 impossible-to-solve tests converted from `#[ignore]` to
+  proper `assert_solve_fails` assertions
+
+### Changed
+
+- Migrated to mathlex v0.4.0 ExprKind/Expression API
+- `dispatch.rs` split into command-family submodules
+- `compile.rs` (1859 lines) → `compile/` submodule directory
+- `mathlex_bridge.rs` (1267 lines) → `mathlex_bridge/` submodule directory
+- `lib.rs` error types extracted to `error.rs`
+- `simplify()` (263 lines) → 7 per-pass helper functions
+- `polynomial.rs` (706 lines) → `polynomial/` with cubic, quartic, numerical submodules
+- `to_latex_inner()` (220 lines) → 7 per-variant helper functions
+- Annotations RFC deferred to v0.10.0
+
 ## [0.4.2] - 2026-04-07
 
 ### Fixed
