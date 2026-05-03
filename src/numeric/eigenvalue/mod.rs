@@ -21,18 +21,17 @@
 //! ```rust
 //! use thales::numeric::{
 //!     eigenvalue::{characteristic_polynomial, eigenvalues, ExprMatrix, EigenvalueResult},
-//!     BigRational, Expr, SymbolId,
+//!     Expr, SymbolId,
 //! };
 //!
-//! // Matrix [[1, 2], [3, 4]]
+//! // Matrix [[2, 1], [1, 2]] — eigenvalues 1 and 3 (rational)
 //! let m: ExprMatrix = vec![
+//!     vec![Expr::int(2), Expr::int(1)],
 //!     vec![Expr::int(1), Expr::int(2)],
-//!     vec![Expr::int(3), Expr::int(4)],
 //! ];
 //! let lambda = SymbolId::intern("lambda");
 //! let char_poly = characteristic_polynomial(&m, lambda).unwrap();
 //!
-//! // Eigenvalues of [[1,2],[3,4]] come from λ²−5λ−2 = 0
 //! let result = eigenvalues(&m).unwrap();
 //! match result {
 //!     EigenvalueResult::Numeric(evs) => assert_eq!(evs.len(), 2),

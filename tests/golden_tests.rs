@@ -414,7 +414,6 @@ fn golden_eigen_diag() {
 }
 
 #[test]
-#[ignore = "known bug: eigenvalue complex representation"]
 fn golden_eigen_rotation() {
     // 90° rotation [[0,-1],[1,0]] has eigenvalues ±i.
     let resp = execute(request(Command::Matrix {

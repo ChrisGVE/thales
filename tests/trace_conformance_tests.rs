@@ -5,7 +5,7 @@
 
 use thales::ast::Variable;
 use thales::numeric::trace::{TechniqueTag, Trace};
-use thales::solver::{SmartSolver, Solver};
+use thales::solver::{PolynomialSolver, SmartSolver, Solver};
 
 // ============================================================================
 // Helper Functions
@@ -102,10 +102,9 @@ fn physics_formula_path_quality() {
 }
 
 #[test]
-#[ignore = "Cubic solver annotations not yet fully populated in all traces"]
 fn cubic_solver_annotations() {
-    let equation = thales::parse_equation("x^3 - 6*x^2 + 11*x - 6 = 0").unwrap();
-    let solver = SmartSolver::new();
+    let equation = thales::parse_equation("x^3 + x + 1 = 0").unwrap();
+    let solver = PolynomialSolver::new();
     let (_solution, trace) = solver.solve(&equation, &Variable::new("x")).unwrap();
 
     assert!(

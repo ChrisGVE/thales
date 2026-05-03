@@ -133,7 +133,7 @@ mod dimension_tests {
     }
 
     #[test]
-    #[ignore] // Unit conversion planned for v0.4.0
+    #[ignore = "UnitRegistry::with_si_base is a stub — conversion needs mathcore-units integration"]
     fn test_unit_conversion() {
         let registry = UnitRegistry::with_common_units();
         let result = registry.convert(1000.0, "m", "km");

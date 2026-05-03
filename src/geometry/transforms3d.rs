@@ -389,10 +389,10 @@ pub fn apply_3d(transform: &MatrixExpr, point: &Point3D) -> Point3D {
 ///
 /// let z = Point3D::new(Expr::int(0), Expr::int(0), Expr::int(1));
 /// let r = rotation_3d(&z, Expr::float(PI / 2.0));
-/// let s = scale_3d(Expr::int(2), Expr::int(2), Expr::int(2));
+/// let s = scale_3d(Expr::int(1), Expr::int(2), Expr::int(3));
 /// let rs = compose_3d(&r, &s); // rotate after scale
 /// let sr = compose_3d(&s, &r); // scale after rotate
-/// assert_ne!(rs, sr);          // non-commutative in general
+/// assert_ne!(rs, sr);          // non-commutative for non-uniform scale
 /// ```
 pub fn compose_3d(outer: &MatrixExpr, inner: &MatrixExpr) -> MatrixExpr {
     assert_eq!(outer.dimensions(), (3, 3), "compose_3d: outer must be 3x3");

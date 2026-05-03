@@ -201,16 +201,17 @@ impl LinearSystem {
     ///
     /// ```
     /// use thales::matrix::MatrixExpr;
-    /// use thales::ast::{Expression, Variable};
+    /// use thales::numeric::expr::Expr;
+    /// use thales::ast::Variable;
     /// use thales::solver::{LinearSystem, SystemSolution};
     ///
     /// let a = MatrixExpr::from_expr_elements(vec![
-    ///     vec![Expression::Integer(2), Expression::Integer(1)],
-    ///     vec![Expression::Integer(1), Expression::Integer(3)],
+    ///     vec![Expr::int(2), Expr::int(1)],
+    ///     vec![Expr::int(1), Expr::int(3)],
     /// ]).unwrap();
     /// let b = MatrixExpr::from_expr_elements(vec![
-    ///     vec![Expression::Integer(5)],
-    ///     vec![Expression::Integer(10)],
+    ///     vec![Expr::int(5)],
+    ///     vec![Expr::int(10)],
     /// ]).unwrap();
     /// let vars = vec![Variable::new("x"), Variable::new("y")];
     /// let system = LinearSystem::from_matrix(a, b, vars).unwrap();
