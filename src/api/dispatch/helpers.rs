@@ -5,7 +5,7 @@
 
 use crate::api::diagnostic::{Diagnostic, DiagnosticCode};
 use crate::api::domain::Domain;
-use crate::api::narrative::Narrative;
+use crate::api::narrative::{Narrative, NarrativeValue};
 use crate::api::request::{Budget, Precision, Request, SolveMode};
 use crate::api::response::{
     BranchEntry, EngineId, NarratedStep, Response, ResultEntry, ResultKey, ResultShape,
@@ -13,7 +13,7 @@ use crate::api::response::{
 };
 use crate::ast::Expression;
 use crate::numeric::compile::decompile;
-use crate::numeric::trace::Trace;
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 
 /// Emit a [`DiagnosticCode::FieldIgnored`] warning on `response` for a
 /// field that was provided in the request but had no effect on this command.
@@ -132,13 +132,139 @@ pub(super) fn steps_from_trace(trace: &Trace) -> Vec<NarratedStep> {
         .map(|step| NarratedStep {
             tag: step.tag,
             difficulty: step.tag.difficulty(),
-            narrative: Narrative::new("step.generic", step.detail.clone()),
+            narrative: build_step_narrative(template_id_for_tag(step.tag), step),
             path: None,
             input: step.input.as_ref().map(|arc| decompile(arc)),
             output: step.output.as_ref().map(|arc| decompile(arc)),
             unit_trace: None,
         })
         .collect()
+}
+
+/// Map a [`TechniqueTag`] to its template identifier string.
+///
+/// Every variant is listed explicitly so that adding a new variant to
+/// `TechniqueTag` causes a compile error here until the mapping is extended.
+pub(super) fn template_id_for_tag(tag: TechniqueTag) -> &'static str {
+    match tag {
+        TechniqueTag::AddBothSides => "step.add_both_sides",
+        TechniqueTag::SubtractBothSides => "step.subtract_both_sides",
+        TechniqueTag::MultiplyBothSides => "step.multiply_both_sides",
+        TechniqueTag::DivideBothSides => "step.divide_both_sides",
+        TechniqueTag::PowerBothSides => "step.power_both_sides",
+        TechniqueTag::RootBothSides => "step.root_both_sides",
+        TechniqueTag::ApplyFunction => "step.apply_function",
+        TechniqueTag::Simplification => "step.simplification",
+        TechniqueTag::Expansion => "step.expansion",
+        TechniqueTag::Factoring => "step.factoring",
+        TechniqueTag::CombineFractions => "step.combine_fractions",
+        TechniqueTag::Cancellation => "step.cancellation",
+        TechniqueTag::CombiningLikeTerms => "step.combining_like_terms",
+        TechniqueTag::Rationalization => "step.rationalization",
+        TechniqueTag::Conjugation => "step.conjugation",
+        TechniqueTag::PartialFractionDecomp => "step.partial_fraction_decomp",
+        TechniqueTag::Isolation => "step.isolation",
+        TechniqueTag::MoveTerm => "step.move_term",
+        TechniqueTag::Substitution => "step.substitution",
+        TechniqueTag::ApplyIdentity => "step.apply_identity",
+        TechniqueTag::TrigIdentity => "step.trig_identity",
+        TechniqueTag::LogIdentity => "step.log_identity",
+        TechniqueTag::ExpIdentity => "step.exp_identity",
+        TechniqueTag::HyperbolicIdentity => "step.hyperbolic_identity",
+        TechniqueTag::EulerFormula => "step.euler_formula",
+        TechniqueTag::DeMoivre => "step.de_moivre",
+        TechniqueTag::QuadraticFormula => "step.quadratic_formula",
+        TechniqueTag::CompleteTheSquare => "step.complete_the_square",
+        TechniqueTag::RationalRootTheorem => "step.rational_root_theorem",
+        TechniqueTag::SyntheticDivision => "step.synthetic_division",
+        TechniqueTag::TotalDifferential => "step.total_differential",
+        TechniqueTag::Divergence => "step.divergence",
+        TechniqueTag::Curl => "step.curl",
+        TechniqueTag::Laplacian => "step.laplacian",
+        TechniqueTag::Jacobian => "step.jacobian",
+        TechniqueTag::Hessian => "step.hessian",
+        TechniqueTag::DirectionalDerivative => "step.directional_derivative",
+        TechniqueTag::SpecialFunction => "step.special_function",
+        TechniqueTag::PowerRule => "step.power_rule",
+        TechniqueTag::ProductRule => "step.product_rule",
+        TechniqueTag::QuotientRule => "step.quotient_rule",
+        TechniqueTag::ChainRule => "step.chain_rule",
+        TechniqueTag::ImplicitDifferentiation => "step.implicit_differentiation",
+        TechniqueTag::LogarithmicDifferentiation => "step.logarithmic_differentiation",
+        TechniqueTag::PatternIntegration => "step.pattern_integration",
+        TechniqueTag::IntegrationByParts => "step.integration_by_parts",
+        TechniqueTag::USubstitution => "step.u_substitution",
+        TechniqueTag::TrigSubstitution => "step.trig_substitution",
+        TechniqueTag::PartialFractionIntegration => "step.partial_fraction_integration",
+        TechniqueTag::RischVerification => "step.risch_verification",
+        TechniqueTag::LHopitalRule => "step.l_hopital_rule",
+        TechniqueTag::SqueezeTheorem => "step.squeeze_theorem",
+        TechniqueTag::LimitAlgebraic => "step.limit_algebraic",
+        TechniqueTag::TaylorExpansion => "step.taylor_expansion",
+        TechniqueTag::LaurentExpansion => "step.laurent_expansion",
+        TechniqueTag::AsymptoticExpansion => "step.asymptotic_expansion",
+        TechniqueTag::SeriesComposition => "step.series_composition",
+        TechniqueTag::LagrangeReversion => "step.lagrange_reversion",
+        TechniqueTag::PuiseuxExpansion => "step.puiseux_expansion",
+        TechniqueTag::FrobeniusMethod => "step.frobenius_method",
+        TechniqueTag::PadeApproximant => "step.pade_approximant",
+        TechniqueTag::WkbApproximation => "step.wkb_approximation",
+        TechniqueTag::ResidueTheorem => "step.residue_theorem",
+        TechniqueTag::PoleClassification => "step.pole_classification",
+        TechniqueTag::FourierSeries => "step.fourier_series",
+        TechniqueTag::SeparationOfVariables => "step.separation_of_variables",
+        TechniqueTag::IntegratingFactor => "step.integrating_factor",
+        TechniqueTag::CharacteristicEquation => "step.characteristic_equation",
+        TechniqueTag::UndeterminedCoefficients => "step.undetermined_coefficients",
+        TechniqueTag::VariationOfParameters => "step.variation_of_parameters",
+        TechniqueTag::RungeKutta => "step.runge_kutta",
+        TechniqueTag::GaussianElimination => "step.gaussian_elimination",
+        TechniqueTag::MatrixInverse => "step.matrix_inverse",
+        TechniqueTag::LuDecomposition => "step.lu_decomposition",
+        TechniqueTag::QrDecomposition => "step.qr_decomposition",
+        TechniqueTag::Eigendecomposition => "step.eigendecomposition",
+        TechniqueTag::Determinant => "step.determinant",
+        TechniqueTag::NumericalApproximation => "step.numerical_approximation",
+        TechniqueTag::NewtonRaphson => "step.newton_raphson",
+        TechniqueTag::Bisection => "step.bisection",
+        TechniqueTag::Brent => "step.brent",
+        TechniqueTag::Secant => "step.secant",
+        TechniqueTag::DomainNarrowing => "step.domain_narrowing",
+        TechniqueTag::DomainExtension => "step.domain_extension",
+        TechniqueTag::PrincipalBranch => "step.principal_branch",
+        TechniqueTag::Custom(_) => "step.generic",
+    }
+}
+
+/// Build a [`Narrative`] for a [`Step`] using the given template identifier.
+///
+/// Binds `input` and `output` expression values when present, then parses
+/// structured `"key=val;key=val"` pairs in [`Step::detail`] into additional
+/// text bindings. The `input` and `output` keys from the detail string are
+/// silently ignored so they cannot overwrite the expression bindings.
+fn build_step_narrative(template_id: &'static str, step: &Step) -> Narrative {
+    let mut narr = Narrative::new(template_id, step.detail.clone());
+
+    if let Some(ref arc) = step.input {
+        narr = narr.bind("input", NarrativeValue::Expr(decompile(arc)));
+    }
+    if let Some(ref arc) = step.output {
+        narr = narr.bind("output", NarrativeValue::Expr(decompile(arc)));
+    }
+
+    if step.detail.contains('=') {
+        for pair in step.detail.split(';') {
+            if let Some((key, val)) = pair.split_once('=') {
+                let key = key.trim();
+                let val = val.trim();
+                if key != "input" && key != "output" && !key.is_empty() {
+                    narr = narr.bind(key, NarrativeValue::Text(val.to_string()));
+                }
+            }
+        }
+    }
+
+    narr
 }
 
 pub(super) fn solution_to_response(
@@ -254,3 +380,7 @@ pub(super) fn expression_to_f64(expr: &Expression) -> Option<f64> {
         _ => expr.evaluate(&std::collections::HashMap::new()),
     }
 }
+
+#[cfg(test)]
+#[path = "helpers_tests.rs"]
+mod tests;

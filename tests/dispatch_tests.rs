@@ -1178,9 +1178,10 @@ fn dict_entry(template_id: &str) -> &'static str {
 }
 
 #[test]
-fn dispatch_resolves_step_generic_narrative() {
-    // A successful narrated dispatch produces step.generic narratives. After
-    // render_response the fallback_md should match the dictionary entry.
+fn dispatch_resolves_step_technique_narrative() {
+    // A successful narrated dispatch produces technique-specific narratives.
+    // Diff emits PowerRule steps; the narrative template_id should be
+    // "step.power_rule", not the old "step.generic" catch-all.
     let resp = execute(request(Command::Diff {
         expr: pow(var("x"), int(2)),
         var: "x".to_string(),
@@ -1192,8 +1193,10 @@ fn dispatch_resolves_step_generic_narrative() {
         !entry.steps.is_empty(),
         "diff with default narrate should emit steps"
     );
-    let body = &entry.steps[0].narrative.fallback_md;
-    assert_eq!(body, dict_entry("step.generic"));
+    assert_eq!(
+        entry.steps[0].narrative.template_id, "step.power_rule",
+        "diff step should use technique-specific template, not generic"
+    );
 }
 
 #[test]
