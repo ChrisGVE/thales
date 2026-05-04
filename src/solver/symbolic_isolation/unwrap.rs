@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use num::traits::{One, Zero};
+use num::traits::{One, Signed, Zero};
 
 use crate::numeric::compile::decompile;
 use crate::numeric::expr::FuncId;
@@ -110,18 +110,42 @@ fn unwrap_add(
 
     let mut new_other = other.clone();
 
-    // Subtract non-var part from the other side in one step.
+    // Move non-var part to the other side in one step.
+    // Tag selection:
+    // - AddBothSides   : const_part is a negative literal (subtracting a
+    //                    negative = adding the absolute value)
+    // - MoveTerm       : const_part came from a single non-var term
+    // - SubtractBothSides : compound non-var sum, positive
     if !non_var.is_empty() {
+        let non_var_count = non_var.len();
         let const_part = normalize::add_many(non_var);
         new_other = normalize::sub(new_other, const_part.clone());
-        let const_expr = decompile(&const_part);
-        trace.push(
-            Step::new(
+        let is_negative_literal = match const_part.as_ref() {
+            Expr::Integer(n) => n.is_negative(),
+            Expr::Rational(r) => r.is_negative(),
+            _ => false,
+        };
+        let (tag, detail) = if is_negative_literal {
+            let abs_part = normalize::neg(const_part.clone());
+            let abs_expr = decompile(&abs_part);
+            (
+                TechniqueTag::AddBothSides,
+                format!("Add {} to both sides", abs_expr),
+            )
+        } else if non_var_count == 1 {
+            let const_expr = decompile(&const_part);
+            (
+                TechniqueTag::MoveTerm,
+                format!("Move {} to the other side", const_expr),
+            )
+        } else {
+            let const_expr = decompile(&const_part);
+            (
                 TechniqueTag::SubtractBothSides,
                 format!("Subtract {} from both sides", const_expr),
             )
-            .with_output(new_other.clone()),
-        );
+        };
+        trace.push(Step::new(tag, detail).with_output(new_other.clone()));
     }
 
     // Single var-containing term: divide by its rational coefficient (if any)
