@@ -153,6 +153,79 @@ mod tests {
     }
 
     #[test]
+    fn fast_step_geometry_keys_present() {
+        let dict = en_dict();
+        let keys = [
+            "step.geom_curvature",
+            "step.geom_distance",
+            "step.geom_exterior_derivative",
+            "step.geom_intersection",
+            "step.geom_normal",
+            "step.geom_tangent",
+            "step.geom_transform",
+        ];
+        for key in &keys {
+            assert!(dict.contains_key(*key), "missing key: {key}");
+        }
+    }
+
+    #[test]
+    fn fast_step_geom_distance_renders() {
+        let narr = Narrative::new(
+            "step.geom_distance",
+            "Distance ({type}) between {a} and {b}: {output}.",
+        )
+        .bind("type", NarrativeValue::Text("Euclidean".to_string()))
+        .bind("a", NarrativeValue::Text("P".to_string()))
+        .bind("b", NarrativeValue::Text("Q".to_string()))
+        .bind("output", NarrativeValue::Expr(Expression::Integer(5)));
+        let out = render_narrative(&narr);
+        assert!(out.contains("Euclidean"), "type binding missing");
+        assert!(out.contains("P"), "a binding missing");
+        assert!(out.contains("Q"), "b binding missing");
+        assert!(out.contains("$5$"), "output binding missing");
+    }
+
+    #[test]
+    fn fast_step_batch2_keys_present() {
+        let dict = en_dict();
+        let keys = [
+            "step.apply_identity",
+            "step.exp_identity",
+            "step.log_identity",
+            "step.complete_the_square",
+            "step.quadratic_formula",
+            "step.curl",
+            "step.directional_derivative",
+            "step.divergence",
+            "step.hessian",
+            "step.jacobian",
+            "step.laplacian",
+            "step.special_function",
+            "step.total_differential",
+            "step.chain_rule",
+            "step.implicit_differentiation",
+            "step.power_rule",
+            "step.product_rule",
+        ];
+        for key in &keys {
+            assert!(dict.contains_key(*key), "missing key: {key}");
+        }
+    }
+
+    #[test]
+    fn fast_render_chain_rule() {
+        let narr = Narrative::new("step.chain_rule", "chain rule fallback")
+            .bind("outer", NarrativeValue::Text("sin".to_string()))
+            .bind("inner", NarrativeValue::Text("x^2".to_string()))
+            .bind("output", NarrativeValue::Expr(Expression::Integer(0)));
+        let out = render_narrative(&narr);
+        assert!(out.contains("sin"), "outer binding missing");
+        assert!(out.contains("x^2"), "inner binding missing");
+        assert!(out.contains("$0$"), "output binding missing");
+    }
+
+    #[test]
     fn theorem_dict_parses() {
         let dict = theorem_dict();
         assert!(dict.contains_key("theorem.calc.fundamental"));
