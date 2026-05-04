@@ -180,7 +180,7 @@ pub(super) fn conjugate_cmd(expr: &Expression, narrate: bool) -> Response {
     let mut trace = Trace::new();
     if narrate {
         trace.push(
-            Step::new(TechniqueTag::Simplification, "Complex conjugate")
+            Step::new(TechniqueTag::Conjugation, "")
                 .with_input(compile(expr))
                 .with_output(compile(&result)),
         );
@@ -298,10 +298,29 @@ pub(super) fn apply_identity_cmd(
             Some(result) => {
                 let mut trace = Trace::new();
                 if narrate {
+                    let identity_name = match identity {
+                        IdentityId::PythagoreanTrig => "pythagorean-trig",
+                        IdentityId::PythagoreanHyp => "pythagorean-hyp",
+                        IdentityId::DoubleAngleSin => "double-angle-sin",
+                        IdentityId::DoubleAngleCos => "double-angle-cos",
+                        IdentityId::SumToProductSin => "sum-to-product-sin",
+                        IdentityId::SumToProductCos => "sum-to-product-cos",
+                        IdentityId::LogProduct => "log-product",
+                        IdentityId::LogPower => "log-power",
+                        IdentityId::ExpSum => "exp-sum",
+                        IdentityId::Euler => "euler",
+                        IdentityId::DeMoivre => "de-moivre",
+                        IdentityId::DifferenceOfSquares => "difference-of-squares",
+                        IdentityId::SumOfCubes => "sum-of-cubes",
+                        IdentityId::Other(label) => label,
+                    };
                     trace.push(
-                        Step::new(TechniqueTag::Factoring, "Apply algebraic identity")
-                            .with_input(compile(expr))
-                            .with_output(compile(&result)),
+                        Step::new(
+                            TechniqueTag::ApplyIdentity,
+                            format!("name={}", identity_name),
+                        )
+                        .with_input(compile(expr))
+                        .with_output(compile(&result)),
                     );
                 }
                 let mut r = Response::default();
@@ -478,6 +497,49 @@ mod tests {
                 .iter()
                 .any(|d| d.code == DiagnosticCode::NotImplemented),
             "expected NotImplemented diagnostic"
+        );
+    }
+
+    // ── Narration tag tests ──────────────────────────────────────────────────
+
+    #[test]
+    fn conjugate_narrated_emits_conjugation_tag() {
+        let expr = Expression::Complex(Complex64::new(1.0, 2.0));
+        let resp = conjugate_cmd(&expr, true);
+        assert_eq!(resp.results.len(), 1);
+        let (_, entry) = &resp.results[0];
+        assert_eq!(entry.steps.len(), 1, "expected one narrated step");
+        assert_eq!(
+            entry.steps[0].tag,
+            TechniqueTag::Conjugation,
+            "expected Conjugation tag, got {:?}",
+            entry.steps[0].tag
+        );
+    }
+
+    #[test]
+    fn apply_identity_narrated_emits_apply_identity_tag_with_name() {
+        // x^2 - y^2 with narrate=true
+        let expr = sub(pow(var("x"), 2), pow(var("y"), 2));
+        let resp = apply_identity_cmd(&expr, &IdentityId::DifferenceOfSquares, true);
+        assert_eq!(resp.results.len(), 1, "expected a result");
+        let (_, entry) = &resp.results[0];
+        assert_eq!(entry.steps.len(), 1, "expected one narrated step");
+        let step = &entry.steps[0];
+        assert_eq!(
+            step.tag,
+            TechniqueTag::ApplyIdentity,
+            "expected ApplyIdentity tag, got {:?}",
+            step.tag
+        );
+        let has_name_binding = step.narrative.bindings.iter().any(|(k, v)| {
+            k == "name"
+                && matches!(v, crate::api::narrative::NarrativeValue::Text(s) if s.contains("difference-of-squares"))
+        });
+        assert!(
+            has_name_binding,
+            "expected narrative binding name=difference-of-squares, got {:?}",
+            step.narrative.bindings
         );
     }
 }

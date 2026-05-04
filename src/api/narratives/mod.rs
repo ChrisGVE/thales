@@ -114,6 +114,45 @@ mod tests {
     }
 
     #[test]
+    fn fast_step_equation_ops_keys_present() {
+        let dict = en_dict();
+        let keys = [
+            "step.add_both_sides",
+            "step.apply_function",
+            "step.divide_both_sides",
+            "step.isolation",
+            "step.move_term",
+            "step.multiply_both_sides",
+            "step.power_both_sides",
+            "step.root_both_sides",
+            "step.subtract_both_sides",
+        ];
+        for key in &keys {
+            assert!(dict.contains_key(*key), "missing key: {key}");
+        }
+    }
+
+    #[test]
+    fn fast_step_algebra_keys_present() {
+        let dict = en_dict();
+        let keys = [
+            "step.cancellation",
+            "step.combine_fractions",
+            "step.combining_like_terms",
+            "step.conjugation",
+            "step.expansion",
+            "step.factoring",
+            "step.partial_fraction_decomp",
+            "step.rationalization",
+            "step.simplification",
+            "step.substitution",
+        ];
+        for key in &keys {
+            assert!(dict.contains_key(*key), "missing key: {key}");
+        }
+    }
+
+    #[test]
     fn theorem_dict_parses() {
         let dict = theorem_dict();
         assert!(dict.contains_key("theorem.calc.fundamental"));
