@@ -48,6 +48,20 @@ fn pow(base: Expression, exp: Expression) -> Expression {
     Expression::Power(Box::new(base), Box::new(exp))
 }
 
+fn assert_mul_eq(actual: &Expression, a: &Expression, b: &Expression) {
+    match actual {
+        Expression::Binary(BinaryOp::Mul, left, right) => {
+            let fwd = left.as_ref() == a && right.as_ref() == b;
+            let rev = left.as_ref() == b && right.as_ref() == a;
+            assert!(
+                fwd || rev,
+                "expected Mul({a:?}, {b:?}) in either order, got {actual:?}"
+            );
+        }
+        _ => panic!("expected Mul, got {actual:?}"),
+    }
+}
+
 // ============================================================================
 // LinearSolver Tests
 // ============================================================================
@@ -178,7 +192,7 @@ fn test_force_equation_solve_for_f() {
     let (solution, _path) = result.unwrap();
     match solution {
         thales::solver::Solution::Unique(expr) => {
-            assert_eq!(expr, mul(var("m"), var("a")));
+            assert_mul_eq(&expr, &var("m"), &var("a"));
         }
         _ => panic!("Expected unique solution"),
     }
@@ -408,7 +422,7 @@ fn test_solve_for_no_values() {
     assert!(result.is_ok());
 
     let (result_expr, _trace) = result.unwrap();
-    assert_eq!(result_expr, mul(var("m"), var("a")));
+    assert_mul_eq(&result_expr, &var("m"), &var("a"));
 }
 
 #[test]
