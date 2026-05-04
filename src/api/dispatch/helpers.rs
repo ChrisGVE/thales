@@ -232,6 +232,13 @@ pub(super) fn template_id_for_tag(tag: TechniqueTag) -> &'static str {
         TechniqueTag::DomainNarrowing => "step.domain_narrowing",
         TechniqueTag::DomainExtension => "step.domain_extension",
         TechniqueTag::PrincipalBranch => "step.principal_branch",
+        TechniqueTag::GeomDistance => "step.geom_distance",
+        TechniqueTag::GeomIntersection => "step.geom_intersection",
+        TechniqueTag::GeomTangent => "step.geom_tangent",
+        TechniqueTag::GeomNormal => "step.geom_normal",
+        TechniqueTag::GeomCurvature => "step.geom_curvature",
+        TechniqueTag::GeomTransform => "step.geom_transform",
+        TechniqueTag::GeomExteriorDerivative => "step.geom_exterior_derivative",
         TechniqueTag::Custom(_) => "step.generic",
     }
 }

@@ -84,6 +84,64 @@ fn fast_template_id_custom_falls_back_to_generic() {
     );
 }
 
+// ── geometry template_id spot checks ────────────────────────────────────
+
+#[test]
+fn fast_template_id_geom_distance() {
+    assert_eq!(
+        template_id_for_tag(TechniqueTag::GeomDistance),
+        "step.geom_distance"
+    );
+}
+
+#[test]
+fn fast_template_id_geom_intersection() {
+    assert_eq!(
+        template_id_for_tag(TechniqueTag::GeomIntersection),
+        "step.geom_intersection"
+    );
+}
+
+#[test]
+fn fast_template_id_geom_tangent() {
+    assert_eq!(
+        template_id_for_tag(TechniqueTag::GeomTangent),
+        "step.geom_tangent"
+    );
+}
+
+#[test]
+fn fast_template_id_geom_normal() {
+    assert_eq!(
+        template_id_for_tag(TechniqueTag::GeomNormal),
+        "step.geom_normal"
+    );
+}
+
+#[test]
+fn fast_template_id_geom_curvature() {
+    assert_eq!(
+        template_id_for_tag(TechniqueTag::GeomCurvature),
+        "step.geom_curvature"
+    );
+}
+
+#[test]
+fn fast_template_id_geom_transform() {
+    assert_eq!(
+        template_id_for_tag(TechniqueTag::GeomTransform),
+        "step.geom_transform"
+    );
+}
+
+#[test]
+fn fast_template_id_geom_exterior_derivative() {
+    assert_eq!(
+        template_id_for_tag(TechniqueTag::GeomExteriorDerivative),
+        "step.geom_exterior_derivative"
+    );
+}
+
 // ── build_step_narrative tests ───────────────────────────────────────────
 
 #[test]

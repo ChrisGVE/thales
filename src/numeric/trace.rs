@@ -298,6 +298,22 @@ pub enum TechniqueTag {
     /// Assumption of a principal branch of a multi-valued function.
     PrincipalBranch,
 
+    // ── Geometry ────────────────────────────────────────────────────────────
+    /// Distance between geometric objects.
+    GeomDistance,
+    /// Intersection of geometric objects.
+    GeomIntersection,
+    /// Tangent at a point on a curve or circle.
+    GeomTangent,
+    /// Normal at a point on a curve.
+    GeomNormal,
+    /// Curvature κ of a parametric curve.
+    GeomCurvature,
+    /// 3D geometric transform (rotation, reflection, scale, translation, composition).
+    GeomTransform,
+    /// Exterior derivative of a differential form.
+    GeomExteriorDerivative,
+
     // ── Catch-all ─────────────────────────────────────────────────────────
     /// Engine-specific technique carried as a stable string label. Use only
     /// when no existing variant fits; prefer adding a first-class variant.
@@ -394,6 +410,13 @@ impl TechniqueTag {
             TechniqueTag::DomainNarrowing => "Domain narrowing",
             TechniqueTag::DomainExtension => "Domain extension",
             TechniqueTag::PrincipalBranch => "Principal branch",
+            TechniqueTag::GeomDistance => "Geometric distance",
+            TechniqueTag::GeomIntersection => "Geometric intersection",
+            TechniqueTag::GeomTangent => "Tangent line/vector",
+            TechniqueTag::GeomNormal => "Normal line/vector",
+            TechniqueTag::GeomCurvature => "Curvature",
+            TechniqueTag::GeomTransform => "Geometric transform",
+            TechniqueTag::GeomExteriorDerivative => "Exterior derivative",
             TechniqueTag::Custom(label) => label,
         }
     }
@@ -504,7 +527,14 @@ impl TechniqueTag {
             | TechniqueTag::Secant
             | TechniqueTag::DomainNarrowing
             | TechniqueTag::DomainExtension
-            | TechniqueTag::PrincipalBranch => Advanced,
+            | TechniqueTag::PrincipalBranch
+            | TechniqueTag::GeomDistance
+            | TechniqueTag::GeomIntersection
+            | TechniqueTag::GeomTangent
+            | TechniqueTag::GeomNormal
+            | TechniqueTag::GeomCurvature
+            | TechniqueTag::GeomTransform
+            | TechniqueTag::GeomExteriorDerivative => Advanced,
 
             // Custom: caller's responsibility; default to Advanced.
             TechniqueTag::Custom(_) => Advanced,
@@ -720,5 +750,42 @@ mod tests {
             .with_output(Expr::int(2));
         assert!(s.input.is_some());
         assert!(s.output.is_some());
+    }
+
+    #[test]
+    fn fast_geom_labels() {
+        assert_eq!(TechniqueTag::GeomDistance.label(), "Geometric distance");
+        assert_eq!(
+            TechniqueTag::GeomIntersection.label(),
+            "Geometric intersection"
+        );
+        assert_eq!(TechniqueTag::GeomTangent.label(), "Tangent line/vector");
+        assert_eq!(TechniqueTag::GeomNormal.label(), "Normal line/vector");
+        assert_eq!(TechniqueTag::GeomCurvature.label(), "Curvature");
+        assert_eq!(TechniqueTag::GeomTransform.label(), "Geometric transform");
+        assert_eq!(
+            TechniqueTag::GeomExteriorDerivative.label(),
+            "Exterior derivative"
+        );
+    }
+
+    #[test]
+    fn fast_geom_difficulty_is_advanced() {
+        let geom_tags = [
+            TechniqueTag::GeomDistance,
+            TechniqueTag::GeomIntersection,
+            TechniqueTag::GeomTangent,
+            TechniqueTag::GeomNormal,
+            TechniqueTag::GeomCurvature,
+            TechniqueTag::GeomTransform,
+            TechniqueTag::GeomExteriorDerivative,
+        ];
+        for tag in geom_tags {
+            assert_eq!(
+                tag.difficulty(),
+                TechniqueDifficulty::Advanced,
+                "{tag:?} should be Advanced"
+            );
+        }
     }
 }
