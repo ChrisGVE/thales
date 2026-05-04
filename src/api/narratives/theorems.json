@@ -3,10 +3,19 @@
   "axiom.field.commutativity_add": "**Commutativity of addition** — for all $a$, $b$: $a + b = b + a$.",
   "axiom.field.commutativity_mul": "**Commutativity of multiplication** — for all $a$, $b$: $a \\cdot b = b \\cdot a$.",
 
-  "theorem.calc.fundamental": "**Fundamental Theorem of Calculus** — if $F$ is an antiderivative of $f$ on $[a, b]$, then $\\int_a^b f(x)\\,dx = F(b) - F(a)$.",
-  "theorem.calc.lhopital": "**L'Hôpital's Rule** — if $\\lim_{x \\to c} f(x) = \\lim_{x \\to c} g(x) = 0$ (or $\\pm\\infty$) and $g'(x) \\neq 0$ near $c$, then $\\lim_{x \\to c} \\frac{f(x)}{g(x)} = \\lim_{x \\to c} \\frac{f'(x)}{g'(x)}$ when the right-hand limit exists.",
   "theorem.alg.fundamental": "**Fundamental Theorem of Algebra** — every non-constant polynomial with complex coefficients has at least one complex root.",
+
+  "theorem.calc.chain_rule": "**Chain Rule** — if $f$ and $g$ are differentiable, then $(f \\circ g)'(x) = f'(g(x)) \\cdot g'(x)$.",
+  "theorem.calc.fundamental": "**Fundamental Theorem of Calculus** — if $F$ is an antiderivative of $f$ on $[a, b]$, then $\\int_a^b f(x)\\,dx = F(b) - F(a)$.",
+  "theorem.calc.implicit_diff": "**Implicit Differentiation** — if $F(x, y) = 0$ defines $y$ implicitly as a differentiable function of $x$, then $dy/dx = -F_x / F_y$ wherever $F_y \\neq 0$.",
+  "theorem.calc.lhopital": "**L'Hôpital's Rule** — if $\\lim_{x \\to c} f(x) = \\lim_{x \\to c} g(x) = 0$ (or $\\pm\\infty$) and $g'(x) \\neq 0$ near $c$, then $\\lim_{x \\to c} \\frac{f(x)}{g(x)} = \\lim_{x \\to c} \\frac{f'(x)}{g'(x)}$ when the right-hand limit exists.",
+  "theorem.calc.product_rule": "**Product Rule** — if $f$ and $g$ are differentiable, then $(fg)' = f'g + fg'$.",
+
   "theorem.complex.euler": "**Euler's Formula** — $e^{i\\theta} = \\cos\\theta + i\\sin\\theta$.",
+
+  "theorem.ode.frobenius": "**Frobenius Method** — if $x_0$ is a regular singular point of $y'' + p(x)y' + q(x)y = 0$, then at least one solution exists as a Frobenius series $y = \\sum_{n=0}^{\\infty} a_n (x - x_0)^{n+r}$ where $r$ satisfies the indicial equation.",
+  "theorem.ode.separation": "**Separation of Variables** — if $dy/dx = f(x)g(y)$ and $g(y) \\neq 0$, then $\\int dy/g(y) = \\int f(x)\\,dx + C$.",
+  "theorem.ode.variation_of_parameters": "**Variation of Parameters** — for $y'' + p(x)y' + q(x)y = g(x)$ with homogeneous solutions $y_1, y_2$, a particular solution is $y_p = -y_1 \\int \\frac{y_2 g}{W}\\,dx + y_2 \\int \\frac{y_1 g}{W}\\,dx$ where $W = y_1 y_2' - y_2 y_1'$ is the Wronskian.",
 
   "lemma.zorn": "**Zorn's Lemma** — every partially ordered set in which every chain has an upper bound contains at least one maximal element.",
 
