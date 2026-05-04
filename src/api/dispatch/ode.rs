@@ -1,5 +1,7 @@
 //! ODE command dispatcher.
 
+use std::sync::Arc;
+
 use crate::api::command::{IvpData, SystemIvpData};
 use crate::api::diagnostic::{Diagnostic, DiagnosticCode};
 use crate::api::narrative::Narrative;
@@ -41,10 +43,26 @@ pub(super) fn ode_cmd(
             let value = decompile(&sol.general_solution);
             let mut trace = Trace::new();
             if narrate {
-                trace.push(
-                    Step::new(TechniqueTag::SeparationOfVariables, sol.method.clone())
-                        .with_output(sol.general_solution.clone()),
-                );
+                let (tag, detail) = if ode.is_separable() {
+                    (
+                        TechniqueTag::SeparationOfVariables,
+                        format!(
+                            "dep={dep};indep={indep}",
+                            dep = ode.dependent,
+                            indep = ode.independent
+                        ),
+                    )
+                } else {
+                    (
+                        TechniqueTag::IntegratingFactor,
+                        format!(
+                            "method={method};var={var}",
+                            method = sol.method,
+                            var = ode.independent
+                        ),
+                    )
+                };
+                trace.push(Step::new(tag, detail).with_output(sol.general_solution.clone()));
             }
             let mut r = Response::default();
             r.results.push((
@@ -82,18 +100,14 @@ pub(super) fn ode_system_cmd(
                 .cloned()
                 .unwrap_or_else(|| format!("y{}", i + 1));
             let steps = if narrate {
-                sol.steps
-                    .iter()
-                    .map(|s| crate::api::response::NarratedStep {
-                        tag: TechniqueTag::CharacteristicEquation,
-                        difficulty: TechniqueTag::CharacteristicEquation.difficulty(),
-                        narrative: Narrative::new("step.ode_system", s.clone()),
-                        path: None,
-                        input: None,
-                        output: None,
-                        unit_trace: None,
-                    })
-                    .collect()
+                let mut t = Trace::new();
+                for s in &sol.steps {
+                    t.push(
+                        Step::new(TechniqueTag::CharacteristicEquation, s.clone())
+                            .with_output(Arc::clone(component)),
+                    );
+                }
+                steps_from_trace(&t)
             } else {
                 Vec::new()
             };
