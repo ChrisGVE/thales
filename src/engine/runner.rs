@@ -1,15 +1,24 @@
-//! Sequential (and stub tree/divide-and-conquer) strategy runners.
+//! Sequential and parallel strategy runners.
 //!
 //! A [`StrategyRunner`] drives the strategy cascade for a single D0 engine
 //! invocation. [`SequentialRunner`] tries each applicable strategy in
 //! priority order and stops at the first success or certified-impossible
-//! result.
+//! result. When the `rayon` feature is enabled, [`RayonRunner`] explores
+//! branches concurrently, bounded by a [`ResourceGate`].
+//!
+//! After the symbolic cascade completes, [`SequentialRunner`] optionally
+//! invokes [`FallbackRunner`] when `ctx.fallback.numerical` is `true`.
 
 use std::sync::Arc;
 
 use crate::engine::context::SolveContext;
+use crate::engine::fallback::runner::FallbackRunner;
+use crate::engine::fallback::{node_count, FallbackTrigger};
 use crate::engine::mode::ExecutionMode;
 use crate::engine::reason::FailureReason;
+#[cfg(feature = "rayon")]
+use crate::engine::resource::ResourceGate;
+use crate::engine::resource::ResourceStatus;
 use crate::engine::strategy::{Strategy, StrategyResult};
 use crate::engine::trace_tree::{BranchHandle, BranchReason, JoinHandle, JoinReason, TraceTree};
 use crate::numeric::Expr;
@@ -50,15 +59,78 @@ impl StrategyRunner for SequentialRunner {
         strategies: &[Box<dyn Strategy>],
         mode: ExecutionMode,
     ) -> StrategyResult {
-        match mode {
-            ExecutionMode::Sequential => run_sequential(ctx, strategies),
-            ExecutionMode::TreeSearch { max_depth, .. } => {
-                run_tree_search(ctx, strategies, max_depth)
-            }
-            ExecutionMode::DivideAndConquer { max_depth } => {
-                run_divide_and_conquer(ctx, strategies, max_depth)
+        // ── Pre-cascade: complexity-explosion gate ─────────────────────────
+        // Check before the cascade so we can short-circuit directly to
+        // FallbackRunner when the expression is too large to solve symbolically.
+        if ctx.fallback.numerical {
+            if let Some(threshold) = ctx.fallback.complexity_threshold {
+                let actual = node_count(&ctx.expr);
+                if actual > threshold {
+                    let trigger = FallbackTrigger::ComplexityExplosion {
+                        actual_nodes: actual,
+                        threshold_nodes: threshold,
+                    };
+                    if let Some(result) = FallbackRunner::run(&ctx, trigger) {
+                        return result;
+                    }
+                    // No evaluator handled it — fall through to symbolic cascade.
+                }
             }
         }
+
+        // ── Symbolic cascade ───────────────────────────────────────────────
+        let cascade_result = match mode {
+            ExecutionMode::Sequential => run_sequential(ctx.fork(), strategies),
+            ExecutionMode::TreeSearch { max_depth, .. } => {
+                run_tree_search(ctx.fork(), strategies, max_depth)
+            }
+            ExecutionMode::DivideAndConquer { max_depth } => {
+                run_divide_and_conquer(ctx.fork(), strategies, max_depth)
+            }
+        };
+
+        // ── Post-cascade: numerical fallback ───────────────────────────────
+        // Only attempted when opt-in; never on hard-stop results.
+        if !ctx.fallback.numerical {
+            return cascade_result;
+        }
+
+        let trigger = match &cascade_result {
+            // Hard success — no fallback needed.
+            StrategyResult::Solved { .. } => return cascade_result,
+            // Certified impossible — symbolic proof is authoritative; skip fallback.
+            StrategyResult::ProvenImpossible { .. } => return cascade_result,
+            // Structural error — cannot recover numerically.
+            StrategyResult::Failed(FailureReason::StructuralError(_)) => return cascade_result,
+
+            // All strategies tried and none succeeded.
+            StrategyResult::Failed(reason) => FallbackTrigger::StrategyExhaustion {
+                strategies_attempted: strategies.len(),
+                last_reason: reason.clone(),
+            },
+
+            // Partial — all strategies tried but only partial progress.
+            StrategyResult::Partial { .. } => FallbackTrigger::StrategyExhaustion {
+                strategies_attempted: strategies.len(),
+                last_reason: FailureReason::NotApplicable,
+            },
+
+            // NeedsResource — budget was the limiting factor.
+            StrategyResult::NeedsResource(_) => FallbackTrigger::ResourceBudgetExceeded {
+                status: ResourceStatus::Exceeded,
+            },
+
+            // Branch/Decompose at the top level means the cascade returned
+            // without resolving; treat as exhaustion.
+            StrategyResult::Branch(_) | StrategyResult::Decompose { .. } => {
+                FallbackTrigger::StrategyExhaustion {
+                    strategies_attempted: strategies.len(),
+                    last_reason: FailureReason::NotApplicable,
+                }
+            }
+        };
+
+        FallbackRunner::run(&ctx, trigger).unwrap_or(cascade_result)
     }
 }
 
@@ -298,6 +370,181 @@ fn run_divide_and_conquer(
                     })
                     .collect::<Option<Vec<_>>>()
                     .unwrap_or_default();
+                if sub_results.is_empty() {
+                    continue;
+                }
+                let merged = merger(sub_results);
+                match merged {
+                    StrategyResult::Solved { .. } => return merged,
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+    StrategyResult::Failed(FailureReason::NotApplicable)
+}
+
+// ── RayonRunner (rayon feature only) ─────────────────────────────────────────
+
+/// A strategy runner that explores branches concurrently using rayon's
+/// thread pool, bounded by a [`ResourceGate`] to cap parallelism.
+///
+/// Falls back to sequential execution for branches that cannot acquire a
+/// gate slot, so correctness is preserved regardless of concurrency level.
+#[cfg(feature = "rayon")]
+pub struct RayonRunner {
+    /// Limits the number of concurrently active parallel branches.
+    pub gate: ResourceGate,
+}
+
+#[cfg(feature = "rayon")]
+impl RayonRunner {
+    /// Create a runner allowing at most `max_parallel` concurrent branches.
+    #[must_use]
+    pub fn new(max_parallel: usize) -> Self {
+        RayonRunner {
+            gate: ResourceGate::new(max_parallel),
+        }
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl StrategyRunner for RayonRunner {
+    fn run(
+        &self,
+        ctx: SolveContext,
+        strategies: &[Box<dyn Strategy>],
+        mode: ExecutionMode,
+    ) -> StrategyResult {
+        match mode {
+            ExecutionMode::Sequential => run_sequential(ctx, strategies),
+            ExecutionMode::TreeSearch { max_depth, .. } => {
+                run_tree_search_parallel(ctx, strategies, max_depth, &self.gate)
+            }
+            ExecutionMode::DivideAndConquer { max_depth } => {
+                run_divide_and_conquer_parallel(ctx, strategies, max_depth, &self.gate)
+            }
+        }
+    }
+}
+
+#[cfg(feature = "rayon")]
+fn run_tree_search_parallel(
+    ctx: SolveContext,
+    strategies: &[Box<dyn Strategy>],
+    max_depth: u32,
+    gate: &ResourceGate,
+) -> StrategyResult {
+    if max_depth == 0 {
+        return StrategyResult::Failed(FailureReason::NoClosedForm);
+    }
+
+    let mut candidates: Vec<(usize, f64)> = strategies
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.applicable(&ctx))
+        .map(|(i, s)| (i, s.priority(&ctx)))
+        .collect();
+    candidates.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    if candidates.len() < 2 {
+        // Single or zero candidates — sequential is optimal.
+        return run_tree_search(ctx, strategies, max_depth);
+    }
+
+    // Try to acquire a gate slot for parallel execution.
+    let _guard = gate.acquire();
+    if _guard.is_some() {
+        // Use rayon::join for the first two candidates, then fold the rest.
+        let (first_idx, _) = candidates[0];
+        let (second_idx, _) = candidates[1];
+        let ctx1 = ctx.fork();
+        let ctx2 = ctx.fork();
+        let s1 = &strategies[first_idx];
+        let s2 = &strategies[second_idx];
+        let (r1, r2) = rayon::join(|| s1.apply(ctx1), || s2.apply(ctx2));
+        // Return the first success; otherwise fall through to sequential.
+        for result in [r1, r2] {
+            match result {
+                StrategyResult::Solved { .. } | StrategyResult::ProvenImpossible { .. } => {
+                    return result
+                }
+                StrategyResult::Failed(FailureReason::StructuralError(_)) => return result,
+                _ => {}
+            }
+        }
+        // Remaining candidates — sequential.
+        for (idx, _) in candidates.iter().skip(2) {
+            let result = strategies[*idx].apply(ctx.fork());
+            match result {
+                StrategyResult::Solved { .. } | StrategyResult::ProvenImpossible { .. } => {
+                    return result
+                }
+                StrategyResult::Failed(FailureReason::StructuralError(_)) => return result,
+                _ => {}
+            }
+        }
+        StrategyResult::Failed(FailureReason::NotApplicable)
+    } else {
+        run_tree_search(ctx, strategies, max_depth)
+    }
+}
+
+#[cfg(feature = "rayon")]
+fn run_divide_and_conquer_parallel(
+    ctx: SolveContext,
+    strategies: &[Box<dyn Strategy>],
+    max_depth: u32,
+    gate: &ResourceGate,
+) -> StrategyResult {
+    let mut candidates: Vec<(usize, f64)> = strategies
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.applicable(&ctx))
+        .map(|(i, s)| (i, s.priority(&ctx)))
+        .collect();
+    candidates.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    for (idx, _) in candidates {
+        let strategy = &strategies[idx];
+        let fork = ctx.fork();
+        let result = strategy.apply(fork);
+        match result {
+            StrategyResult::Solved { .. } => return result,
+            StrategyResult::ProvenImpossible { .. } => return result,
+            StrategyResult::Failed(FailureReason::StructuralError(_)) => return result,
+            StrategyResult::Decompose { parts, merger } => {
+                if max_depth == 0 {
+                    continue;
+                }
+                let _guard = gate.acquire();
+                let sub_results: Vec<Arc<Expr>> = if _guard.is_some() {
+                    use rayon::prelude::*;
+                    parts
+                        .into_par_iter()
+                        .map(|sp| {
+                            let sub = run_divide_and_conquer(sp.context, strategies, max_depth - 1);
+                            match sub {
+                                StrategyResult::Solved { expr, .. } => Some(expr),
+                                _ => None,
+                            }
+                        })
+                        .collect::<Option<Vec<_>>>()
+                        .unwrap_or_default()
+                } else {
+                    parts
+                        .into_iter()
+                        .map(|sp| {
+                            let sub = run_divide_and_conquer(sp.context, strategies, max_depth - 1);
+                            match sub {
+                                StrategyResult::Solved { expr, .. } => Some(expr),
+                                _ => None,
+                            }
+                        })
+                        .collect::<Option<Vec<_>>>()
+                        .unwrap_or_default()
+                };
                 if sub_results.is_empty() {
                     continue;
                 }
@@ -623,6 +870,228 @@ mod tests {
         assert!(
             matches!(result, StrategyResult::Partial { .. }),
             "Expected Partial as best result"
+        );
+    }
+
+    // ── RayonRunner tests (rayon feature only) ────────────────────────────────
+
+    #[cfg(feature = "rayon")]
+    #[test]
+    fn fast_rayon_runner_sequential_mode_finds_solution() {
+        let runner = RayonRunner::new(4);
+        let strategies: Vec<Box<dyn Strategy>> = vec![
+            Box::new(FailStrategy { priority: 0.0 }),
+            Box::new(SolveStrategy {
+                priority: 1.0,
+                value: 77,
+            }),
+        ];
+        let result = runner.run(base_ctx(), &strategies, ExecutionMode::Sequential);
+        assert!(
+            matches!(result, StrategyResult::Solved { .. }),
+            "Expected Solved"
+        );
+    }
+
+    #[cfg(feature = "rayon")]
+    #[test]
+    fn fast_rayon_runner_tree_search_finds_solution() {
+        let runner = RayonRunner::new(4);
+        let strategies: Vec<Box<dyn Strategy>> = vec![
+            Box::new(SolveStrategy {
+                priority: 1.0,
+                value: 42,
+            }),
+            Box::new(FailStrategy { priority: 2.0 }),
+        ];
+        let result = runner.run(
+            base_ctx(),
+            &strategies,
+            ExecutionMode::TreeSearch {
+                max_depth: 2,
+                comparison: crate::engine::mode::TreeComparison::FirstSuccess,
+            },
+        );
+        assert!(
+            matches!(result, StrategyResult::Solved { .. }),
+            "Expected Solved from parallel tree search"
+        );
+    }
+
+    #[cfg(feature = "rayon")]
+    #[test]
+    fn fast_rayon_runner_zero_depth_tree_search_returns_no_closed_form() {
+        let runner = RayonRunner::new(4);
+        let strategies: Vec<Box<dyn Strategy>> = vec![Box::new(SolveStrategy {
+            priority: 0.0,
+            value: 1,
+        })];
+        let result = runner.run(
+            base_ctx(),
+            &strategies,
+            ExecutionMode::TreeSearch {
+                max_depth: 0,
+                comparison: crate::engine::mode::TreeComparison::FirstSuccess,
+            },
+        );
+        assert!(
+            matches!(result, StrategyResult::Failed(FailureReason::NoClosedForm)),
+            "Expected NoClosedForm at depth 0"
+        );
+    }
+
+    #[cfg(feature = "rayon")]
+    #[test]
+    fn fast_rayon_gate_acquire_and_release() {
+        use crate::engine::resource::ResourceGate;
+        let gate = ResourceGate::new(2);
+        let g1 = gate.acquire();
+        let g2 = gate.acquire();
+        assert!(g1.is_some());
+        assert!(g2.is_some());
+        assert_eq!(gate.active_count(), 2);
+        // Gate is at capacity — third acquire must fail.
+        assert!(gate.acquire().is_none());
+        drop(g1);
+        assert_eq!(gate.active_count(), 1);
+        // Slot released — can acquire again.
+        assert!(gate.acquire().is_some());
+    }
+
+    // ── Fallback integration tests ────────────────────────────────────────────
+
+    use crate::engine::fallback::testutils::{MockNumericalEvaluator, MockOutcome};
+    use crate::engine::fallback::{FallbackConfig, NumericalEvaluatorRegistry};
+
+    fn ctx_with_fallback() -> SolveContext {
+        SolveContext::new(int_expr(1), ResourceBudget::unlimited())
+            .with_fallback(FallbackConfig::enabled())
+    }
+
+    fn reg_with_success() -> NumericalEvaluatorRegistry {
+        let reg = NumericalEvaluatorRegistry::new();
+        reg.register(Arc::new(MockNumericalEvaluator::new(
+            "runner_test_success",
+            0.5,
+            MockOutcome::Success {
+                digits: 15,
+                approximate: true,
+            },
+        )));
+        reg
+    }
+
+    /// Verify that when fallback is disabled (default), cascade failure is
+    /// returned as-is — no fallback attempted.
+    #[test]
+    fn fast_runner_fallback_disabled_returns_cascade_failure() {
+        let runner = SequentialRunner;
+        // Default context has fallback disabled.
+        let strategies: Vec<Box<dyn Strategy>> = vec![Box::new(FailStrategy { priority: 0.0 })];
+        let result = runner.run(base_ctx(), &strategies, ExecutionMode::Sequential);
+        assert!(
+            matches!(result, StrategyResult::Failed(FailureReason::NotApplicable)),
+            "fallback disabled: cascade failure must be returned unchanged"
+        );
+    }
+
+    /// When fallback is enabled and the cascade succeeds, no fallback is
+    /// invoked — the cascade result is returned directly.
+    #[test]
+    fn fast_runner_fallback_not_invoked_when_cascade_succeeds() {
+        let runner = SequentialRunner;
+        let strategies: Vec<Box<dyn Strategy>> = vec![Box::new(SolveStrategy {
+            priority: 0.0,
+            value: 99,
+        })];
+        let result = runner.run(ctx_with_fallback(), &strategies, ExecutionMode::Sequential);
+        match result {
+            StrategyResult::Solved { expr, .. } => {
+                if let Expr::Integer(n) = &*expr {
+                    assert_eq!(n.to_i64(), Some(99), "cascade result must be unchanged");
+                } else {
+                    panic!("expected integer");
+                }
+            }
+            other => panic!("expected Solved, got {:?}", other),
+        }
+    }
+
+    /// When fallback is enabled and the cascade exhausts all strategies,
+    /// `FallbackRunner::run_with_registry` with a success mock produces Solved.
+    #[test]
+    fn fast_runner_fallback_invoked_after_cascade_exhaustion() {
+        use crate::engine::fallback::runner::FallbackRunner;
+        use crate::engine::fallback::trigger::FallbackTrigger;
+
+        let reg = reg_with_success();
+        let ctx = ctx_with_fallback();
+        let trigger = FallbackTrigger::StrategyExhaustion {
+            strategies_attempted: 1,
+            last_reason: FailureReason::NotApplicable,
+        };
+        let result = FallbackRunner::run_with_registry(&ctx, trigger, &reg);
+        assert!(
+            result.is_some(),
+            "fallback should produce Solved when an evaluator succeeds"
+        );
+        assert!(matches!(result.unwrap(), StrategyResult::Solved { .. }));
+    }
+
+    /// When fallback is enabled but the registry is empty, the original
+    /// cascade failure is returned.
+    #[test]
+    fn fast_runner_fallback_empty_registry_returns_cascade_result() {
+        use crate::engine::fallback::runner::FallbackRunner;
+        use crate::engine::fallback::trigger::FallbackTrigger;
+
+        let reg = NumericalEvaluatorRegistry::new(); // empty
+        let ctx = ctx_with_fallback();
+        let trigger = FallbackTrigger::StrategyExhaustion {
+            strategies_attempted: 0,
+            last_reason: FailureReason::NotApplicable,
+        };
+        let result = FallbackRunner::run_with_registry(&ctx, trigger, &reg);
+        assert!(result.is_none(), "empty registry must return None");
+    }
+
+    /// Pre-cascade complexity gate: when `complexity_threshold` is set and the
+    /// expression exceeds it, `FallbackRunner::run_with_registry` is the right
+    /// path — verified directly to avoid global-registry side effects.
+    #[test]
+    fn fast_runner_fallback_complexity_gate_triggers_on_threshold_exceeded() {
+        use crate::engine::fallback::runner::FallbackRunner;
+        use crate::engine::fallback::trigger::FallbackTrigger;
+
+        let reg = reg_with_success();
+        let ctx = SolveContext::new(int_expr(1), ResourceBudget::unlimited()).with_fallback(
+            FallbackConfig {
+                numerical: true,
+                numerical_narrative: true,
+                complexity_threshold: Some(0), // threshold=0: always exceeded
+            },
+        );
+        let trigger = FallbackTrigger::ComplexityExplosion {
+            actual_nodes: 1,
+            threshold_nodes: 0,
+        };
+        let result = FallbackRunner::run_with_registry(&ctx, trigger, &reg);
+        assert!(
+            result.is_some(),
+            "complexity-gate path should invoke FallbackRunner successfully"
+        );
+    }
+
+    /// ProvenImpossible from the cascade is never overridden by fallback.
+    #[test]
+    fn fast_runner_fallback_proven_impossible_not_overridden() {
+        let runner = SequentialRunner;
+        // Even with fallback enabled, ProvenImpossible is authoritative.
+        let strategies: Vec<Box<dyn Strategy>> = vec![Box::new(ImpossibleStrategy)];
+        let result = runner.run(ctx_with_fallback(), &strategies, ExecutionMode::Sequential);
+        assert!(
+            matches!(result, StrategyResult::ProvenImpossible { .. }),
+            "ProvenImpossible must not be overridden by fallback"
         );
     }
 }
