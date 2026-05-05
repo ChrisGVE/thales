@@ -389,17 +389,25 @@
 #![allow(clippy::missing_panics_doc)]
 
 // Public module exports
+pub mod api;
+pub mod engine;
 pub mod approximations;
 pub mod ast;
+pub mod calculus;
+pub mod differential_geometry;
 pub mod dimensions;
 pub mod equation_system;
+pub mod error;
 pub mod fourier;
+pub mod geometry;
 pub mod inequality;
+pub mod integral_transforms;
 pub mod integration;
 pub mod latex;
 pub mod limits;
 pub mod mathlex_bridge;
 pub mod matrix;
+pub mod numeric;
 pub mod numerical;
 pub mod ode;
 pub mod ode_higher;
@@ -408,9 +416,7 @@ pub mod parser;
 pub mod partial_fractions;
 pub mod pattern;
 pub mod precision;
-pub mod resolution_path;
 pub mod runge_kutta;
-pub mod series;
 pub mod simplification_rules;
 pub mod solver;
 pub mod special;
@@ -420,6 +426,9 @@ pub mod trigonometric;
 // User guides for common workflows
 pub mod guides;
 
+// Optional domain extensions (conditionally compiled)
+pub mod extensions;
+
 // LAPACK-accelerated linear algebra (conditionally compiled)
 #[cfg(feature = "lapack")]
 pub mod lapack;
@@ -427,6 +436,9 @@ pub mod lapack;
 // FFI module (conditionally compiled for FFI builds)
 #[cfg(feature = "ffi")]
 pub mod ffi;
+
+// Re-export unified error type
+pub use error::ThalesError;
 
 // Re-export commonly used types at crate root for convenience
 pub use approximations::{
@@ -464,17 +476,20 @@ pub use equation_system::{
     NonlinearSystemSolverResult,
     ODEInfo,
     SmartNonlinearSystemSolver,
+    SmartSystemSolver,
     SolutionStrategy,
     SolutionValue,
     SolveMethod,
     SolveStep,
     SolverConfig,
     StepResult,
+    SubstitutionSolver,
     SystemContext,
     SystemError,
     SystemOperation,
     SystemResolutionPath,
     SystemStep,
+    SystemType,
 };
 pub use fourier::{fourier_series, FourierSeries, FourierSeriesError, FourierSeriesResult};
 pub use inequality::{
@@ -486,13 +501,18 @@ pub use integration::{
     integrate_by_substitution, integrate_with_substitution, numerical_integrate,
     tabular_integration, IntegrationError,
 };
-pub use latex::{parse_latex, parse_latex_equation};
+pub use latex::{
+    parse_latex, parse_latex_equation, parse_latex_equation_to_expr, parse_latex_to_expr,
+};
 pub use matrix::{BracketStyle, MatrixError, MatrixExpr};
+pub use numeric::trace::{Step, TechniqueDifficulty, TechniqueTag, Trace};
 pub use numerical::{
-    BisectionMethod, BrentsMethod, NewtonRaphson, NumericalConfig, NumericalError, NumericalResult,
-    NumericalSolution, SmartNumericalSolver,
+    optimize_constrained, BisectionMethod, BrentsMethod, LagrangianResult, LagrangianSolver,
+    NewtonRaphson, NumericalConfig, NumericalError, NumericalResult, NumericalSolution,
+    OptimizationType, SmartNumericalSolver,
 };
 pub use ode::{
+    builder::{first_order_ode, second_order_homogeneous, ODEBuilder},
     solve_characteristic_equation, solve_ivp, solve_linear, solve_second_order_homogeneous,
     solve_second_order_ivp, solve_separable, CharacteristicRoots, FirstOrderODE, ODEError,
     ODESolution, RootType, SecondOrderODE, SecondOrderSolution,
@@ -502,54 +522,19 @@ pub use optimization::{
     track_precision, ComputationStep, ManualStep, MultiplicativeChain, OperationConfig,
     OperationType, PrecisionReport, StepOperand,
 };
-pub use parser::{parse_equation, parse_equation_system, parse_expression};
+pub use parser::{
+    parse_equation, parse_equation_system, parse_equation_system_to_expr, parse_equation_to_expr,
+    parse_expression, parse_to_expr,
+};
 pub use partial_fractions::{
     decompose, is_polynomial, is_rational_function, DecomposeError, PartialFractionResult,
     PartialFractionTerm,
 };
 pub use precision::{EvalContext, EvalError, PrecisionMode, RoundingMode, Value};
-pub use resolution_path::{
-    Operation, OperationCounts, PathStatistics, ResolutionPath, ResolutionPathBuilder,
-    ResolutionStep, Verbosity,
+pub use solver::{
+    LinearSystem, SmartSolver, Solution, Solver, SymbolicFailureReason, SystemSolution,
+    SystemSolver,
 };
-pub use series::{
-    arctan_series,
-    asymptotic,
-    binomial_series,
-    // Series arithmetic (composition and reversion)
-    compose_series,
-    compute_nth_derivative,
-    cos_series,
-    evaluate_at,
-    exp_series,
-    factorial,
-    factorial_expr,
-    find_singularities,
-    laurent,
-    limit_via_asymptotic,
-    ln_1_plus_x_series,
-    maclaurin,
-    pole_order,
-    residue,
-    reversion,
-    sin_series,
-    taylor,
-    // Asymptotic expansions
-    AsymptoticDirection,
-    AsymptoticSeries,
-    AsymptoticTerm,
-    BigO,
-    // Laurent series support
-    LaurentSeries,
-    RemainderTerm,
-    Series,
-    SeriesError,
-    SeriesResult,
-    SeriesTerm,
-    Singularity,
-    SingularityType,
-};
-pub use solver::{LinearSystem, SmartSolver, Solution, Solver, SystemSolution, SystemSolver};
 pub use special::{beta, erf, erfc, gamma, SpecialFunctionError, SpecialFunctionResult};
 pub use transforms::{
     Cartesian2D, Cartesian3D, ComplexOps, Cylindrical, Polar, Spherical, Transform2D,
@@ -577,213 +562,6 @@ pub fn has_ffi_support() -> bool {
     cfg!(feature = "ffi")
 }
 
-/// Unified error type for the thales library.
-///
-/// This enum provides a single error type that encompasses all possible errors
-/// that can occur within the library. It wraps error types from individual modules,
-/// allowing for consistent error handling across the entire library.
-///
-/// # Design
-///
-/// The `#[non_exhaustive]` attribute allows future versions to add new error variants
-/// without breaking existing code. Users should always include a wildcard match arm
-/// when matching on this type.
-///
-/// # Examples
-///
-/// ```rust
-/// use thales::{ThalesError, parse_expression};
-///
-/// match parse_expression("2 + x") {
-///     Ok(expr) => println!("Parsed: {:?}", expr),
-///     Err(errors) => {
-///         // parse_expression returns Vec<ParseError>, not ThalesError
-///         println!("Parse errors: {:?}", errors);
-///     }
-/// }
-/// ```
-///
-/// Future usage with unified error handling:
-///
-/// ```rust,ignore
-/// use thales::ThalesError;
-///
-/// fn process() -> Result<(), ThalesError> {
-///     // Future API will return ThalesError
-///     Ok(())
-/// }
-/// ```
-#[derive(Debug)]
-#[non_exhaustive]
-pub enum ThalesError {
-    /// Error from the parser module.
-    Parse(parser::ParseError),
-    /// Error from the solver module.
-    Solver(solver::SolverError),
-    /// Error from the series module.
-    Series(series::SeriesError),
-    /// Error from the matrix module.
-    Matrix(matrix::MatrixError),
-    /// Error from the integration module.
-    Integration(integration::IntegrationError),
-    /// Error from the numerical module.
-    Numerical(numerical::NumericalError),
-    /// Error from the limits module.
-    Limits(limits::LimitError),
-    /// Error from the ODE module.
-    ODE(ode::ODEError),
-    /// Error from the special functions module.
-    SpecialFunction(special::SpecialFunctionError),
-    /// Error from the inequality module.
-    Inequality(inequality::InequalityError),
-    /// Error from the precision module.
-    Evaluation(precision::EvalError),
-    /// Error from the partial fractions module.
-    PartialFractions(partial_fractions::DecomposeError),
-    /// Error from the LaTeX parser module.
-    LaTeXParse(latex::LaTeXParseError),
-    /// Error from the equation system module.
-    System(equation_system::SystemError),
-    /// Error from the nonlinear system solver.
-    NonlinearSystem(equation_system::NonlinearSystemSolverError),
-}
-
-impl std::fmt::Display for ThalesError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ThalesError::Parse(e) => write!(f, "Parse error: {}", e),
-            ThalesError::Solver(e) => write!(f, "Solver error: {:?}", e),
-            ThalesError::Series(e) => write!(f, "Series error: {}", e),
-            ThalesError::Matrix(e) => write!(f, "Matrix error: {}", e),
-            ThalesError::Integration(e) => write!(f, "Integration error: {}", e),
-            ThalesError::Numerical(e) => write!(f, "Numerical error: {:?}", e),
-            ThalesError::Limits(e) => write!(f, "Limits error: {}", e),
-            ThalesError::ODE(e) => write!(f, "ODE error: {}", e),
-            ThalesError::SpecialFunction(e) => write!(f, "Special function error: {}", e),
-            ThalesError::Inequality(e) => write!(f, "Inequality error: {}", e),
-            ThalesError::Evaluation(e) => write!(f, "Evaluation error: {}", e),
-            ThalesError::PartialFractions(e) => write!(f, "Partial fractions error: {}", e),
-            ThalesError::LaTeXParse(e) => write!(f, "LaTeX parse error: {}", e),
-            ThalesError::System(e) => write!(f, "System error: {:?}", e),
-            ThalesError::NonlinearSystem(e) => write!(f, "Nonlinear system error: {:?}", e),
-        }
-    }
-}
-
-impl std::error::Error for ThalesError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            ThalesError::Parse(e) => Some(e),
-            ThalesError::Series(e) => Some(e),
-            ThalesError::Matrix(e) => Some(e),
-            ThalesError::Integration(e) => Some(e),
-            ThalesError::Limits(e) => Some(e),
-            ThalesError::ODE(e) => Some(e),
-            ThalesError::SpecialFunction(e) => Some(e),
-            ThalesError::Inequality(e) => Some(e),
-            ThalesError::Evaluation(e) => Some(e),
-            ThalesError::PartialFractions(e) => Some(e),
-            ThalesError::LaTeXParse(e) => Some(e),
-            // These error types don't implement std::error::Error
-            ThalesError::Solver(_) => None,
-            ThalesError::Numerical(_) => None,
-            ThalesError::System(_) => None,
-            ThalesError::NonlinearSystem(_) => None,
-        }
-    }
-}
-
-// Implement From conversions for each error type
-impl From<parser::ParseError> for ThalesError {
-    fn from(e: parser::ParseError) -> Self {
-        ThalesError::Parse(e)
-    }
-}
-
-impl From<solver::SolverError> for ThalesError {
-    fn from(e: solver::SolverError) -> Self {
-        ThalesError::Solver(e)
-    }
-}
-
-impl From<series::SeriesError> for ThalesError {
-    fn from(e: series::SeriesError) -> Self {
-        ThalesError::Series(e)
-    }
-}
-
-impl From<matrix::MatrixError> for ThalesError {
-    fn from(e: matrix::MatrixError) -> Self {
-        ThalesError::Matrix(e)
-    }
-}
-
-impl From<integration::IntegrationError> for ThalesError {
-    fn from(e: integration::IntegrationError) -> Self {
-        ThalesError::Integration(e)
-    }
-}
-
-impl From<numerical::NumericalError> for ThalesError {
-    fn from(e: numerical::NumericalError) -> Self {
-        ThalesError::Numerical(e)
-    }
-}
-
-impl From<limits::LimitError> for ThalesError {
-    fn from(e: limits::LimitError) -> Self {
-        ThalesError::Limits(e)
-    }
-}
-
-impl From<ode::ODEError> for ThalesError {
-    fn from(e: ode::ODEError) -> Self {
-        ThalesError::ODE(e)
-    }
-}
-
-impl From<special::SpecialFunctionError> for ThalesError {
-    fn from(e: special::SpecialFunctionError) -> Self {
-        ThalesError::SpecialFunction(e)
-    }
-}
-
-impl From<inequality::InequalityError> for ThalesError {
-    fn from(e: inequality::InequalityError) -> Self {
-        ThalesError::Inequality(e)
-    }
-}
-
-impl From<precision::EvalError> for ThalesError {
-    fn from(e: precision::EvalError) -> Self {
-        ThalesError::Evaluation(e)
-    }
-}
-
-impl From<partial_fractions::DecomposeError> for ThalesError {
-    fn from(e: partial_fractions::DecomposeError) -> Self {
-        ThalesError::PartialFractions(e)
-    }
-}
-
-impl From<latex::LaTeXParseError> for ThalesError {
-    fn from(e: latex::LaTeXParseError) -> Self {
-        ThalesError::LaTeXParse(e)
-    }
-}
-
-impl From<equation_system::SystemError> for ThalesError {
-    fn from(e: equation_system::SystemError) -> Self {
-        ThalesError::System(e)
-    }
-}
-
-impl From<equation_system::NonlinearSystemSolverError> for ThalesError {
-    fn from(e: equation_system::NonlinearSystemSolverError) -> Self {
-        ThalesError::NonlinearSystem(e)
-    }
-}
-
 // TODO: Add prelude module with commonly used imports
 // TODO: Add error types module with unified error handling
 // TODO: Add traits module with common trait definitions
@@ -794,83 +572,3 @@ impl From<equation_system::NonlinearSystemSolverError> for ThalesError {
 // TODO: Add comprehensive integration tests
 // TODO: Add performance benchmarks
 // TODO: Add documentation examples that compile and run
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_thales_error_from_parse_error() {
-        let parse_err = parser::ParseError::UnexpectedCharacter { pos: 0, found: 'x' };
-        let thales_err: ThalesError = parse_err.clone().into();
-
-        match thales_err {
-            ThalesError::Parse(e) => assert_eq!(e, parse_err),
-            _ => panic!("Expected ThalesError::Parse"),
-        }
-    }
-
-    #[test]
-    fn test_thales_error_from_solver_error() {
-        let solver_err = solver::SolverError::NoSolution;
-        let thales_err: ThalesError = solver_err.clone().into();
-
-        match thales_err {
-            ThalesError::Solver(e) => assert_eq!(e, solver_err),
-            _ => panic!("Expected ThalesError::Solver"),
-        }
-    }
-
-    #[test]
-    fn test_thales_error_from_numerical_error() {
-        let num_err = numerical::NumericalError::NoConvergence;
-        let thales_err: ThalesError = num_err.clone().into();
-
-        match thales_err {
-            ThalesError::Numerical(e) => assert_eq!(e, num_err),
-            _ => panic!("Expected ThalesError::Numerical"),
-        }
-    }
-
-    #[test]
-    fn test_thales_error_display() {
-        let solver_err = solver::SolverError::NoSolution;
-        let thales_err: ThalesError = solver_err.into();
-        let display_str = format!("{}", thales_err);
-
-        assert!(display_str.contains("Solver error"));
-        assert!(display_str.contains("NoSolution"));
-    }
-
-    #[test]
-    fn test_thales_error_source() {
-        use std::error::Error;
-
-        let parse_err = parser::ParseError::UnexpectedCharacter { pos: 5, found: '!' };
-        let thales_err: ThalesError = parse_err.into();
-
-        assert!(thales_err.source().is_some());
-    }
-
-    #[test]
-    fn test_thales_error_from_integration_error() {
-        let int_err = integration::IntegrationError::DivisionByZero;
-        let thales_err: ThalesError = int_err.clone().into();
-
-        match thales_err {
-            ThalesError::Integration(e) => assert_eq!(e, int_err),
-            _ => panic!("Expected ThalesError::Integration"),
-        }
-    }
-
-    #[test]
-    fn test_thales_error_from_matrix_error() {
-        let matrix_err = matrix::MatrixError::EmptyMatrix;
-        let thales_err: ThalesError = matrix_err.clone().into();
-
-        match thales_err {
-            ThalesError::Matrix(e) => assert_eq!(e, matrix_err),
-            _ => panic!("Expected ThalesError::Matrix"),
-        }
-    }
-}

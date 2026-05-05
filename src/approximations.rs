@@ -32,7 +32,8 @@
 //! ```
 
 use crate::ast::{BinaryOp, Expression, Function, UnaryOp, Variable};
-use crate::resolution_path::{Operation, ResolutionStep};
+use crate::numeric::compile::compile;
+use crate::numeric::trace::{Step, TechniqueTag};
 use std::collections::HashMap;
 
 /// Result of an approximation with error bounds and validity information.
@@ -370,21 +371,12 @@ pub fn is_approximation_valid(approx_type: &ApproxType, variable_value: f64) -> 
     }
 }
 
-/// Generate a resolution step for an approximation.
+/// Generate a trace step documenting an approximation substitution.
 ///
-/// Creates a `ResolutionStep` documenting the approximation applied, including
-/// the error bound and validity range.
-///
-/// # Arguments
-///
-/// * `original` - The original exact expression
-/// * `approximation` - The approximation expression
-/// * `error_bound` - Conservative upper bound on approximation error
-/// * `formula_used` - Description of the approximation formula
-///
-/// # Returns
-///
-/// A `ResolutionStep` documenting the approximation.
+/// The returned [`Step`] carries the `original` expression as input
+/// and the `approximation` as output (both compiled to `Arc<Expr>`),
+/// tagged [`TechniqueTag::Substitution`]. The error bound and formula
+/// identifier are encoded in the step `detail`.
 ///
 /// # Examples
 ///
@@ -408,21 +400,15 @@ pub fn generate_approximation_step(
     approximation: &Expression,
     error_bound: f64,
     formula_used: String,
-) -> ResolutionStep {
-    let explanation = format!(
+) -> Step {
+    let detail = format!(
         "Apply approximation: {}. Error bound: {:.2e}",
         formula_used, error_bound
     );
 
-    ResolutionStep::new(
-        Operation::ApproximationSubstitution {
-            original: original.clone(),
-            approximation: approximation.clone(),
-            error_bound,
-        },
-        explanation,
-        approximation.clone(),
-    )
+    Step::new(TechniqueTag::Substitution, detail)
+        .with_input(compile(original))
+        .with_output(compile(approximation))
 }
 
 /// Optimize Pythagorean form sqrt(1-x²) based on x magnitude.
@@ -658,8 +644,9 @@ mod tests {
 
         let step = generate_approximation_step(&original, &approx, 1e-5, "sin(θ) ≈ θ".to_string());
 
-        assert!(step.explanation.contains("sin(θ) ≈ θ"));
-        assert!(step.explanation.contains("Error bound"));
-        assert_eq!(step.result, approx);
+        assert!(step.detail.contains("sin(θ) ≈ θ"));
+        assert!(step.detail.contains("Error bound"));
+        assert_eq!(step.tag, TechniqueTag::Substitution);
+        assert!(step.output.is_some());
     }
 }

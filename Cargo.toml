@@ -1,6 +1,6 @@
 [package]
 name = "thales"
-version = "0.4.2"
+version = "0.9.0"
 edition = "2021"
 authors = ["Christian C. Berclaz"]
 license = "MIT"
@@ -16,7 +16,7 @@ readme = "README.md"
 crate-type = ["staticlib", "cdylib", "lib"]
 
 [dependencies]
-mathlex = { version = "0.3.1", features = ["serde"] }
+mathlex = { version = "0.4", features = ["serde"] }
 num = "0.4"
 num-bigint = "0.4"
 num-complex = "0.4"
@@ -36,6 +36,9 @@ lapack = ["dep:nalgebra-lapack"]
 lapack-accelerate = ["lapack", "nalgebra-lapack/accelerate"]
 lapack-netlib = ["lapack", "nalgebra-lapack/netlib"]
 lapack-openblas = ["lapack", "nalgebra-lapack/openblas"]
+# Domain extension features
+vector-calc = []
+number-theory = []
 
 [build-dependencies]
 swift-bridge-build = "0.1"

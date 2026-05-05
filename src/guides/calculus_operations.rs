@@ -485,7 +485,7 @@
 //! - [`crate::limits`]: Limit evaluation and L'Hôpital's rule
 //! - [`crate::ode`]: ODE solvers (first and second order)
 //! - [`crate::numerical`]: Numerical methods for root finding
-//! - [`crate::series`]: Taylor/Maclaurin series expansions
+//! - [`crate::numeric::series`]: Taylor/Maclaurin/Laurent/asymptotic series expansions
 //!
 //! [`Expression`]: crate::ast::Expression
 //! [`Expression::differentiate`]: crate::ast::Expression::differentiate

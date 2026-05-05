@@ -108,6 +108,17 @@ where
     })
 }
 
+/// Output of a completed RK4 system integration.
+#[derive(Debug, Clone)]
+pub struct Rk4SystemSolution {
+    /// Final value of the independent variable.
+    pub x_final: f64,
+    /// Approximated values of y_i at x_final.
+    pub y_final: Vec<f64>,
+    /// All (x, [y_1, ..., y_n]) pairs collected during integration.
+    pub trajectory: Vec<(f64, Vec<f64>)>,
+}
+
 /// Integrate a system of first-order ODEs y' = F(x, y) using RK4.
 ///
 /// The system is supplied as a closure mapping `(x, &[y]) -> Vec<f64>`.
@@ -130,20 +141,20 @@ pub fn rk4_system_solve<F>(
     y0: Vec<f64>,
     x_end: f64,
     steps: usize,
-) -> Result<Vec<f64>, ODEError>
+) -> Result<Rk4SystemSolution, ODEError>
 where
     F: Fn(f64, &[f64]) -> Vec<f64>,
 {
     if steps == 0 {
-        return Err(ODEError::CannotSolve(
-            "RK4 requires at least one step".to_string(),
-        ));
+        return Err(ODEError::CannotSolve("steps must be ≥ 1".into()));
     }
 
     let n = y0.len();
     let h = (x_end - x0) / steps as f64;
     let mut x = x0;
-    let mut y = y0;
+    let mut y = y0.clone();
+    let mut trajectory = Vec::with_capacity(steps + 1);
+    trajectory.push((x, y.clone()));
 
     for _ in 0..steps {
         let k1 = f(x, &y);
@@ -175,10 +186,14 @@ where
             .map(|(i, yi)| yi + h * (k1[i] + 2.0 * k2[i] + 2.0 * k3[i] + k4[i]) / 6.0)
             .collect();
         x += h;
+        trajectory.push((x, y.clone()));
     }
 
-    let _ = x; // x == x_end after all steps
-    Ok(y)
+    Ok(Rk4SystemSolution {
+        x_final: x,
+        y_final: y,
+        trajectory,
+    })
 }
 
 /// Check that a system output has the expected dimension.
@@ -233,7 +248,7 @@ mod tests {
         // Convert y'' + y = 0 to system:
         //   u0' = u1,  u1' = -u0
         // Initial: u0(0) = 1, u1(0) = 0  =>  u0 = cos(x)
-        let y_final = rk4_system_solve(
+        let sol = rk4_system_solve(
             |_x, u| vec![u[1], -u[0]],
             0.0,
             vec![1.0, 0.0],
@@ -242,7 +257,32 @@ mod tests {
         )
         .unwrap();
         // cos(π) = -1
-        assert!((y_final[0] - (-1.0)).abs() < 1e-6);
+        assert!((sol.y_final[0] - (-1.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_rk4_system_harmonic_oscillator() {
+        // y' = [y2, -y1], y(0) = [1, 0]  =>  y1 = cos(t), y2 = -sin(t)
+        // At t = π: y1 = cos(π) = -1, y2 = -sin(π) ≈ 0
+        let sol = rk4_system_solve(
+            |_t, y| vec![y[1], -y[0]],
+            0.0,
+            vec![1.0, 0.0],
+            std::f64::consts::PI,
+            10_000,
+        )
+        .unwrap();
+        assert!((sol.y_final[0] - (-1.0)).abs() < 1e-6, "y1(π) ≈ -1");
+        assert!(sol.y_final[1].abs() < 1e-6, "y2(π) ≈ 0");
+        assert!((sol.x_final - std::f64::consts::PI).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_rk4_system_trajectory_length() {
+        let steps = 50;
+        let sol =
+            rk4_system_solve(|_t, y| vec![y[1], -y[0]], 0.0, vec![1.0, 0.0], 1.0, steps).unwrap();
+        assert_eq!(sol.trajectory.len(), steps + 1);
     }
 
     #[test]

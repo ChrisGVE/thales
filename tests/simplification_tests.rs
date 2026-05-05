@@ -609,27 +609,72 @@ fn test_power_of_power() {
 }
 
 #[test]
-fn test_power_of_power_with_variables() {
-    // (x^a)^b → x^(a*b)
+fn test_power_of_power_with_variables_no_collapse() {
+    // (x^a)^b must NOT simplify to x^(a*b) when `a` is non-integer.
+    // The identity (x^a)^b = x^(a*b) is only valid for integer `a`;
+    // e.g. ((-1)^2)^(1/2) = 1, but (-1)^(2*1/2) = (-1)^1 = -1.
     let x = Expression::Variable(Variable::new("x"));
     let a = Expression::Variable(Variable::new("a"));
     let b = Expression::Variable(Variable::new("b"));
     let x_to_a = Expression::Power(Box::new(x.clone()), Box::new(a.clone()));
-    let power_of_power = Expression::Power(Box::new(x_to_a), Box::new(b.clone()));
+    let power_of_power = Expression::Power(Box::new(x_to_a.clone()), Box::new(b.clone()));
 
     let simplified = power_of_power.simplify();
 
-    if let Expression::Power(base, exp) = simplified {
-        assert_eq!(*base, x);
-        // exp should be a * b
-        if let Expression::Binary(BinaryOp::Mul, left, right) = *exp {
-            assert_eq!(*left, a);
-            assert_eq!(*right, b);
-        } else {
-            panic!("Expected Binary Mul for exponent, got {:?}", exp);
-        }
+    // Should remain as (x^a)^b — not collapsed
+    if let Expression::Power(base, exp) = &simplified {
+        assert_eq!(**exp, b);
+        assert_eq!(**base, x_to_a);
     } else {
-        panic!("Expected Power, got {:?}", simplified);
+        panic!("Expected Power((x^a), b), got {:?}", simplified);
+    }
+}
+
+#[test]
+fn test_power_of_power_integer_exponent_still_collapses() {
+    // (x^3)^2 → x^6 — integer inner exponent, safe to collapse
+    let x = Expression::Variable(Variable::new("x"));
+    let x_cubed = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(3)));
+    let result = Expression::Power(Box::new(x_cubed), Box::new(Expression::Integer(2))).simplify();
+
+    if let Expression::Power(base, exp) = result {
+        assert_eq!(*base, x);
+        assert_eq!(*exp, Expression::Integer(6));
+    } else {
+        panic!("Expected x^6, got {:?}", result);
+    }
+}
+
+#[test]
+fn test_power_of_power_fractional_exponent_blocked() {
+    // (x^(1/2))^2 should NOT simplify to x^1 via power-of-power rule,
+    // because inner exponent 1/2 is not integer.
+    let x = Expression::Variable(Variable::new("x"));
+    let half = Expression::Rational(num_rational::Rational64::new(1, 2));
+    let x_sqrt = Expression::Power(Box::new(x.clone()), Box::new(half.clone()));
+    let result =
+        Expression::Power(Box::new(x_sqrt.clone()), Box::new(Expression::Integer(2))).simplify();
+
+    // Should remain (x^(1/2))^2, not collapse to x
+    if let Expression::Power(base, _) = &result {
+        assert_eq!(**base, x_sqrt);
+    } else {
+        panic!("Expected Power, got {:?}", result);
+    }
+}
+
+#[test]
+fn test_power_of_power_negative_integer_collapses() {
+    // (x^(-2))^3 → x^(-6) — negative integer inner exponent, still safe
+    let x = Expression::Variable(Variable::new("x"));
+    let x_neg2 = Expression::Power(Box::new(x.clone()), Box::new(Expression::Integer(-2)));
+    let result = Expression::Power(Box::new(x_neg2), Box::new(Expression::Integer(3))).simplify();
+
+    if let Expression::Power(base, exp) = result {
+        assert_eq!(*base, x);
+        assert_eq!(*exp, Expression::Integer(-6));
+    } else {
+        panic!("Expected x^(-6), got {:?}", result);
     }
 }
 

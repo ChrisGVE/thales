@@ -67,7 +67,7 @@ fn test_newton_raphson_transcendental() {
     assert!(solution.converged);
     // Verify solution: e^x should equal x + 2
     assert!((solution.value.exp() - (solution.value + 2.0)).abs() < 1e-9);
-    assert!(path.step_count() > 0);
+    assert!(path.len() > 0);
 }
 
 #[test]
@@ -962,4 +962,90 @@ fn test_lm_empty_input() {
     let lm = LevenbergMarquardt::with_default_config();
     let result = lm.solve_least_squares(&[], &[Variable::new("x")]);
     assert!(result.is_err());
+}
+
+// ============================================================================
+// Convergence Info in Resolution Path Tests
+// ============================================================================
+
+#[test]
+fn test_smart_solver_convergence_info_in_path() {
+    use thales::numeric::trace::TechniqueTag;
+    use thales::solver::{SmartSolver, Solver};
+
+    // x + sin(x) = 1 — transcendental equation that forces numerical fallback
+    let equation = Equation::new(
+        "mixed_transcendental",
+        Expression::Binary(
+            BinaryOp::Add,
+            Box::new(Expression::Variable(Variable::new("x"))),
+            Box::new(Expression::Function(
+                Function::Sin,
+                vec![Expression::Variable(Variable::new("x"))],
+            )),
+        ),
+        Expression::Integer(1),
+    );
+
+    let solver = SmartSolver::new();
+    let var = Variable::new("x");
+    let result = solver.solve(&equation, &var);
+
+    if let Ok((_solution, trace)) = result {
+        let has_convergence_step = trace.steps().iter().any(|s| {
+            s.tag == TechniqueTag::NumericalApproximation && s.detail.contains("iterations")
+        });
+        assert!(
+            has_convergence_step,
+            "Trace should contain a NumericalApproximation step with convergence info"
+        );
+    }
+}
+
+#[test]
+fn test_numerical_convergence_step_for_lambert_equation() {
+    use thales::numeric::trace::TechniqueTag;
+    use thales::solver::{SmartSolver, Solver};
+
+    // x*e^x = 1 — Lambert-type equation that needs numerical methods
+    let equation = Equation::new(
+        "lambert_like",
+        Expression::Binary(
+            BinaryOp::Mul,
+            Box::new(Expression::Variable(Variable::new("x"))),
+            Box::new(Expression::Function(
+                Function::Exp,
+                vec![Expression::Variable(Variable::new("x"))],
+            )),
+        ),
+        Expression::Integer(1),
+    );
+
+    let solver = SmartSolver::new();
+    let var = Variable::new("x");
+
+    if let Ok((_solution, trace)) = solver.solve(&equation, &var) {
+        let convergence_steps: Vec<_> = trace
+            .steps()
+            .iter()
+            .filter(|s| {
+                s.tag == TechniqueTag::NumericalApproximation && s.detail.contains("iterations")
+            })
+            .collect();
+
+        assert!(
+            !convergence_steps.is_empty(),
+            "Trace should contain a NumericalApproximation convergence step for Lambert-type equation"
+        );
+
+        let step = convergence_steps[0];
+        assert!(
+            step.detail.contains("iterations"),
+            "Convergence step detail should mention iterations"
+        );
+        assert!(
+            step.detail.contains("error"),
+            "Convergence step detail should mention error"
+        );
+    }
 }

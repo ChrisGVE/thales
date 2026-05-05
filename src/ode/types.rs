@@ -1,0 +1,159 @@
+//! Types for ODE solving.
+
+use std::sync::Arc;
+
+use crate::ast::Expression;
+use crate::integration::IntegrationError;
+use crate::numeric::compile::compile;
+use crate::numeric::{Expr, SymbolId};
+
+use super::first_order::{extract_linear_coefficients, try_separate};
+
+/// Error types for ODE solving
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum ODEError {
+    /// The equation is not in the expected form
+    NotInExpectedForm(String),
+    /// Cannot solve this type of ODE
+    CannotSolve(String),
+    /// Integration failed during solving
+    IntegrationFailed(IntegrationError),
+    /// Initial condition cannot be applied
+    InitialConditionError(String),
+    /// The ODE is not separable
+    NotSeparable,
+    /// The ODE is not linear
+    NotLinear,
+    /// Characteristic equation solving failed
+    CharacteristicEquationError(String),
+    /// Coefficients are not constant (depend on independent variable)
+    NonConstantCoefficients(String),
+    /// Boundary value problem error
+    BoundaryValueError(String),
+    /// Resonance detected in particular solution
+    ResonanceDetected(String),
+    /// System equation count ≠ function count or IC dimension mismatch.
+    SystemDimensionMismatch(String),
+    /// System is not linear with constant coefficients.
+    NotLinearConstantCoefficient(String),
+    /// Eigenvalue/eigenvector computation failed.
+    EigenvalueComputationFailed(String),
+    /// PDE solving not yet supported (v0.12.0).
+    PdeNotSupported,
+}
+
+impl From<IntegrationError> for ODEError {
+    fn from(e: IntegrationError) -> Self {
+        ODEError::IntegrationFailed(e)
+    }
+}
+
+impl std::fmt::Display for ODEError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ODEError::NotInExpectedForm(msg) => write!(f, "ODE not in expected form: {}", msg),
+            ODEError::CannotSolve(msg) => write!(f, "Cannot solve ODE: {}", msg),
+            ODEError::IntegrationFailed(e) => write!(f, "Integration failed: {}", e),
+            ODEError::InitialConditionError(msg) => {
+                write!(f, "Initial condition error: {}", msg)
+            }
+            ODEError::NotSeparable => write!(f, "ODE is not separable"),
+            ODEError::NotLinear => write!(f, "ODE is not first-order linear"),
+            ODEError::CharacteristicEquationError(msg) => {
+                write!(f, "Characteristic equation error: {}", msg)
+            }
+            ODEError::NonConstantCoefficients(msg) => {
+                write!(f, "Non-constant coefficients: {}", msg)
+            }
+            ODEError::BoundaryValueError(msg) => write!(f, "Boundary value error: {}", msg),
+            ODEError::ResonanceDetected(msg) => write!(f, "Resonance detected: {}", msg),
+            ODEError::SystemDimensionMismatch(msg) => {
+                write!(f, "System dimension mismatch: {}", msg)
+            }
+            ODEError::NotLinearConstantCoefficient(msg) => {
+                write!(f, "Not linear with constant coefficients: {}", msg)
+            }
+            ODEError::EigenvalueComputationFailed(msg) => {
+                write!(f, "Eigenvalue computation failed: {}", msg)
+            }
+            ODEError::PdeNotSupported => write!(f, "PDE solving is not yet supported (v0.12.0)"),
+        }
+    }
+}
+
+impl std::error::Error for ODEError {}
+
+/// Represents a first-order ordinary differential equation: dy/dx = f(x, y)
+///
+/// The right-hand side is stored in canonical `Arc<Expr>` form (numeric-engine
+/// representation). Use [`FirstOrderODE::rhs_arc`] for engine-native access.
+#[derive(Debug, Clone)]
+pub struct FirstOrderODE {
+    /// The dependent variable (e.g., "y")
+    pub dependent: String,
+    /// The independent variable (e.g., "x")
+    pub independent: String,
+    rhs: Arc<Expr>,
+}
+
+impl FirstOrderODE {
+    /// Create a new first-order ODE from an `Expression`-typed right-hand side.
+    ///
+    /// The RHS is compiled to canonical `Arc<Expr>` form on construction.
+    ///
+    /// # Arguments
+    ///
+    /// * `dependent` - The dependent variable name (e.g., "y")
+    /// * `independent` - The independent variable name (e.g., "x")
+    /// * `rhs` - The expression f(x, y) such that dy/dx = f(x, y)
+    pub fn new(dependent: &str, independent: &str, rhs: Expression) -> Self {
+        Self::from_arc(dependent, independent, compile(&rhs))
+    }
+
+    /// Create a first-order ODE directly from a pre-compiled `Arc<Expr>` RHS.
+    ///
+    /// Prefer this constructor when the caller already operates in canonical
+    /// form — it avoids a redundant decompile/compile round-trip.
+    #[must_use]
+    pub fn from_arc(dependent: &str, independent: &str, rhs: Arc<Expr>) -> Self {
+        Self {
+            dependent: dependent.to_string(),
+            independent: independent.to_string(),
+            rhs,
+        }
+    }
+
+    /// Check if this ODE is separable (can be written as g(x) * h(y)).
+    pub fn is_separable(&self) -> bool {
+        let x = SymbolId::intern(&self.independent);
+        let y = SymbolId::intern(&self.dependent);
+        try_separate(&self.rhs, x, y).is_some()
+    }
+
+    /// Check if this ODE is first-order linear (dy/dx + P(x)*y = Q(x)).
+    pub fn is_linear(&self) -> bool {
+        let y = SymbolId::intern(&self.dependent);
+        extract_linear_coefficients(&self.rhs, y).is_some()
+    }
+
+    /// Right-hand side as a canonical `Arc<Expr>` (clone of the stored field).
+    ///
+    /// Engine-native accessor. Cheap `Arc::clone`.
+    #[must_use]
+    pub fn rhs_arc(&self) -> Arc<Expr> {
+        Arc::clone(&self.rhs)
+    }
+}
+
+/// Result of solving an ODE
+#[derive(Debug, Clone)]
+pub struct ODESolution {
+    /// The general solution expression (may contain constant C), in
+    /// canonical [`Arc<Expr>`] form. Decompile at the I/O boundary.
+    pub general_solution: Arc<Expr>,
+    /// Description of the solution method used
+    pub method: String,
+    /// Solution steps for educational output
+    pub steps: Vec<String>,
+}

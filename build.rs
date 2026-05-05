@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 fn main() {
     // Rerun if either the bridge definitions or FFI implementations change
-    println!("cargo::rerun-if-changed=src/ffi.rs");
+    println!("cargo::rerun-if-changed=src/ffi/mod.rs");
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
     let bridges = vec!["src/bridge.rs"];

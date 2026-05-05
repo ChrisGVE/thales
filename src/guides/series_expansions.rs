@@ -1,233 +1,76 @@
 //! # Series Expansions Guide
 //!
-//! This guide covers working with power series in thales, including Taylor series,
-//! Maclaurin series, Laurent series for functions with singularities, and asymptotic
-//! expansions for approximating function behavior.
+//! Series-expansion engines live in [`crate::numeric::series`]. The engines
+//! operate on `Arc<Expr>`; callers that start from the public [`Expression`]
+//! type compile at the boundary and decompile the result.
 //!
-//! ## Overview
+//! [`Expression`]: crate::ast::Expression
 //!
-//! The [`crate::series`] module provides comprehensive series expansion capabilities:
+//! ## Engines
 //!
-//! - **Taylor series**: Expand functions around arbitrary center points
-//! - **Maclaurin series**: Special case of Taylor series centered at x=0
-//! - **Laurent series**: Handle functions with poles and singularities
-//! - **Asymptotic expansions**: Approximate behavior as x→∞ or x→0
-//! - **Big-O notation**: Track error terms and convergence
+//! | Engine | Function | Return type |
+//! | ------ | -------- | ----------- |
+//! | Taylor / Maclaurin | [`numeric::series::taylor`] | [`numeric::series::TaylorSeries`] |
+//! | Laurent | [`numeric::series::laurent_expand`] | [`numeric::series::LaurentSeries`] |
+//! | Asymptotic (`x→±∞`, `x→0`) | [`numeric::series::asymptotic`] | [`numeric::series::AsymptoticSeries`] |
+//! | Composition `g(f(x))` | [`numeric::series::compose`] | `TaylorSeries` |
+//! | Lagrange reversion `f⁻¹` | [`numeric::series::revert`] | `TaylorSeries` |
+//! | Singularity / residue | [`numeric::series::residue`], [`numeric::series::classify_singularity`], [`numeric::series::find_singularities`] | — |
+//! | Known standard series | [`numeric::series::sin_series`], [`numeric::series::cos_series`], [`numeric::series::exp_series`], [`numeric::series::ln_series`], [`numeric::series::atan_series`] | `TaylorSeries` |
 //!
-//! ## Quick Start: Maclaurin Series
+//! [`numeric::series`]: crate::numeric::series
+//! [`numeric::series::taylor`]: crate::numeric::series::taylor
+//! [`numeric::series::laurent_expand`]: crate::numeric::series::laurent_expand
+//! [`numeric::series::asymptotic`]: crate::numeric::series::asymptotic
+//! [`numeric::series::compose`]: crate::numeric::series::compose
+//! [`numeric::series::revert`]: crate::numeric::series::revert
+//! [`numeric::series::residue`]: crate::numeric::series::residue
+//! [`numeric::series::classify_singularity`]: crate::numeric::series::classify_singularity
+//! [`numeric::series::find_singularities`]: crate::numeric::series::find_singularities
+//! [`numeric::series::TaylorSeries`]: crate::numeric::series::TaylorSeries
+//! [`numeric::series::LaurentSeries`]: crate::numeric::series::LaurentSeries
+//! [`numeric::series::AsymptoticSeries`]: crate::numeric::series::AsymptoticSeries
+//! [`numeric::series::sin_series`]: crate::numeric::series::sin_series
+//! [`numeric::series::cos_series`]: crate::numeric::series::cos_series
+//! [`numeric::series::exp_series`]: crate::numeric::series::exp_series
+//! [`numeric::series::ln_series`]: crate::numeric::series::ln_series
+//! [`numeric::series::atan_series`]: crate::numeric::series::atan_series
 //!
-//! The simplest expansion is a Maclaurin series (Taylor at x=0):
+//! ## Calling pattern
 //!
-//! ```rust,ignore
-//! use thales::{maclaurin, Expression, Variable, Function};
+//! All engines share the same shape — supply an `Arc<Expr>`, a [`SymbolId`]
+//! for the expansion variable, and engine-specific parameters (center,
+//! order, direction). When starting from an `Expression`, compile at the
+//! entry and decompile for display:
 //!
-//! let x = Variable::new("x");
-//! let expr = Expression::Function(
-//!     Function::Exp,
-//!     vec![Expression::Variable(x.clone())]
-//! );
-//!
-//! // Expand e^x to 5th order at x=0
-//! let series = maclaurin(&expr, &x, 5).unwrap();
-//!
-//! // Result: 1 + x + x²/2! + x³/3! + x⁴/4! + x⁵/5! + O(x⁶)
-//! println!("{}", series.to_latex());
-//! ```
-//!
-//! ## Taylor Series Around a Point
-//!
-//! For expansions around arbitrary center points a, use [`crate::series::taylor`]:
-//!
-//! ```rust,ignore
-//! use thales::{taylor, Expression, Variable, Function};
-//!
-//! let x = Variable::new("x");
-//! let expr = Expression::Function(
-//!     Function::Ln,
-//!     vec![Expression::Variable(x.clone())]
-//! );
-//!
-//! // Expand ln(x) around x=1 to 4th order
-//! let center = Expression::Integer(1);
-//! let series = taylor(&expr, &x, &center, 4).unwrap();
-//!
-//! // Result: (x-1) - (x-1)²/2 + (x-1)³/3 - (x-1)⁴/4 + O((x-1)⁵)
-//! ```
-//!
-//! **Why use Taylor series?**
-//! - Approximate transcendental functions with polynomials
-//! - Understand function behavior near a point
-//! - Compute derivatives symbolically
-//! - Numerical approximation when exact form unknown
-//!
-//! ## Common Function Expansions
-//!
-//! The [`crate::series`] module provides built-in expansions for standard functions:
+//! [`SymbolId`]: crate::numeric::SymbolId
 //!
 //! ```rust,ignore
-//! use thales::{exp_series, sin_series, cos_series, ln_1_plus_x_series, arctan_series};
+//! use thales::numeric::compile::{compile, decompile};
+//! use thales::numeric::expr::Expr;
+//! use thales::numeric::series::taylor;
+//! use thales::numeric::SymbolId;
+//! use thales::parser::parse_expression;
 //!
-//! // Exponential: e^x = 1 + x + x²/2! + x³/3! + ...
-//! let exp = exp_series(5).unwrap();
-//!
-//! // Sine: sin(x) = x - x³/3! + x⁵/5! - ...
-//! let sine = sin_series(7).unwrap();
-//!
-//! // Cosine: cos(x) = 1 - x²/2! + x⁴/4! - ...
-//! let cosine = cos_series(6).unwrap();
-//!
-//! // Natural log: ln(1+x) = x - x²/2 + x³/3 - x⁴/4 + ...
-//! let log = ln_1_plus_x_series(4).unwrap();
-//!
-//! // Arctangent: arctan(x) = x - x³/3 + x⁵/5 - x⁷/7 + ...
-//! let arctan = arctan_series(9).unwrap();
+//! let parsed = parse_expression("exp(x)").unwrap();
+//! let arc_expr = compile(&parsed);
+//! let var_id = SymbolId::intern("x");
+//! let ts = taylor(&arc_expr, var_id, &Expr::int(0), 5);
+//! let series_expr = decompile(&ts.to_expr());
+//! println!("{}", series_expr);
 //! ```
 //!
-//! ## Laurent Series for Functions with Poles
+//! ## Narrated expansion
 //!
-//! When functions have singularities, Laurent series include negative powers:
+//! All engines accept an optional `&mut Trace` sink. When supplied, each
+//! decision point emits a [`numeric::trace::Step`] tagged with the technique
+//! applied. Callers that only want the computed result pass `None` and
+//! pay no allocation cost.
 //!
-//! ```rust,ignore
-//! use thales::{laurent, Expression, Variable, BinaryOp};
+//! [`numeric::trace::Step`]: crate::numeric::trace::Step
 //!
-//! let x = Variable::new("x");
+//! ## Related modules
 //!
-//! // Expand 1/(x-1) around x=1
-//! let expr = Expression::Binary(
-//!     BinaryOp::Div,
-//!     Box::new(Expression::Integer(1)),
-//!     Box::new(Expression::Binary(
-//!         BinaryOp::Sub,
-//!         Box::new(Expression::Variable(x.clone())),
-//!         Box::new(Expression::Integer(1))
-//!     ))
-//! );
-//!
-//! let center = Expression::Integer(1);
-//! let series = laurent(&expr, &x, &center, -1, 3).unwrap();
-//!
-//! // Result: 1/(x-1) + 0 + 0 + ... (simple pole at x=1)
-//! ```
-//!
-//! **Key concepts:**
-//! - **Principal part**: Terms with negative powers (singular part)
-//! - **Regular part**: Terms with non-negative powers (analytic part)
-//! - **Residue**: Coefficient of the -1 power term
-//! - **Pole order**: Most negative power with non-zero coefficient
-//!
-//! ### Finding Residues
-//!
-//! The residue is critical for complex integration via residue theorem:
-//!
-//! ```rust,ignore
-//! use thales::{residue, Expression, Variable, BinaryOp, Function};
-//!
-//! let x = Variable::new("x");
-//! let expr = Expression::Binary(
-//!     BinaryOp::Div,
-//!     Box::new(Expression::Function(
-//!         Function::Sin,
-//!         vec![Expression::Variable(x.clone())]
-//!     )),
-//!     Box::new(Expression::Variable(x.clone()))
-//! );
-//!
-//! let center = Expression::Integer(0);
-//! let res = residue(&expr, &x, &center).unwrap();
-//! // For sin(x)/x at x=0, residue is 0 (removable singularity)
-//! ```
-//!
-//! ## Asymptotic Expansions
-//!
-//! For behavior as x→∞ or x→0⁺, use [`crate::series::asymptotic`]:
-//!
-//! ```rust,ignore
-//! use thales::{asymptotic, AsymptoticDirection, Expression, Variable, BinaryOp, Function};
-//!
-//! let x = Variable::new("x");
-//!
-//! // Stirling's approximation: ln(n!) ~ n·ln(n) - n as n→∞
-//! let expr = Expression::Function(
-//!     Function::Ln,
-//!     vec![Expression::Variable(x.clone())]
-//! );
-//!
-//! let expansion = asymptotic(&expr, &x, AsymptoticDirection::Infinity, 3).unwrap();
-//!
-//! // Returns expansion with error estimate
-//! println!("Error term: {}", expansion.error_term);
-//! ```
-//!
-//! **Asymptotic directions:**
-//! - [`AsymptoticDirection::Infinity`]: x→∞
-//! - [`AsymptoticDirection::ZeroPlus`]: x→0⁺
-//! - [`AsymptoticDirection::ZeroMinus`]: x→0⁻
-//!
-//! ## Working with Series Terms
-//!
-//! Access individual terms and coefficients:
-//!
-//! ```rust,ignore
-//! use thales::{maclaurin, Expression, Variable, Function};
-//!
-//! let x = Variable::new("x");
-//! let expr = Expression::Function(
-//!     Function::Exp,
-//!     vec![Expression::Variable(x.clone())]
-//! );
-//! let series = maclaurin(&expr, &x, 4).unwrap();
-//!
-//! // Get specific term
-//! if let Some(term) = series.get_term(2) {
-//!     println!("x² coefficient: {}", term.coefficient); // 1/2
-//!     println!("power: {}", term.power); // 2
-//! }
-//!
-//! // Count non-zero terms
-//! println!("Number of terms: {}", series.term_count());
-//!
-//! // Convert to polynomial expression
-//! let poly = series.to_expression();
-//! ```
-//!
-//! ## Convergence and Truncation
-//!
-//! Series approximations have error bounds tracked via Big-O notation:
-//!
-//! ```rust,ignore
-//! use thales::{maclaurin, Expression, Variable, Function, RemainderTerm};
-//!
-//! let x = Variable::new("x");
-//! let expr = Expression::Function(
-//!     Function::Sin,
-//!     vec![Expression::Variable(x.clone())]
-//! );
-//!
-//! let series = maclaurin(&expr, &x, 5).unwrap();
-//!
-//! // Check remainder term
-//! if let Some(remainder) = &series.remainder {
-//!     match remainder {
-//!         RemainderTerm::BigO { order } => {
-//!             println!("Error is O(x^{})", order);
-//!         }
-//!         RemainderTerm::Lagrange { bound, order } => {
-//!             println!("Error ≤ {} for order {}", bound, order);
-//!         }
-//!     }
-//! }
-//! ```
-//!
-//! **Convergence guidelines:**
-//! - Taylor/Maclaurin series converge within radius of convergence
-//! - Higher orders give better accuracy near the center
-//! - For e^x, sin(x), cos(x): infinite radius (converge everywhere)
-//! - For ln(1+x): radius = 1 (converges for |x| < 1)
-//! - For 1/(1-x): radius = 1 (geometric series)
-//!
-//! ## Related Modules
-//!
-//! - [`crate::series`]: Full series expansion API
-//! - [`crate::limits`]: Compute limits using series
-//! - [`crate::calculus_operations`]: Integration and differentiation
-//! - [`crate::numerical`]: Numerical approximation methods
+//! - [`crate::numeric::limits`] — uses series for L'Hôpital / asymptotic limits.
+//! - [`crate::numeric::differentiation`] — symbolic derivatives underpinning Taylor.
+//! - [`crate::numeric::pattern_integrate`] — pattern-based antiderivatives.

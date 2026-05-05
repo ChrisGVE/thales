@@ -24,8 +24,9 @@
 //! ```
 //!
 //! [`SmartSolver`](crate::SmartSolver) automatically detects the equation type and selects the
-//! appropriate solving method. The returned [`ResolutionPath`](crate::ResolutionPath) contains
-//! step-by-step solution details for educational applications.
+//! appropriate solving method. The returned
+//! [`Trace`](crate::numeric::trace::Trace) contains step-by-step solution
+//! details for educational applications.
 //!
 //! ## Understanding Solution Types
 //!

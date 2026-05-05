@@ -76,7 +76,10 @@
 
 use crate::ast::Expression;
 use crate::mathlex_bridge;
+use crate::numeric::compile::compile;
+use crate::numeric::expr::Expr;
 use std::fmt;
+use std::sync::Arc;
 
 /// Error type for LaTeX parsing failures.
 ///
@@ -280,8 +283,8 @@ pub fn parse_latex_equation(input: &str) -> Result<(Expression, Expression), Vec
     // Use mathlex to parse as a LaTeX equation system (single equation)
     let ml_expr = mathlex::parse_latex(input).map_err(|e| vec![convert_mathlex_error(&e)])?;
 
-    match &ml_expr {
-        mathlex::Expression::Equation { left, right } => {
+    match &ml_expr.kind {
+        mathlex::ExprKind::Equation { left, right } => {
             let l = mathlex_bridge::convert_expression(left).map_err(|msg| {
                 vec![LaTeXParseError::InvalidExpression {
                     pos: 0,
@@ -310,6 +313,60 @@ pub fn parse_latex_equation(input: &str) -> Result<(Expression, Expression), Vec
             Ok((left, right))
         }
     }
+}
+
+/// Parse a LaTeX expression directly into the internal CAS [`Expr`] form.
+///
+/// This is the fast-path entry for internal CAS operations on LaTeX input: it
+/// parses via mathlex into a legacy [`Expression`] AST, then compiles into the
+/// canonical [`Expr`] representation.
+///
+/// # Arguments
+///
+/// * `input` - A LaTeX expression string.
+///
+/// # Returns
+///
+/// * `Ok(Arc<Expr>)` - Canonical, normalized internal form.
+/// * `Err(Vec<LaTeXParseError>)` - Parse errors.
+///
+/// # Examples
+///
+/// ```
+/// use thales::latex::parse_latex_to_expr;
+///
+/// let expr = parse_latex_to_expr(r"\frac{x}{2}").unwrap();
+/// ```
+#[must_use = "parsing returns a result that should be used"]
+pub fn parse_latex_to_expr(input: &str) -> Result<Arc<Expr>, Vec<LaTeXParseError>> {
+    let expression = parse_latex(input)?;
+    Ok(compile(&expression))
+}
+
+/// Parse a LaTeX equation directly into a pair of internal [`Expr`] sides.
+///
+/// # Arguments
+///
+/// * `input` - A LaTeX equation string (e.g. `r"x^2 = 4"`).
+///
+/// # Returns
+///
+/// * `Ok((Arc<Expr>, Arc<Expr>))` - Left and right side in canonical form.
+/// * `Err(Vec<LaTeXParseError>)` - Parse errors.
+///
+/// # Examples
+///
+/// ```
+/// use thales::latex::parse_latex_equation_to_expr;
+///
+/// let (left, right) = parse_latex_equation_to_expr(r"x^2 = 4").unwrap();
+/// ```
+#[must_use = "parsing returns a result that should be used"]
+pub fn parse_latex_equation_to_expr(
+    input: &str,
+) -> Result<(Arc<Expr>, Arc<Expr>), Vec<LaTeXParseError>> {
+    let (left, right) = parse_latex_equation(input)?;
+    Ok((compile(&left), compile(&right)))
 }
 
 #[cfg(test)]
@@ -433,12 +490,16 @@ mod tests {
 
     #[test]
     fn test_parse_times() {
+        // \times is a cross product operator in mathlex; the bridge preserves
+        // it as Function::Custom("cross_product") rather than flattening to Mul.
         let expr = parse_latex(r"2 \times 3").unwrap();
-        if let Expression::Binary(BinaryOp::Mul, left, right) = expr {
-            assert!(matches!(*left, Expression::Integer(2)));
-            assert!(matches!(*right, Expression::Integer(3)));
+        if let Expression::Function(Function::Custom(name), args) = &expr {
+            assert_eq!(name, "cross_product");
+            assert_eq!(args.len(), 2);
+            assert!(matches!(args[0], Expression::Integer(2)));
+            assert!(matches!(args[1], Expression::Integer(3)));
         } else {
-            panic!("Expected multiplication");
+            panic!("Expected cross_product function, got {:?}", expr);
         }
     }
 

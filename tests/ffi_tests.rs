@@ -4,27 +4,40 @@
 //! layer work correctly. The FFI functions themselves are tested via Swift
 //! integration tests.
 
-use thales::ast::{Expression, Variable};
+use thales::ast::Expression;
+use thales::numeric::compile::{compile, decompile};
+use thales::numeric::expr::Expr;
+use thales::numeric::series::taylor;
+use thales::numeric::SymbolId;
 use thales::parser::parse_expression;
-use thales::series::{maclaurin, taylor};
 use thales::special::{beta, erf, erfc, gamma};
 
 // =============================================================================
 // Series Expansion Tests
 // =============================================================================
+//
+// These tests mirror what the FFI layer does: parse Expression → compile to
+// Arc<Expr> → call the numeric engine → decompile back to Expression for
+// display. That matches the real code path through `taylor_series_ffi` /
+// `maclaurin_series_ffi`.
+
+fn expand_taylor_expr(src: &str, var_name: &str, center: &Expr, order: usize) -> Expression {
+    let parsed = parse_expression(src).unwrap();
+    let arc_expr = compile(&parsed);
+    let var_id = SymbolId::intern(var_name);
+    let ts = taylor(
+        &arc_expr,
+        var_id,
+        &std::sync::Arc::new(center.clone()),
+        order,
+    );
+    decompile(&ts.to_expr())
+}
 
 #[test]
 fn test_taylor_series_simple_polynomial() {
     // Taylor series of x^2 around x=1 should be 1 + 2(x-1) + (x-1)^2
-    let x = Variable::new("x");
-    let expr = parse_expression("x^2").unwrap();
-    let center = Expression::Float(1.0);
-
-    let result = taylor(&expr, &x, &center, 3);
-    assert!(result.is_ok(), "Taylor series computation should succeed");
-
-    let series = result.unwrap();
-    let series_expr = series.to_expression();
+    let series_expr = expand_taylor_expr("x^2", "x", &Expr::Float(1.0), 3);
     let series_str = format!("{}", series_expr);
     assert!(!series_str.is_empty(), "Series should not be empty");
 }
@@ -32,29 +45,15 @@ fn test_taylor_series_simple_polynomial() {
 #[test]
 fn test_taylor_series_exponential() {
     // Taylor series of e^x around x=0
-    let x = Variable::new("x");
-    let expr = parse_expression("exp(x)").unwrap();
-    let center = Expression::Float(0.0);
-
-    let result = taylor(&expr, &x, &center, 4);
-    assert!(result.is_ok(), "Taylor series of exp(x) should succeed");
-
-    let series = result.unwrap();
-    let series_str = format!("{}", series.to_expression());
+    let series_expr = expand_taylor_expr("exp(x)", "x", &Expr::Integer(0i64.into()), 4);
+    let series_str = format!("{}", series_expr);
     assert!(series_str.contains('x'), "Series should contain variable x");
 }
 
 #[test]
 fn test_maclaurin_series_sin() {
     // Maclaurin series of sin(x)
-    let x = Variable::new("x");
-    let expr = parse_expression("sin(x)").unwrap();
-
-    let result = maclaurin(&expr, &x, 5);
-    assert!(result.is_ok(), "Maclaurin series of sin(x) should succeed");
-
-    let series = result.unwrap();
-    let series_expr = series.to_expression();
+    let series_expr = expand_taylor_expr("sin(x)", "x", &Expr::Integer(0i64.into()), 5);
     assert!(
         !format!("{}", series_expr).is_empty(),
         "Series should not be empty"
@@ -64,14 +63,7 @@ fn test_maclaurin_series_sin() {
 #[test]
 fn test_maclaurin_series_cos() {
     // Maclaurin series of cos(x)
-    let x = Variable::new("x");
-    let expr = parse_expression("cos(x)").unwrap();
-
-    let result = maclaurin(&expr, &x, 5);
-    assert!(result.is_ok(), "Maclaurin series of cos(x) should succeed");
-
-    let series = result.unwrap();
-    let series_expr = series.to_expression();
+    let series_expr = expand_taylor_expr("cos(x)", "x", &Expr::Integer(0i64.into()), 5);
     assert!(
         !format!("{}", series_expr).is_empty(),
         "Series should not be empty"
@@ -81,14 +73,7 @@ fn test_maclaurin_series_cos() {
 #[test]
 fn test_maclaurin_series_simple() {
     // Maclaurin series of x^3 + 2*x
-    let x = Variable::new("x");
-    let expr = parse_expression("x^3 + 2*x").unwrap();
-
-    let result = maclaurin(&expr, &x, 4);
-    assert!(result.is_ok(), "Maclaurin series should succeed");
-
-    let series = result.unwrap();
-    let series_expr = series.to_expression();
+    let series_expr = expand_taylor_expr("x^3 + 2*x", "x", &Expr::Integer(0i64.into()), 4);
     assert!(
         !format!("{}", series_expr).is_empty(),
         "Series should not be empty"
@@ -375,11 +360,7 @@ fn test_erfc_has_derivation_steps() {
 
 #[test]
 fn test_series_latex_output() {
-    let x = Variable::new("x");
-    let expr = parse_expression("x^2").unwrap();
-
-    let series = maclaurin(&expr, &x, 3).unwrap();
-    let series_expr = series.to_expression();
+    let series_expr = expand_taylor_expr("x^2", "x", &Expr::Integer(0i64.into()), 3);
     let latex = series_expr.to_latex();
 
     assert!(!latex.is_empty(), "LaTeX output should not be empty");
@@ -667,7 +648,7 @@ fn test_ode_linear_dy_dx_plus_y_eq_x() {
 fn test_ode_ivp_dy_dx_eq_y_with_y0_eq_1() {
     // dy/dx = y, y(0) = 1  →  particular solution y = exp(x)
     use thales::ast::Expression;
-    use thales::ode::{solve_ivp, FirstOrderODE};
+    use thales::ode::{solve_ivp, verify, FirstOrderODE};
 
     let rhs = parse_expression("y").expect("y must parse");
     let ode = FirstOrderODE::new("y", "x", rhs);
@@ -675,11 +656,10 @@ fn test_ode_ivp_dy_dx_eq_y_with_y0_eq_1() {
     let y0 = Expression::Float(1.0);
 
     let sol = solve_ivp(&ode, &x0, &y0).expect("IVP dy/dx=y, y(0)=1 must be solvable");
-    let sol_str = format!("{}", sol.general_solution);
-    assert!(
-        sol_str.contains("ln") || sol_str.contains("exp"),
-        "Particular solution y(0)=1 should contain ln or exp, got: {sol_str}"
-    );
+
+    // Decision 2b: particular solution must be y-free and satisfy IC at x₀.
+    verify::assert_y_free(&sol.general_solution, "y");
+    verify::assert_ic_satisfied(&sol.general_solution, "x", 0.0, 1.0, 1e-9);
 }
 
 #[test]
@@ -687,7 +667,7 @@ fn test_ode_ivp_dy_dx_eq_neg_y() {
     // dy/dx = -y, y(0) = 2
     // Integration of 1/(-y) is a known limitation of the current integrator.
     use thales::ast::Expression;
-    use thales::ode::{solve_ivp, FirstOrderODE};
+    use thales::ode::{solve_ivp, verify, FirstOrderODE};
 
     let rhs = parse_expression("-y").expect("-y must parse");
     let ode = FirstOrderODE::new("y", "x", rhs);
@@ -695,13 +675,12 @@ fn test_ode_ivp_dy_dx_eq_neg_y() {
     let y0 = Expression::Float(2.0);
 
     let result = solve_ivp(&ode, &x0, &y0);
-    // Accept either a solution or a known integration limitation
+    // Accept either a solution or a known integration limitation.
+    // Decision 2b: when a particular solution is returned, it must be y-free
+    // and satisfy the initial condition.
     if let Ok(sol) = result {
-        let sol_str = format!("{}", sol.general_solution);
-        assert!(
-            !sol_str.is_empty(),
-            "Particular solution should not be empty"
-        );
+        verify::assert_y_free(&sol.general_solution, "y");
+        verify::assert_ic_satisfied(&sol.general_solution, "x", 0.0, 2.0, 1e-9);
     }
     // If Err, that's the known integrator limitation — acceptable
 }
@@ -713,5 +692,57 @@ fn test_ode_unsolvable_returns_error() {
     assert!(
         result.is_err(),
         "dy/dx = y^2 + x^2 should not be solvable by separable/linear methods"
+    );
+}
+
+// =============================================================================
+// execute_json_ffi integration tests
+//
+// These tests exercise the canonical cross-language entry point `execute_json_ffi`
+// (defined in ffi/json_impl.rs), which delegates to `api::json::execute_ffi`.
+// We call the underlying function directly since the ffi feature flag is not
+// enabled in the default test build.
+// =============================================================================
+
+#[test]
+fn execute_json_ffi_simplify() {
+    // Valid JSON simplify request returns a JSON response with a result.
+    let ml = mathlex::parse("x + x").expect("parse x + x");
+    let expr_val = serde_json::to_value(&ml).expect("serialise expr");
+    let payload = serde_json::json!({ "command": {"type": "Simplify", "expr": expr_val} });
+    let req = serde_json::to_string(&payload).unwrap();
+    let resp = thales::api::json::execute_ffi(&req).expect("execute_json_ffi should succeed");
+    let val: serde_json::Value = serde_json::from_str(&resp).expect("response must be valid JSON");
+    assert!(
+        val.get("results").is_some(),
+        "response must contain a 'results' field, got: {val}"
+    );
+}
+
+#[test]
+fn execute_json_ffi_unknown_command() {
+    // An unknown command type returns an error string, not a panic.
+    // Use a well-formed expr object so the failure is due to the unknown type.
+    let ml = mathlex::parse("x").expect("parse x");
+    let expr_val = serde_json::to_value(&ml).expect("serialise expr");
+    let payload = serde_json::json!({ "command": {"type": "DoesNotExist", "expr": expr_val} });
+    let req = serde_json::to_string(&payload).unwrap();
+    let err = thales::api::json::execute_ffi(&req);
+    assert!(
+        err.is_err(),
+        "unknown command must return Err, got: {err:?}"
+    );
+}
+
+#[test]
+fn execute_json_ffi_bad_json() {
+    // Malformed JSON returns an error string describing the parse failure.
+    let req = r#"{not valid json"#;
+    let err = thales::api::json::execute_ffi(req);
+    assert!(err.is_err(), "malformed JSON must return Err, got: {err:?}");
+    let msg = err.unwrap_err();
+    assert!(
+        msg.contains("invalid JSON"),
+        "error message must mention invalid JSON, got: {msg}"
     );
 }

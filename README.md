@@ -28,7 +28,7 @@ A comprehensive Computer Algebra System (CAS) library for symbolic mathematics, 
 
 ```toml
 [dependencies]
-thales = "0.4.2"
+thales = "0.9.0"
 ```
 
 ## Quick Start
@@ -153,6 +153,56 @@ See [IOS_BUILD.md](IOS_BUILD.md) for complete iOS integration instructions.
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
+
+## Roadmap
+
+Feature status by release. Released features are documented in the [Changelog](CHANGELOG.md); planned features are tracked as working designs and may shift before shipping.
+
+### v0.9.0 — current released line
+
+See [CHANGELOG](CHANGELOG.md) for full details. Highlights:
+
+- Single entry point: `execute(Request) → Response` (Rust), `execute_json_ffi(json)` (FFI)
+- JSON wire format uses native mathlex Expression serde (structured objects, not strings)
+- 18 special functions, integral transforms (Laplace, Fourier, Z, Mellin + inverses)
+- Vector calculus with Nabla operator, multi-variable integration, coordinate changes
+- ODE systems, Puiseux/Frobenius/Padé/WKB series, optimization with Lagrange multipliers
+- Structured response model with narrated step-by-step resolution
+
+### v0.10.0 — `units-and-domains` (planned)
+
+Consumes mathlex annotation substrate.
+
+- Unit-aware computation: engines verify dimensional consistency; mismatches emit error-level diagnostics
+- Parallel `UnitTrace` per narrated step (present only when inputs carry unit annotations)
+- Output unit system conversion: mixed input (feet, kg, hours, …) explicitly converted to requested `UnitSystem` (SI / CGS / Imperial / Natural / Custom)
+- Domain-aware simplification consuming mathlex symbol annotations: `√(x²) = |x|` over ℝ, `= x` over ℝ⁺; log domain branching; solver root-set restriction
+- Named constants resolved from mathlex annotations via the `mathcore-units` catalog (preserved symbolically until `SolveMode::Numeric` substitutes values)
+- Quaternion (ℍ) support in the domain qualifier algebra
+
+### v0.11.0 — `interactive-cas` (planned)
+
+CAS-as-environment features.
+
+- Stateful `Session`: bound variables, sticky assumptions, cached prior results
+- Step-back / undo across sessions
+- Alternative-path exploration: side-by-side simplification strategies returned as `Vec<Response>`
+
+### Shared utility crate
+
+**[`mathcore-units`](https://github.com/ChrisGVE/mathcore-units)** (planned, MIT) — Dimensions, units (base and composed, SI / MKS / CGS / Imperial, scale prefixes), and a hand-curated catalog of physical, mathematical, chemical, and astronomy constants sourced from CODATA 2022 and the SI Brochure. Consumed by thales, mathlex, and mathlex-eval. Public-domain values; no GPL dependencies.
+
+### Sister crates (tracked, deferred — no active development)
+
+- **`thales-quantum`** — bra/ket Dirac notation, Hilbert spaces, inner-product semantics, Hermitian conjugate, tensor product, operator algebra (commutators, ladder operators), angular momentum.
+- **`thales-qft`** — Feynman diagrams, perturbative expansion, path integrals, renormalization, field-theoretic correlators.
+- **`thales-GR`** — general relativity: metric tensor, Christoffel symbols, Riemann / Ricci / Einstein tensors, geodesic equation, index operations.
+
+All three depend on the core thales expression engine and `mathcore-units`.
+
+### Upstream dependency
+
+- **[mathlex](https://github.com/ChrisGVE/mathlex)** — annotation substrate (unit / domain / constant / label), parser support for domain notation, dual serialization modes (sidecar and separator-block). Targeting mathlex v0.4.0. Developed in parallel with thales v0.8.1 – v0.10.0.
 
 ## License
 

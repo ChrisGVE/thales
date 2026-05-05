@@ -48,6 +48,20 @@ fn pow(base: Expression, exp: Expression) -> Expression {
     Expression::Power(Box::new(base), Box::new(exp))
 }
 
+fn assert_mul_eq(actual: &Expression, a: &Expression, b: &Expression) {
+    match actual {
+        Expression::Binary(BinaryOp::Mul, left, right) => {
+            let fwd = left.as_ref() == a && right.as_ref() == b;
+            let rev = left.as_ref() == b && right.as_ref() == a;
+            assert!(
+                fwd || rev,
+                "expected Mul({a:?}, {b:?}) in either order, got {actual:?}"
+            );
+        }
+        _ => panic!("expected Mul, got {actual:?}"),
+    }
+}
+
 // ============================================================================
 // LinearSolver Tests
 // ============================================================================
@@ -178,8 +192,7 @@ fn test_force_equation_solve_for_f() {
     let (solution, _path) = result.unwrap();
     match solution {
         thales::solver::Solution::Unique(expr) => {
-            // Should be m * a
-            assert_eq!(expr, mul(var("m"), var("a")));
+            assert_mul_eq(&expr, &var("m"), &var("a"));
         }
         _ => panic!("Expected unique solution"),
     }
@@ -336,10 +349,13 @@ fn test_linear_equation_solve_for_y() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        thales::solver::Solution::Unique(expr) => {
-            // Should be m * x + b
-            assert_eq!(expr, add(mul(var("m"), var("x")), var("b")));
-        }
+        thales::solver::Solution::Unique(expr) => match &expr {
+            Expression::Binary(BinaryOp::Add, left, right) => {
+                assert_eq!(left.as_ref(), &var("b"));
+                assert_mul_eq(right, &var("m"), &var("x"));
+            }
+            _ => panic!("Expected Add, got {expr:?}"),
+        },
         _ => panic!("Expected unique solution"),
     }
 }
@@ -365,14 +381,14 @@ fn test_solve_for_with_values() {
     }
     assert!(result.is_ok());
 
-    let path = result.unwrap();
+    let (result_expr, _trace) = result.unwrap();
     // Result should be 6.0
-    if let Expression::Float(val) = &path.result {
+    if let Expression::Float(val) = &result_expr {
         assert!((val - 6.0).abs() < 1e-10);
-    } else if let Expression::Integer(val) = &path.result {
+    } else if let Expression::Integer(val) = &result_expr {
         assert_eq!(*val, 6);
     } else {
-        panic!("Expected numeric result, got: {:?}", path.result);
+        panic!("Expected numeric result, got: {:?}", result_expr);
     }
 }
 
@@ -389,11 +405,11 @@ fn test_solve_for_partial_values() {
     let result = solve_for(&equation, "F", &known_values);
     assert!(result.is_ok());
 
-    let path = result.unwrap();
+    let (result_expr, _trace) = result.unwrap();
     // Result should be 2.0 * a
-    println!("Result: {:?}", path.result);
+    println!("Result: {:?}", result_expr);
     // Should still contain variable 'a'
-    assert!(path.result.contains_variable("a"));
+    assert!(result_expr.contains_variable("a"));
 }
 
 #[test]
@@ -408,9 +424,8 @@ fn test_solve_for_no_values() {
     let result = solve_for(&equation, "F", &known_values);
     assert!(result.is_ok());
 
-    let path = result.unwrap();
-    // Result should be m * a
-    assert_eq!(path.result, mul(var("m"), var("a")));
+    let (result_expr, _trace) = result.unwrap();
+    assert_mul_eq(&result_expr, &var("m"), &var("a"));
 }
 
 #[test]
@@ -425,9 +440,9 @@ fn test_solve_for_simple_arithmetic() {
     let result = solve_for(&equation, "x", &known_values);
     assert!(result.is_ok());
 
-    let path = result.unwrap();
+    let (result_expr, _trace) = result.unwrap();
     // Result should be 2
-    assert_eq!(path.result, int(2));
+    assert_eq!(result_expr, int(2));
 }
 
 #[test]
@@ -686,4 +701,366 @@ fn test_polynomial_solver_quintic_numerical() {
         }
         _ => panic!("Expected multiple solutions"),
     }
+}
+
+// ============================================================================
+// Complex Root Tests
+// ============================================================================
+
+#[test]
+fn test_quadratic_complex_roots_x2_plus_4() {
+    // x² + 4 = 0 => x = ±2i
+    let left = add(pow(var("x"), int(2)), int(4));
+    let equation = Equation::new("test", left, int(0));
+
+    let solver = QuadraticSolver::new();
+    let (solution, _path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+    match solution {
+        Solution::Multiple(roots) => {
+            assert_eq!(roots.len(), 2);
+            for root in &roots {
+                match root {
+                    Expression::Complex(c) => {
+                        assert!(c.re.abs() < 1e-10, "real part should be 0, got {}", c.re);
+                        assert!(
+                            (c.im.abs() - 2.0).abs() < 1e-10,
+                            "imag should be ±2, got {}",
+                            c.im
+                        );
+                    }
+                    _ => panic!("Expected complex root, got {:?}", root),
+                }
+            }
+            // Roots should be conjugates
+            if let (Expression::Complex(c1), Expression::Complex(c2)) = (&roots[0], &roots[1]) {
+                assert!((c1.im + c2.im).abs() < 1e-10, "roots should be conjugates");
+            }
+        }
+        _ => panic!("Expected multiple solutions"),
+    }
+}
+
+#[test]
+fn test_quadratic_complex_roots_x2_plus_2x_plus_5() {
+    // x² + 2x + 5 = 0 => x = -1 ± 2i
+    let left = add(add(pow(var("x"), int(2)), mul(int(2), var("x"))), int(5));
+    let equation = Equation::new("test", left, int(0));
+
+    let solver = QuadraticSolver::new();
+    let (solution, _path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+    match solution {
+        Solution::Multiple(roots) => {
+            assert_eq!(roots.len(), 2);
+            for root in &roots {
+                match root {
+                    Expression::Complex(c) => {
+                        assert!(
+                            (c.re + 1.0).abs() < 1e-10,
+                            "real part should be -1, got {}",
+                            c.re
+                        );
+                        assert!(
+                            (c.im.abs() - 2.0).abs() < 1e-10,
+                            "imag part should be ±2, got {}",
+                            c.im
+                        );
+                    }
+                    _ => panic!("Expected complex root, got {:?}", root),
+                }
+            }
+            // One root is -1+2i, the other is -1-2i
+            let imag_values: Vec<f64> = roots
+                .iter()
+                .filter_map(|r| {
+                    if let Expression::Complex(c) = r {
+                        Some(c.im)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            assert!(
+                imag_values.iter().any(|v| (*v - 2.0).abs() < 1e-10),
+                "Expected root with +2i"
+            );
+            assert!(
+                imag_values.iter().any(|v| (*v + 2.0).abs() < 1e-10),
+                "Expected root with -2i"
+            );
+        }
+        _ => panic!("Expected multiple solutions"),
+    }
+}
+
+#[test]
+fn test_cubic_complex_roots_x3_plus_1() {
+    // x³ + 1 = 0 => x = -1, x = (1 ± i√3)/2
+    let left = add(pow(var("x"), int(3)), int(1));
+    let equation = Equation::new("test", left, int(0));
+
+    let solver = PolynomialSolver::new();
+    let (solution, _path) = solver.solve(&equation, &Variable::new("x")).unwrap();
+    match solution {
+        Solution::Multiple(roots) => {
+            assert_eq!(roots.len(), 3);
+            // Collect real roots (evaluate returns Some only for real-valued expressions)
+            let real_vals: Vec<f64> = roots
+                .iter()
+                .filter_map(|r| r.evaluate(&HashMap::new()))
+                .collect();
+            // One real root: x = -1
+            assert!(
+                real_vals.iter().any(|v| (v + 1.0).abs() < 1e-10),
+                "Expected real root -1"
+            );
+            // Two complex roots
+            let complex_count = roots
+                .iter()
+                .filter(|r| matches!(r, Expression::Complex(c) if c.im.abs() > 1e-10))
+                .count();
+            assert_eq!(complex_count, 2, "Expected two complex roots");
+            // Complex roots should be conjugates with re=0.5, im=±√3/2
+            let complex_roots: Vec<_> = roots
+                .iter()
+                .filter_map(|r| {
+                    if let Expression::Complex(c) = r {
+                        if c.im.abs() > 1e-10 {
+                            Some(*c)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            assert_eq!(complex_roots.len(), 2);
+            for c in &complex_roots {
+                assert!(
+                    (c.re - 0.5).abs() < 1e-10,
+                    "real part of complex root should be 0.5, got {}",
+                    c.re
+                );
+                assert!(
+                    (c.im.abs() - (3.0_f64).sqrt() / 2.0).abs() < 1e-10,
+                    "imag magnitude should be √3/2, got {}",
+                    c.im.abs()
+                );
+            }
+        }
+        _ => panic!("Expected multiple solutions"),
+    }
+}
+
+#[test]
+fn test_smart_solver_routes_to_quadratic_for_complex_roots() {
+    // SmartSolver must delegate x² + 1 = 0 to QuadraticSolver, returning ±i.
+    // The SmartSolver skips symbolic isolation when the discriminant is negative.
+    use thales::solver::SmartSolver;
+
+    let left = add(pow(var("x"), int(2)), int(1));
+    let equation = Equation::new("test", left, int(0));
+
+    let solver = SmartSolver::new();
+    let result = solver.solve(&equation, &Variable::new("x"));
+    assert!(result.is_ok(), "SmartSolver failed: {:?}", result.err());
+
+    let (solution, _path) = result.unwrap();
+    match solution {
+        Solution::Multiple(roots) => {
+            assert_eq!(roots.len(), 2, "Expected 2 complex roots");
+            for root in &roots {
+                assert!(
+                    matches!(root, Expression::Complex(_)),
+                    "Expected complex root, got {:?}",
+                    root
+                );
+                if let Expression::Complex(c) = root {
+                    assert!(c.re.abs() < 1e-10, "real part should be 0, got {}", c.re);
+                    assert!(
+                        (c.im.abs() - 1.0).abs() < 1e-10,
+                        "|imag| should be 1, got {}",
+                        c.im.abs()
+                    );
+                }
+            }
+        }
+        _ => panic!("Expected multiple complex solutions, got {:?}", solution),
+    }
+}
+
+#[test]
+fn test_complex_root_display_format() {
+    // Verify that complex roots display with a+bi / a-bi notation
+    let root_pos = Expression::Complex(num_complex::Complex64::new(-1.0, 2.0));
+    let root_neg = Expression::Complex(num_complex::Complex64::new(-1.0, -2.0));
+    let root_pure_imag = Expression::Complex(num_complex::Complex64::new(0.0, 3.0));
+
+    let s_pos = format!("{}", root_pos);
+    let s_neg = format!("{}", root_neg);
+    let s_pure = format!("{}", root_pure_imag);
+
+    // Positive imaginary: should contain '+' between real and imaginary parts
+    assert!(
+        s_pos.contains('+') || s_pos.contains('i'),
+        "Positive-imaginary display '{}' should contain '+' or 'i'",
+        s_pos
+    );
+    // Negative imaginary: should show negative sign
+    assert!(
+        s_neg.contains('-') && s_neg.contains('i'),
+        "Negative-imaginary display '{}' should contain '-' and 'i'",
+        s_neg
+    );
+    // Pure imaginary
+    assert!(
+        s_pure.contains('i'),
+        "Pure-imaginary display '{}' should contain 'i'",
+        s_pure
+    );
+}
+
+#[test]
+fn test_complex_root_evaluate_returns_none_for_nonzero_imaginary() {
+    // evaluate() should return None when imaginary part is nonzero
+    let root = Expression::Complex(num_complex::Complex64::new(1.0, 2.0));
+    assert_eq!(root.evaluate(&HashMap::new()), None);
+}
+
+#[test]
+fn test_complex_root_evaluate_returns_real_for_zero_imaginary() {
+    // evaluate() should return the real part when imaginary is ~0
+    let root = Expression::Complex(num_complex::Complex64::new(3.5, 0.0));
+    assert_eq!(root.evaluate(&HashMap::new()), Some(3.5));
+}
+
+// ============================================================================
+// Step Annotation Tests
+// ============================================================================
+
+#[test]
+fn test_quadratic_solver_annotations() {
+    use thales::solver::QuadraticSolver;
+    // x² - 5x + 6 = 0
+    let lhs = binary(
+        BinaryOp::Add,
+        binary(
+            BinaryOp::Sub,
+            Expression::Power(Box::new(var("x")), Box::new(int(2))),
+            binary(BinaryOp::Mul, int(5), var("x")),
+        ),
+        int(6),
+    );
+    let eq = Equation::new("q", lhs, int(0));
+    let solver = QuadraticSolver::new();
+    let (_sol, path) = solver.solve(&eq, &Variable::new("x")).unwrap();
+
+    let disc_step = path
+        .steps()
+        .iter()
+        .find(|s| s.detail.contains("discriminant"));
+    assert!(disc_step.is_some(), "Expected a discriminant step");
+    assert_eq!(
+        disc_step.unwrap().tag,
+        thales::numeric::trace::TechniqueTag::Simplification,
+        "Discriminant step should be Simplification"
+    );
+
+    let formula_step = path
+        .steps()
+        .iter()
+        .find(|s| s.detail.contains("Quadratic Formula"));
+    assert!(formula_step.is_some(), "Expected a quadratic formula step");
+    assert_eq!(
+        formula_step.unwrap().tag,
+        thales::numeric::trace::TechniqueTag::QuadraticFormula,
+    );
+}
+
+#[test]
+fn test_transcendental_solver_annotations() {
+    use thales::ast::Function;
+    use thales::solver::TranscendentalSolver;
+    let eq = Equation::new(
+        "trig",
+        Expression::Function(Function::Sin, vec![var("x")]),
+        float(0.5),
+    );
+    let solver = TranscendentalSolver::new();
+    let (_sol, path) = solver.solve(&eq, &Variable::new("x")).unwrap();
+
+    let trig_step = path.steps().iter().find(|s| s.detail.contains("arcsine"));
+    assert!(trig_step.is_some(), "Expected an arcsine step");
+    assert!(
+        trig_step
+            .unwrap()
+            .detail
+            .contains("Inverse Trigonometric Function"),
+        "Expected step detail to mention the technique",
+    );
+}
+
+#[test]
+fn test_symbolic_isolation_annotations() {
+    use thales::solver::SmartSolver;
+    // SmartSolver tries symbolic isolation first for 2*x + 3 = 7
+    let lhs = binary(
+        BinaryOp::Add,
+        binary(BinaryOp::Mul, int(2), var("x")),
+        int(3),
+    );
+    let eq = Equation::new("lin", lhs, int(7));
+    let solver = SmartSolver::new();
+    let (_sol, path) = solver.solve(&eq, &Variable::new("x")).unwrap();
+
+    let tagged_count = path.steps().len();
+    assert!(
+        tagged_count > 0,
+        "Expected at least one trace step from symbolic isolation, got 0"
+    );
+}
+
+#[test]
+fn test_quadratic_complex_root_path_contains_decomposition() {
+    use thales::numeric::trace::TechniqueTag;
+    use thales::solver::QuadraticSolver;
+    // x² + 1 = 0 => x = ±i; the trace must contain a ComplexDecomposition step.
+    let lhs = add(pow(var("x"), int(2)), int(1));
+    let eq = Equation::new("cplx", lhs, int(0));
+    let solver = QuadraticSolver::new();
+    let (_sol, path) = solver.solve(&eq, &Variable::new("x")).unwrap();
+
+    let decomp_step = path
+        .steps()
+        .iter()
+        .find(|s| s.tag == TechniqueTag::Custom("ComplexDecomposition"));
+    assert!(
+        decomp_step.is_some(),
+        "Trace for x²+1=0 must contain a ComplexDecomposition step"
+    );
+    assert!(
+        decomp_step.unwrap().detail.contains("original_var=x"),
+        "ComplexDecomposition detail must name the original variable"
+    );
+}
+
+#[test]
+fn test_complex_operation_difficulty_tiers() {
+    use thales::numeric::trace::{TechniqueDifficulty, TechniqueTag};
+    // ComplexDecomposition is carried as a custom tag; custom tags default
+    // to Advanced difficulty.
+    let decomp = TechniqueTag::Custom("ComplexDecomposition");
+    assert_eq!(
+        decomp.difficulty(),
+        TechniqueDifficulty::Advanced,
+        "Custom tags default to Advanced difficulty"
+    );
+
+    // EulerFormula is a first-class tag sitting at Transcendental.
+    let euler = TechniqueTag::EulerFormula;
+    assert_eq!(
+        euler.difficulty(),
+        TechniqueDifficulty::Transcendental,
+        "EulerFormula should be Transcendental difficulty"
+    );
 }

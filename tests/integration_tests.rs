@@ -133,41 +133,12 @@ mod dimension_tests {
     }
 
     #[test]
-    #[ignore] // Unit conversion planned for v0.4.0
+    #[ignore = "UnitRegistry::with_si_base is a stub — conversion needs mathcore-units integration"]
     fn test_unit_conversion() {
         let registry = UnitRegistry::with_common_units();
         let result = registry.convert(1000.0, "m", "km");
         assert!(result.is_ok());
         assert!((result.unwrap() - 1.0).abs() < 1e-10);
-    }
-}
-
-// Resolution path tests
-mod resolution_path_tests {
-    use super::*;
-    use thales::resolution_path::{Operation, ResolutionPathBuilder};
-
-    #[test]
-    fn test_empty_resolution_path() {
-        let expr = Expression::Integer(5);
-        let path = thales::ResolutionPath::new(expr);
-        assert!(path.is_empty());
-        assert_eq!(path.step_count(), 0);
-    }
-
-    #[test]
-    fn test_resolution_path_builder() {
-        let initial = Expression::Integer(5);
-        let path = ResolutionPathBuilder::new(initial.clone())
-            .step(
-                Operation::Simplify,
-                "Simplify expression".to_string(),
-                Expression::Integer(5),
-            )
-            .finish(Expression::Integer(5));
-
-        assert_eq!(path.step_count(), 1);
-        assert!(!path.is_empty());
     }
 }
 
