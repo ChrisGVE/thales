@@ -130,15 +130,12 @@ pub(super) fn constraint_entails(
     weaker: &AssumptionConstraint,
 ) -> bool {
     use AssumptionConstraint::*;
-    use Domain::*;
 
-    // Stage 1: reflexivity
     if stronger == weaker {
         return true;
     }
 
     match (stronger, weaker) {
-        // ── Stage 2: InDomain subsumption ─────────────────────────────────────
         (
             InDomain {
                 var: v1,
@@ -150,157 +147,73 @@ pub(super) fn constraint_entails(
             },
         ) => v1 == v2 && domain_subsumes(*d2, *d1),
 
-        // ── Stage 3a: InDomain cross-form ─────────────────────────────────────
-        // PositiveIntegers ⊆ NonNegativeReals → entails NonNegative [D012-E2]
-        (
-            InDomain {
-                var: v1,
-                domain: PositiveIntegers,
-            },
-            NonNegative { var: v2 },
-        ) => v1 == v2,
-        // NegativeIntegers ⊆ NonPositiveReals → entails NonPositive [D012-E2]
-        (
-            InDomain {
-                var: v1,
-                domain: NegativeIntegers,
-            },
-            NonPositive { var: v2 },
-        ) => v1 == v2,
-        // PositiveReals → Positive
-        (
-            InDomain {
-                var: v1,
-                domain: PositiveReals,
-            },
-            Positive { var: v2 },
-        ) => v1 == v2,
-        // PositiveReals → NonNegative
-        (
-            InDomain {
-                var: v1,
-                domain: PositiveReals,
-            },
-            NonNegative { var: v2 },
-        ) => v1 == v2,
-        // PositiveReals → NonZero
-        (
-            InDomain {
-                var: v1,
-                domain: PositiveReals,
-            },
-            NonZero { var: v2 },
-        ) => v1 == v2,
-        // PositiveIntegers → Positive
-        (
-            InDomain {
-                var: v1,
-                domain: PositiveIntegers,
-            },
-            Positive { var: v2 },
-        ) => v1 == v2,
-        // PositiveIntegers → NonZero
-        (
-            InDomain {
-                var: v1,
-                domain: PositiveIntegers,
-            },
-            NonZero { var: v2 },
-        ) => v1 == v2,
-        // NegativeReals → Negative
-        (
-            InDomain {
-                var: v1,
-                domain: NegativeReals,
-            },
-            Negative { var: v2 },
-        ) => v1 == v2,
-        // NegativeReals → NonPositive
-        (
-            InDomain {
-                var: v1,
-                domain: NegativeReals,
-            },
-            NonPositive { var: v2 },
-        ) => v1 == v2,
-        // NegativeReals → NonZero
-        (
-            InDomain {
-                var: v1,
-                domain: NegativeReals,
-            },
-            NonZero { var: v2 },
-        ) => v1 == v2,
-        // NegativeIntegers → Negative
-        (
-            InDomain {
-                var: v1,
-                domain: NegativeIntegers,
-            },
-            Negative { var: v2 },
-        ) => v1 == v2,
-        // NegativeIntegers → NonZero
-        (
-            InDomain {
-                var: v1,
-                domain: NegativeIntegers,
-            },
-            NonZero { var: v2 },
-        ) => v1 == v2,
-        // NonZeroReals → NonZero
-        (
-            InDomain {
-                var: v1,
-                domain: NonZeroReals,
-            },
-            NonZero { var: v2 },
-        ) => v1 == v2,
+        (InDomain { var: v1, domain }, weaker_c) => domain_cross_entails(v1, *domain, weaker_c),
 
-        // ── Stage 3b: Sign cross-form ──────────────────────────────────────────
-        // Positive |- NonNegative
         (Positive { var: v1 }, NonNegative { var: v2 }) => v1 == v2,
-        // Positive |- NonZero
         (Positive { var: v1 }, NonZero { var: v2 }) => v1 == v2,
-        // Negative |- NonPositive
         (Negative { var: v1 }, NonPositive { var: v2 }) => v1 == v2,
-        // Negative |- NonZero
         (Negative { var: v1 }, NonZero { var: v2 }) => v1 == v2,
 
-        // ── Stage 3c: Bound comparisons ────────────────────────────────────────
-        // GreaterThan(x, a) |- GreaterThan(x, b) when a >= b
+        _ => bound_entails(stronger, weaker),
+    }
+}
+
+/// InDomain cross-form: does `var ∈ domain` entail the `weaker` constraint?
+fn domain_cross_entails(var: &str, domain: Domain, weaker: &AssumptionConstraint) -> bool {
+    use AssumptionConstraint::*;
+    use Domain::*;
+
+    let weaker_var = match weaker {
+        Positive { var: v }
+        | NonNegative { var: v }
+        | Negative { var: v }
+        | NonPositive { var: v }
+        | NonZero { var: v } => v,
+        _ => return false,
+    };
+    if var != weaker_var {
+        return false;
+    }
+
+    match (domain, weaker) {
+        (PositiveReals | PositiveIntegers, Positive { .. }) => true,
+        (PositiveReals | PositiveIntegers, NonNegative { .. }) => true,
+        (PositiveReals | PositiveIntegers, NonZero { .. }) => true,
+        (NegativeReals | NegativeIntegers, Negative { .. }) => true,
+        (NegativeReals | NegativeIntegers, NonPositive { .. }) => true,
+        (NegativeReals | NegativeIntegers, NonZero { .. }) => true,
+        (NonZeroReals, NonZero { .. }) => true,
+        _ => false,
+    }
+}
+
+/// Bound-comparison entailment rules (GreaterThan/AtLeast/LessThan/AtMost).
+fn bound_entails(stronger: &AssumptionConstraint, weaker: &AssumptionConstraint) -> bool {
+    use AssumptionConstraint::*;
+
+    match (stronger, weaker) {
         (GreaterThan { var: v1, bound: b1 }, GreaterThan { var: v2, bound: b2 }) => {
             v1 == v2 && bounds_ge(b1, b2)
         }
-        // GreaterThan(x, a) |- AtLeast(x, b) when a > b (strict > non-strict weaker)
-        // or a >= b (GreaterThan with same bound entails AtLeast)
         (GreaterThan { var: v1, bound: b1 }, AtLeast { var: v2, bound: b2 }) => {
             v1 == v2 && bounds_ge(b1, b2)
         }
-        // AtLeast(x, a) |- AtLeast(x, b) when a >= b
         (AtLeast { var: v1, bound: b1 }, AtLeast { var: v2, bound: b2 }) => {
             v1 == v2 && bounds_ge(b1, b2)
         }
-        // LessThan(x, a) |- LessThan(x, b) when a <= b
         (LessThan { var: v1, bound: b1 }, LessThan { var: v2, bound: b2 }) => {
             v1 == v2 && bounds_le(b1, b2)
         }
-        // LessThan(x, a) |- AtMost(x, b) when a <= b
         (LessThan { var: v1, bound: b1 }, AtMost { var: v2, bound: b2 }) => {
             v1 == v2 && bounds_le(b1, b2)
         }
-        // AtMost(x, a) |- AtMost(x, b) when a <= b
         (AtMost { var: v1, bound: b1 }, AtMost { var: v2, bound: b2 }) => {
             v1 == v2 && bounds_le(b1, b2)
         }
-        // GreaterThan(x, 0) |- Positive(x)
         (GreaterThan { var: v1, bound }, Positive { var: v2 }) => v1 == v2 && is_zero_bound(bound),
-        // AtLeast(x, 0) |- NonNegative(x)  (x >= 0 means non-negative)
         (AtLeast { var: v1, bound }, NonNegative { var: v2 }) => v1 == v2 && is_zero_bound(bound),
-        // LessThan(x, 0) |- Negative(x)
         (LessThan { var: v1, bound }, Negative { var: v2 }) => v1 == v2 && is_zero_bound(bound),
-        // AtMost(x, 0) |- NonPositive(x)
         (AtMost { var: v1, bound }, NonPositive { var: v2 }) => v1 == v2 && is_zero_bound(bound),
-
         _ => false,
     }
 }
