@@ -3,6 +3,8 @@
 //! Helpers used by per-command-family submodules. All conversions between
 //! `Expression` and `Arc<Expr>` happen at this seam (architecture rule 2).
 
+use std::sync::Arc;
+
 use crate::api::diagnostic::{Diagnostic, DiagnosticCode};
 use crate::api::domain::Domain;
 use crate::api::narrative::{Narrative, NarrativeValue};
@@ -12,8 +14,11 @@ use crate::api::response::{
     ResultValue, StructuredResult,
 };
 use crate::ast::Expression;
+use crate::engine::context::SolveContext;
+use crate::engine::resource::ResourceBudget;
 use crate::numeric::compile::decompile;
 use crate::numeric::trace::{Step, TechniqueTag, Trace};
+use crate::numeric::Expr;
 
 /// Emit a [`DiagnosticCode::FieldIgnored`] warning on `response` for a
 /// field that was provided in the request but had no effect on this command.
@@ -145,7 +150,7 @@ pub(super) fn steps_from_trace(trace: &Trace) -> Vec<NarratedStep> {
 ///
 /// Every variant is listed explicitly so that adding a new variant to
 /// `TechniqueTag` causes a compile error here until the mapping is extended.
-pub(super) fn template_id_for_tag(tag: TechniqueTag) -> &'static str {
+pub(crate) fn template_id_for_tag(tag: TechniqueTag) -> &'static str {
     match tag {
         TechniqueTag::AddBothSides => "step.add_both_sides",
         TechniqueTag::SubtractBothSides => "step.subtract_both_sides",
@@ -272,6 +277,20 @@ fn build_step_narrative(template_id: &'static str, step: &Step) -> Narrative {
     }
 
     narr
+}
+
+/// Public alias for [`build_step_narrative`], accessible from the engine
+/// module (e.g. `engine::narrate`).
+pub(crate) fn build_narrated_step(template_id: &'static str, step: &Step) -> Narrative {
+    build_step_narrative(template_id, step)
+}
+
+/// Create a fresh [`SolveContext`] from an `Arc<Expr>` with unlimited budget.
+///
+/// Used by dispatch arms that route computations through the D0
+/// [`crate::engine::runner::StrategyRunner`] pipeline.
+pub(super) fn to_solve_context(expr: Arc<Expr>) -> SolveContext {
+    SolveContext::new(expr, ResourceBudget::unlimited())
 }
 
 pub(super) fn solution_to_response(

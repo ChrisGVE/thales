@@ -18,20 +18,27 @@
 //! [`DiagnosticCode::NotImplemented`] entry and an empty [`ResultEntry`]
 //! carrying an [`ResultValue::Unsolved`] reason.
 
+use std::sync::Arc;
 use std::time::Instant;
 
 use crate::api::command::{Command, SimplifyRules};
 use crate::api::diagnostic::{Diagnostic, DiagnosticCode};
 use crate::api::narrative::Narrative;
 use crate::api::request::Request;
-use crate::api::response::Response;
+use crate::api::response::{EngineId, Response, ResultKey};
+use crate::engine::legacy::LegacyEngine;
+use crate::engine::mode::ExecutionMode;
+use crate::engine::runner::{SequentialRunner, StrategyRunner};
+use crate::engine::strategy::StrategyResult;
+use crate::numeric::compile::{compile, decompile};
+use crate::numeric::trace::{Step, TechniqueTag, Trace};
 use crate::ThalesError;
 
-use helpers::DispatchContext;
+use helpers::{steps_from_trace, symbolic_entry, to_solve_context, DispatchContext};
 
 mod algebra;
 mod calculus;
-mod helpers;
+pub(crate) mod helpers;
 mod limits;
 mod matrix;
 mod nabla;
@@ -59,7 +66,37 @@ pub fn execute(request: Request) -> Result<Response, ThalesError> {
 
         // ── Algebra ──────────────────────────────────────────────────────
         Command::Simplify { expr, rules, over } => {
-            let mut r = algebra::simplify_cmd(&expr, rules, narrate);
+            let expr_clone = expr.clone();
+            let legacy = LegacyEngine::new("simplify", 1.0, move |_arc_expr| {
+                let simplified = expr_clone.simplify();
+                Ok(compile(&simplified))
+            });
+            let ctx = to_solve_context(compile(&expr));
+            let result = SequentialRunner.run(ctx, &[Box::new(legacy)], ExecutionMode::Sequential);
+            let mut r = match result {
+                StrategyResult::Solved {
+                    expr: solved_arc, ..
+                } => {
+                    let simplified = decompile(&solved_arc);
+                    let mut trace = Trace::new();
+                    if narrate {
+                        trace.push(
+                            Step::new(TechniqueTag::Simplification, "Canonical simplification")
+                                .with_input(compile(&expr))
+                                .with_output(Arc::clone(&solved_arc)),
+                        );
+                    }
+                    let mut resp = Response::default();
+                    resp.results.push((
+                        ResultKey::Single,
+                        symbolic_entry(simplified, EngineId::Simplify, steps_from_trace(&trace)),
+                    ));
+                    resp.meta.engine_trace.push(EngineId::Simplify);
+                    resp
+                }
+                // Fallback: delegate to the existing command handler.
+                _ => algebra::simplify_cmd(&expr, rules, narrate),
+            };
             if over.is_some() {
                 helpers::warn_ignored_field(&mut r, "Simplify.over", "request.field_ignored");
             }

@@ -11,6 +11,7 @@ pub mod canonical_pattern;
 pub mod context;
 pub mod legacy;
 pub mod mode;
+pub mod narrate;
 pub mod property;
 pub mod reason;
 pub mod resource;
