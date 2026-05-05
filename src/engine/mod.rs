@@ -37,14 +37,19 @@ pub use canonical_pattern::{
 };
 pub use context::SolveContext;
 pub use fallback::{
-    node_count, FallbackConfig, FallbackTrigger, ImpossibilityClass, NumericalResult,
+    global_registry, node_count, FallbackConfig, FallbackRunner, FallbackTrigger,
+    ImpossibilityClass, NumericalEvaluator, NumericalEvaluatorRegistry, NumericalResult,
     PrecisionAttemptOutcome, PrecisionLevel, CHAIN,
 };
 pub use legacy::{LegacyEngine, LegacyResult};
 pub use mode::{ExecutionMode, TreeComparison};
 pub use property::{Property, PropertyConstraint, PropertySet};
 pub use reason::{FailureReason, ImpossibilityProof, PartialReason, ResourceRequest};
+#[cfg(feature = "rayon")]
+pub use resource::{BranchGuard, ResourceGate};
 pub use resource::{ResourceBudget, ResourceStatus};
+#[cfg(feature = "rayon")]
+pub use runner::RayonRunner;
 pub use runner::{SequentialRunner, StrategyRunner};
 pub use strategy::{
     MergerFn, Strategy, StrategyCandidate, StrategyResult, StrategyStatus, SubProblem,
