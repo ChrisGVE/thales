@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::engine::canonical_pattern::structural_hash;
+use crate::engine::canonicalize::structural_hash;
 use crate::numeric::Expr;
 
 // ── PropertyConstraint ────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ pub mod assumption;
 pub mod assumption_key;
 pub mod cache;
 pub mod canonical_pattern;
+pub mod canonicalize;
 pub mod context;
 pub mod fallback;
 pub mod legacy;
@@ -32,9 +33,8 @@ pub use cache::{
     CacheEntry, CacheLookup, CacheSource, CacheStats, KnowledgeCache, NegativeCacheEntry,
     PositiveCacheEntry, Promotable, SolveCache,
 };
-pub use canonical_pattern::{
-    canonicalize, pattern_hash, structural_hash, CanonicalPattern, PatternHash, SlotId, VarMap,
-};
+pub use canonical_pattern::{CanonicalPattern, PatternHash, SlotId, VarMap};
+pub use canonicalize::{canonicalize, pattern_hash, structural_hash};
 pub use context::SolveContext;
 pub use fallback::{
     global_registry, node_count, FallbackConfig, FallbackRunner, FallbackTrigger,
