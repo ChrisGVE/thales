@@ -32,7 +32,8 @@ pub use canonical_pattern::{
 };
 pub use context::SolveContext;
 pub use fallback::{
-    node_count, FallbackConfig, NumericalResult, PrecisionAttemptOutcome, PrecisionLevel, CHAIN,
+    node_count, FallbackConfig, FallbackTrigger, ImpossibilityClass, NumericalResult,
+    PrecisionAttemptOutcome, PrecisionLevel, CHAIN,
 };
 pub use legacy::{LegacyEngine, LegacyResult};
 pub use mode::{ExecutionMode, TreeComparison};

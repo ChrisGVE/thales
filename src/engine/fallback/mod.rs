@@ -10,6 +10,8 @@
 
 pub mod config;
 pub mod precision;
+pub mod trigger;
 
 pub use config::{node_count, FallbackConfig};
 pub use precision::{NumericalResult, PrecisionAttemptOutcome, PrecisionLevel, CHAIN};
+pub use trigger::{FallbackTrigger, ImpossibilityClass};

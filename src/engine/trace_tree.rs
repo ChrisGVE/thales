@@ -38,6 +38,9 @@ pub enum BranchReason {
     DomainExtension,
     /// A probabilistic or heuristic check is being verified.
     ProbabilisticVerify,
+    /// Symbolic strategies were exhausted or proved impossible; a numerical
+    /// fallback evaluation is being attempted.
+    NumericalFallback,
     /// Custom reason not covered by the above variants.
     Custom(&'static str),
 }
