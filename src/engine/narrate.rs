@@ -51,6 +51,11 @@ fn collect_nodes(nodes: &[TraceNode], out: &mut Vec<NarratedStep>) {
                     collect_nodes(&part.nodes, out);
                 }
             }
+            // Expand cache hits inline — all cached steps are included
+            // so the caller sees the full trace (Rule 4 completeness).
+            TraceNode::CacheHit { cached_trace, .. } => {
+                collect_nodes(std::slice::from_ref(cached_trace.as_ref()), out);
+            }
         }
     }
 }
