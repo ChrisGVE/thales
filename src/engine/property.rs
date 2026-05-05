@@ -1,11 +1,15 @@
 //! Property set for expressions encountered during engine search.
 //!
 //! [`PropertySet`] accumulates structural and domain properties learned about
-//! sub-expressions. Properties are keyed by a string label (to be upgraded to
-//! structural hashes in a later task) and stored as a list of [`Property`] values.
+//! sub-expressions. Properties are keyed by the `u64` structural hash of the
+//! expression (via [`structural_hash`]) so that two structurally identical
+//! `Arc<Expr>` trees share a bucket regardless of pointer identity.
 
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use crate::engine::canonical_pattern::structural_hash;
+use crate::numeric::Expr;
 
 // ── PropertyConstraint ────────────────────────────────────────────────────────
 
@@ -51,13 +55,14 @@ pub enum Property {
 
 // ── PropertySet ───────────────────────────────────────────────────────────────
 
-/// Accumulated properties keyed by a string identifier.
+/// Accumulated properties keyed by the structural hash of the expression.
 ///
-/// String keys will be upgraded to `u64` structural hashes in a later task.
-/// For now they are plain `String` labels identifying the expression.
+/// Each bucket stores `(Arc<Expr>, Property)` pairs so that collisions between
+/// structurally different expressions that hash to the same value are handled
+/// correctly via structural equality on the stored `Arc<Expr>`.
 #[derive(Debug, Clone, Default)]
 pub struct PropertySet {
-    props: HashMap<String, Vec<Property>>,
+    props: HashMap<u64, Vec<(Arc<Expr>, Property)>>,
 }
 
 impl PropertySet {
@@ -67,21 +72,33 @@ impl PropertySet {
         PropertySet::default()
     }
 
-    /// Record a property for the expression identified by `key`.
-    pub fn learn(&mut self, key: impl Into<String>, prop: Property) {
-        self.props.entry(key.into()).or_default().push(prop);
+    /// Record a property for the expression `key`.
+    pub fn learn(&mut self, key: &Arc<Expr>, prop: Property) {
+        let hash = structural_hash(key);
+        self.props
+            .entry(hash)
+            .or_default()
+            .push((Arc::clone(key), prop));
     }
 
     /// Returns all properties recorded for `key`, or an empty slice.
     #[must_use]
-    pub fn get(&self, key: &str) -> &[Property] {
-        self.props.get(key).map_or(&[], Vec::as_slice)
+    pub fn get(&self, key: &Arc<Expr>) -> Vec<&Property> {
+        let hash = structural_hash(key);
+        match self.props.get(&hash) {
+            None => Vec::new(),
+            Some(bucket) => bucket
+                .iter()
+                .filter(|(stored, _)| Arc::ptr_eq(stored, key) || stored == key)
+                .map(|(_, p)| p)
+                .collect(),
+        }
     }
 
     /// Returns `true` if the exact `prop` has been recorded for `key`.
     #[must_use]
-    pub fn has(&self, key: &str, prop: &Property) -> bool {
-        self.get(key).contains(prop)
+    pub fn has(&self, key: &Arc<Expr>, prop: &Property) -> bool {
+        self.get(key).contains(&prop)
     }
 
     /// Total number of property entries across all keys.
@@ -102,6 +119,15 @@ impl PropertySet {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::numeric::{Expr, SmallInt, SymbolId};
+
+    fn int_expr(n: i64) -> Arc<Expr> {
+        Arc::new(Expr::Integer(SmallInt::from(n)))
+    }
+
+    fn sym_expr(name: &str) -> Arc<Expr> {
+        Arc::new(Expr::Symbol(SymbolId::intern(name)))
+    }
 
     #[test]
     fn fast_property_set_new_is_empty() {
@@ -111,68 +137,100 @@ mod tests {
     }
 
     #[test]
-    fn fast_property_learn_and_get() {
+    fn fast_property_learn_and_get_by_expr() {
         let mut ps = PropertySet::new();
-        ps.learn("x", Property::Rational);
-        assert_eq!(ps.get("x"), &[Property::Rational]);
+        let x = sym_expr("x");
+        ps.learn(&x, Property::Rational);
+        let props = ps.get(&x);
+        assert_eq!(props.len(), 1);
+        assert_eq!(props[0], &Property::Rational);
         assert_eq!(ps.len(), 1);
     }
 
     #[test]
     fn fast_property_get_unknown_key_empty_slice() {
         let ps = PropertySet::new();
-        assert_eq!(ps.get("unknown"), &[]);
+        let x = sym_expr("unknown");
+        assert!(ps.get(&x).is_empty());
     }
 
     #[test]
     fn fast_property_has_present() {
         let mut ps = PropertySet::new();
-        ps.learn("expr", Property::Zero);
-        assert!(ps.has("expr", &Property::Zero));
+        let e = int_expr(0);
+        ps.learn(&e, Property::Zero);
+        assert!(ps.has(&e, &Property::Zero));
     }
 
     #[test]
     fn fast_property_has_absent() {
         let mut ps = PropertySet::new();
-        ps.learn("expr", Property::Rational);
-        assert!(!ps.has("expr", &Property::Analytic));
+        let e = sym_expr("expr");
+        ps.learn(&e, Property::Rational);
+        assert!(!ps.has(&e, &Property::Analytic));
     }
 
     #[test]
     fn fast_property_multiple_per_key() {
         let mut ps = PropertySet::new();
-        ps.learn("f", Property::Analytic);
-        ps.learn("f", Property::Polynomial { degree: 2 });
-        assert_eq!(ps.get("f").len(), 2);
-        assert!(ps.has("f", &Property::Analytic));
-        assert!(ps.has("f", &Property::Polynomial { degree: 2 }));
+        let f = sym_expr("f");
+        ps.learn(&f, Property::Analytic);
+        ps.learn(&f, Property::Polynomial { degree: 2 });
+        assert_eq!(ps.get(&f).len(), 2);
+        assert!(ps.has(&f, &Property::Analytic));
+        assert!(ps.has(&f, &Property::Polynomial { degree: 2 }));
         assert_eq!(ps.len(), 2);
     }
 
     #[test]
     fn fast_property_multiple_keys() {
         let mut ps = PropertySet::new();
-        ps.learn("a", Property::Constant);
-        ps.learn("b", Property::Zero);
+        let a = sym_expr("a");
+        let b = sym_expr("b");
+        ps.learn(&a, Property::Constant);
+        ps.learn(&b, Property::Zero);
         assert_eq!(ps.len(), 2);
-        assert!(ps.has("a", &Property::Constant));
-        assert!(ps.has("b", &Property::Zero));
-        assert!(!ps.has("a", &Property::Zero));
+        assert!(ps.has(&a, &Property::Constant));
+        assert!(ps.has(&b, &Property::Zero));
+        assert!(!ps.has(&a, &Property::Zero));
     }
 
     #[test]
     fn fast_property_constraint_variant() {
         let mut ps = PropertySet::new();
-        ps.learn("x", Property::Constraint(PropertyConstraint::Positive));
-        assert!(ps.has("x", &Property::Constraint(PropertyConstraint::Positive)));
-        assert!(!ps.has("x", &Property::Constraint(PropertyConstraint::Negative)));
+        let x = sym_expr("x");
+        ps.learn(&x, Property::Constraint(PropertyConstraint::Positive));
+        assert!(ps.has(&x, &Property::Constraint(PropertyConstraint::Positive)));
+        assert!(!ps.has(&x, &Property::Constraint(PropertyConstraint::Negative)));
     }
 
     #[test]
     fn fast_property_custom() {
         let mut ps = PropertySet::new();
+        let m = sym_expr("M");
         let label: Arc<str> = Arc::from("invertible");
-        ps.learn("M", Property::Custom(label.clone()));
-        assert!(ps.has("M", &Property::Custom(label)));
+        ps.learn(&m, Property::Custom(label.clone()));
+        assert!(ps.has(&m, &Property::Custom(label)));
+    }
+
+    #[test]
+    fn fast_property_learn_and_get_int_expr() {
+        let mut ps = PropertySet::new();
+        let e = int_expr(42);
+        ps.learn(&e, Property::Constant);
+        assert!(ps.has(&e, &Property::Constant));
+    }
+
+    #[test]
+    fn fast_property_distinct_exprs_distinct_buckets() {
+        let mut ps = PropertySet::new();
+        let x = sym_expr("x");
+        let y = sym_expr("y");
+        ps.learn(&x, Property::Rational);
+        ps.learn(&y, Property::Analytic);
+        // x and y have different structural hashes
+        assert!(!ps.has(&x, &Property::Analytic));
+        assert!(!ps.has(&y, &Property::Rational));
+        assert_eq!(ps.len(), 2);
     }
 }
