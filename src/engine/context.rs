@@ -9,6 +9,7 @@
 use std::sync::Arc;
 
 use crate::engine::assumption::AssumptionSet;
+use crate::engine::fallback::FallbackConfig;
 use crate::engine::property::PropertySet;
 use crate::engine::resource::ResourceBudget;
 use crate::engine::trace_tree::TraceTree;
@@ -35,12 +36,15 @@ pub struct SolveContext {
     pub budget: ResourceBudget,
     /// Properties learned about sub-expressions during search.
     pub properties: PropertySet,
+    /// Numerical fallback configuration for this invocation.
+    pub fallback: FallbackConfig,
 }
 
 impl SolveContext {
     /// Create a fresh context for `expr` with the given budget.
     ///
-    /// Trace, assumptions, and properties start empty.
+    /// Trace, assumptions, properties, and fallback config start at their
+    /// defaults (`FallbackConfig::disabled()`).
     #[must_use]
     pub fn new(expr: Arc<Expr>, budget: ResourceBudget) -> Self {
         Self {
@@ -49,7 +53,14 @@ impl SolveContext {
             assumptions: AssumptionSet::default(),
             budget,
             properties: PropertySet::default(),
+            fallback: FallbackConfig::default(),
         }
+    }
+
+    /// Consume this context and return a new one with `fallback` replaced.
+    #[must_use]
+    pub fn with_fallback(self, fallback: FallbackConfig) -> Self {
+        Self { fallback, ..self }
     }
 
     /// Fork this context for an independent sub-problem.
@@ -70,6 +81,7 @@ impl SolveContext {
             assumptions: self.assumptions.clone(),
             budget: self.budget.clone(),
             properties: self.properties.clone(),
+            fallback: self.fallback.clone(),
         }
     }
 
@@ -186,5 +198,29 @@ mod tests {
             .push_step(Step::new(TechniqueTag::Simplification, "test"));
         assert_eq!(ctx.trace.step_count(), 1);
         assert_eq!(ctx2.trace.step_count(), 0);
+    }
+
+    #[test]
+    fn fast_context_new_has_disabled_fallback() {
+        use crate::engine::fallback::FallbackConfig;
+        let ctx = unlimited_ctx(1);
+        assert_eq!(ctx.fallback, FallbackConfig::disabled());
+        assert!(!ctx.fallback.numerical);
+    }
+
+    #[test]
+    fn fast_context_with_fallback_replaces_config() {
+        use crate::engine::fallback::FallbackConfig;
+        let ctx = unlimited_ctx(1);
+        let ctx2 = ctx.with_fallback(FallbackConfig::enabled());
+        assert!(ctx2.fallback.numerical);
+    }
+
+    #[test]
+    fn fast_context_fork_carries_fallback() {
+        use crate::engine::fallback::FallbackConfig;
+        let ctx = unlimited_ctx(1).with_fallback(FallbackConfig::enabled_silent());
+        let fork = ctx.fork();
+        assert_eq!(fork.fallback, FallbackConfig::enabled_silent());
     }
 }
