@@ -7,6 +7,7 @@
 
 pub mod assumption;
 pub mod assumption_key;
+pub mod cache;
 pub mod canonical_pattern;
 pub mod context;
 pub mod legacy;
@@ -25,6 +26,10 @@ pub use assumption::{AssumptionGuard, AssumptionSet};
 pub use assumption_key::{
     entails, normalize_assumption, sign_with_varmap, AssumptionConstraint, AssumptionSignature,
     Domain, NormalizedAssumption,
+};
+pub use cache::{
+    CacheEntry, CacheLookup, CacheSource, CacheStats, KnowledgeCache, NegativeCacheEntry,
+    PositiveCacheEntry, Promotable, SolveCache,
 };
 pub use canonical_pattern::{
     canonicalize, pattern_hash, structural_hash, CanonicalPattern, PatternHash, SlotId, VarMap,
