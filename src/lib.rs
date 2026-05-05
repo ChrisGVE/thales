@@ -390,6 +390,7 @@
 
 // Public module exports
 pub mod api;
+pub mod engine;
 pub mod approximations;
 pub mod ast;
 pub mod calculus;
