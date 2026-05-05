@@ -45,13 +45,63 @@ impl PartialEq for FailureReason {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ImpossibilityProof {
     /// No elementary closure exists (Liouville/Risch theorem).
+    ///
+    /// # Deprecation
+    ///
+    /// Prefer [`ImpossibilityProof::NoElementaryAntiderivative`] with
+    /// `provenance` set to `"Risch"` or `"Liouville"`.
+    #[deprecated(
+        since = "0.9.0",
+        note = "use NoElementaryAntiderivative { provenance: \"Risch\" } or \
+                NoElementaryAntiderivative { provenance: \"Liouville\" } instead"
+    )]
     NoElementaryClosure,
     /// No elementary antiderivative via Liouville's theorem.
+    ///
+    /// # Deprecation
+    ///
+    /// Prefer [`ImpossibilityProof::NoElementaryAntiderivative`] with
+    /// `provenance` set to `"Liouville"`.
+    #[deprecated(
+        since = "0.9.0",
+        note = "use NoElementaryAntiderivative { provenance: \"Liouville\" } instead"
+    )]
     NoLiouvillePrimitive,
     /// No Liouvillian solution via Kovacic's algorithm.
     NoKovacicSolution,
+    /// No elementary antiderivative exists, as certified by the given decision
+    /// procedure.
+    ///
+    /// `provenance` must be one of:
+    /// - `"Risch"` — full Risch decision procedure
+    /// - `"Liouville"` — Liouville's structure theorem
+    NoElementaryAntiderivative { provenance: &'static str },
+    /// No solution in radicals exists for this polynomial.
+    ///
+    /// Applies to general polynomials with symbolic coefficients. For
+    /// specific fixed-coefficient polynomials of degree ≥ 5, solvability
+    /// depends on the Galois group of the polynomial — a certificate is
+    /// required (deferred to D2).
+    NoRadicalSolution { degree: usize },
     /// Custom impossibility description.
     Custom(String),
+}
+
+impl ImpossibilityProof {
+    /// A short name for the theorem or algorithm that certifies this
+    /// impossibility, suitable for use in narrative output.
+    #[must_use]
+    #[allow(deprecated)]
+    pub fn theorem_name(&self) -> &'static str {
+        match self {
+            ImpossibilityProof::NoElementaryClosure => "Liouville-Risch",
+            ImpossibilityProof::NoLiouvillePrimitive => "Liouville",
+            ImpossibilityProof::NoKovacicSolution => "Kovacic",
+            ImpossibilityProof::NoElementaryAntiderivative { provenance } => provenance,
+            ImpossibilityProof::NoRadicalSolution { .. } => "Abel-Ruffini",
+            ImpossibilityProof::Custom(_) => "custom",
+        }
+    }
 }
 
 // ── PartialReason ─────────────────────────────────────────────────────────────
@@ -165,6 +215,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn fast_impossibility_proof_eq() {
         assert_eq!(
             ImpossibilityProof::NoElementaryClosure,
@@ -177,6 +228,77 @@ mod tests {
         assert_eq!(
             ImpossibilityProof::Custom("test".to_string()),
             ImpossibilityProof::Custom("test".to_string())
+        );
+    }
+
+    #[test]
+    fn fast_impossibility_proof_new_variants_eq() {
+        assert_eq!(
+            ImpossibilityProof::NoElementaryAntiderivative {
+                provenance: "Risch"
+            },
+            ImpossibilityProof::NoElementaryAntiderivative {
+                provenance: "Risch"
+            },
+        );
+        assert_ne!(
+            ImpossibilityProof::NoElementaryAntiderivative {
+                provenance: "Risch"
+            },
+            ImpossibilityProof::NoElementaryAntiderivative {
+                provenance: "Liouville"
+            },
+        );
+        assert_eq!(
+            ImpossibilityProof::NoRadicalSolution { degree: 5 },
+            ImpossibilityProof::NoRadicalSolution { degree: 5 },
+        );
+        assert_ne!(
+            ImpossibilityProof::NoRadicalSolution { degree: 5 },
+            ImpossibilityProof::NoRadicalSolution { degree: 6 },
+        );
+    }
+
+    #[test]
+    fn fast_impossibility_proof_theorem_name_new_variants() {
+        assert_eq!(
+            ImpossibilityProof::NoElementaryAntiderivative {
+                provenance: "Risch"
+            }
+            .theorem_name(),
+            "Risch",
+        );
+        assert_eq!(
+            ImpossibilityProof::NoElementaryAntiderivative {
+                provenance: "Liouville"
+            }
+            .theorem_name(),
+            "Liouville",
+        );
+        assert_eq!(
+            ImpossibilityProof::NoRadicalSolution { degree: 5 }.theorem_name(),
+            "Abel-Ruffini",
+        );
+        assert_eq!(
+            ImpossibilityProof::NoKovacicSolution.theorem_name(),
+            "Kovacic",
+        );
+        assert_eq!(
+            ImpossibilityProof::Custom("special".to_string()).theorem_name(),
+            "custom",
+        );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn fast_impossibility_proof_theorem_name_deprecated_variants() {
+        assert_eq!(
+            ImpossibilityProof::NoElementaryClosure.theorem_name(),
+            "Liouville-Risch",
+        );
+        assert_eq!(
+            ImpossibilityProof::NoLiouvillePrimitive.theorem_name(),
+            "Liouville",
         );
     }
 

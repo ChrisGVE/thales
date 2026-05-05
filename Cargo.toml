@@ -1,3 +1,5 @@
+[workspace]
+
 [package]
 name = "thales"
 version = "0.9.0"
