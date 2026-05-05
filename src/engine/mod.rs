@@ -23,12 +23,14 @@ pub mod strategy;
 pub mod trace_tree;
 
 mod assumption_entailment;
+pub mod assumption_normalize;
 
 pub use assumption::{AssumptionGuard, AssumptionSet};
 pub use assumption_key::{
-    entails, normalize_assumption, sign_with_varmap, AssumptionConstraint, AssumptionSignature,
-    Domain, NormalizedAssumption,
+    entails, sign_with_varmap, AssumptionConstraint, AssumptionSignature, Domain,
+    NormalizedAssumption,
 };
+pub use assumption_normalize::normalize_assumption;
 pub use cache::{
     CacheEntry, CacheLookup, CacheSource, CacheStats, KnowledgeCache, NegativeCacheEntry,
     PositiveCacheEntry, Promotable, SolveCache,
