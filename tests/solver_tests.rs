@@ -349,10 +349,13 @@ fn test_linear_equation_solve_for_y() {
 
     let (solution, _path) = result.unwrap();
     match solution {
-        thales::solver::Solution::Unique(expr) => {
-            // Should be m * x + b (normalizer sorts: b before x*m)
-            assert_eq!(expr, add(var("b"), mul(var("x"), var("m"))));
-        }
+        thales::solver::Solution::Unique(expr) => match &expr {
+            Expression::Binary(BinaryOp::Add, left, right) => {
+                assert_eq!(left.as_ref(), &var("b"));
+                assert_mul_eq(right, &var("m"), &var("x"));
+            }
+            _ => panic!("Expected Add, got {expr:?}"),
+        },
         _ => panic!("Expected unique solution"),
     }
 }
