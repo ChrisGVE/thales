@@ -13,6 +13,7 @@ pub mod mode;
 pub mod property;
 pub mod reason;
 pub mod resource;
+pub mod runner;
 pub mod strategy;
 pub mod trace_tree;
 
@@ -31,6 +32,7 @@ pub use mode::{ExecutionMode, TreeComparison};
 pub use property::{Property, PropertyConstraint, PropertySet};
 pub use reason::{FailureReason, ImpossibilityProof, PartialReason, ResourceRequest};
 pub use resource::{ResourceBudget, ResourceStatus};
+pub use runner::{SequentialRunner, StrategyRunner};
 pub use strategy::{
     MergerFn, Strategy, StrategyCandidate, StrategyResult, StrategyStatus, SubProblem,
 };
