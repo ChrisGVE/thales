@@ -9,6 +9,7 @@ pub mod assumption;
 pub mod assumption_key;
 pub mod canonical_pattern;
 pub mod context;
+pub mod legacy;
 pub mod mode;
 pub mod property;
 pub mod reason;
@@ -28,6 +29,7 @@ pub use canonical_pattern::{
     canonicalize, pattern_hash, structural_hash, CanonicalPattern, PatternHash, SlotId, VarMap,
 };
 pub use context::SolveContext;
+pub use legacy::{LegacyEngine, LegacyResult};
 pub use mode::{ExecutionMode, TreeComparison};
 pub use property::{Property, PropertyConstraint, PropertySet};
 pub use reason::{FailureReason, ImpossibilityProof, PartialReason, ResourceRequest};
