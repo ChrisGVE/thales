@@ -16,6 +16,7 @@ pub mod entry;
 pub mod knowledge;
 pub mod rehydrate;
 pub mod reorder;
+pub mod runner;
 pub(crate) mod slottify;
 pub mod solve;
 pub mod stats;
