@@ -276,6 +276,30 @@ pub enum TechniqueTag {
     Eigendecomposition,
     /// Determinant computation.
     Determinant,
+    /// Bareiss fraction-free elimination for determinant computation.
+    BareissElimination,
+    /// Gauss-Jordan elimination to reduced row echelon form.
+    GaussJordanElimination,
+    /// Generic row reduction step (swap, scale, eliminate).
+    RowReduction,
+    /// Null-space / kernel basis extraction from RREF.
+    NullSpaceComputation,
+    /// Column-space / image basis extraction.
+    ColumnSpaceComputation,
+    /// Rank computation from pivot count.
+    RankComputation,
+    /// Cholesky LLᵀ factorization.
+    CholeskyDecomposition,
+    /// SVD computation (numeric).
+    SvdDecomposition,
+    /// Gram-Schmidt orthogonalization step.
+    GramSchmidt,
+    /// Closed-form symbolic eigenvector extraction.
+    SymbolicEigenvector,
+    /// Minimal polynomial computation and verification.
+    MinimalPolynomial,
+    /// Quadratic form classification (definiteness analysis).
+    QuadraticFormAnalysis,
 
     // ── Numerical fallback ───────────────────────────────────────────────
     /// A numeric approximation replaced a symbolic result.
@@ -402,6 +426,18 @@ impl TechniqueTag {
             TechniqueTag::QrDecomposition => "QR decomposition",
             TechniqueTag::Eigendecomposition => "Eigendecomposition",
             TechniqueTag::Determinant => "Determinant",
+            TechniqueTag::BareissElimination => "Bareiss elimination",
+            TechniqueTag::GaussJordanElimination => "Gauss-Jordan elimination",
+            TechniqueTag::RowReduction => "Row reduction",
+            TechniqueTag::NullSpaceComputation => "Null space computation",
+            TechniqueTag::ColumnSpaceComputation => "Column space computation",
+            TechniqueTag::RankComputation => "Rank computation",
+            TechniqueTag::CholeskyDecomposition => "Cholesky decomposition",
+            TechniqueTag::SvdDecomposition => "SVD",
+            TechniqueTag::GramSchmidt => "Gram-Schmidt orthogonalization",
+            TechniqueTag::SymbolicEigenvector => "Symbolic eigenvector",
+            TechniqueTag::MinimalPolynomial => "Minimal polynomial",
+            TechniqueTag::QuadraticFormAnalysis => "Quadratic form analysis",
             TechniqueTag::NumericalApproximation => "Numerical approximation",
             TechniqueTag::NewtonRaphson => "Newton-Raphson",
             TechniqueTag::Bisection => "Bisection",
@@ -520,6 +556,18 @@ impl TechniqueTag {
             | TechniqueTag::QrDecomposition
             | TechniqueTag::Eigendecomposition
             | TechniqueTag::Determinant
+            | TechniqueTag::BareissElimination
+            | TechniqueTag::GaussJordanElimination
+            | TechniqueTag::RowReduction
+            | TechniqueTag::NullSpaceComputation
+            | TechniqueTag::ColumnSpaceComputation
+            | TechniqueTag::RankComputation
+            | TechniqueTag::CholeskyDecomposition
+            | TechniqueTag::SvdDecomposition
+            | TechniqueTag::GramSchmidt
+            | TechniqueTag::SymbolicEigenvector
+            | TechniqueTag::MinimalPolynomial
+            | TechniqueTag::QuadraticFormAnalysis
             | TechniqueTag::NumericalApproximation
             | TechniqueTag::NewtonRaphson
             | TechniqueTag::Bisection
