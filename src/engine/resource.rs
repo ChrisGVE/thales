@@ -4,6 +4,9 @@
 //! covering step count, memory, and wall-clock time. Engines call
 //! [`ResourceBudget::consume_steps`] at each decision point and abort
 //! when [`ResourceStatus::Exceeded`] is returned.
+//!
+//! When the `rayon` feature is enabled, [`ResourceGate`] limits the
+//! number of concurrently active parallel branches.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -152,6 +155,74 @@ impl ResourceBudget {
         self.inner.steps_used.load(Ordering::Acquire) >= self.inner.max_steps as usize
             || self.inner.memory_used.load(Ordering::Acquire) >= self.inner.max_memory_bytes
             || self.inner.start.elapsed().as_millis() as u64 >= self.inner.max_time_ms
+    }
+}
+
+// ── ResourceGate (rayon only) ─────────────────────────────────────────────────
+
+/// Limits the number of concurrently active parallel branches when the
+/// `rayon` feature is enabled.
+///
+/// Callers acquire a [`BranchGuard`] via [`ResourceGate::acquire`] before
+/// spawning a parallel branch. If the gate is already at capacity, `None`
+/// is returned and the caller should fall back to sequential execution.
+#[cfg(feature = "rayon")]
+pub struct ResourceGate {
+    max_concurrent: usize,
+    active: Arc<AtomicUsize>,
+}
+
+#[cfg(feature = "rayon")]
+impl ResourceGate {
+    /// Create a gate allowing at most `max` concurrent branches.
+    #[must_use]
+    pub fn new(max: usize) -> Self {
+        ResourceGate {
+            max_concurrent: max,
+            active: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
+    /// Try to acquire a branch slot.
+    ///
+    /// Returns `Some(BranchGuard)` if a slot was available, `None` if
+    /// the gate is already at capacity.  The guard releases the slot on drop.
+    pub fn acquire(&self) -> Option<BranchGuard<'_>> {
+        // CAS loop: increment only if below max.
+        loop {
+            let current = self.active.load(Ordering::Acquire);
+            if current >= self.max_concurrent {
+                return None;
+            }
+            match self.active.compare_exchange(
+                current,
+                current + 1,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return Some(BranchGuard { gate: self }),
+                Err(_) => std::hint::spin_loop(),
+            }
+        }
+    }
+
+    /// Current number of active parallel branches.
+    #[must_use]
+    pub fn active_count(&self) -> usize {
+        self.active.load(Ordering::Acquire)
+    }
+}
+
+/// RAII guard that releases one branch slot from a [`ResourceGate`] on drop.
+#[cfg(feature = "rayon")]
+pub struct BranchGuard<'a> {
+    gate: &'a ResourceGate,
+}
+
+#[cfg(feature = "rayon")]
+impl Drop for BranchGuard<'_> {
+    fn drop(&mut self) {
+        self.gate.active.fetch_sub(1, Ordering::Release);
     }
 }
 
