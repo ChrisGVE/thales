@@ -16,12 +16,16 @@ pub mod entry;
 pub mod knowledge;
 pub mod rehydrate;
 pub mod reorder;
+pub mod run_trace;
 pub mod runner;
+pub mod scoring;
 pub(crate) mod slottify;
 pub mod solve;
 pub mod stats;
 
 pub use entry::{CacheEntry, CacheSource, NegativeCacheEntry, PositiveCacheEntry};
 pub use knowledge::{CacheLookup, KnowledgeCache};
+pub use run_trace::{PipelineEvent, RunTrace, SkipReason, StrategyOutcomeSummary};
+pub use scoring::{HitRateScorer, ScoringPolicy};
 pub use solve::{Promotable, SolveCache};
 pub use stats::CacheStats;
