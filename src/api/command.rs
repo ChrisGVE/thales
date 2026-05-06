@@ -814,6 +814,24 @@ pub enum MatrixOp {
     Qr,
     /// Solve `Ax = b`.
     SolveLinear,
+    /// Column-space (image) basis.
+    ColumnSpace,
+    /// Row echelon form (REF or RREF).
+    RowEchelon,
+    /// Minimal polynomial of a square matrix.
+    MinimalPolynomial,
+    /// Symbolic (closed-form) eigenvectors.
+    SymbolicEigenvectors,
+    /// Cholesky decomposition (positive definite matrices).
+    Cholesky,
+    /// Singular value decomposition (numeric).
+    Svd,
+    /// Characteristic polynomial.
+    CharacteristicPolynomial,
+    /// Quadratic form definiteness classification.
+    QuadraticFormClassify,
+    /// Kronecker (tensor) product of two matrices.
+    KroneckerProduct,
 }
 
 /// Matrix or vector expression operand.

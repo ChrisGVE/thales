@@ -77,6 +77,15 @@ pub(super) fn parse_matrix_op(s: &str) -> Result<MatrixOp, String> {
         "Lu" => Ok(MatrixOp::Lu),
         "Qr" => Ok(MatrixOp::Qr),
         "SolveLinear" => Ok(MatrixOp::SolveLinear),
+        "ColumnSpace" => Ok(MatrixOp::ColumnSpace),
+        "RowEchelon" => Ok(MatrixOp::RowEchelon),
+        "MinimalPolynomial" => Ok(MatrixOp::MinimalPolynomial),
+        "SymbolicEigenvectors" => Ok(MatrixOp::SymbolicEigenvectors),
+        "Cholesky" => Ok(MatrixOp::Cholesky),
+        "Svd" => Ok(MatrixOp::Svd),
+        "CharacteristicPolynomial" => Ok(MatrixOp::CharacteristicPolynomial),
+        "QuadraticFormClassify" => Ok(MatrixOp::QuadraticFormClassify),
+        "KroneckerProduct" => Ok(MatrixOp::KroneckerProduct),
         other => Err(format!("unknown MatrixOp `{}`", other)),
     }
 }

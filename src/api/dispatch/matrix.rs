@@ -437,6 +437,25 @@ pub(super) fn matrix_cmd(op: MatrixOp, operands: &[ApiMatrixExpr], narrate: bool
             MatrixOp::Qr => {
                 Err("QR decomposition engine not yet implemented in v0.9.0".to_string())
             }
+            MatrixOp::ColumnSpace => Err("ColumnSpace engine not yet implemented".to_string()),
+            MatrixOp::RowEchelon => Err("RowEchelon engine not yet implemented".to_string()),
+            MatrixOp::MinimalPolynomial => {
+                Err("MinimalPolynomial engine not yet implemented".to_string())
+            }
+            MatrixOp::SymbolicEigenvectors => {
+                Err("SymbolicEigenvectors engine not yet implemented".to_string())
+            }
+            MatrixOp::Cholesky => Err("Cholesky engine not yet implemented".to_string()),
+            MatrixOp::Svd => Err("SVD engine not yet implemented".to_string()),
+            MatrixOp::CharacteristicPolynomial => {
+                Err("CharacteristicPolynomial engine not yet implemented".to_string())
+            }
+            MatrixOp::QuadraticFormClassify => {
+                Err("QuadraticFormClassify engine not yet implemented".to_string())
+            }
+            MatrixOp::KroneckerProduct => {
+                Err("KroneckerProduct engine not yet implemented".to_string())
+            }
         }
     })();
 
