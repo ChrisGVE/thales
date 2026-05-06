@@ -390,12 +390,12 @@
 
 // Public module exports
 pub mod api;
-pub mod engine;
 pub mod approximations;
 pub mod ast;
 pub mod calculus;
 pub mod differential_geometry;
 pub mod dimensions;
+pub mod engine;
 pub mod equation_system;
 pub mod error;
 pub mod fourier;
