@@ -8,6 +8,14 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::{LazyLock, RwLock};
 
+/// Sentinel base for strategy-introduced variables in the D0 cache.
+///
+/// `SymbolId` indices at or above this value are sentinels created by
+/// `fresh_id_gen` during rehydration; they are never interned in the global
+/// symbol table. Their [`Display`] and [`Debug`] representations are
+/// `$slot_N` where `N = u32::MAX - index`.
+pub(crate) const SENTINEL_BASE: u32 = u32::MAX - 65535;
+
 /// A compact, `Copy` handle to an interned string.
 ///
 /// Created via [`SymbolId::intern`]. Two `SymbolId` values are equal if and
@@ -56,6 +64,10 @@ impl SymbolId {
 
 impl fmt::Display for SymbolId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0 >= SENTINEL_BASE {
+            let slot_num = u32::MAX - self.0;
+            return write!(f, "$slot_{}", slot_num);
+        }
         let table = INTERNER.read().expect("symbol interner poisoned");
         write!(f, "{}", table.id_to_str[self.0 as usize])
     }
@@ -63,6 +75,10 @@ impl fmt::Display for SymbolId {
 
 impl fmt::Debug for SymbolId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0 >= SENTINEL_BASE {
+            let slot_num = u32::MAX - self.0;
+            return write!(f, "SymbolId({}, \"$slot_{}\")", self.0, slot_num);
+        }
         let table = INTERNER.read().expect("symbol interner poisoned");
         write!(
             f,

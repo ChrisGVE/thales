@@ -14,6 +14,8 @@
 
 pub mod entry;
 pub mod knowledge;
+pub mod rehydrate;
+pub mod reorder;
 pub mod solve;
 pub mod stats;
 
