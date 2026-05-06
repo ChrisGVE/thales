@@ -15,6 +15,7 @@ pub mod fallback;
 pub mod legacy;
 pub mod mode;
 pub mod narrate;
+pub mod phase;
 pub mod property;
 pub mod reason;
 pub mod resource;
@@ -45,6 +46,7 @@ pub use fallback::{
 };
 pub use legacy::{LegacyEngine, LegacyResult};
 pub use mode::{ExecutionMode, TreeComparison};
+pub use phase::PhaseBarrier;
 pub use property::{Property, PropertyConstraint, PropertySet};
 pub use reason::{FailureReason, ImpossibilityProof, PartialReason, ResourceRequest};
 #[cfg(feature = "rayon")]

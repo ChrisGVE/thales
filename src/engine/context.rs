@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use crate::engine::assumption::AssumptionSet;
 use crate::engine::fallback::FallbackConfig;
+use crate::engine::phase::PhaseBarrier;
 use crate::engine::property::PropertySet;
 use crate::engine::resource::ResourceBudget;
 use crate::engine::trace_tree::TraceTree;
@@ -38,6 +39,8 @@ pub struct SolveContext {
     pub properties: PropertySet,
     /// Numerical fallback configuration for this invocation.
     pub fallback: FallbackConfig,
+    /// Phase barrier carrying intermediate state from the previous phase.
+    pub phase_barrier: Option<PhaseBarrier>,
 }
 
 impl SolveContext {
@@ -54,6 +57,7 @@ impl SolveContext {
             budget,
             properties: PropertySet::default(),
             fallback: FallbackConfig::default(),
+            phase_barrier: None,
         }
     }
 
@@ -82,7 +86,18 @@ impl SolveContext {
             budget: self.budget.clone(),
             properties: self.properties.clone(),
             fallback: self.fallback.clone(),
+            phase_barrier: self.phase_barrier.clone(),
         }
+    }
+
+    /// Set the phase barrier on this context.
+    pub fn set_phase_barrier(&mut self, barrier: PhaseBarrier) {
+        self.phase_barrier = Some(barrier);
+    }
+
+    /// Take and return the phase barrier, leaving `None` in its place.
+    pub fn take_phase_barrier(&mut self) -> Option<PhaseBarrier> {
+        self.phase_barrier.take()
     }
 
     /// Consume this context and return a new one with `expr` replaced.
