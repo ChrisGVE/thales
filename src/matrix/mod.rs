@@ -31,8 +31,10 @@
 mod accessors;
 mod arithmetic;
 mod constructors;
+mod determinant;
 mod display;
 mod eigen;
+mod inverse;
 mod lu;
 mod operations;
 mod types;
