@@ -1779,3 +1779,82 @@ fn solve_for_over_wired() {
         "SolveFor.over must not produce FieldIgnored when the domain is passed to the engine"
     );
 }
+
+// ── NullSpace / ColumnSpace / RowEchelon ─────────────────────────────────────
+
+#[test]
+fn fast_matrix_null_space_rank_deficient() {
+    // [[1,2,3],[4,5,6],[7,8,9]] has rank 2; its null space is 1-dimensional.
+    let deficient = ApiMatrixExpr::Matrix(vec![
+        vec![int(1), int(2), int(3)],
+        vec![int(4), int(5), int(6)],
+        vec![int(7), int(8), int(9)],
+    ]);
+    let resp = execute(request(Command::Matrix {
+        op: MatrixOp::NullSpace,
+        operands: vec![deficient],
+    }))
+    .unwrap();
+    assert_eq!(resp.results[0].1.engine, EngineId::Matrix);
+    // Structured result must be a Decomposition with at least one basis vector.
+    match &resp.results[0].1.structured {
+        Some(StructuredResult::Decomposition { parts }) => {
+            assert!(
+                !parts.is_empty(),
+                "expected at least one null-space basis vector"
+            );
+        }
+        other => panic!("expected Decomposition structured result, got {:?}", other),
+    }
+}
+
+#[test]
+fn fast_matrix_column_space_identity() {
+    // The 3×3 identity has full rank; its column space has 3 basis vectors.
+    let identity3 = ApiMatrixExpr::Matrix(vec![
+        vec![int(1), int(0), int(0)],
+        vec![int(0), int(1), int(0)],
+        vec![int(0), int(0), int(1)],
+    ]);
+    let resp = execute(request(Command::Matrix {
+        op: MatrixOp::ColumnSpace,
+        operands: vec![identity3],
+    }))
+    .unwrap();
+    assert_eq!(resp.results[0].1.engine, EngineId::Matrix);
+    match &resp.results[0].1.structured {
+        Some(StructuredResult::Decomposition { parts }) => {
+            assert_eq!(
+                parts.len(),
+                3,
+                "identity column space must have 3 basis vectors"
+            );
+        }
+        other => panic!("expected Decomposition structured result, got {:?}", other),
+    }
+}
+
+#[test]
+fn fast_matrix_row_echelon_shape() {
+    // [[1,2],[3,4]] → RREF is [[1,0],[0,1]] (identity); result shape is Matrix.
+    let m = ApiMatrixExpr::Matrix(vec![vec![int(1), int(2)], vec![int(3), int(4)]]);
+    let resp = execute(request(Command::Matrix {
+        op: MatrixOp::RowEchelon,
+        operands: vec![m],
+    }))
+    .unwrap();
+    assert_eq!(resp.results[0].1.engine, EngineId::Matrix);
+    assert_eq!(
+        resp.results[0].1.shape,
+        thales::api::response::ResultShape::Matrix,
+        "RowEchelon must return a Matrix shape"
+    );
+    // No engine-error diagnostic.
+    assert!(
+        !resp
+            .diagnostics
+            .iter()
+            .any(|d| matches!(&d.code, DiagnosticCode::Other(s) if *s == "engine-error")),
+        "RowEchelon must not produce an engine-error diagnostic"
+    );
+}

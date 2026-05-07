@@ -450,13 +450,157 @@ pub(super) fn matrix_cmd(op: MatrixOp, operands: &[ApiMatrixExpr], narrate: bool
                 }
             }
             MatrixOp::NullSpace => {
-                Err("NullSpace engine not yet implemented in v0.9.0".to_string())
+                if operands.len() != 1 {
+                    Err(format!(
+                        "NullSpace requires 1 operand, got {}",
+                        operands.len()
+                    ))
+                } else {
+                    let m = compile_matrix(&operands[0])?;
+                    record(
+                        narrate,
+                        &mut trace,
+                        TechniqueTag::NullSpaceComputation,
+                        "Kernel basis via RREF back-substitution",
+                    );
+                    m.kernel()
+                        .map(|basis| {
+                            let mat_to_part = |mat: &CoreMatrix| -> DecompositionPart {
+                                let rows = mat.rows();
+                                let cols = mat.cols();
+                                let elements: Vec<Expression> = (0..rows)
+                                    .flat_map(|r| {
+                                        (0..cols).map(move |c| {
+                                            decompile(mat.get(r, c).expect("in-range cell"))
+                                        })
+                                    })
+                                    .collect();
+                                DecompositionPart::Matrix {
+                                    elements,
+                                    rows,
+                                    cols,
+                                }
+                            };
+                            let parts: Vec<(String, DecompositionPart)> = basis
+                                .iter()
+                                .enumerate()
+                                .map(|(i, v)| (format!("basis_{}", i + 1), mat_to_part(v)))
+                                .collect();
+                            let cells: Vec<Expression> = basis
+                                .iter()
+                                .flat_map(|v| {
+                                    (0..v.rows()).flat_map(move |r| {
+                                        (0..v.cols())
+                                            .map(move |c| decompile(v.get(r, c).expect("in-range")))
+                                    })
+                                })
+                                .collect();
+                            let (primary, alternatives) = match cells.split_first() {
+                                Some((first, rest)) => (first.clone(), rest.to_vec()),
+                                None => (Expression::Integer(0), Vec::new()),
+                            };
+                            ResultEntry {
+                                value: ResultValue::Symbolic(primary),
+                                structured: Some(StructuredResult::Decomposition { parts }),
+                                shape: ResultShape::Matrix,
+                                unit: None,
+                                steps: steps_from_trace(&trace),
+                                alternatives,
+                                engine: EngineId::Matrix,
+                            }
+                        })
+                        .map_err(|e| format!("{:?}", e))
+                }
             }
             MatrixOp::Qr => {
                 Err("QR decomposition engine not yet implemented in v0.9.0".to_string())
             }
-            MatrixOp::ColumnSpace => Err("ColumnSpace engine not yet implemented".to_string()),
-            MatrixOp::RowEchelon => Err("RowEchelon engine not yet implemented".to_string()),
+            MatrixOp::ColumnSpace => {
+                if operands.len() != 1 {
+                    Err(format!(
+                        "ColumnSpace requires 1 operand, got {}",
+                        operands.len()
+                    ))
+                } else {
+                    let m = compile_matrix(&operands[0])?;
+                    record(
+                        narrate,
+                        &mut trace,
+                        TechniqueTag::ColumnSpaceComputation,
+                        "Column-space basis via pivot columns in RREF",
+                    );
+                    m.column_space()
+                        .map(|basis| {
+                            let mat_to_part = |mat: &CoreMatrix| -> DecompositionPart {
+                                let rows = mat.rows();
+                                let cols = mat.cols();
+                                let elements: Vec<Expression> = (0..rows)
+                                    .flat_map(|r| {
+                                        (0..cols).map(move |c| {
+                                            decompile(mat.get(r, c).expect("in-range cell"))
+                                        })
+                                    })
+                                    .collect();
+                                DecompositionPart::Matrix {
+                                    elements,
+                                    rows,
+                                    cols,
+                                }
+                            };
+                            let parts: Vec<(String, DecompositionPart)> = basis
+                                .iter()
+                                .enumerate()
+                                .map(|(i, v)| (format!("basis_{}", i + 1), mat_to_part(v)))
+                                .collect();
+                            let cells: Vec<Expression> = basis
+                                .iter()
+                                .flat_map(|v| {
+                                    (0..v.rows()).flat_map(move |r| {
+                                        (0..v.cols())
+                                            .map(move |c| decompile(v.get(r, c).expect("in-range")))
+                                    })
+                                })
+                                .collect();
+                            let (primary, alternatives) = match cells.split_first() {
+                                Some((first, rest)) => (first.clone(), rest.to_vec()),
+                                None => (Expression::Integer(0), Vec::new()),
+                            };
+                            ResultEntry {
+                                value: ResultValue::Symbolic(primary),
+                                structured: Some(StructuredResult::Decomposition { parts }),
+                                shape: ResultShape::Matrix,
+                                unit: None,
+                                steps: steps_from_trace(&trace),
+                                alternatives,
+                                engine: EngineId::Matrix,
+                            }
+                        })
+                        .map_err(|e| format!("{:?}", e))
+                }
+            }
+            MatrixOp::RowEchelon => {
+                if operands.len() != 1 {
+                    Err(format!(
+                        "RowEchelon requires 1 operand, got {}",
+                        operands.len()
+                    ))
+                } else {
+                    let m = compile_matrix(&operands[0])?;
+                    record(
+                        narrate,
+                        &mut trace,
+                        TechniqueTag::GaussJordanElimination,
+                        "Reduced row echelon form via Gauss-Jordan elimination",
+                    );
+                    m.rref()
+                        .map(|(mat, _pivots)| {
+                            let mut entry = matrix_to_value(&mat);
+                            entry.steps = steps_from_trace(&trace);
+                            entry
+                        })
+                        .map_err(|e| format!("{:?}", e))
+                }
+            }
             MatrixOp::MinimalPolynomial => {
                 Err("MinimalPolynomial engine not yet implemented".to_string())
             }
