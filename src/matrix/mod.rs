@@ -44,6 +44,7 @@ mod row_echelon;
 mod sparse;
 mod subspaces;
 mod svd;
+mod symbolic_eigen;
 mod types;
 
 pub use quadratic::Definiteness;
