@@ -161,6 +161,87 @@ fn jacobi_eigendecomp(a: &mut Vec<Vec<f64>>, n: usize) -> Vec<Vec<f64>> {
     v
 }
 
+/// Build the m×m U matrix from `A·V` and singular values.
+///
+/// Columns `u_j = av_j / σ_j` for σ_j > TOLERANCE. When m > n the extra
+/// columns are completed to an orthonormal basis via Gram-Schmidt.
+fn build_u_matrix(av: &[Vec<f64>], sigma: &[f64], m: usize, n: usize) -> Vec<Vec<f64>> {
+    let mut u = vec![vec![0.0_f64; m]; m];
+
+    for j in 0..n.min(m) {
+        if sigma[j] > TOLERANCE {
+            for i in 0..m {
+                u[i][j] = av[i][j] / sigma[j];
+            }
+        }
+        // σ_j ≈ 0 → leave column zero; Gram-Schmidt below will handle it if needed.
+    }
+
+    if m > n {
+        let mut filled = n;
+        let mut candidate = 0;
+        while filled < m && candidate < m {
+            let mut col = vec![0.0_f64; m];
+            col[candidate] = 1.0;
+            candidate += 1;
+
+            for k in 0..filled {
+                let dot: f64 = (0..m).map(|i| u[i][k] * col[i]).sum();
+                for i in 0..m {
+                    col[i] -= dot * u[i][k];
+                }
+            }
+
+            let norm: f64 = col.iter().map(|x| x * x).sum::<f64>().sqrt();
+            if norm > TOLERANCE {
+                for i in 0..m {
+                    u[i][filled] = col[i] / norm;
+                }
+                filled += 1;
+            }
+        }
+    }
+
+    u
+}
+
+/// Sort singular values descending and permute U and V columns to match.
+///
+/// Returns `(sigma_sorted, u_sorted, v_sorted)`.
+fn sort_svd_descending(
+    sigma: Vec<f64>,
+    u_data: Vec<Vec<f64>>,
+    v: Vec<Vec<f64>>,
+    m: usize,
+    n: usize,
+) -> (Vec<f64>, Vec<Vec<f64>>, Vec<Vec<f64>>) {
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by(|&a, &b| sigma[b].partial_cmp(&sigma[a]).unwrap());
+
+    let sigma_sorted: Vec<f64> = order.iter().map(|&k| sigma[k]).collect();
+
+    let mut v_sorted = vec![vec![0.0_f64; n]; n];
+    for (new_j, &old_j) in order.iter().enumerate() {
+        for i in 0..n {
+            v_sorted[i][new_j] = v[i][old_j];
+        }
+    }
+
+    let mut u_sorted = vec![vec![0.0_f64; m]; m];
+    for (new_j, &old_j) in order.iter().enumerate() {
+        for i in 0..m {
+            u_sorted[i][new_j] = u_data[i][old_j];
+        }
+    }
+    for j in n..m {
+        for i in 0..m {
+            u_sorted[i][j] = u_data[i][j];
+        }
+    }
+
+    (sigma_sorted, u_sorted, v_sorted)
+}
+
 // ── public SVD implementation ─────────────────────────────────────────────────
 
 impl MatrixExpr {
@@ -210,80 +291,14 @@ impl MatrixExpr {
         let v = jacobi_eigendecomp(&mut b, n);
 
         // Eigenvalues of B = σ² — extract from diagonal, clamp negatives to 0.
-        let mut sigma: Vec<f64> = (0..n).map(|i| b[i][i].max(0.0).sqrt()).collect();
+        let sigma: Vec<f64> = (0..n).map(|i| b[i][i].max(0.0).sqrt()).collect();
 
-        // Build U: columns u_i = A·v_i / σ_i; zero column when σ_i ≈ 0.
+        // Build U: columns u_i = A·v_i / σ_i; extend with Gram-Schmidt when m > n.
         let av = mat_mul(&a, &v);
-        let mut u_data = vec![vec![0.0_f64; m]; m];
+        let u_data = build_u_matrix(&av, &sigma, m, n);
 
-        for j in 0..n.min(m) {
-            if sigma[j] > TOLERANCE {
-                for i in 0..m {
-                    u_data[i][j] = av[i][j] / sigma[j];
-                }
-            }
-            // σ_j ≈ 0 → leave column as zero; orthonormalize below if needed.
-        }
-
-        // Fill any remaining U columns (when m > n) with an orthonormal basis
-        // via Gram-Schmidt against the already-filled columns.
-        if m > n {
-            let mut filled = n;
-            // Candidate unit vectors e_0, e_1, … until we have m columns.
-            let mut candidate = 0;
-            while filled < m && candidate < m {
-                // Build standard basis vector e_candidate.
-                let mut col = vec![0.0_f64; m];
-                col[candidate] = 1.0;
-                candidate += 1;
-
-                // Gram-Schmidt: subtract projections onto already-filled columns.
-                for k in 0..filled {
-                    let dot: f64 = (0..m).map(|i| u_data[i][k] * col[i]).sum();
-                    for i in 0..m {
-                        col[i] -= dot * u_data[i][k];
-                    }
-                }
-
-                // Normalize.
-                let norm: f64 = col.iter().map(|x| x * x).sum::<f64>().sqrt();
-                if norm > TOLERANCE {
-                    for i in 0..m {
-                        u_data[i][filled] = col[i] / norm;
-                    }
-                    filled += 1;
-                }
-            }
-        }
-
-        // Sort singular values descending; permute U columns and V columns.
-        let mut order: Vec<usize> = (0..n).collect();
-        order.sort_by(|&a, &b| sigma[b].partial_cmp(&sigma[a]).unwrap());
-
-        let sigma_sorted: Vec<f64> = order.iter().map(|&k| sigma[k]).collect();
-
-        let mut v_sorted = vec![vec![0.0_f64; n]; n];
-        for (new_j, &old_j) in order.iter().enumerate() {
-            for i in 0..n {
-                v_sorted[i][new_j] = v[i][old_j];
-            }
-        }
-
-        let mut u_sorted = vec![vec![0.0_f64; m]; m];
-        // Copy the first n columns according to sort order.
-        for (new_j, &old_j) in order.iter().enumerate() {
-            for i in 0..m {
-                u_sorted[i][new_j] = u_data[i][old_j];
-            }
-        }
-        // The remaining m-n columns (if any) can stay in their current positions.
-        for j in n..m {
-            for i in 0..m {
-                u_sorted[i][j] = u_data[i][j];
-            }
-        }
-
-        sigma = sigma_sorted;
+        // Sort singular values descending; permute U and V columns to match.
+        let (sigma, u_sorted, v_sorted) = sort_svd_descending(sigma, u_data, v, m, n);
 
         let vt = transpose(&v_sorted);
         let u_mat = f64_to_matrix(u_sorted)?;
