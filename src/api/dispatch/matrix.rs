@@ -430,7 +430,25 @@ pub(super) fn matrix_cmd(op: MatrixOp, operands: &[ApiMatrixExpr], narrate: bool
                         .map_err(|e| format!("{:?}", e))
                 }
             }
-            MatrixOp::Rank => Err("Rank engine not yet implemented in v0.9.0".to_string()),
+            MatrixOp::Rank => {
+                if operands.len() != 1 {
+                    Err(format!("Rank requires 1 operand, got {}", operands.len()))
+                } else {
+                    let m = compile_matrix(&operands[0])?;
+                    record(
+                        narrate,
+                        &mut trace,
+                        TechniqueTag::RankComputation,
+                        "Rank via pivot count in row echelon form",
+                    );
+                    m.rank()
+                        .map(|rank| {
+                            let value = Expression::Integer(rank as i64);
+                            symbolic_entry(value, EngineId::Matrix, steps_from_trace(&trace))
+                        })
+                        .map_err(|e| format!("{:?}", e))
+                }
+            }
             MatrixOp::NullSpace => {
                 Err("NullSpace engine not yet implemented in v0.9.0".to_string())
             }

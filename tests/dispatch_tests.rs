@@ -887,19 +887,45 @@ fn matrix_lu_decomposition() {
 }
 
 #[test]
-fn matrix_rank_returns_engine_error() {
-    // Rank engine not yet implemented; must surface an engine error.
+fn matrix_rank_identity_3x3() {
+    // rank(I₃) = 3 — full-rank identity matrix.
+    let identity3 = ApiMatrixExpr::Matrix(vec![
+        vec![int(1), int(0), int(0)],
+        vec![int(0), int(1), int(0)],
+        vec![int(0), int(0), int(1)],
+    ]);
     let resp = execute(request(Command::Matrix {
         op: MatrixOp::Rank,
-        operands: vec![m22(1, 2, 3, 4)],
+        operands: vec![identity3],
     }))
     .unwrap();
-    assert!(
-        resp.diagnostics
-            .iter()
-            .any(|d| matches!(d.code, DiagnosticCode::Other(s) if s == "engine-error")),
-        "expected engine-error diagnostic for unimplemented Rank"
-    );
+    assert_eq!(resp.results[0].1.engine, EngineId::Matrix);
+    if let ResultValue::Symbolic(e) = &resp.results[0].1.value {
+        assert_eq!(*e, int(3), "expected rank == 3, got {}", e);
+    } else {
+        panic!("expected Symbolic result for rank");
+    }
+}
+
+#[test]
+fn matrix_rank_deficient() {
+    // [[1,2,3],[4,5,6],[7,8,9]] has rank 2 (row 3 = row1 + row2 shift).
+    let deficient = ApiMatrixExpr::Matrix(vec![
+        vec![int(1), int(2), int(3)],
+        vec![int(4), int(5), int(6)],
+        vec![int(7), int(8), int(9)],
+    ]);
+    let resp = execute(request(Command::Matrix {
+        op: MatrixOp::Rank,
+        operands: vec![deficient],
+    }))
+    .unwrap();
+    assert_eq!(resp.results[0].1.engine, EngineId::Matrix);
+    if let ResultValue::Symbolic(e) = &resp.results[0].1.value {
+        assert_eq!(*e, int(2), "expected rank == 2, got {}", e);
+    } else {
+        panic!("expected Symbolic result for rank");
+    }
 }
 
 // ── Optimization (F1f) ───────────────────────────────────────────────────────
