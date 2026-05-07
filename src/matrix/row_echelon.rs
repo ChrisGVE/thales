@@ -204,6 +204,32 @@ impl MatrixExpr {
             pivot_cols,
         ))
     }
+
+    /// Compute the rank of the matrix.
+    ///
+    /// The rank equals the number of pivot columns in the RREF, which is the
+    /// dimension of the row space (equivalently, the column space).
+    ///
+    /// # Errors
+    ///
+    /// Returns `InvalidOperation` if the matrix is empty (0 rows or 0 cols).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use thales::matrix::MatrixExpr;
+    /// use thales::numeric::expr::Expr;
+    ///
+    /// let m = MatrixExpr::identity(3);
+    /// assert_eq!(m.rank().unwrap(), 3);
+    ///
+    /// let z = MatrixExpr::zero(2, 3);
+    /// assert_eq!(z.rank().unwrap(), 0);
+    /// ```
+    pub fn rank(&self) -> MatrixResult<usize> {
+        let (_, pivots) = self.rref()?;
+        Ok(pivots.len())
+    }
 }
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -409,5 +435,48 @@ mod tests {
             2,
             "rank-deficient 3x3 should have exactly 2 pivots"
         );
+    }
+
+    #[test]
+    fn fast_test_rank_identity() {
+        assert_eq!(MatrixExpr::identity(3).rank().unwrap(), 3);
+    }
+
+    #[test]
+    fn fast_test_rank_zero() {
+        assert_eq!(MatrixExpr::zero(3, 3).rank().unwrap(), 0);
+    }
+
+    #[test]
+    fn fast_test_rank_deficient() {
+        // [[1,2,3],[4,5,6],[7,8,9]] — rank 2 (third row = sum of first two rows'
+        // linear combination).
+        let m = MatrixExpr::from_expr_elements(vec![
+            vec![Expr::int(1), Expr::int(2), Expr::int(3)],
+            vec![Expr::int(4), Expr::int(5), Expr::int(6)],
+            vec![Expr::int(7), Expr::int(8), Expr::int(9)],
+        ])
+        .unwrap();
+        assert_eq!(m.rank().unwrap(), 2);
+    }
+
+    #[test]
+    fn fast_test_rank_full_row() {
+        // 2×3 full row-rank matrix — rank must equal number of rows (2).
+        let m = MatrixExpr::from_expr_elements(vec![
+            vec![Expr::int(1), Expr::int(0), Expr::int(0)],
+            vec![Expr::int(0), Expr::int(1), Expr::int(0)],
+        ])
+        .unwrap();
+        assert_eq!(m.rank().unwrap(), 2);
+    }
+
+    #[test]
+    fn fast_test_rank_1x1() {
+        let nonzero = MatrixExpr::from_expr_elements(vec![vec![Expr::int(5)]]).unwrap();
+        assert_eq!(nonzero.rank().unwrap(), 1);
+
+        let zero = MatrixExpr::from_expr_elements(vec![vec![Expr::int(0)]]).unwrap();
+        assert_eq!(zero.rank().unwrap(), 0);
     }
 }
