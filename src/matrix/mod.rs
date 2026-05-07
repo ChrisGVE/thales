@@ -38,6 +38,8 @@ mod eigen;
 mod inverse;
 mod lu;
 mod operations;
+mod qr;
+mod row_echelon;
 mod types;
 
 pub use types::{BracketStyle, MatrixError, MatrixResult};
