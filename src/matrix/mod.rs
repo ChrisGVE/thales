@@ -40,8 +40,11 @@ mod lu;
 mod operations;
 mod qr;
 mod row_echelon;
+mod sparse;
+mod svd;
 mod types;
 
+pub use sparse::CsrMatrix;
 pub use types::{BracketStyle, MatrixError, MatrixResult};
 
 use std::sync::Arc;
