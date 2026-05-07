@@ -39,11 +39,14 @@ mod inverse;
 mod lu;
 mod operations;
 mod qr;
+mod quadratic;
 mod row_echelon;
 mod sparse;
+mod subspaces;
 mod svd;
 mod types;
 
+pub use quadratic::Definiteness;
 pub use sparse::CsrMatrix;
 pub use types::{BracketStyle, MatrixError, MatrixResult};
 
