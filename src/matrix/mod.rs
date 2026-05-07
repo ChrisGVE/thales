@@ -30,6 +30,7 @@
 
 mod accessors;
 mod arithmetic;
+mod cholesky;
 mod constructors;
 mod determinant;
 mod display;
