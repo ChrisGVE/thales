@@ -37,6 +37,7 @@ mod display;
 mod eigen;
 mod inverse;
 mod lu;
+mod minimal_poly;
 mod operations;
 mod qr;
 mod quadratic;
