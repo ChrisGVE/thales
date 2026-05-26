@@ -1,6 +1,6 @@
 # thales
 
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache_2.0-green.svg)](LICENSE)
 [![GitHub Release](https://img.shields.io/github/v/release/ChrisGVE/thales)](https://github.com/ChrisGVE/thales/releases)
 [![CI](https://github.com/ChrisGVE/thales/actions/workflows/ci.yml/badge.svg)](https://github.com/ChrisGVE/thales/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/thales.svg)](https://crates.io/crates/thales)
@@ -96,7 +96,7 @@ Thales can parse LaTeX mathematical notation into its internal expression tree v
 ### Supported constructs
 
 | Category | LaTeX syntax | Examples |
-|----------|-------------|---------|
+|----------|-------------|----------|
 | Fractions | `\frac{num}{denom}` | `\frac{1}{2}`, `\frac{x+1}{y}` |
 | Square root | `\sqrt{x}` | `\sqrt{2}`, `\sqrt{x+1}` |
 | nth root | `\sqrt[n]{x}` | `\sqrt[3]{8}`, `\sqrt[n]{x}` |
@@ -156,7 +156,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+Apache License 2.0 - see [LICENSE](LICENSE) for details.
 
 ## Links
 
