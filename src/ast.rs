@@ -1695,7 +1695,7 @@ impl Expression {
                 };
 
                 if needs_parens {
-                    format!(r"\left({}{}{}right)", left_str, op_str, right_str)
+                    format!(r"\left({}{}{}\right)", left_str, op_str, right_str)
                 } else {
                     format!("{}{}{}", left_str, op_str, right_str)
                 }
